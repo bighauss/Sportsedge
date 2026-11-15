@@ -53,15 +53,28 @@ def _unique(items, field, label):
     if any(type(x) is not str or not x.strip() for x in values) or len(set(values)) != len(values):
         raise ValueError("EMPTY_OR_DUPLICATE_ID:" + label)
 
-def _consecutive_days(dates):
-    days = sorted({d.toordinal() for d in dates})
-    best = current = 0
+def _recent_clean_day_streak(cards):
+    """Consecutive CLEAN reported CT dates ending on the latest reported date.
+
+    Every run on a day must pass both price and guard checks. A failed run on
+    the same date is not hidden by a second successful run that day. A clean
+    five-day stretch in the distant past cannot cover a broken latest day.
+    This is still just a self-reported calendar count, NOT verified slate uptime.
+    """
+    by_day = {}
+    for when, _, price_clean, guard_clean in cards:
+        day = when.astimezone(CT).date().toordinal()
+        by_day[day] = by_day.get(day, True) and price_clean and guard_clean
+    current = 0
     previous = None
-    for d in days:
-        current = current + 1 if previous is not None and d == previous + 1 else 1
-        best = max(best, current)
-        previous = d
-    return best
+    for day in sorted(by_day, reverse=True):
+        if not by_day[day]:
+            break
+        if previous is not None and previous - day != 1:
+            break
+        current += 1
+        previous = day
+    return current
 
 def _check_cards(data):
     cards = []
@@ -125,7 +138,16 @@ def _check_cycles(data):
         if parsed[i][0] < parsed[i-1][1]:
             raise ValueError("OVERLAPPING_CALIBRATION_EVALUATIONS")
     clean = [p for p in parsed if p[2] < p[0] < p[1] and p[3] == 0]
-    return len(clean), len(parsed)
+    # Issue #10 explicitly requires the LAST THREE registered cycles clean.
+    # Counting any three clean cycles from old history would hide a new
+    # leakage finding or an unregistered latest test.
+    latest_clean_streak = 0
+    for p in reversed(parsed):
+        if p[2] < p[0] < p[1] and p[3] == 0:
+            latest_clean_streak += 1
+        else:
+            break
+    return len(clean), len(parsed), latest_clean_streak
 
 def analyze(manifest):
     _keys(manifest, ROOT_FIELDS, "root")
@@ -136,7 +158,7 @@ def analyze(manifest):
             raise ValueError("INVALID_OR_UNBOUNDED_EVIDENCE_LIST:" + name)
     cards = _check_cards(manifest["cards"])
     matched_closes, excluded_closes = _check_closes(manifest["clv_triples"])
-    clean_cycles, cycles = _check_cycles(manifest["calibration_cycles"])
+    clean_cycles, cycles, latest_clean_cycles = _check_cycles(manifest["calibration_cycles"])
     latest = cards[-100:]
     consecutive_clean = 0
     for _, r, clean, _ in reversed(cards):
@@ -151,11 +173,9 @@ def analyze(manifest):
     total_pit = sum(row["pit_total"] for _, row, _, _ in latest)
     complete_pit = sum(row["pit_complete"] for _, row, _, _ in latest)
     ratio = complete_pit / total_pit if total_pit else 0.0
-    # This is only the longest *reported* calendar-date streak. Without the
-    # external real-slate schedule, full operational coverage is NOT proven.
-    run_dates = [when.astimezone(CT).date() for when, _, clean, guard in cards
-                 if clean and guard]
-    date_streak = _consecutive_days(run_dates)
+    # Latest self-reported daily streak, accounting for EVERY run on each day.
+    # It still does not verify completeness against a true real-slate schedule.
+    date_streak = _recent_clean_day_streak(cards)
     gates = {
         "A_prices": {"threshold_cards": 100, "reported_clean_recent_streak": consecutive_clean,
                      "structural_threshold_met": consecutive_clean >= 100},
@@ -165,7 +185,8 @@ def analyze(manifest):
                   "structural_threshold_met": total_pit > 0 and ratio >= 0.95},
         "C_calibration": {"minimum_cycles": 3, "reported_cycles": cycles,
                           "reported_clean_registered_cycles": clean_cycles,
-                          "structural_threshold_met": clean_cycles >= 3},
+                          "reported_latest_clean_cycle_streak": latest_clean_cycles,
+                          "structural_threshold_met": latest_clean_cycles >= 3},
         "D_CLV": {"minimum_settled_comparable": 200,
                    "reported_structurally_comparable_closes": matched_closes,
                    "reported_exclusion_reasons": excluded_closes,

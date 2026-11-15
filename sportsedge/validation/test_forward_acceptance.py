@@ -113,6 +113,47 @@ class AuditContract(unittest.TestCase):
         r=analyze(p)
         self.assertEqual(r["gates"]["five_days"]["reported_calendar_date_streak"],1)
 
+
+    def test_last_calibration_cycle_leak_resets_latest_streak_even_if_old_three_clean(self):
+        p=fixture(cycles=4)
+        p["calibration_cycles"][-1]["leakage_findings"]=1
+        r=analyze(p)
+        g=r["gates"]["C_calibration"]
+        self.assertEqual(g["reported_clean_registered_cycles"],3)
+        self.assertEqual(g["reported_latest_clean_cycle_streak"],0)
+        self.assertFalse(g["structural_threshold_met"])
+        self.assertFalse(r["reported_all_structural_thresholds_met"])
+
+    def test_last_unregistered_calibration_cycle_blocks_three_cycle_gate(self):
+        p=fixture(cycles=4)
+        last=p["calibration_cycles"][-1]
+        last["registered_utc"]=last["window_start_utc"]
+        r=analyze(p)
+        self.assertEqual(r["gates"]["C_calibration"]["reported_latest_clean_cycle_streak"],0)
+        self.assertFalse(r["gates"]["C_calibration"]["structural_threshold_met"])
+
+    def test_late_failure_resets_current_five_day_streak_not_historical_best(self):
+        p=fixture(cards=120)
+        # First five dates can be clean; final date's run fails.
+        p["cards"][-1]["unauthenticated_quote_rows"]=1
+        r=analyze(p)
+        self.assertEqual(r["gates"]["five_days"]["reported_calendar_date_streak"],0)
+        self.assertFalse(r["gates"]["five_days"]["structural_threshold_met"])
+
+    def test_one_bad_card_among_good_cards_on_latest_day_blocks_day(self):
+        p=fixture()
+        p["cards"][-2]["guard_bypasses"]=1
+        r=analyze(p)
+        self.assertEqual(r["gates"]["five_days"]["reported_calendar_date_streak"],0)
+
+    def test_five_clean_reported_days_pass_structural_streak_only(self):
+        p=fixture()
+        r=analyze(p)
+        self.assertEqual(r["gates"]["five_days"]["reported_calendar_date_streak"],5)
+        self.assertTrue(r["gates"]["five_days"]["structural_threshold_met"])
+        self.assertFalse(r["gates"]["five_days"]["externally_certified"])
+        self.assertFalse(r["release_certified"])
+
     def test_naive_datetime_rejected(self):
         p=fixture()
         p["cards"][0]["generated_utc"]="2026-11-15T17:00:00"
