@@ -96,5 +96,30 @@ class GateTests(unittest.TestCase):
         self.assertIn("SGP_NEEDS_JOINT_EVENT_PROBABILITY_AND_POSTED_PRICE",
                       run([a])["rows"][0]["reasons"])
 
+    def test_half_total_never_compared_to_full_game_total(self):
+        a=quote(kind="TOTAL",period="1H",line="20.5")
+        reasons=run([a])["rows"][0]["reasons"]
+        self.assertIn("NO_INDEPENDENT_PERIOD_PROJECTION",reasons)
+        self.assertNotIn("UNEXPLAINED_TOTAL_MODEL_MARKET_GAP",reasons)
+    def test_half_has_own_independent_projection(self):
+        a=quote(kind="TOTAL",period="1H",line="20.5")
+        f=model(periods={"1H":{"total":21,"margin_home":-3}})
+        reasons=run([a],f)["rows"][0]["reasons"]
+        self.assertNotIn("NO_INDEPENDENT_PERIOD_PROJECTION",reasons)
+        self.assertNotIn("UNEXPLAINED_TOTAL_MODEL_MARKET_GAP",reasons)
+    def test_team_total_needs_own_team_period_projection(self):
+        a=quote(kind="TEAM_TOTAL",period="FG",team_id="LV",line="20.5")
+        reasons=run([a])["rows"][0]["reasons"]
+        self.assertIn("NO_INDEPENDENT_TEAM_TOTAL_PROJECTION",reasons)
+        f=model(team_totals={"FG":{"LV":{"mean":25}}})
+        self.assertIn("UNEXPLAINED_TEAM_TOTAL_MODEL_MARKET_GAP",
+                      run([a],f)["rows"][0]["reasons"])
+    def test_period_player_cannot_reuse_full_game_mean(self):
+        a=quote(kind="PLAYER_PROP",period="1H",side="OVER",line="30.5",
+                player_id="gsis1",stat="REC_YDS")
+        reasons=run([a])["rows"][0]["reasons"]
+        self.assertIn("NO_INDEPENDENT_PERIOD_PLAYER_PROJECTION",reasons)
+        self.assertIn("INDEPENDENT_PLAYER_FORECAST_MISSING_OR_INVALID",reasons)
+
 if __name__=="__main__":
     unittest.main()
