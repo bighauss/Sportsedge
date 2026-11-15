@@ -68,7 +68,13 @@ def build_offensive_td_shares(
         if w<1:
             raise ValueError("INVALID_WEEK")
         pid=row.get("player_id","").strip()
-        team=row.get("recent_team","").strip().upper()
+        # 2026 nflverse weekly stats actually uses `team`; some older exports
+        # use `recent_team`. If both exist, refuse conflicting identities.
+        field_team=(row.get("team") or "").strip().upper()
+        field_recent=(row.get("recent_team") or "").strip().upper()
+        if field_team and field_recent and field_team != field_recent:
+            raise ValueError("CONFLICTING_WEEKLY_TEAM_IDENTIFIERS")
+        team=field_team or field_recent
         if not pid or not team or team not in NFL32:
             raise ValueError("UNKNOWN_OR_MISSING_PLAYER_TEAM_ID")
         key=(y,w,team,pid)
