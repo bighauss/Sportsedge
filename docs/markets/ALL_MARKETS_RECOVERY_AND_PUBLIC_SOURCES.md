@@ -15,6 +15,7 @@ card or forward-test baseline is altered.
 | NFL offensive touchdown share | `nfl_td_shares.py` | Builds player rushing+receiving TD shares by year/week/team, rejects duplicate IDs and future weeks, checks 32-team coverage | Current full-file hash, active lineup, joint team TD/scoring process, ATTD/first/2+ calibration |
 | Outcome distribution | `projection_distribution.py` | Explicit external model SDs/period shares and player-stat moments → deterministic provisional score+player scenarios | Validated error distributions and joint correlations. It **never** manufactures touchdown or first-basket event sequences |
 | Market pricing | `allmarkets_research.py` | Exact scenario grading for single and period markets, props, TDs and first score; exact quote pair, push-aware raw+30/70 blended EV; parlay **joint** simulation, not leg multiplication | Verified current DK/BestBook lines; independent provider receipt checks; calibrated probabilities; posted SGP odds |
+| Independent player prop intake | `player_forecast_intake.py` | Reads original hashed CSV of per-player ID, team, sport/stat, mean+SD, model training/feature freeze, active roster, volume/lineup; rejects all odds/market-implied means as features. | Real independently observed pregame source snapshots, player-level width calibration and joint game/player correlations |
 | Chronological test | `chronological_calibration.py` | Walk-forward fitted train-only margin/total widths; holdout MAE, Brier, log loss; leak-preventing timestamps | Authenticated long-run historical forecasts/results, three signed cycles, independent price/CLV evidence |
 | Card/risk integration | `run_it_research.py` | Runs each candidate through existing v2.1 guards, stores unverified quote receipts and risk decisions in the same local hash chain, emits **no official card** | Independent quote authenticity, actual v2.1 full production inputs, per-market promotion signoff |
 
@@ -95,6 +96,7 @@ independent second sportsbook quote.
 python -m unittest sportsedge.markets.test_allmarkets_research -v
 python -m unittest sportsedge.markets.test_projection_bridge -v
 python -m unittest sportsedge.markets.test_run_it_research -v
+python -m unittest sportsedge.markets.test_player_forecast_intake -v
 python -m unittest research.audits.test_multisport_quote_ev_regressions -v
 python -m unittest sportsedge.odds.test_issue10_offline -v
 ```
