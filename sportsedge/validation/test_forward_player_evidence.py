@@ -79,11 +79,15 @@ def inputs(root, *, confirmed_active="1", lineup_state="ACTIVE",
     }
     forecast=write(root,"forecast.csv",
                    csv_bytes([projection],sorted(REQUIRED)))
+    model_artifact=write(root,"model_revision.py",(
+        b"MODEL_VERSION='PLAYER_LAG3_RESEARCH_CANDIDATE'\n"))
     manifest={
         "schema":RESEARCH_FREEZE,"event_id":"GAME1",
-        "home_id":"BUF","away_id":"MIA","start_utc":iso(START),
+        "home_id":"BUF","away_id":"MIA","season":2026,"week":11,
+        "start_utc":iso(START),
         "forecast_asof_utc":iso(ASOF),
-        "forecast_file":forecast,"lineup_file":lineup,
+        "forecast_file":forecast,"model_artifact":model_artifact,
+        "lineup_file":lineup,
         "source_files":[source],"roster_player_ids":["P1"],
         "odds_observed_at_utc":None,
     }
@@ -194,6 +198,47 @@ class ForwardPlayerEvidence(unittest.TestCase):
             m["source_files"][0]["source_id"]="NFLVERSE_PBP"
             with self.assertRaisesRegex(ValueError,"NFL_PLAYER_SOURCE_NOT_ALLOWLISTED"):
                 freeze_player_forecasts(m,now=NOW)
+
+    def test_same_game_week_row_blocks_even_if_manifest_claims_prior_cutoff(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            raw=(
+                b"season,week,season_type,player_id,team,rushing_tds,receiving_tds\n"
+                b"2026,11,REG,P1,BUF,0,1\n")
+            m["source_files"][0].update(
+                write(d,"same_week_source.csv",raw))
+            with self.assertRaisesRegex(ValueError,
+                              "SOURCE_ROW_SAME_OR_FUTURE_GAME_WEEK"):
+                freeze_player_forecasts(m,now=NOW)
+
+    def test_ngs_week_zero_season_aggregate_blocks(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            raw=(
+                b"season,week,season_type,player_gsis_id,team_abbr\n"
+                b"2026,0,REG,P1,BUF\n")
+            m["source_files"][0].update(
+                write(d,"ngs_aggregate.csv",raw))
+            m["source_files"][0]["source_id"]="NFLVERSE_NGS"
+            with self.assertRaisesRegex(ValueError,
+                              "SOURCE_ROW_SAME_OR_FUTURE_GAME_WEEK"):
+                freeze_player_forecasts(m,now=NOW)
+
+    def test_model_source_artifact_tampering_refused(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            Path(m["model_artifact"]["path"]).write_text("CHANGED=True\n")
+            with self.assertRaisesRegex(ValueError,
+                              "ORIGINAL_FILE_HASH_MISMATCH"):
+                freeze_player_forecasts(m,now=NOW)
+
+    def test_season_and_week_and_model_sha_preserved_in_private_freeze(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            f=freeze_player_forecasts(m,now=NOW)
+            self.assertEqual((f["season"],f["week"]),(2026,11))
+            self.assertEqual(
+                f["model_artifact_sha256"],m["model_artifact"]["raw_sha256"])
 
     def test_lineup_receipt_after_forecast_blocks(self):
         with TemporaryDirectory() as d:
