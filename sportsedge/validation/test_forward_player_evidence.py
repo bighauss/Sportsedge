@@ -366,7 +366,7 @@ class ForwardPlayerEvidence(unittest.TestCase):
             m,final=inputs(d)
             obj=freeze_player_forecasts(m,now=NOW)
             obj["frozen_rows"]=0
-            raw=(json.dumps(obj,sort_keys=True,separators=(",",":"))+"\\n").encode()
+            raw=(json.dumps(obj,sort_keys=True,separators=(",",":"))+"\n").encode()
             p=Path(d)/"frozen.json"
             p.write_bytes(raw)
             h="sha256:"+sha256(raw).hexdigest()
