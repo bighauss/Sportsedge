@@ -65,6 +65,20 @@ class MarketSettlement(unittest.TestCase):
         self.assertEqual(settle(batch(),s,mk()),"W")
         self.assertEqual(settle(batch(),s,mk(selection="AWAY",line="3.5")),"L")
 
+    def test_half_player_prop_cannot_reuse_full_game_stat(self):
+        half=mk(kind="PLAYER_PROP",period="1H",selection="OVER",
+                line="140.5",player="P1",stat="PASS_YDS")
+        with self.assertRaisesRegex(ValueError,"PERIOD_PLAYER_STAT_PROJECTION_MISSING"):
+            settle(batch(),sample_outcome(),half)
+
+    def test_explicit_half_player_stat_settles_as_half(self):
+        full=sample_outcome()
+        scenario=Outcome(full.periods,full.player_stats,full.events,True,
+                         player_period_stats={"1H":{"P1":{"PASS_YDS":120}}})
+        half=mk(kind="PLAYER_PROP",period="1H",selection="UNDER",
+                line="140.5",player="P1",stat="PASS_YDS")
+        self.assertEqual(settle(batch(),scenario,half),"W")
+
     def test_full_game_total(self):
         self.assertEqual(settle(batch(),sample_outcome(),
             mk(kind="TOTAL",selection="OVER",line="40.5")),"W")
@@ -138,6 +152,14 @@ class CapturedOdds(unittest.TestCase):
         self.assertEqual((p["approved_stake_u"],p["official_counted"]),(0,0))
         self.assertGreater(p["wins"],25)
         self.assertAlmostEqual(p["no_vig_market_p_conditional"],.5,5)
+
+    def test_provider_market_id_cannot_be_mixed(self):
+        from dataclasses import replace
+        a=mk(); b=mk(selection="AWAY",line="3.5")
+        other=replace(quote(b,receipt="r2",quote_id="q2"),
+                      provider_market_id="another_market")
+        r=price_market(batch(),a,quote(a),other,D)
+        self.assertIn("DIFFERENT_QUOTE_SOURCE_EVENT_OR_MARKET",r["reasons"])
 
     def test_missing_other_side_blocks(self):
         r=price_market(batch(),mk(),quote(mk()),None,D)
