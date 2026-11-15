@@ -95,13 +95,22 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
         elif sport in ("CFB","CBB","NBA","MLB"):
             if "forecast" in ref or "ratings_csv" in ref or not isinstance(ref.get("feature_paths"),dict):
                 raise ValueError("CLAUDE_MODEL_FEATURE_FILES_REQUIRED")
+            paths=ref["feature_paths"]
             pit_manifest_audit=verify_model_feature_manifest(
-                ref["source_manifest"],ref["feature_paths"],sport=sport,
+                ref["source_manifest"],paths,sport=sport,
                 event_id=ref["event_id"],forecast_asof_utc=asof)
-            projection=from_claude_sport(sport,ref["feature_paths"],
+            projection=from_claude_sport(sport,paths,
                 ref["event_id"],asof_utc=asof)
         else:
             raise ValueError("MODEL_BRIDGE_NOT_AVAILABLE")
+        # Defend against local feature files changing while the recovered model
+        # reads them. The signed/independent provider provenance gate remains
+        # separate: repeated local hashes cannot authenticate remote authors.
+        second_audit=verify_model_feature_manifest(
+            ref["source_manifest"],paths,sport=sport,
+            event_id=ref["event_id"],forecast_asof_utc=asof)
+        if second_audit.data_sha256 != pit_manifest_audit.data_sha256:
+            raise ValueError("PIT_FILE_CHANGED_WHILE_MODEL_WAS_RUNNING")
     else:
         p=_only_keys(payload["projection"],{
             "sport","event_id","home_id","away_id","expected_home","expected_away",
