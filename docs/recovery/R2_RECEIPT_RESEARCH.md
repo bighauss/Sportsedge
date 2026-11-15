@@ -16,3 +16,10 @@ PYTHONPATH=repair_r1:repair_r1/tests:repair_r2 python -m unittest discover -s re
 Original full package also passed an 88-case release runner when the full historical ZIP was mounted locally. The extra four guarded-v5 tests depended on historical board data deliberately excluded from public GitHub.
 
 The additional `research/audit_legacy_20261115`, `research/half_legacy_20261115`, and `research/props_candidates_20261115` directories are **archived research sources, not adopted production models**, and may need archived data to execute. Missing historical inputs must not be silently replaced with invented values. Existing models/risk rules/old cards are unchanged. Outputs remain **PAPER / 0u**.
+
+
+## R2 CSV/JSON ambiguity hardening (Issue #10 follow-up)
+
+The intake now rejects duplicate CSV header names (including case/whitespace variants), missing required columns, ragged rows, malformed UTF-8, and duplicate keys in captured quote JSON. It also refuses repeated `(book, quote_id)` pairs even when separate differently hashed receipt JSON files are presented. An invalid CSV returns a consistent blocked report with `official_counted=0` rather than a CLI report KeyError. Synthetic regression tests cover these controls.
+
+These are **integrity safeguards only**. The JSON receipt still contains untrusted adapter claims about provider, source URL and observation time: checksums are not third-party signatures and cannot independently prove that DraftKings offered the price. This does not remove Issue #10's authenticated-odds, point-in-time, closing-line, calibration or end-to-end risk requirements. Existing frozen v5 pricing, engine hash and historical wagers remain untouched. PAPER / 0u.
