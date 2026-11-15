@@ -163,7 +163,9 @@ def verify_model_feature_manifest(
         sid = row["source_id"]
         if not isinstance(sid, str) or not NAME.fullmatch(sid):
             raise ValueError("PIT_SOURCE_ID_REQUIRED")
-        if sid in SOURCES and SOURCES[sid].sport != sport:
+        if sid not in SOURCES:
+            raise ValueError("PIT_SOURCE_NOT_REGISTERED")
+        if SOURCES[sid].sport != sport:
             raise ValueError("PIT_SOURCE_DIFFERENT_SPORT")
         ids.add(sid)
         observed = _utc(row["observed_at_utc"])
