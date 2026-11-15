@@ -275,16 +275,23 @@ class CLIContract(unittest.TestCase):
             self.assertFalse(out.exists())
 
     def test_failed_nonfinite_report_serialization_creates_no_output(self):
-        from unittest.mock import patch
+        # Some offline source-model fixtures deliberately disable socket.socket.
+        # unittest.mock imports asyncio/ssl and is unavailable in that fixture
+        # state; directly patch and restore the local call instead.
+        from sportsedge.markets import cli
         with tempfile.TemporaryDirectory() as d:
             inp=Path(d)/"input.json";out=Path(d)/"output.json"
             inp.write_text(json.dumps(manifest()))
             result={"status":"PAPER_0U_RESEARCH_ONLY","submitted_candidates":0,
                     "unverified_probability":float("nan"),
                     "official_counted":0,"approved_stake_u":0}
-            with patch("sportsedge.markets.cli.run_from_manifest",return_value=result):
+            original=cli.run_from_manifest
+            try:
+                cli.run_from_manifest=lambda _payload: result
                 with self.assertRaisesRegex(ValueError,"Out of range float"):
                     main([str(inp),str(out)])
+            finally:
+                cli.run_from_manifest=original
             self.assertFalse(out.exists())
 
     def test_create_only_cli_does_not_overwrite_archives(self):
