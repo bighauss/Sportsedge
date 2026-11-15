@@ -29,6 +29,25 @@ from .source_ingestion import SOURCES
 from sportsedge.odds.storage import EvidenceChain
 
 
+MAX_MANIFEST_BYTES = 20_000_000
+
+
+def _unique_json_keys(pairs):
+    """Never let JSON last-key-wins silently rewrite a quote or forecast."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("RUN_MANIFEST_DUPLICATE_JSON_KEY:" + key)
+        result[key] = value
+    return result
+
+
+def _deny_nonfinite_json(value):
+    # CPython's json.loads permits NaN/Infinity by default, though they
+    # are not valid JSON numbers and must never reach a betting model.
+    raise ValueError("RUN_MANIFEST_NONFINITE_JSON_NUMBER:" + str(value))
+
+
 def _iso(s:str)->datetime:
     if not isinstance(s,str) or not s:
         raise ValueError("UTC_TIMESTAMP_MISSING")
@@ -188,13 +207,26 @@ def main(argv:list[str]|None=None)->int:
     if input_path.resolve()==output_path.resolve():
         raise ValueError("REFUSE_INPUT_OVERWRITE")
     input_bytes=input_path.read_bytes()
-    data=json.loads(input_bytes.decode("utf-8"))
+    if len(input_bytes)>MAX_MANIFEST_BYTES:
+        raise ValueError("RUN_MANIFEST_TOO_LARGE")
+    data=json.loads(input_bytes.decode("utf-8"),
+                    object_pairs_hook=_unique_json_keys,
+                    parse_constant=_deny_nonfinite_json)
     # Output is create-only. Never mutate an existing archived card.
     result=run_from_manifest(data)
     result["manifest_sha256"]="sha256:"+sha256(input_bytes).hexdigest()
-    with output_path.open("x",encoding="utf-8") as f:
-        json.dump(result,f,indent=2,sort_keys=True)
-        f.write("\n")
+    # Serialize to validated, standard JSON BEFORE opening the destination.
+    # A failed serializer must never strand a half-written audit artifact.
+    serialized=json.dumps(result,indent=2,sort_keys=True,allow_nan=False)+"\n"
+    created=False
+    try:
+        with output_path.open("x",encoding="utf-8") as f:
+            created=True
+            f.write(serialized)
+    except Exception:
+        if created:
+            output_path.unlink(missing_ok=True)
+        raise
     print(json.dumps({
         "status":result["status"],"markets":result["submitted_candidates"],
         "approved_stake_u":0,"official_counted":0,
