@@ -1,10 +1,10 @@
-"""SportsEdge NFL DFS - DraftKings Showdown Monte Carlo engine (v1).
+"""SportsEdge NFL DFS - DraftKings Showdown Monte Carlo engine (v1.1).
 
 Python standard library only. RESEARCH / PAPER: a DFS projection is never Model_P,
 and contest EV is BLOCKED because no validated ownership feed exists.
 
 Pipeline: game config (market lines, weather, injuries, roles)
-  -> correlated attempt-level approximate simulation (both offenses, kickers, DSTs)
+  -> correlated attempt-level simulation; pass TDs generated on simulated completions
   -> DK scoring per sim -> player distributions
   -> enumerate salary-filtered candidates from the projection-screened player pool
   -> evaluate candidates on the SAME sims (mean, p90, p99, optimal-lineup rate).
@@ -63,18 +63,22 @@ def sim_team(rng, t, zg, zt, active):
     tn, tc = picker(tg)
     att = max(15, int(round(rng.gauss(t["pass_att"] * f_vol, 4.0))))
     qb = t["qb"]
+    # TDs are generated ON completions: per-receiver TD prob per catch is set so
+    # expected receiver TDs = pass_td * td_share at the mean attempt count.
+    tdw = {n: w for n, w in t["pass_td_w"].items() if active.get(n, True)}
+    tw_tot = sum(tg.values()); dw_tot = sum(tdw.values())
+    p_td = {}
+    for r, w in tg.items():
+        prof = t["recv"].get(r, t["recv"]["_default"])
+        exp_catch = t["pass_att"] * (w / tw_tot) * prof[0]
+        p_td[r] = min(0.6, t["pass_td"] * f_score * (tdw.get(r, 0) / dw_tot) / max(exp_catch, 0.05))
     for _ in range(att):
         r = pick(rng, tn, tc); prof = t["recv"].get(r, t["recv"]["_default"])
         if rng.random() < prof[0]:
             y = rng.gammavariate(1.35, prof[1] * math.sqrt(f_score) / 1.35)
             s = S(r); s["rec"] += 1; s["rcy"] += y; S(qb)["py"] += y
-    # pass TDs
-    tdw = {n: w for n, w in t["pass_td_w"].items() if active.get(n, True)}
-    dn, dc = picker(tdw)
-    for _ in range(poisson(rng, t["pass_td"] * f_score)):
-        r = pick(rng, dn, dc); s = S(r); s["rctd"] += 1; S(qb)["ptd"] += 1
-        if s["rec"] < s["rctd"]:
-            s["rec"] += 1; y = rng.uniform(3, 25); s["rcy"] += y; S(qb)["py"] += y
+            if rng.random() < p_td[r]:
+                s["rctd"] += 1; S(qb)["ptd"] += 1
     S(qb)["ints"] += poisson(rng, t["int_rate"] * att / max(f_score, 0.6) ** 0.5)
     # rushing
     rw = {n: w for n, w in t["rush"].items() if active.get(n, True)}
