@@ -63,6 +63,22 @@ class MarketsTests(unittest.TestCase):
         self.assertEqual(p["anytime_td"]["fair"],-300)
         self.assertEqual(p["td_2plus"]["fair"],-100)
 
+    def test_shared_raw_stream_and_moneyline_tie_condition(self):
+        cfg={"tag":"ties","teams":{"AWY":{},"HOM":{}},
+             "market":{"spread_home":3.5,"total":44.5},"players":{}}
+        scores=[(20,27),(24,24),(17,31),(30,14)]
+        def fake_run(cfg,n,seed=7,raw=None):
+            raw.extend({"AWY":({},a),"HOM":({},h)} for a,h in scores)
+            return {},scores
+        with mock.patch.object(m.mc,"run",side_effect=fake_run) as runner:
+            out=m.price(cfg,4,seed=7)
+            runner.assert_called_once()
+        self.assertEqual(out["game"]["moneyline"]["HOM"],m.american(2/3))
+        self.assertEqual(out["game"]["moneyline"]["AWY"],m.american(1/3))
+        self.assertEqual(out["game"]["p_tie"],0.25)
+        self.assertEqual(out["game"]["HOM team total fair"],26.0)
+        self.assertEqual(out["game"]["HOM over 26.0"],0.5)
+
     def test_current_owner_config_deterministic_and_research_only(self):
         here=Path(__file__).resolve().parent
         cfg=json.loads((here/"games"/"PIT_CIN_2026-11-15.json").read_text())
