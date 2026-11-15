@@ -22,7 +22,9 @@ def normalize_line(value, market):
         if value == "":
             return ""
         raise ValueError("CATEGORICAL_MARKET_HAS_LINE")
-    if market not in NUMERIC or not ASCII_DECIMAL.fullmatch(value):
+    if market not in NUMERIC:
+        raise ValueError("UNKNOWN_MARKET")
+    if not ASCII_DECIMAL.fullmatch(value):
         raise ValueError("NON_ASCII_OR_INVALID_NUMERIC_LINE")
     number = Decimal(value)
     if number == 0:
@@ -59,8 +61,10 @@ def audit_rows(rows):
         if identity in seen:
             problems[index].add("CANONICAL_DUPLICATE_SELECTION")
         seen.add(identity)
+        ladder = (str(abs(Decimal(line))) if market == "SPREAD"
+                  else line if market in NUMERIC else "")
         group = (get("sport").upper(), event, book, market, period,
-                 player, team, stat, captured)
+                 player, team, stat, captured, ladder)
         groups[group].append((index, side, line))
     for group, entries in groups.items():
         market = group[3]
