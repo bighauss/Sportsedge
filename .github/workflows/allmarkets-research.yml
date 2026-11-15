@@ -20,5 +20,7 @@ jobs:
           python-version: '3.12'
       - name: Run deterministic scenario/quote/calibration tests
         run: python -m unittest sportsedge.markets.test_allmarkets_research -v
+      - name: Check recovered five-sport projection bridge
+        run: python -m unittest sportsedge.markets.test_projection_bridge -v
       - name: Verify old v5 intake/policy and all-sport quote math tests
         run: python -m unittest research.audits.test_multisport_quote_ev_regressions sportsedge.odds.test_issue10_offline -q
