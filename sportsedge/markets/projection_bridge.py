@@ -51,13 +51,21 @@ def sha_inputs(paths: dict[str,str], *, forbidden: tuple[str,...] = (
         if not isinstance(p,str):
             raise ValueError("MODEL_FEATURE_FILE_PATH_REQUIRED:"+role)
         path=Path(p)
-        if not path.is_file():
+        if path.is_dir() and role in ("folder","data_dir"):
+            # MLB loader accepts a directory; hash each independent CSV input.
+            # Neither odds nor prop odds may enter the independent-feature hash.
+            inputs=sorted(x for x in path.glob("*.csv") if x.name not in
+                          ("odds.csv","prop_odds.csv","bets.csv"))
+        else:
+            inputs=[path]
+        if not inputs or not all(x.is_file() for x in inputs):
             raise ValueError("MODEL_FEATURE_FILE_MISSING:"+role)
-        raw=path.read_bytes()
-        if not raw:
-            raise ValueError("MODEL_FEATURE_FILE_EMPTY:"+role)
-        hasher.update(role.encode()+b"\0"+sha256(raw).digest())
-        seen+=1
+        for input_path in inputs:
+            raw=input_path.read_bytes()
+            if not raw:
+                raise ValueError("MODEL_FEATURE_FILE_EMPTY:"+role)
+            hasher.update((role+"/"+input_path.name).encode()+b"\0"+sha256(raw).digest())
+            seen+=1
     if not seen:
         raise ValueError("NO_INDEPENDENT_MODEL_FEATURE_FILES")
     return "sha256:"+hasher.hexdigest()
