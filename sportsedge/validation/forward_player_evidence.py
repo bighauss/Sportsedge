@@ -48,6 +48,9 @@ RESULT_KEYS = frozenset({
     "event_id", "event_final_at_utc", "result_file",
 })
 FILE_KEYS = frozenset({"path", "raw_sha256"})
+LINEUP_FILE_KEYS = FILE_KEYS | frozenset({
+    "source_name", "observed_at_utc", "captured_at_utc",
+})
 RESULT_FILE_KEYS = frozenset({
     "path", "raw_sha256", "source_id", "observed_at_utc", "captured_at_utc",
 })
@@ -230,7 +233,15 @@ def freeze_player_forecasts(request, *, now=None):
         raise ValueError("BOOKMAKER_DERIVED_PROJECTION_FIELDS")
     if not rows or len(rows) > 1500:
         raise ValueError("EMPTY_OR_EXCESSIVE_PLAYER_FORECASTS")
-    raw_lineup, lineup_hash = _raw_file(r["lineup_file"])
+    raw_lineup, lineup_hash = _raw_file(
+        r["lineup_file"], fields=LINEUP_FILE_KEYS)
+    _id(r["lineup_file"]["source_name"], "lineup_source_name")
+    lineup_observed = _time(r["lineup_file"]["observed_at_utc"])
+    lineup_captured = _time(r["lineup_file"]["captured_at_utc"])
+    if not lineup_observed <= lineup_captured <= asof:
+        raise ValueError("LINEUP_CAPTURE_TOO_LATE_FOR_FORECAST")
+    if quote is not None and lineup_captured > quote:
+        raise ValueError("LINEUP_CAPTURE_AFTER_ODDS")
     _, lineup_rows = _csv(raw_lineup, LINEUP_KEYS)
     roster = r["roster_player_ids"]
     if (not isinstance(roster, list) or len(roster) > 400 or
@@ -308,6 +319,9 @@ def freeze_player_forecasts(request, *, now=None):
         "start_utc": start.isoformat(), "forecast_asof_utc": asof.isoformat(),
         "locally_written_at_utc": now_utc.isoformat(),
         "forecast_csv_sha256": forecast_hash, "lineup_csv_sha256": lineup_hash,
+        "lineup_source_name": r["lineup_file"]["source_name"],
+        "lineup_observed_at_utc": lineup_observed.isoformat(),
+        "lineup_captured_at_utc": lineup_captured.isoformat(),
         "source_receipts": sources, "forecast_rows": entries,
         "frozen_rows": sum(x["state"] != "BLOCK" for x in entries),
         "blocked_rows": sum(x["state"] == "BLOCK" for x in entries),
