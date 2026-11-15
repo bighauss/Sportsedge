@@ -20,7 +20,7 @@ import json
 import sys
 
 from .allmarkets_research import Market,PriceReceipt
-from .projection_bridge import TeamProjection
+from .projection_bridge import TeamProjection, from_claude_sport, from_nfl_ridge
 from .projection_distribution import DistributionInput,generate_score_scenarios
 from .player_forecast_intake import ingest_player_forecast_csv
 from .run_it_research import MarketCandidate,run_research_board
@@ -68,14 +68,35 @@ def _quote(data:dict|None)->PriceReceipt|None:
 
 
 def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
-    _only_keys(payload,{"projection","distribution","markets","player_file",
+    _only_keys(payload,{"projection","projection_ref","distribution","markets","player_file",
                         "roster_ids","event_team_ids","simulation_count",
                         "simulation_seed"},"root")
-    p=_only_keys(payload["projection"],{
-        "sport","event_id","home_id","away_id","expected_home","expected_away",
-        "model_sha256","feature_sha256","asof_utc"},"projection")
-    q=dict(p);q["asof_utc"]=_iso(q["asof_utc"])
-    projection=TeamProjection(**q)
+    if ("projection" in payload)==("projection_ref" in payload):
+        raise ValueError("EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED")
+    if "projection_ref" in payload:
+        ref=_only_keys(payload["projection_ref"],
+            {"sport","event_id","asof_utc","feature_paths",
+             "ratings_csv","forecast"},"projection_ref")
+        sport=ref.get("sport")
+        asof=_iso(ref["asof_utc"])
+        if sport=="NFL":
+            if "feature_paths" in ref or not ref.get("ratings_csv") or not isinstance(ref.get("forecast"),dict):
+                raise ValueError("NFL_RIDGE_FORECAST_SOURCE_REQUIRED")
+            projection=from_nfl_ridge(ref["ratings_csv"],ref["forecast"],
+                event_id=ref["event_id"],frozen_asof_utc=asof)
+        elif sport in ("CFB","CBB","NBA","MLB"):
+            if "forecast" in ref or "ratings_csv" in ref or not isinstance(ref.get("feature_paths"),dict):
+                raise ValueError("CLAUDE_MODEL_FEATURE_FILES_REQUIRED")
+            projection=from_claude_sport(sport,ref["feature_paths"],
+                ref["event_id"],asof_utc=asof)
+        else:
+            raise ValueError("MODEL_BRIDGE_NOT_AVAILABLE")
+    else:
+        p=_only_keys(payload["projection"],{
+            "sport","event_id","home_id","away_id","expected_home","expected_away",
+            "model_sha256","feature_sha256","asof_utc"},"projection")
+        q=dict(p);q["asof_utc"]=_iso(q["asof_utc"])
+        projection=TeamProjection(**q)
     dispersion=_only_keys(payload["distribution"],{
         "sport","sd_margin","sd_total","period_shares","model_sha256",
         "training_end_utc","status"},"distribution")
@@ -123,6 +144,8 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     results["input_version"]="SPORTSEDGE_FIVE_SPORT_RESEARCH_CLI_V1"
     results["generated_at_utc"]=datetime.now(timezone.utc).isoformat()
     results["generator_unvalidated"]=True
+    results["model_projection_method"]=("RECOVERED_MODEL_FUNCTION"
+            if "projection_ref" in payload else "CALLER_SUPPLIED_UNVERIFIED_MEAN")
     results["source_transport_authentication"]=False
     results["historical_backtest_certified"]=False
     return results
