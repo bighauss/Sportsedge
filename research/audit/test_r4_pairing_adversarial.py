@@ -1,5 +1,5 @@
 import unittest
-from r4_pairing_adversarial import audit_rows, normalize_line
+from research.audit.r4_pairing_adversarial import audit_rows, normalize_line
 
 def row(side="HOME", line="-3.5", **kw):
     d=dict(sport="NFL",event_id="EVT-1",book="DK",market="SPREAD",
