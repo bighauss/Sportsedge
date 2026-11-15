@@ -50,6 +50,97 @@ class TestMarketAndDual(unittest.TestCase):
                         MarketKey("NFL", "match-1", kind, "FG", "YES",
                                   line=invalid_line, player_id="player-1")
 
+    def test_mlb_first_five_and_first_inning_quote_contract(self):
+        m=MarketKey("MLB","MLB-GAME","MONEYLINE","F5","HOME",
+                    settlement="POSTED_RULES")
+        self.assertEqual((m.period,m.side),("F5","HOME"))
+        n=MarketKey("MLB","MLB-GAME","NRFI","1IN","YES",
+                    settlement="POSTED_RULES")
+        self.assertEqual(n.kind,"NRFI")
+
+    def test_market_kind_spelling_canonicalizes_ml(self):
+        a=MarketKey("NFL","GAME","ML","FG","HOME",line="0")
+        b=MarketKey("NFL","GAME","MONEYLINE","FG","HOME",line="")
+        self.assertEqual(a.key(),b.key())
+
+    def test_market_side_mismatch_blocks(self):
+        for kind,side,line in (
+            ("MONEYLINE","OVER",""),
+            ("SPREAD","UNDER","-3.5"),
+            ("TOTAL","HOME","41.5"),
+            ("TEAM_TOTAL","AWAY","20.5"),
+            ("PLAYER_PROP","YES","99.5"),
+            ("ATTD","OVER",""),
+            ("FIRST_TD","AWAY",""),
+            ("TD_2PLUS","UNDER",""),
+            ("FIRST_BASKET","OVER",""),
+            ("NRFI","HOME",""),
+        ):
+            with self.subTest(kind=kind,side=side):
+                with self.assertRaisesRegex(ValueError,
+                            "TEAM_SIDE_REQUIRED|OVER_UNDER_REQUIRED|YES_NO_REQUIRED"):
+                    MarketKey("NFL" if kind!="NRFI" else "MLB",
+                        "GAME",kind,"FG" if kind!="NRFI" else "1IN",
+                        side,line=line,
+                        team_id="HOME" if kind=="TEAM_TOTAL" else "",
+                        player_id="P" if kind in (
+                            "PLAYER_PROP","ATTD","FIRST_TD","TD_2PLUS","FIRST_BASKET") else "",
+                        stat="PASS_YDS" if kind=="PLAYER_PROP" else "")
+
+    def test_mlb_cannot_use_basketball_quarters(self):
+        with self.assertRaisesRegex(ValueError,"PERIOD_UNSUPPORTED_FOR_BASEBALL"):
+            MarketKey("MLB","G","TOTAL","1Q","OVER",line="4.5")
+
+    def test_football_cannot_use_first_five_innings(self):
+        with self.assertRaisesRegex(ValueError,"BASEBALL_PERIOD_ON_OTHER_SPORT"):
+            MarketKey("NFL","G","TOTAL","F5","OVER",line="24.5")
+
+    def test_first_inning_yes_no_only_mlb(self):
+        for sport,period in (("NBA","FG"),("MLB","FG")):
+            with self.subTest(sport=sport,period=period):
+                with self.assertRaisesRegex(ValueError,
+                                  "FIRST_INNING_ONLY_MLB"):
+                    MarketKey(sport,"G","YRFI",period,"YES")
+
+    def test_first_basket_only_nba_cbb_full_game(self):
+        good=MarketKey("CBB","G","FIRST_BASKET","FG","YES",player_id="P")
+        self.assertEqual(good.sport,"CBB")
+        for sport,period in (("NFL","FG"),("NBA","1H")):
+            with self.subTest(sport=sport,period=period):
+                with self.assertRaisesRegex(ValueError,
+                            "FIRST_BASKET_ONLY_BASKETBALL_FG"):
+                    MarketKey(sport,"G","FIRST_BASKET",period,"YES",player_id="P")
+
+    def test_at_td_only_football(self):
+        with self.assertRaisesRegex(ValueError,"TOUCHDOWN_MARKET_ONLY_FOOTBALL"):
+            MarketKey("NBA","G","ATTD","FG","YES",player_id="P")
+
+    def test_negative_prop_or_team_total_line_blocked(self):
+        for kind,team,player,stat in (
+            ("TOTAL","","",""),("TEAM_TOTAL","HOME","",""),
+            ("PLAYER_PROP","","P","POINTS"),
+        ):
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(ValueError,"NEGATIVE_OVER_UNDER_LINE"):
+                    MarketKey("NBA","G",kind,"FG","OVER",line="-2.5",
+                              team_id=team,player_id=player,stat=stat)
+
+    def test_posted_market_settlement_cannot_be_arbitrary(self):
+        with self.assertRaisesRegex(ValueError,"UNKNOWN_SETTLEMENT_CONTRACT"):
+            MarketKey("MLB","G","MONEYLINE","FG","HOME",
+                      settlement="INCLUDES_EXTRA_UNCERTAIN")
+
+    def test_forged_sport_is_not_a_quote_market(self):
+        with self.assertRaisesRegex(ValueError,"INVALID_SPORT_OR_MARKET_KIND"):
+            MarketKey("SOCCER","G","TOTAL","FG","OVER",line="2.5")
+
+    def test_number_normalization_for_dk_player_lines(self):
+        a=MarketKey("NBA","G","PLAYER_PROP","FG","OVER",
+                    "25.50",player_id="P",stat="POINTS")
+        b=MarketKey("NBA","G","PLAYER_PROP","FG","OVER",
+                    "25.5",player_id="P",stat="POINTS")
+        self.assertEqual(a.key(),b.key())
+
     def test_distinct_book_logos_same_aggregator_chain_still_blocked(self):
         from dataclasses import replace
         first=quote("DK-offer",provider="BestBookFeed",upstream="DraftKings")
