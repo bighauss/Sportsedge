@@ -53,6 +53,46 @@ NGS weekly rows may exclude lower-usage players and are currently recorded
 for identity and coverage diagnostics only. Adding an NGS-to-points multiplier
 requires independently calibrated forward evidence.
 
+## Weekly nflverse data path (matches existing SportsEdge captures)
+
+The PBP reader above requires an actual play-by-play snapshot. SportsEdge's
+November 15 source archive contains nflverse stats_player_week_2026.csv.gz and
+the NGS passing/rushing/receiving CSV archives instead, not a PBP file.
+Use build_weekly_game_inputs.py for that existing weekly schema.
+
+Archive the exact original weekly .csv.gz bytes pre-kickoff and register the
+SHA256 of the COMPRESSED file. The local game-date and target season/week are
+required. The template and GSIS roster CSV are still required. Example
+supplemental manifest fields:
+
+    {
+      "kickoff_utc":"2026-11-16T01:20:00Z",
+      "game_date_local":"2026-11-15",
+      "target_season":2026, "target_week":10,
+      "weekly":{"path":"stats_player_week_2026.csv.gz",
+                "sha256":"ACTUAL_COMPRESSED_SHA256",
+                "captured_at_utc":"2026-11-15T22:19:56Z"}
+    }
+
+Also provide the previously described template and roster records. The
+timestamps above are examples of syntax, not a claim of a complete archived
+PIT/CIN event-specific pregame package.
+
+    python models/nfl_dfs/build_weekly_game_inputs.py path/to/weekly_manifest.json --lookback 5 --min-games 3 --out path/to/weekly_RESEARCH.json
+
+If a verified NGS receiving CSV is available, register
+ngs_receiving with path/hash/capture time; year/week and GSIS matching
+are audited, and season-aggregate week=0 rows are excluded.
+Neither DK average fantasy points nor provider fantasy-point totals
+are used. No NGS point multiplier is applied.
+
+Explicit limitations: weekly data lacks play order, red-zone field position,
+route-level player usage, snap-specific status, and full fumbles. TD weights
+therefore use observed counts with fixed small opportunity smoothing, not
+a calibrated TD model. The game configuration still retains independently
+recorded injuries and market information. If high usage cannot be mapped
+to valid GSIS identities, the weekly builder stops.
+
 ## Historical replay and grading
 
 Archive a JSON object containing a non-empty slates array. Each slate has
