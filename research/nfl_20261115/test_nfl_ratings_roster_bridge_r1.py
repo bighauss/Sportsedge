@@ -89,6 +89,19 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(len(dst),1)
         self.assertNotIn('ROSTER_GSIS_ID_NOT_PROVEN',dst[0]['reasons'])
         self.assertIn('DK_OUTCOME_ID_NOT_PROVEN',dst[0]['reasons'])
+    def test_game_lines_only_has_header_only_census(self):
+        self.write(self.capture,self.fields,[self.rows[0]])
+        forecasts,census,report=b.bridge(self.capture)
+        self.assertEqual(len(forecasts),1)
+        self.assertEqual(census,[])
+        self.assertEqual(report['participant_or_team_td_rows'],0)
+        self.assertEqual(report['status'],'PAPER_HOLD_0U')
+        output=self.root/'census.csv'
+        b.write_csv(output,census,b.CENSUS_FIELDS)
+        with output.open(newline='') as f:
+            reader=csv.DictReader(f)
+            self.assertEqual(reader.fieldnames,list(b.CENSUS_FIELDS))
+            self.assertEqual(list(reader),[])
     def test_source_file_unchanged(self):
         pre=b.sha256(self.capture);b.bridge(self.capture,self.ratings,self.digest)
         self.assertEqual(pre,b.sha256(self.capture))
