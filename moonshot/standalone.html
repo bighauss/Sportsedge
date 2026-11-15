@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071219"><title>SportsEdge • Moonshot Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#071219;--panel:#10232b;--panel2:#142d36;--line:#27454c;--text:#ebfaf5;--muted:#a3bcb9;--mint:#76fac9;--warning:#e9bd64;--bad:#ff8292}
+*{box-sizing:border-box}body{background:radial-gradient(ellipse at 85% -20%,#195548 0%,#071219 48%);font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);margin:0;min-height:100vh}
+main{max-width:1100px;margin:auto;padding:25px 18px 60px}.header{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;flex-wrap:wrap}.eyebrow{color:var(--mint);font-size:12px;letter-spacing:.16em;font-weight:800;text-transform:uppercase}.brand{font-size:clamp(32px,5vw,48px);font-weight:850;letter-spacing:-.06em;line-height:1.08;margin:4px 0 8px}.brand span{color:var(--mint)}p{color:var(--muted);margin:4px 0 13px}.tag{border:1px solid #765e32;background:#332f22;color:#ffe0a3;border-radius:100px;padding:6px 13px;font-weight:800;font-size:12px;white-space:nowrap}.tabs{display:flex;gap:7px;border-bottom:1px solid var(--line);margin:21px 0 21px;overflow:auto}.tab{color:var(--muted);padding:12px 17px;border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;font-weight:800;font-size:14px;cursor:pointer;white-space:nowrap}.tab.active{color:var(--mint);border-bottom-color:var(--mint)}.page{display:none}.page.active{display:block}.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:linear-gradient(145deg,var(--panel),#0b1c24);border:1px solid var(--line);padding:19px;border-radius:17px;box-shadow:0 10px 35px #0002}.panel h2{font-size:17px;letter-spacing:-.015em;margin:0 0 14px}.fieldgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field label{font-size:12px;color:var(--muted);display:block;margin:0 0 5px;font-weight:750}.field input,.field select,textarea{border:1px solid #3b5b61;border-radius:9px;background:#091920;color:var(--text);padding:11px;font:inherit;width:100%;outline:none}.field input:focus,.field select:focus,textarea:focus{border-color:var(--mint)}input[type=checkbox]{accent-color:var(--mint)}.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.check input{width:16px;height:16px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}button{border:1px solid #3a5e61;border-radius:10px;background:#203841;color:var(--text);padding:10px 14px;font:inherit;font-weight:800;cursor:pointer}button.primary{background:var(--mint);color:#082119;border-color:var(--mint)}button.danger{border-color:#80505b;color:#ffc6ca;background:#35252d}button:disabled{opacity:.38;cursor:not-allowed}button:hover:not(:disabled){filter:brightness(1.1)}.status{display:flex;justify-content:space-between;gap:10px;align-items:center;color:var(--muted);font-size:12px;font-weight:750}.metric{font-size:clamp(56px,9vw,91px);font-weight:900;line-height:1.05;letter-spacing:-.08em;color:var(--mint);margin:12px 0}.meter{width:100%;height:12px;background:#27434b;border-radius:20px;overflow:hidden}.meter i{height:100%;display:block;width:0%;background:linear-gradient(90deg,#35b69b,var(--mint));transition:width .2s}.numbers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0 5px}.numbers strong{display:block;font-size:23px;color:white;font-variant-numeric:tabular-nums}.numbers small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.03em}.notice{padding:12px 14px;border-radius:10px;background:#2a2c23;border:1px solid #605a37;color:#e5d5a7;margin:16px 0;font-size:13px}.muted{color:var(--muted)}.kicker{font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;font-weight:900}.feed{max-height:240px;overflow:auto;margin-top:10px}.feed div{padding:8px 0;border-top:1px solid var(--line);font-size:13px}.feed small{color:var(--muted)}.wide{grid-column:1/-1}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em}th,td{padding:11px 10px;border-bottom:1px solid var(--line)}td strong{color:var(--mint)}.tablewrap{overflow:auto}textarea{min-height:122px;font-family:ui-monospace,monospace;font-size:12px}.good{color:var(--mint)}.bad{color:var(--bad)}.footer{border-top:1px solid var(--line);padding-top:18px;margin-top:25px;font-size:12px;color:var(--muted)}a{color:var(--mint)}#message{min-height:20px;color:var(--warning);font-size:13px;margin-top:10px}code{color:#b8faeb}.helper{font-size:12px;color:var(--muted)}@media(max-width:760px){.cols{grid-template-columns:1fr}main{padding:18px 12px 40px}.panel{padding:15px}.numbers strong{font-size:19px}.fieldgrid{gap:9px}th,td{padding:9px 7px;font-size:13px}}
+</style></head><body><main>
+<div class="header"><div><div class="eyebrow">SPORTSEDGE / NFL RESEARCH</div><h1 class="brand">Moonshot <span>Lab</span></h1><p>Offline payout tracker, rules replay & historical-target research.</p></div><div class="tag">PAPER / 0u • NO LIVE FEED</div></div>
+<div class="tabs"><button class="tab active" data-tab="tracker">Live rule tracker</button><button class="tab" data-tab="history">Historical replay</button><button class="tab" data-tab="guide">Rules & safeguards</button></div>
+<section class="page active" id="tracker"><div class="cols">
+ <article class="panel"><h2>1. Set up a prospective round</h2><div class="fieldgrid">
+ <div class="field"><label>Selected target multiplier</label><input id="target" type="number" min="0.1" max="10000" step="0.1" value="3"></div>
+ <div class="field"><label>Stake, $ (demo only)</label><input id="stake" type="number" min="0.01" max="100000" step="0.01" value="10"></div>
+ <div class="field wide"><label>Game / market label (optional)</label><input id="game" placeholder="e.g., CHI @ MIN, 1H before 3rd incompletion"></div>
+ </div><div class="actions"><button class="primary" id="reset">Reset / new round</button><button id="export">Export action log</button></div>
+ <div id="message" role="status"></div><div class="notice">This is a manual research tracker, not a DraftKings interface. A round may only start outside the opponent's 20. Changes after entry are not synced to any sportsbook.</div>
+ </article>
+ <article class="panel"><div class="status"><span id="phase">WAITING FOR ROUND</span><span id="ratio">0% OF TARGET</span></div><div class="metric" id="multiplier">0.00x</div><div class="meter"><i id="progress"></i></div><div class="numbers"><div><small>Target</small><strong id="targetShow">3.00x</strong></div><div><small>Qualifying plays</small><strong id="playShow">0</strong></div><div><small>Paid if settled</small><strong id="payoutShow">—</strong></div></div><p id="note">Waiting for an eligible round start.</p></article>
+ <article class="panel"><h2>2. Record an official action</h2><div class="fieldgrid">
+ <div class="field wide"><label>Play type / event</label><select id="eventType"><option value="rush">Rushing play</option><option value="pass">Completed pass</option><option value="incomplete">Incomplete pass / spike / grounding</option><option value="turnover">Interception / turnover / safety</option><option value="penalty_first_down">Penalty-awarded first down</option><option value="field_goal">Field goal made (bonus only)</option><option value="special_teams_td">Special teams TD (bonus only)</option><option value="kneel">Kneel / no qualifying gain</option><option value="punt">Punt / kicked-ball play</option><option value="no_play">Nullified play (no play)</option><option value="half_end">End of half / game</option><option value="cashout">Cashout accepted</option></select></div>
+ <div class="field"><label>Official yards on play</label><input id="yards" type="number" value="6" step="1"></div>
+ <div class="field"><label>Cashout payout, $</label><input id="cashout" type="number" step="0.01" min="0" placeholder="Offered amount"></div>
+ <label class="check"><input type="checkbox" id="firstDown"> First down credited</label><label class="check"><input type="checkbox" id="touchdown"> Offensive touchdown</label><label class="check wide"><input type="checkbox" id="outside20" checked> Play snapped outside the opponent's 20 (for round start)</label>
+ </div><div class="actions"><button class="primary" id="record">Record official action</button><button id="undo">Undo last action</button></div><p class="helper">Count scoring bonuses after touchdowns / made field goals. Review official stats for overturned plays and first downs.</p></article>
+ <article class="panel"><h2>Action log</h2><p class="helper">Actions are recorded locally in this browser tab only.</p><div id="feed" class="feed"><span class="muted">No actions yet</span></div></article>
+ </div></section>
+<section class="page" id="history"><div class="cols"><article class="panel wide"><h2>Historical target replay</h2><p>Paste real, verified historical Moonshot rounds in CSV format. This compares fixed target payouts across past sequences. It <b>does not</b> establish a forward-looking edge or that DK offered each target at each opportunity.</p>
+<div class="fieldgrid"><div class="field wide"><label>One row per completed Moonshot round</label><textarea id="csv" spellcheck="false" placeholder="round_id,game,date,final_x,end_type\nunique-1,GB@CHI,2026-11-15,2.40,incomplete\nunique-2,GB@CHI,2026-11-15,4.10,turnover\nunique-3,GB@CHI,2026-11-15,0.00,void"></textarea></div><div class="field"><label>Or upload CSV</label><input type="file" id="csvFile" accept=".csv,text/csv"></div><div class="field"><label>Targets to compare (comma separated)</label><input id="targets" value="2,3,5,10"></div></div>
+<div class="actions"><button class="primary" id="analyze">Analyze verified rounds</button><button id="template">Download blank CSV template</button></div><div id="importMsg" role="status" class="helper"></div></article>
+<article class="panel wide"><h2>Retrospective target table</h2><div class="tablewrap"><table><thead><tr><th>Target</th><th>Reached / eligible</th><th>Observed hit %</th><th>95% Wilson range</th><th>Historical ROI*</th><th>Status</th></tr></thead><tbody id="results"><tr><td colspan="6" class="muted">No historical data loaded yet.</td></tr></tbody></table></div><p class="helper">*Retrospective hypothetical return for a fixed target on every recorded round, including voids and unusual end-of-half partial settlements. Not the expected value of today's offer.</p></article>
+</div></section>
+<section class="page" id="guide"><article class="panel"><h2>DK Football Moonshot — implemented behavior</h2>
+<p>Positive rush/completed pass: +0.2x; every full 10 yards on that play: +0.5x; credited first down: +0.5x; offensive TD: +2.0x. Action values double on the 10th qualifying rush/completed pass and every fifth thereafter, and beginning with the second scoring event; bonus factors compound.</p>
+<p>An incomplete pass or offensive turnover ends an active round and loses an unresolved wager. Before an eligible round start, a designated failure voids it. At end of half/game, unresolved active wagers settle at the current multiplier, even below 1x. A winning payout uses the <em>selected target</em>, not the amount by which the event exceeded it.</p>
+<p><b>Manual interpretation to verify against DK settlement receipts:</b> the 10th and 15th qualifying action and second scoring event receive their newly activated bonus immediately. Positive pass, rushing play, scoring-event counts and unusual penalty cases must be validated against actual settlements before model admission. The tracker stops at wager settlement, not at the next DK round boundary.</p>
+<div class="notice"><b>SportsEdge gating:</b> all retrospective rows are PAPER / 0u. No sportsbook scraping, automatic bets, live prices, team-specific calibrated probabilities, edge stars or claims of +EV. To move this lane forward: capture DK quoted target(s) before each round, immutable play-by-play with source timestamps, settlement receipts, forward walk testing, confidence intervals, and calibration against the market.</div>
+<p>Source: <a href="https://support.draftkings.com/dk/en-us/football-moonshot-overview?id=kb_article_view&sysparm_article=KB0012395" target="_blank" rel="noopener">DraftKings Football Moonshot overview</a>. This project is independent of and not endorsed by DraftKings.</p></article></section>
+<div class="footer">SportsEdge Moonshot Lab v0.1 • Offline / no external data calls • All calculations are research-only. Verify the exact game rules and eligibility with DK before placing any wager.</div>
+</main><script>
+/* SportsEdge Football Moonshot Lab — research-only rule replay and retrospective payoffs.
+   Source: https://support.draftkings.com/dk/en-us/football-moonshot-overview?id=kb_article_view&sysparm_article=KB0012395
+   NOT a DraftKings service or validated predictive model. */
+(function(root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.MoonshotEngine = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function() {
+  'use strict';
+
+  const TERMINAL = new Set(['won','lost','void','half_settled','cashed_out']);
+  function validNum(n, fallback = 0) { const x=Number(n); return Number.isFinite(x) ? x : fallback; }
+  function round2(x) { return Math.round((x + Number.EPSILON) * 100)/100; }
+  function init(target=3, stake=10) {
+    if (!(Number(target)>0) || !Number.isFinite(+target)) throw new Error('Target must be positive');
+    if (!(Number(stake)>0) || !Number.isFinite(+stake)) throw new Error('Stake must be positive');
+    return {target:+target, stake:+stake, phase:'waiting', multiplier:0, qualifying_plays:0,
+      scoring_events:0, events:[], payout:null, note:'Waiting for a qualifying rush or pass outside the opponent 20'};
+  }
+  function next(state, event) {
+    if (TERMINAL.has(state.phase)) throw new Error('This wager is settled. Reset to start a new round.');
+    const e={type:String(event.type||'').trim(),yards:validNum(event.yards),first_down:!!event.first_down,
+      touchdown:!!event.touchdown, outside20:event.outside20!==false,
+      cashout:validNum(event.cashout), label:String(event.label || '')};
+    const s={...state,events:state.events.concat([e])};
+    if (e.type==='no_play') { s.note='Nullified play — no change'; return s; }
+    if (e.type==='half_end') {
+      if (s.phase==='waiting') {s.phase='void';s.payout=s.stake;s.note='No round began — stake returned';}
+      else {s.phase='half_settled';s.payout=round2(s.stake*s.multiplier);s.note='End of half/game — paid at current multiplier';}
+      return s;
+    }
+    if (e.type==='cashout') {
+      if (s.phase!=='active' || !(e.cashout>=0)) throw new Error('Cashout requires an active round and offered payout');
+      s.phase='cashed_out';s.payout=round2(e.cashout);s.note='Accepted offered cashout';return s;
+    }
+    if (s.phase==='waiting') {
+      if (e.type==='incomplete' || e.type==='turnover') {
+        s.phase='void';s.payout=s.stake;s.note='Designated failure before round starts — void';return s;
+      }
+      if ((e.type==='pass'||e.type==='rush') && e.outside20) s.phase='active';
+      else { s.note='No eligible round start yet';return s; }
+    }
+    if (e.type==='incomplete' || e.type==='turnover') {
+      s.phase='lost';s.payout=0;s.note='Incomplete pass or offensive turnover ended round';return s;
+    }
+    // Field goals, special-teams touchdowns count toward scoring bonuses, no base gain.
+    let scoreThisEvent = e.type==='field_goal' || e.type==='special_teams_td' ||
+      ((e.type==='pass'||e.type==='rush') && e.touchdown);
+    if (scoreThisEvent) s.scoring_events++;
+    let base=0;
+    if (e.type==='pass' || e.type==='rush') {
+      s.qualifying_plays++;
+      if (e.yards>0) base += .2 + Math.floor(e.yards/10)*.5;
+      if (e.first_down) base += .5;
+      if (e.touchdown) base += 2;
+    } else if (e.type==='penalty_first_down') base+=.5;
+    const playDoublings = s.qualifying_plays>=10 ? Math.floor((s.qualifying_plays-10)/5)+1 : 0;
+    const scoreDoublings = Math.max(0,s.scoring_events-1);
+    const factor=Math.pow(2,playDoublings+scoreDoublings);
+    s.multiplier=round2(s.multiplier + base*factor);
+    if (s.multiplier>=s.target) {
+      s.phase='won';s.payout=round2(s.stake*s.target);
+      s.note='Target reached — payout capped at selected target';
+    } else s.note=`Active: +${round2(base*factor).toFixed(2)}x this action (bonus ${factor}x)`;
+    return s;
+  }
+  function replay(events,target=3,stake=10) {
+    let s=init(target,stake);
+    for(const e of events) { if (TERMINAL.has(s.phase)) break; s=next(s,e); }
+    return s;
+  }
+  function parseCsv(text) {
+    const lines=String(text).replace(/\r/g,'').split('\n').filter(s=>s.trim() && !s.trim().startsWith('#'));
+    if(!lines.length) return [];
+    function splitCsv(line){const out=[];let cur='',q=false;for(let i=0;i<line.length;i++){
+      const c=line[i];if(c==='"'&&q&&line[i+1]==='"'){cur+='"';i++;}
+      else if(c==='"'){q=!q;} else if(c===','&&!q){out.push(cur.trim());cur='';} else cur+=c;
+    }if(q) throw Error('Unclosed CSV quote');out.push(cur.trim());return out;}
+    const hdr=splitCsv(lines[0]).map(x=>x.toLowerCase());
+    for (const key of ['round_id','final_x','end_type']) if(!hdr.includes(key)) throw Error('CSV requires '+key+' column');
+    const seen = new Set();
+    return lines.slice(1).map((line,ix)=>{
+      const cols=splitCsv(line);if(cols.length!==hdr.length) throw Error(`Row ${ix+2}: column count mismatch`);
+      const obj=Object.fromEntries(hdr.map((h,i)=>[h,cols[i]]));
+      const end_type=obj.end_type.toLowerCase();
+      if(!['incomplete','turnover','half_end','void'].includes(end_type)) throw Error(`Row ${ix+2}: invalid end_type`);
+      const final_x=+obj.final_x;
+      if (!Number.isFinite(final_x)||final_x<0) throw Error(`Row ${ix+2}: invalid final_x`);
+      const round_id=obj.round_id.trim();
+      if (!round_id || seen.has(round_id)) throw Error(`Row ${ix+2}: duplicate or empty round_id`);
+      seen.add(round_id);
+      if(end_type==='void' && final_x!==0) throw Error(`Row ${ix+2}: void final_x must be zero`);
+      return {...obj,end_type,final_x,round_id};
+    });
+  }
+  function summary(rows,target,stake=1) {
+    if(!Array.isArray(rows)||!rows.length) throw Error('Load historical rounds first');
+    if(!(target>0)||!(stake>0)) throw Error('Target and stake must be positive');
+    let wins=0,voids=0,partials=0,profit=0;
+    let gross=0;
+    for(const r of rows){
+      let payout=0;
+      if(r.end_type==='void'){voids++; payout=stake;}
+      else if(r.final_x>=target){ wins++; payout=stake*target; }
+      else if(r.end_type==='half_end'){partials++; payout=stake*r.final_x;}
+      gross+=payout;profit+=payout-stake;
+    }
+    const settled=rows.length-voids;
+    const p=settled ? wins/settled : 0;
+    const z=1.96;
+    const denom=1+z*z/Math.max(settled,1);
+    const centre=(p+z*z/(2*Math.max(settled,1)))/denom;
+    const spread=z*Math.sqrt(p*(1-p)/Math.max(settled,1)+z*z/(4*Math.max(settled,1)**2))/denom;
+    const games=new Set(rows.map(r=>r.game).filter(Boolean)).size;
+    return {target, rounds:rows.length, settled, wins, voids, partials, games,
+      hitRate:p, hitCiLow:settled?Math.max(0,centre-spread):null,
+      hitCiHigh:settled?Math.min(1,centre+spread):null,
+      avgGross:gross/rows.length, historicalRoi:profit/(stake*rows.length),
+      breakEvenSimple:1/target,
+      // Theoretical replay of *all* rounds, not feasible per-round offers or forward edge.
+      readiness:'PAPER / 0u — historical replay only; no validated live win probabilities or per-round quote capture'};
+  }
+  return {init,next,replay,parseCsv,summary};
+});
+
+</script><script>
+'use strict';
+const $=id=>document.getElementById(id);let state=MoonshotEngine.init();const money=n=>'$'+Number(n).toFixed(2);const fmt=n=>Number(n).toFixed(2)+'x';
+const safe=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function render(){
+ $('phase').textContent=state.phase.replaceAll('_',' ').toUpperCase();$('multiplier').textContent=fmt(state.multiplier);
+ $('targetShow').textContent=fmt(state.target);$('playShow').textContent=state.qualifying_plays;
+ $('ratio').textContent=Math.round(state.multiplier/state.target*100)+'% OF TARGET';
+ $('progress').style.width=Math.min(100,100*state.multiplier/state.target)+'%';
+ $('payoutShow').textContent=state.payout===null?'—':money(state.payout);
+ $('note').textContent=state.note;
+ $('feed').innerHTML=state.events.length?state.events.map((e,i)=>`<div><small>#${i+1}</small> ${safe(e.type.replaceAll('_',' '))} ${(['rush','pass'].includes(e.type))?' / '+safe(e.yards)+' yards':''} ${e.first_down?' / first down':''} ${e.touchdown?' / TD':''}</div>`).reverse().join(''):'<span class="muted">No actions yet</span>';
+ $('record').disabled=['won','lost','void','half_settled','cashed_out'].includes(state.phase);
+}
+function fail(id,error){$(id).textContent=String(error.message||error)}
+$('reset').onclick=()=>{try{state=MoonshotEngine.init(+$('target').value,+$('stake').value);$('message').textContent='New research round ready.';render()}catch(err){fail('message',err)}};
+$('record').onclick=()=>{try{let t=$('eventType').value;const payout=$('cashout').value;
+ if(t==='cashout' && (payout==='' || Number(payout)<0))throw Error('Enter DK offered cashout payout first');
+ state=MoonshotEngine.next(state,{type:t,yards:+$('yards').value,first_down:$('firstDown').checked,touchdown:$('touchdown').checked,outside20:$('outside20').checked,cashout:Number(payout)});
+ $('message').textContent='';render();}catch(err){fail('message',err)}};
+$('undo').onclick=()=>{try{const events=state.events.slice(0,-1);state=MoonshotEngine.replay(events,state.target,state.stake);$('message').textContent='Removed last event';render()}catch(err){fail('message',err)}};
+function download(name,content,type='text/plain'){const blob=new Blob([content],{type});const a=document.createElement('a');const u=URL.createObjectURL(blob);a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000)}
+$('export').onclick=()=>download('moonshot_manual_log.json',JSON.stringify({game:$('game').value,source:'manual',status:'research',state},null,2),'application/json');
+$('template').onclick=()=>download('moonshot_rounds_template.csv','round_id,game,date,final_x,end_type,source,captured_at\n','text/csv');
+$('csvFile').onchange=async ev=>{const f=ev.target.files?.[0];if(f)$('csv').value=await f.text()};
+$('analyze').onclick=()=>{try{const data=MoonshotEngine.parseCsv($('csv').value);if(!data.length)throw Error('No data rows supplied');
+const ts=$('targets').value.split(',').map(x=>Number(x.trim()));if(ts.some(x=>!Number.isFinite(x)||x<=0))throw Error('Targets must be positive numbers');
+const results=ts.map(t=>MoonshotEngine.summary(data,t));$('importMsg').textContent=`${data.length} unique rounds loaded; ${results[0].games} named games. All evidence remains PAPER / 0u.`;
+$('results').innerHTML=results.map(s=>`<tr><td><strong>${fmt(s.target)}</strong></td><td>${s.wins}/${s.settled} (void ${s.voids})</td><td>${(100*s.hitRate).toFixed(1)}%</td><td>${s.hitCiLow===null?'—':(100*s.hitCiLow).toFixed(1)+'–'+(100*s.hitCiHigh).toFixed(1)+'%'}</td><td class="${s.historicalRoi>=0?'good':'bad'}">${(100*s.historicalRoi).toFixed(1)}%</td><td>PAPER / 0u</td></tr>`).join('');
+}catch(err){fail('importMsg',err)}};
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===b.dataset.tab))});
+render();
+</script></body></html>
