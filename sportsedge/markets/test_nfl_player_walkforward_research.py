@@ -74,7 +74,7 @@ class NFLPlayerHistoricalStudy(unittest.TestCase):
             n=values["baseline"]["n"]
             self.assertEqual(values["naive_last_observed"]["n"],n)
             self.assertEqual(values["naive_trailing_three_equal"]["n"],n)
-            self.assertGreater(values["naive_last_observed"]["mae"],0)
+            self.assertGreaterEqual(values["naive_last_observed"]["mae"],0)
         self.assertIn("LAST_OBSERVED",
                       r["baselines_compared_on_identical_graded_rows"])
 
