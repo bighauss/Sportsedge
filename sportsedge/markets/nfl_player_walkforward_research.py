@@ -313,8 +313,6 @@ def historical_player_walkforward(
     totals={}
     for stat in STATS:
         base=[];paired_b=[];paired_n=[]
-        for w in folds:
-            pass
         for f in forecasts:
             if f.stat!=stat or f.observed_actual is None:
                 continue
