@@ -315,8 +315,9 @@ def price_game(proj, L):
         bet(rows, proj, "ML", H, None, L["homeMoneyline"], ph, nh, signal=f"{gid}|SIDE|{H}", mean=m)
         bet(rows, proj, "ML", A, None, L["awayMoneyline"], 1 - ph, na, signal=f"{gid}|SIDE|{A}", mean=-m)
     s = L.get("spread")  # home perspective, e.g. -7 = home favored by 7
-    if s is not None:
-        ho, ao = L.get("spreadHomeOdds", -110), L.get("spreadAwayOdds", -110)
+    # Do not invent -110 when a real capture omitted either side.
+    if s is not None and L.get("spreadHomeOdds") is not None and L.get("spreadAwayOdds") is not None:
+        ho, ao = L["spreadHomeOdds"], L["spreadAwayOdds"]
         nh, na = novig(ho, ao); pc = pgt(m, -s, SD_MARGIN)
         bet(rows, proj, "Spread", f"{H} {s:+g}", s, ho, pc, nh, signal=f"{gid}|SIDE|{H}", mean=m)
         bet(rows, proj, "Spread", f"{A} {-s:+g}", -s, ao, 1 - pc, na, signal=f"{gid}|SIDE|{A}", mean=-m)
@@ -325,7 +326,7 @@ def price_game(proj, L):
         no, nu = novig(oo, uo); po = pgt(mean, line, sd)
         bet(rows, proj, market, f"Over {line}", line, oo, po, no, "over", sig + "|UP", mean)
         bet(rows, proj, market, f"Under {line}", line, uo, 1 - po, nu, "under", sig + "|DOWN", mean)
-    ou("Total", L.get("overUnder"), L.get("overOdds", -110), L.get("underOdds", -110), t, SD_TOTAL, f"{gid}|PTS")
+    ou("Total", L.get("overUnder"), L.get("overOdds"), L.get("underOdds"), t, SD_TOTAL, f"{gid}|PTS")
     ou(f"{H} TT", L.get("homeTT"), L.get("homeTTOver"), L.get("homeTTUnder"), proj["pts_home"], SD_TT, f"{gid}|PTS")
     ou(f"{A} TT", L.get("awayTT"), L.get("awayTTOver"), L.get("awayTTUnder"), proj["pts_away"], SD_TT, f"{gid}|PTS")
     ou("1H Total", L.get("h1Total"), L.get("h1Over"), L.get("h1Under"), H1_SHARE * t, SD_1H, f"{gid}|PTS")

@@ -570,11 +570,22 @@ def poisson_over_normal(mean, line, cv):
 # ---------------------------------------------------------------------------
 # EV / BLEND / STARS
 # ---------------------------------------------------------------------------
-def ev_row(model_p, price, nv_p):
+def ev_row(model_p, price, nv_p, push=0.0):
+    """Price a no-vig conditional win probability on the same no-push basis.
+
+    Distinguish W/P/L: p(win)=(1-push)*p(win|no push), losses refunded
+    only for pushes. Applying p_cond*decimal-1 to integer totals or F5 ML
+    would incorrectly treat refunded pushes as wins/losses.
+    """
+    if not (0 <= push < 1 and 0 <= model_p <= 1 and 0 <= nv_p <= 1):
+        raise ValueError("INVALID_PUSH_AWARE_PROBABILITY")
     dec = american_to_decimal(price)
     p_blend = W["model_weight_blend"] * model_p + (1 - W["model_weight_blend"]) * nv_p
-    return {"dec": dec, "model_p": model_p, "nv_p": nv_p, "p_blend": p_blend,
-            "ev_raw": model_p * dec - 1, "ev_blend": p_blend * dec - 1}
+    model_win, blend_win = model_p * (1 - push), p_blend * (1 - push)
+    model_loss, blend_loss = (1 - model_p) * (1 - push), (1 - p_blend) * (1 - push)
+    return {"dec": dec, "model_p": model_win, "nv_p": nv_p, "p_blend": blend_win,
+            "p_push": push, "ev_raw": model_win * (dec - 1) - model_loss,
+            "ev_blend": blend_win * (dec - 1) - blend_loss}
 
 
 def stars(ev):
@@ -638,7 +649,36 @@ def _pair_game_odds(odds_rows, gid):
     for r in rows:
         key = (r["market"], abs(_num(r.get("line"), 0) or 0))
         pairs.setdefault(key, []).append(r)
-    return pairs
+    # A pair must be complementary and have one captured price per selection.
+    # Equal prices or equal row counts do not establish a valid two-sided book.
+    valid = {}
+    for key, pair in pairs.items():
+        if len(pair) != 2:
+            continue
+        a, b = pair
+        market = key[0]
+        sa, sb = a["selection"].lower(), b["selection"].lower()
+        if market in ("ML", "RL", "F5_ML"):
+            if {sa, sb} != {"home", "away"}:
+                continue
+            if market == "RL" and abs(_num(a.get("line"),0) + _num(b.get("line"),0)) > 1e-9:
+                continue
+        elif market in ("TOTAL", "TT_AWAY", "TT_HOME", "F5_TOTAL"):
+            if {sa, sb} != {"over", "under"} or abs(_num(a.get("line"),0) - _num(b.get("line"),0)) > 1e-9:
+                continue
+        elif market == "NRFI":
+            if {sa, sb} != {"nrfi", "yrfi"}:
+                continue
+        else:
+            continue
+        try:
+            odds = [float(a["price"]), float(b["price"])]
+            if any(not math.isfinite(x) or int(x) != x or abs(x) < 100 for x in odds):
+                continue
+        except (ValueError, TypeError, OverflowError):
+            continue
+        valid[key] = pair
+    return valid
 
 
 def run_card(inputs, out_dir=None, min_ev=0.0):
@@ -660,13 +700,27 @@ def run_card(inputs, out_dir=None, min_ev=0.0):
             nv = no_vig(*imp)
             for s, nvp in zip(sides, nv):
                 line = _num(s.get("line"))
-                p, _ = f(mkt, s["selection"], line)
+                p, push = f(mkt, s["selection"], line)
                 if p is None:
                     continue
                 row = {"game_id": gid, "game": f"{g['away']}@{g['home']}", "type": "game", "market": mkt,
                        "selection": s["selection"], "line": line, "price": int(float(s["price"])),
                        "projection": proj_vals.get(mkt), "signal_side": ""}
-                row.update(ev_row(p, s["price"], nvp))
+                # Models report P(win | no push); carry push mass separately.
+                if mkt in ("RL", "F5_ML"):
+                    d_a, d_h = (joint(proj["away"]["runs"], proj["home"]["runs"])
+                                if mkt == "RL" else
+                                joint(extra["f5"]["away"], extra["f5"]["home"]))
+                    _, push = p_side_margin(d_a, d_h, s["selection"], line if mkt == "RL" else 0)
+                elif mkt in ("TOTAL", "TT_AWAY", "TT_HOME", "F5_TOTAL"):
+                    dist = {"TOTAL": total_dist(*joint(proj["away"]["runs"], proj["home"]["runs"])),
+                            "TT_AWAY": joint(proj["away"]["runs"], proj["home"]["runs"])[0],
+                            "TT_HOME": joint(proj["away"]["runs"], proj["home"]["runs"])[1],
+                            "F5_TOTAL": total_dist(*joint(extra["f5"]["away"], extra["f5"]["home"]))}[mkt]
+                    _, push = p_over_dist(dist, line)
+                else:
+                    push = 0.0
+                row.update(ev_row(p, s["price"], nvp, push=push))
                 card.append(row)
         # --- props
         models = prop_models(inp, g, proj)

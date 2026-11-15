@@ -1,0 +1,30 @@
+name: Multi-sport quote and EV audit
+on:
+  pull_request:
+    paths:
+      - 'models/**'
+      - 'research/audits/**'
+      - '.github/workflows/multisport-quote-audit.yml'
+  push:
+    paths:
+      - 'models/**'
+      - 'research/audits/**'
+      - '.github/workflows/multisport-quote-audit.yml'
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Quote pairing and push-aware EV regressions
+        run: python -m unittest research.audits.test_multisport_quote_ev_regressions -v
+      - name: Existing CFB synthetic suite
+        run: cd models/cfb && python make_samples.py >/dev/null && python test_cfb_model.py >/dev/null
+      - name: Existing CBB synthetic suite
+        run: cd models/cbb && python test_cbb.py >/dev/null
+      - name: Existing NBA synthetic suite
+        run: cd models/nba && python make_samples.py >/dev/null && python test_sportsedge_nba_model.py >/dev/null
+      - name: Existing MLB synthetic suite
+        run: cd models/mlb && python make_samples.py >/dev/null && python test_sportsedge_mlb_model.py >/dev/null
