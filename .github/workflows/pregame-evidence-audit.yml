@@ -16,5 +16,5 @@ jobs:
           python-version: '3.11'
       - name: Compile the read-only audit
         run: python -m compileall -q research/audit
-      - name: Run 12 pregame evidence regression tests
+      - name: Run 13 pregame evidence regression tests
         run: python research/audit/test_pregame_edge_audit.py

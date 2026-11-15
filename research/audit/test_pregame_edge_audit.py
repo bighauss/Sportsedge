@@ -28,6 +28,11 @@ class Validation(unittest.TestCase):
         a=row(market='ML',side='HOME');b=row(market='ml',side='home')
         z=run(a,b);self.assertEqual(z['diagnostic_eligible'],1)
         self.assertIn('DUPLICATE_CANONICAL_SELECTION',z['flagged'][0]['flags'])
+    def test_moneyline_blank_zero_and_alias_dedup(self):
+        a=row(market='moneyline',period='full_game',line='')
+        b=row(market='ML',period='FG',line='0')
+        z=run(a,b);self.assertEqual(z['diagnostic_eligible'],1)
+        self.assertIn('DUPLICATE_CANONICAL_SELECTION',z['flagged'][0]['flags'])
     def test_quote_not_pregame(self):
         z=run(row(captured_utc='2026-11-15T17:00:00Z'))
         self.assertIn('QUOTE_NOT_PREGAME',z['flagged'][0]['flags'])

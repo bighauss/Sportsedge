@@ -37,14 +37,20 @@ def price(s):
     return v, dec
 
 def identity(row):
-    fields = ('sport','event_id','period','market','side','line','player_id')
-    return '|'.join((row.get(k) or '').strip().casefold() for k in fields)
+    val = lambda k:(row.get(k) or '').strip().casefold()
+    market = val('market').replace('moneyline','ml').replace('money_line','ml')
+    period = {'full_game':'fg','fullgame':'fg','h1':'1h','first_half':'1h'}.get(val('period'),val('period'))
+    line = val('line')
+    if market == 'ml' and line in ('', '0', '0.0', '+0', '-0'): line='0'
+    return '|'.join((val('sport'),val('event_id'),period,market,val('side'),line,val('player_id')))
 
 def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
     seen=set(); valid=[]; rejected=[]
     for number, row in enumerate(rows, 2):
         flags=[]
-        missing=[name for name in REQUIRED if not str(row.get(name) or '').strip()]
+        is_ml=(row.get('market') or '').strip().casefold() in ('ml','moneyline','money_line')
+        missing=[name for name in REQUIRED if not str(row.get(name) or '').strip()
+                 and not (name=='line' and is_ml)]
         if missing: flags.append('MISSING_FIELDS:' + ','.join(missing))
         key=identity(row)
         if key in seen: flags.append('DUPLICATE_CANONICAL_SELECTION')
