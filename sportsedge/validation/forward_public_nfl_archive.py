@@ -76,7 +76,10 @@ def prospective_archive(private_parent, *, assets=ALLOWED, event_id=None,
             if not raw_manifest.get("retrieved_at_utc"):
                 raise ValueError("CAPTURE_TIMESTAMP_MISSING")
             observed = utc(raw_manifest["retrieved_at_utc"])
-            if observed > now:
+            # A real download finishes after run start. Injected test clocks remain
+            # deterministic; production checks against the actual completion clock.
+            observation_clock = now if now_utc is not None else datetime.now(timezone.utc)
+            if observed > observation_clock:
                 raise ValueError("FUTURE_CAPTURE_TIMESTAMP")
             observations.append({
                 "asset_id": asset, "source_id": ASSETS[asset][2],
