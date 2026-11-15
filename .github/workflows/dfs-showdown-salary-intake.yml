@@ -1,0 +1,28 @@
+name: NFL DFS owner salary and unofficial loader checks
+on:
+  pull_request:
+    paths:
+      - models/nfl_dfs/fetch_dk_salaries.py
+      - models/nfl_dfs/test_fetch_dk_salaries.py
+      - models/nfl_dfs/data/DKSalaries_PIT_CIN_2026-11-15.csv
+      - models/nfl_dfs/games/PIT_CIN_2026-11-15.json
+      - .github/workflows/dfs-showdown-salary-intake.yml
+  push:
+    branches: [main]
+    paths:
+      - models/nfl_dfs/fetch_dk_salaries.py
+      - models/nfl_dfs/test_fetch_dk_salaries.py
+      - .github/workflows/dfs-showdown-salary-intake.yml
+permissions:
+  contents: read
+jobs:
+  salary-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Salary conversion + canonical owner CSV vs game config (no live fetch)
+        run: python -m unittest discover -s models/nfl_dfs -p 'test_fetch_dk_salaries.py' -v
