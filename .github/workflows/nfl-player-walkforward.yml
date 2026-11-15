@@ -1,0 +1,35 @@
+name: NFL player walk-forward research (PAPER only)
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/markets/nfl_player_walkforward_research.py'
+      - 'sportsedge/markets/nfl_player_replay_cli.py'
+      - 'sportsedge/markets/test_nfl_player_walkforward_research.py'
+      - '.github/workflows/nfl-player-walkforward.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-price-player-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Guard for future-week, missing-game and source integrity leakage
+        run: python -m unittest sportsedge.markets.test_nfl_player_walkforward_research -v
+      - name: Real 2026 week 5-9 nflverse and Next Gen Stats retrospective holdout
+        env:
+          SPORTSEDGE_REPLAY_PRIVATE: ${{ runner.temp }}/sportsedge-player-replay
+        run: |
+          mkdir -p "$SPORTSEDGE_REPLAY_PRIVATE"
+          python -m sportsedge.markets.nfl_player_replay_cli "$SPORTSEDGE_REPLAY_PRIVATE"
+      - name: Check source tree unchanged (no provider/player archives)
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo 'Unexpected file in public git tree' >&2
+            git status --short
+            exit 1
+          fi
