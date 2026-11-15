@@ -57,6 +57,7 @@ def build_offensive_td_shares(
     active_teams:set[str]=set()
     eligible_rows=0
     excluded_future=0
+    excluded_unbound_non_scoring=0
     for row in rows:
         if not row.get("season") or not row.get("week"):
             raise ValueError("SEASON_WEEK_MISSING")
@@ -80,18 +81,24 @@ def build_offensive_td_shares(
             raise ValueError("CONFLICTING_WEEKLY_TEAM_IDENTIFIERS")
         team=field_team or field_recent
         team=NFLVERSE_TEAM_ALIASES.get(team,team)
-        if not pid or not team or team not in NFL32:
-            # Do not reveal player IDs/names in public CI failure logs.
-            raise ValueError("UNKNOWN_OR_MISSING_PLAYER_TEAM_ID:"+
-                             "team="+team+";player_id_present="+str(bool(pid)))
+        if not team or team not in NFL32:
+            raise ValueError("UNKNOWN_WEEKLY_TEAM_ID:"+team)
+        rush=numeric_count(row["rushing_tds"],"rush")
+        rec=numeric_count(row["receiving_tds"],"receiving")
+        if not pid:
+            # Public weekly exports may include unbound, non-scoring players.
+            # Such rows must never receive invented player identities.
+            # Missing player IDs for ANY scoring contribution are fatal.
+            if rush+rec>0:
+                raise ValueError("UNATTRIBUTED_OFFENSIVE_TDS_MISSING_PLAYER_ID:team="+team)
+            excluded_unbound_non_scoring+=1
+            continue
         key=(y,w,team,pid)
         if key in seen:
             raise ValueError("DUPLICATE_WEEKLY_PLAYER_TEAM_ENTRY")
         seen.add(key)
         eligible_rows+=1
         active_teams.add(team)
-        rush=numeric_count(row["rushing_tds"],"rush")
-        rec=numeric_count(row["receiving_tds"],"receiving")
         # Passing touchdowns THROWN by a quarterback are not player TD SCORED.
         td_counts[(team,pid)]=td_counts.get((team,pid),Decimal(0))+rush+rec
     if not eligible_rows:
@@ -122,6 +129,8 @@ def build_offensive_td_shares(
         "season":season,"through_week":through_week,
         "eligible_weekly_rows":eligible_rows,
         "excluded_future_weekly_rows":excluded_future,
+        "excluded_non_scoring_rows_without_player_id":excluded_unbound_non_scoring,
+        "unattributed_offensive_scoring_tds":0,
         "teams_observed":len(active_teams),
         "missing_teams":missing,
         "input_sha256":receipt.sha256_raw,
