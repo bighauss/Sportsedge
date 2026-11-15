@@ -77,6 +77,30 @@ class PublicReleaseSmoke(unittest.TestCase):
                 "sha256:"+sha256(files[0].read_bytes()).hexdigest(),
                 out["source_original_sha256"])
 
+    def test_missing_player_id_zero_offensive_td_can_be_counted_and_excluded(self):
+        from sportsedge.markets.nfl_td_shares import build_offensive_td_shares
+        raw=("season,week,season_type,player_id,team,rushing_tds,receiving_tds\\n"
+             "2026,1,REG,,SEA,0,0\\n"
+             "2026,1,REG,P1,SEA,1,0\\n").replace("\\n",chr(10)).encode()
+        out=build_offensive_td_shares(raw,through_week=9,season=2026,
+            source_observed_at_utc=datetime(2026,11,15,16,21,10,tzinfo=timezone.utc),
+            fetched_at_utc=datetime(2026,11,15,17,0,tzinfo=timezone.utc),
+            require_all_32_teams=False)
+        self.assertEqual(out["excluded_non_scoring_rows_without_player_id"],1)
+        self.assertEqual(out["eligible_weekly_rows"],1)
+        self.assertEqual(out["unattributed_offensive_scoring_tds"],0)
+
+    def test_missing_player_id_offensive_td_fails(self):
+        from sportsedge.markets.nfl_td_shares import build_offensive_td_shares
+        raw=("season,week,season_type,player_id,team,rushing_tds,receiving_tds\\n"
+             "2026,1,REG,,SEA,1,0\\n").replace("\\n",chr(10)).encode()
+        with self.assertRaisesRegex(ValueError,
+                            "UNATTRIBUTED_OFFENSIVE_TDS_MISSING_PLAYER_ID"):
+            build_offensive_td_shares(raw,through_week=9,season=2026,
+                source_observed_at_utc=datetime(2026,11,15,16,21,10,tzinfo=timezone.utc),
+                fetched_at_utc=datetime(2026,11,15,17,0,tzinfo=timezone.utc),
+                require_all_32_teams=False)
+
     def test_nflverse_la_rams_team_code_normalizes_explicitly(self):
         from sportsedge.markets.nfl_td_shares import build_offensive_td_shares
         raw=("season,week,season_type,player_id,team,rushing_tds,receiving_tds\\n"
