@@ -27,7 +27,7 @@ class MarketsTests(unittest.TestCase):
     def test_pushes_are_separate_from_win_probabilities(self):
         cfg={"tag":"fixture", "teams":{"AWY":{}, "HOM":{}},
              "market":{"spread_home":3,"total":45},"players":{}}
-        scores=[(21,24),(22,23),(24,21),(25,20)]
+        scores=[(21,24),(22,23),(24,21),(25,19)]
         def fake_run(cfg,n,seed=7,raw=None):
             self.assertEqual(n,4)
             raw.extend({"AWY":({},a),"HOM":({},h)} for a,h in scores)
