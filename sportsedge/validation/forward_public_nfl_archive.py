@@ -76,7 +76,7 @@ def prospective_archive(private_parent, *, assets=ALLOWED, event_id=None,
             if not raw_manifest.get("retrieved_at_utc"):
                 raise ValueError("CAPTURE_TIMESTAMP_MISSING")
             observed = utc(raw_manifest["retrieved_at_utc"])
-            if observed > datetime.now(timezone.utc):
+            if observed > now:
                 raise ValueError("FUTURE_CAPTURE_TIMESTAMP")
             observations.append({
                 "asset_id": asset, "source_id": ASSETS[asset][2],
@@ -98,6 +98,8 @@ def prospective_archive(private_parent, *, assets=ALLOWED, event_id=None,
         "state": "PAPER_0U_RAW_PUBLIC_SOURCE_CAPTURE" if failure is None else "BLOCK_INCOMPLETE_PUBLIC_CAPTURE",
         "collected_run_start_utc": now.isoformat(),
         "github_run_id_claim": run_id,
+        "github_sha_claim": os.environ.get("GITHUB_SHA") or None,
+        "github_ref_claim": os.environ.get("GITHUB_REF") or None,
         "event_id_declared": event_id,
         "event_start_utc_declared": start.isoformat() if start else None,
         "collected_before_declared_event": all_before_event,
