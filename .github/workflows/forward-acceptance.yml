@@ -22,3 +22,4 @@ jobs:
           python-version: '3.12'
       - run: python -m compileall -q sportsedge/validation
       - run: python -m unittest sportsedge.validation.test_forward_acceptance -v
+      - run: python -m unittest sportsedge.validation.test_forward_player_evidence -v
