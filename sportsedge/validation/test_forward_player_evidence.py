@@ -171,6 +171,30 @@ class ForwardPlayerEvidence(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"ORIGINAL_FILE_HASH_MISMATCH"):
                 freeze_player_forecasts(m,now=NOW)
 
+    def test_registered_weekly_source_must_have_real_csv_schema(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            bad=write(d,"bad_source.csv",b"garbage\nnot,a,valid,source\n")
+            m["source_files"][0].update(bad)
+            with self.assertRaisesRegex(ValueError,"SOURCE_REQUIRED_COLUMN_MISSING"):
+                freeze_player_forecasts(m,now=NOW)
+
+    def test_ngs_missing_gsis_id_header_rejected(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            bad=write(d,"ngs_missing_gsis.csv",b"season,week,season_type,team_abbr\n2026,9,REG,BUF\n")
+            m["source_files"][0].update(bad)
+            m["source_files"][0]["source_id"]="NFLVERSE_NGS"
+            with self.assertRaisesRegex(ValueError,"NFL_NGS_SOURCE_ID_OR_WEEK_COLUMNS_MISSING"):
+                freeze_player_forecasts(m,now=NOW)
+
+    def test_pbp_source_disallowed_for_player_curve(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            m["source_files"][0]["source_id"]="NFLVERSE_PBP"
+            with self.assertRaisesRegex(ValueError,"NFL_PLAYER_SOURCE_NOT_ALLOWLISTED"):
+                freeze_player_forecasts(m,now=NOW)
+
     def test_lineup_receipt_after_forecast_blocks(self):
         with TemporaryDirectory() as d:
             m,_=inputs(d)
