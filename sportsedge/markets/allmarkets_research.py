@@ -260,19 +260,55 @@ class PriceReceipt:
 
 
 def _period_score(o: Outcome, sport: str, period: str, settlement: str) -> tuple[int,int]:
+    """Fail closed on unresolved full-game overtime and extra innings.
+
+    Period-only and explicitly regulation-only markets do not inherit
+    unmodeled overtime. This is a model-scenario completeness check,
+    NOT an attestation of a sportsbook's posted settlement rules.
+    """
     if period == "FG":
-        if sport=="MLB":
-            keys=tuple("I"+str(i) for i in range(1,10))
-            optional=("EXTRA",)
-        else:
-            keys=("Q1","Q2","Q3","Q4")
-            optional=("OT",) if settlement=="INCLUDES_OT" else ()
+        keys=(tuple("I"+str(i) for i in range(1,10)) if sport=="MLB"
+              else ("Q1","Q2","Q3","Q4"))
     else:
-        keys=PERIOD_ORDER[period];optional=()
+        keys=PERIOD_ORDER[period]
     if any(k not in o.periods for k in keys):
         raise ValueError("MISSING_PERIOD_SPLIT")
-    return (sum(o.periods[k][0] for k in keys+tuple(k for k in optional if k in o.periods)),
-            sum(o.periods[k][1] for k in keys+tuple(k for k in optional if k in o.periods)))
+    home=sum(o.periods[k][0] for k in keys)
+    away=sum(o.periods[k][1] for k in keys)
+    if period!="FG" or settlement=="REGULATION":
+        return home,away
+    if sport=="MLB":
+        if home!=away:
+            if "EXTRA" in o.periods:
+                raise ValueError("EXTRA_INNINGS_WITHOUT_NINE_INNING_TIE")
+            return home,away
+        if "EXTRA" not in o.periods:
+            raise ValueError("MLB_EXTRA_INNINGS_OUTCOME_MISSING")
+        home+=o.periods["EXTRA"][0]
+        away+=o.periods["EXTRA"][1]
+        if home==away:
+            raise ValueError("MLB_FINAL_TIE_UNRESOLVED")
+        return home,away
+    if settlement=="POSTED_RULES":
+        # This generic flag does not identify whether the book includes OT.
+        # For a regulation tie, the absent rule can change any FG market.
+        if home==away:
+            raise ValueError("POSTED_SETTLEMENT_RULE_UNVERIFIED")
+        if "OT" in o.periods:
+            raise ValueError("POSTED_SETTLEMENT_RULE_UNVERIFIED")
+        return home,away
+    if settlement=="INCLUDES_OT":
+        if home!=away:
+            if "OT" in o.periods:
+                raise ValueError("OVERTIME_WITHOUT_REGULATION_TIE")
+            return home,away
+        if "OT" not in o.periods:
+            raise ValueError("OVERTIME_OUTCOME_MISSING")
+        home+=o.periods["OT"][0]
+        away+=o.periods["OT"][1]
+        if (sport in BASKETBALL or sport=="CFB") and home==away:
+            raise ValueError("OVERTIME_FINAL_TIE_UNRESOLVED")
+    return home,away
 
 
 def settle(batch: SimulationBatch, o: Outcome, market: Market) -> str:
@@ -333,7 +369,7 @@ def settle(batch: SimulationBatch, o: Outcome, market: Market) -> str:
 def validate_pair(
     primary: PriceReceipt | None, opponent: PriceReceipt | None,
     market: Market, decision_at_utc: datetime,
-    *, max_age_seconds: int = 300,
+    *, max_age_seconds: int = 300, max_pair_skew_seconds: int = 30,
 ) -> tuple[Decimal,Decimal]:
     """No-vig requires two truly captured complementary prices on exact definition."""
     now=_time(decision_at_utc)
@@ -353,11 +389,19 @@ def validate_pair(
         raise ValueError("DUPLICATE_QUOTE_RECEIPT")
     if type(max_age_seconds)!=int or not 0<max_age_seconds<=300:
         raise ValueError("UNSAFE_PREGAME_QUOTE_AGE")
+    if (type(max_pair_skew_seconds)!=int or
+            not 0<max_pair_skew_seconds<=max_age_seconds):
+        raise ValueError("UNSAFE_TWO_SIDED_QUOTE_SKEW_LIMIT")
     for q in (primary,opponent):
         if not (q.observed_at_utc <= q.received_at_utc <= now < q.event_start_utc):
             raise ValueError("QUOTE_AFTER_DECISION_OR_START")
         if (now-q.observed_at_utc).total_seconds()>max_age_seconds:
             raise ValueError("STALE_QUOTE")
+    # Only compare quote synchronicity after both inputs pass their own
+    # freshness and temporal validity checks. A stale receipt is always
+    # reported as stale even when the pair is also asynchronous.
+    if abs((primary.observed_at_utc-opponent.observed_at_utc).total_seconds())>max_pair_skew_seconds:
+        raise ValueError("TWO_SIDED_QUOTE_SNAPSHOT_SKEW")
     p=_implied(primary.odds_american); opp=_implied(opponent.odds_american)
     return p/(p+opp), _decimal_odds(primary.odds_american)
 
