@@ -98,6 +98,10 @@ identities, not guessed lines. Missing such inputs → BLOCK / 0u.
 - The straight-leg CLI does not price SGPs. A separate explicit **SGP
   inventory-only placeholder** can be submitted as
   `{"market":{"sport":"NFL","event_id":"EXAMPLE","kind":"SGP","period":"FG"}}`.
+  At most **one** such marker is permitted per sport/event: without a
+  distinct posted parlay ID and leg fingerprint, repeated placeholders are
+  duplicates, not separately verified offered SGPs. A repeated marker
+  blocks intake with `DUPLICATE_UNPRICED_SGP_INVENTORY`.
   This emits an individual visible BLOCK with reason
   `SGP_REQUIRES_POSTED_JOINT_QUOTE_AND_CALIBRATED_EVENTS`, retains its
   position in the input and keeps unrelated straight legs evaluable. Any
