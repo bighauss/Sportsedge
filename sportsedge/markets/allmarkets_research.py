@@ -392,13 +392,16 @@ def validate_pair(
     if (type(max_pair_skew_seconds)!=int or
             not 0<max_pair_skew_seconds<=max_age_seconds):
         raise ValueError("UNSAFE_TWO_SIDED_QUOTE_SKEW_LIMIT")
-    if abs((primary.observed_at_utc-opponent.observed_at_utc).total_seconds())>max_pair_skew_seconds:
-        raise ValueError("TWO_SIDED_QUOTE_SNAPSHOT_SKEW")
     for q in (primary,opponent):
         if not (q.observed_at_utc <= q.received_at_utc <= now < q.event_start_utc):
             raise ValueError("QUOTE_AFTER_DECISION_OR_START")
         if (now-q.observed_at_utc).total_seconds()>max_age_seconds:
             raise ValueError("STALE_QUOTE")
+    # Only compare quote synchronicity after both inputs pass their own
+    # freshness and temporal validity checks. A stale receipt is always
+    # reported as stale even when the pair is also asynchronous.
+    if abs((primary.observed_at_utc-opponent.observed_at_utc).total_seconds())>max_pair_skew_seconds:
+        raise ValueError("TWO_SIDED_QUOTE_SNAPSHOT_SKEW")
     p=_implied(primary.odds_american); opp=_implied(opponent.odds_american)
     return p/(p+opp), _decimal_odds(primary.odds_american)
 
