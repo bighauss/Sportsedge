@@ -23,7 +23,7 @@ PUBLIC_URL=("https://github.com/nflverse/nflverse-data/releases/"
 
 def sample_gzip() -> bytes:
     raw=(
-        "season,week,season_type,player_id,recent_team,rushing_tds,receiving_tds\n"
+        "season,week,season_type,player_id,team,rushing_tds,receiving_tds\n"
         "2026,1,REG,P1,BUF,1,2\n"
         "2026,2,REG,P2,BUF,0,1\n"
         "2026,10,REG,P1,BUF,3,5\n"
@@ -76,6 +76,24 @@ class PublicReleaseSmoke(unittest.TestCase):
             self.assertEqual(
                 "sha256:"+sha256(files[0].read_bytes()).hexdigest(),
                 out["source_original_sha256"])
+
+    def test_two_team_columns_disagree_is_quarantined(self):
+        from sportsedge.markets.nfl_td_shares import build_offensive_td_shares
+        raw=("season,week,season_type,player_id,team,recent_team,rushing_tds,receiving_tds\\n"
+             "2026,1,REG,P1,BUF,NYJ,1,0\\n").replace("\\n",chr(10)).encode()
+        with self.assertRaisesRegex(ValueError,"CONFLICTING_WEEKLY_TEAM_IDENTIFIERS"):
+            build_offensive_td_shares(raw,through_week=9,season=2026,
+                source_observed_at_utc=datetime(2026,11,15,16,21,10,tzinfo=timezone.utc),
+                fetched_at_utc=datetime(2026,11,15,17,0,0,tzinfo=timezone.utc),
+                require_all_32_teams=False)
+
+    def test_missing_both_team_identifiers_fails_schema(self):
+        from sportsedge.markets.source_ingestion import parse_snapshot_bytes
+        raw=b"season,week,season_type,player_id,rushing_tds,receiving_tds\\n2026,1,REG,P1,1,0\\n".replace(b"\\n",b"\n")
+        with self.assertRaisesRegex(ValueError,"SOURCE_TEAM_ID_COLUMN_MISSING"):
+            parse_snapshot_bytes("NFLVERSE_WEEKLY",raw,
+                datetime(2026,11,15,16,0,0,tzinfo=timezone.utc),
+                datetime(2026,11,15,17,0,0,tzinfo=timezone.utc))
 
     def test_real_mode_requires_all_32_teams(self):
         with TemporaryDirectory() as d:
