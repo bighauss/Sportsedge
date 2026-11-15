@@ -16,6 +16,7 @@ card or forward-test baseline is altered.
 | Outcome distribution | `projection_distribution.py` | Explicit external model SDs/period shares and player-stat moments → deterministic provisional score+player scenarios | Validated error distributions and joint correlations. It **never** manufactures touchdown or first-basket event sequences |
 | Market pricing | `allmarkets_research.py` | Exact scenario grading for single and period markets, props, TDs and first score; exact quote pair, push-aware raw+30/70 blended EV; parlay **joint** simulation, not leg multiplication | Verified current DK/BestBook lines; independent provider receipt checks; calibrated probabilities; posted SGP odds |
 | Chronological test | `chronological_calibration.py` | Walk-forward fitted train-only margin/total widths; holdout MAE, Brier, log loss; leak-preventing timestamps | Authenticated long-run historical forecasts/results, three signed cycles, independent price/CLV evidence |
+| Card/risk integration | `run_it_research.py` | Runs each candidate through existing v2.1 guards, stores unverified quote receipts and risk decisions in the same local hash chain, emits **no official card** | Independent quote authenticity, actual v2.1 full production inputs, per-market promotion signoff |
 
 ## Markets covered at the scenario-engine level
 
@@ -31,6 +32,8 @@ card or forward-test baseline is altered.
   pitcher K/outs, hits/TB/HR/RBI/runs/walks; SGP joint scenarios.
 - **NHL** is maintained in Claude's recovered sport-specific module but is
   intentionally not included in this five-sport user-scope kernel.
+
+**Period-specific player stats:** a 1H/1Q player prop requires separately simulated 1H/1Q player outcomes; the model will not reuse full-game player statistics. Both DK sides must carry the same original provider-market ID and settlement definition.
 
 This is **coverage for evaluating externally generated scenario outcomes**,
 not proof all markets have reliable independent projections today. Missing
@@ -90,6 +93,8 @@ independent second sportsbook quote.
 
 ```bash
 python -m unittest sportsedge.markets.test_allmarkets_research -v
+python -m unittest sportsedge.markets.test_projection_bridge -v
+python -m unittest sportsedge.markets.test_run_it_research -v
 python -m unittest research.audits.test_multisport_quote_ev_regressions -v
 python -m unittest sportsedge.odds.test_issue10_offline -v
 ```
