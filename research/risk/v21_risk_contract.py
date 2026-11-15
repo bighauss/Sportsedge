@@ -87,7 +87,11 @@ def diagnostic(candidate,ledger=(),closing_observations=()):
         if quote>=start:flags.append('POST_START_QUOTE')
         if D(str((start-quote).total_seconds()))<=D(90*60) and candidate.get('injury_snapshot_locked') is not True:
             flags.append('T90_INJURY_LOCK_MISSING')
-        if start.astimezone(CT).date().isoformat()!=str(candidate['risk_date_ct']):
+        # Daily staking/exposure caps are assessed on the Central Time
+        # calendar day of the candidate quote/decision, not the future game's
+        # kickoff date. An early bet on Monday's game placed Sunday consumes
+        # Sunday's 5u budget. Caller claims still require independent receipts.
+        if quote.astimezone(CT).date().isoformat()!=str(candidate['risk_date_ct']):
             flags.append('CT_DATE_NEEDS_INDEPENDENT_VERIFICATION')
         p_model=dec(candidate['p_model']);p_market=dec(candidate['p_market_novig'])
         if not (0<p_model<1 and 0<p_market<1):raise ValueError('probability out of range')

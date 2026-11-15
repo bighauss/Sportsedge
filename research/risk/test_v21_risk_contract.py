@@ -79,4 +79,37 @@ class Contract(unittest.TestCase):
         z=size({'game_start_utc':'2026-11-16T02:00:00Z',
                 'captured_utc':'2026-11-16T01:25:00Z','risk_date_ct':'2026-11-16'})
         self.assertIn('CT_DATE_NEEDS_INDEPENDENT_VERIFICATION',z['flags'])
+    def test_early_next_day_game_uses_decision_ct_day_for_risk(self):
+        # Sunday evening research quote for a Monday 7 PM Central kickoff.
+        z=size({'captured_utc':'2026-11-16T02:00:00Z',
+                'game_start_utc':'2026-11-17T01:00:00Z',
+                'risk_date_ct':'2026-11-15'})
+        self.assertNotIn('CT_DATE_NEEDS_INDEPENDENT_VERIFICATION',z['flags'])
+        self.assertNotEqual(z['diagnostic_u'],0)
+        self.assertEqual(z['approved_stake_u'],0)
+
+    def test_early_next_day_game_misdated_as_kickoff_day_is_blocked(self):
+        z=size({'captured_utc':'2026-11-16T02:00:00Z',
+                'game_start_utc':'2026-11-17T01:00:00Z',
+                'risk_date_ct':'2026-11-16'})
+        self.assertIn('CT_DATE_NEEDS_INDEPENDENT_VERIFICATION',z['flags'])
+        self.assertEqual(z['diagnostic_u'],0)
+
+    def test_early_next_day_game_consumes_same_capture_day_limit(self):
+        sunday=[{'bet_id':'SUNDAY_BET','risk_date_ct':'2026-11-15',
+                 'event_id':'SUNDAY_GAME','theme':'different-theme',
+                 'stake_u':'4.90'}]
+        z=size({'captured_utc':'2026-11-16T02:00:00Z',
+                'game_start_utc':'2026-11-17T01:00:00Z',
+                'risk_date_ct':'2026-11-15'},ledger=sunday)
+        self.assertEqual(z['diagnostic_u'],'0.10')
+        self.assertEqual(z['approved_stake_u'],0)
+
+    def test_central_day_boundary_uses_quote_date_not_utc_date(self):
+        # 01:25 UTC Monday is still Sunday 19:25 CT.
+        z=size({'captured_utc':'2026-11-16T01:25:00Z',
+                'game_start_utc':'2026-11-16T03:00:00Z',
+                'risk_date_ct':'2026-11-15'})
+        self.assertNotIn('CT_DATE_NEEDS_INDEPENDENT_VERIFICATION',z['flags'])
+        self.assertNotEqual(z['diagnostic_u'],0)
 if __name__=='__main__':unittest.main()
