@@ -1,0 +1,156 @@
+"""One-command fail-closed all-market research runner (no bookmaker network calls).
+
+Usage:
+  python -m sportsedge.markets.cli RUN_INPUT.json RESEARCH_OUTPUT.json
+
+RUN_INPUT.json supplies pre-frozen model score means, an explicit *uncalibrated*
+dispersion contract, frozen roster IDs and exact observed opposing quote receipts.
+Optional player moment input is a separate independently sourced forecast CSV;
+never use bookmaker lines to construct model projections. Write is create-only.
+
+No CLI flag lifts PAPER/0u or generates an OFFICIAL betting card. This is a
+research audit tool, not a DraftKings/BestBook adapter or trade execution agent.
+"""
+from __future__ import annotations
+
+from datetime import datetime,timezone,timedelta
+from pathlib import Path
+from hashlib import sha256
+import json
+import sys
+
+from .allmarkets_research import Market,PriceReceipt
+from .projection_bridge import TeamProjection
+from .projection_distribution import DistributionInput,generate_score_scenarios
+from .player_forecast_intake import ingest_player_forecast_csv
+from .run_it_research import MarketCandidate,run_research_board
+from .source_ingestion import SOURCES
+from sportsedge.odds.storage import EvidenceChain
+
+
+def _iso(s:str)->datetime:
+    if not isinstance(s,str) or not s:
+        raise ValueError("UTC_TIMESTAMP_MISSING")
+    try:
+        d=datetime.fromisoformat(s.replace("Z","+00:00"))
+    except ValueError as exc:
+        raise ValueError("UTC_TIMESTAMP_INVALID") from exc
+    if d.tzinfo is None or d.utcoffset().total_seconds()!=0:
+        raise ValueError("UTC_TIMESTAMP_REQUIRED")
+    return d.astimezone(timezone.utc)
+
+
+def _only_keys(record:dict,allowed:set[str],label:str)->dict:
+    if not isinstance(record,dict) or set(record)-allowed:
+        raise ValueError("UNSUPPORTED_OR_SECRET_FIELD:"+label)
+    return record
+
+
+def _market(info:dict)->Market:
+    allowed={"sport","event_id","kind","period","selection","line",
+             "team_id","player_id","stat","settlement"}
+    _only_keys(info,allowed,"market")
+    return Market(**info)
+
+
+def _quote(data:dict|None)->PriceReceipt|None:
+    if data is None:
+        return None
+    allowed={"market","odds_american","book","provider_id","provider_event_id",
+             "provider_market_id","quote_id","receipt_id","raw_payload_sha256",
+             "observed_at_utc","received_at_utc","event_start_utc"}
+    _only_keys(data,allowed,"quote")
+    r=dict(data)
+    r["market"]=_market(r["market"])
+    for k in ("observed_at_utc","received_at_utc","event_start_utc"):
+        r[k]=_iso(r[k])
+    return PriceReceipt(**r)
+
+
+def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
+    _only_keys(payload,{"projection","distribution","markets","player_file",
+                        "roster_ids","event_team_ids","simulation_count",
+                        "simulation_seed"},"root")
+    p=_only_keys(payload["projection"],{
+        "sport","event_id","home_id","away_id","expected_home","expected_away",
+        "model_sha256","feature_sha256","asof_utc"},"projection")
+    q=dict(p);q["asof_utc"]=_iso(q["asof_utc"])
+    projection=TeamProjection(**q)
+    dispersion=_only_keys(payload["distribution"],{
+        "sport","sd_margin","sd_total","period_shares","model_sha256",
+        "training_end_utc","status"},"distribution")
+    dd=dict(dispersion)
+    dd["training_end_utc"]=_iso(dd["training_end_utc"])
+    dd["period_shares"]=tuple(dd["period_shares"])
+    distribution=DistributionInput(**dd)
+    roster=frozenset(payload.get("roster_ids",()))
+    if any(not isinstance(p,str) or not p.strip() for p in roster):
+        raise ValueError("INVALID_FROZEN_ROSTER_IDS")
+    players=()
+    if "player_file" in payload:
+        info=_only_keys(payload["player_file"],
+            {"path","raw_sha256","odds_observed_at_utc"},"player_file")
+        src=Path(info["path"])
+        if not src.is_file():
+            raise ValueError("PLAYER_FORECAST_FILE_NOT_FOUND")
+        raw=src.read_bytes()
+        intake=ingest_player_forecast_csv(raw,sport=projection.sport,
+            event_id=projection.event_id,game_roster_ids=roster,
+            event_team_ids=frozenset({projection.home_id,projection.away_id}),
+            forecast_freeze_utc=projection.asof_utc,
+            odds_observed_at_utc=_iso(info["odds_observed_at_utc"]),
+            expected_file_sha256=info["raw_sha256"])
+        players=intake.moments
+    now=datetime.now(timezone.utc)
+    if projection.asof_utc>now:
+        raise ValueError("MODEL_PROJECTION_DATED_IN_FUTURE")
+    if not isinstance(payload.get("markets"),list) or len(payload["markets"])>5000:
+        raise ValueError("INVALID_MARKET_LIST")
+    batch=generate_score_scenarios(projection,distribution,
+        roster_ids=roster,player_moments=players,
+        count=payload.get("simulation_count",2000),
+        seed=payload.get("simulation_seed",10),generated_at_utc=now)
+    candidates=[]
+    for item in payload["markets"]:
+        _only_keys(item,{"market","dk_quote","dk_opposite_quote","v21_inputs"},"candidate")
+        m=_market(item["market"])
+        candidates.append(MarketCandidate(
+            market=m,dk_quote=_quote(item.get("dk_quote")),
+            dk_other_side=_quote(item.get("dk_opposite_quote")),
+            v21_inputs=item.get("v21_inputs",{})))
+    results=run_research_board(batch,tuple(candidates),
+                               datetime.now(timezone.utc),chain=chain)
+    results["input_version"]="SPORTSEDGE_FIVE_SPORT_RESEARCH_CLI_V1"
+    results["generated_at_utc"]=datetime.now(timezone.utc).isoformat()
+    results["generator_unvalidated"]=True
+    results["source_transport_authentication"]=False
+    results["historical_backtest_certified"]=False
+    return results
+
+
+def main(argv:list[str]|None=None)->int:
+    argv=sys.argv[1:] if argv is None else argv
+    if len(argv)!=2:
+        print("Usage: python -m sportsedge.markets.cli INPUT.json OUTPUT.json",file=sys.stderr)
+        return 2
+    input_path=Path(argv[0])
+    output_path=Path(argv[1])
+    if input_path.resolve()==output_path.resolve():
+        raise ValueError("REFUSE_INPUT_OVERWRITE")
+    input_bytes=input_path.read_bytes()
+    data=json.loads(input_bytes.decode("utf-8"))
+    # Output is create-only. Never mutate an existing archived card.
+    result=run_from_manifest(data)
+    result["manifest_sha256"]="sha256:"+sha256(input_bytes).hexdigest()
+    with output_path.open("x",encoding="utf-8") as f:
+        json.dump(result,f,indent=2,sort_keys=True)
+        f.write("\n")
+    print(json.dumps({
+        "status":result["status"],"markets":result["submitted_candidates"],
+        "approved_stake_u":0,"official_counted":0,
+        "saved_to":str(output_path)},sort_keys=True))
+    return 0
+
+
+if __name__=="__main__":
+    raise SystemExit(main())
