@@ -44,7 +44,7 @@ class WeeklyAdapterTests(unittest.TestCase):
             for wk in (8,9):
                 stats=[
                     (tm+"_QB",dict(attempts=20,completions=14,passing_tds=2,
-                                  interceptions=1,carries=2,rushing_yards=6)),
+                                  passing_interceptions=1,carries=2,rushing_yards=6)),
                     (tm+"_RB",dict(carries=12,rushing_yards=55,rushing_tds=1,
                                   targets=4,receptions=3,receiving_yards=24)),
                     (tm+"_WR",dict(targets=8,receptions=5,
@@ -99,6 +99,21 @@ class WeeklyAdapterTests(unittest.TestCase):
         out=weekly.build(self.manifest_path,lookback=2,min_games=2)
         self.assertGreater(out["_auto_build"]["excluded_current_or_future_rows"],0)
         self.assertEqual(out["teams"]["PIT"]["pass_td"],2)
+
+    def test_real_2026_passing_interception_column(self):
+        self.assertIn("passing_interceptions",weekly.CORE)
+        self.assertNotIn("interceptions",weekly.CORE)
+        out=weekly.build(self.manifest_path,lookback=2,min_games=2)
+        self.assertEqual(out["teams"]["PIT"]["int_rate"],.05)
+
+    def test_legacy_interception_only_file_is_blocked(self):
+        # Real 2026 release uses passing_interceptions. A synthetic
+        # legacy-only alias must fail instead of filling 0 INTs.
+        self.columns=tuple("interceptions" if k=="passing_interceptions"
+                           else k for k in self.columns)
+        self.save_weekly(self.rows)
+        with self.assertRaises(Blocked):
+            weekly.build(self.manifest_path,lookback=2,min_games=2)
 
     def test_wrong_hash_fails(self):
         self.manifest["weekly"]["sha256"]="0"*64
