@@ -4,8 +4,34 @@ import tempfile
 import unittest
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
+from hashlib import sha256
 
 from sportsedge.markets.cli import run_from_manifest,main
+from sportsedge.markets.pit_source_manifest import (
+    MANIFEST_VERSION,_inputs_to_check,
+)
+
+
+def source_manifest(paths, sport, event_id, freeze_utc):
+    """Artificial dated receipts for tests ONLY, not proof of historic capture."""
+    freeze=datetime.fromisoformat(freeze_utc)
+    files=[]
+    for role,path in _inputs_to_check(paths).items():
+        files.append({
+           "role":role,"path":str(path),
+           "raw_sha256":"sha256:"+sha256(path.read_bytes()).hexdigest(),
+           "source_id":{"NFL":"NFLVERSE_WEEKLY","CBB":"CBB_HOOPR",
+                        "CFB":"CFB_DATA","NBA":"NBA_STATS",
+                        "MLB":"MLB_STATCAST"}[sport],
+           "data_through_utc":(freeze-timedelta(days=3)).isoformat(),
+           "observed_at_utc":(freeze-timedelta(hours=3)).isoformat(),
+           "captured_at_utc":(freeze-timedelta(hours=2)).isoformat(),
+        })
+    return {"version":MANIFEST_VERSION,"sport":sport,"event_id":event_id,
+            "forecast_asof_utc":freeze_utc,
+            "model_trained_until_utc":(freeze-timedelta(days=2)).isoformat(),
+            "files":files}
+
 
 H="sha256:"+"a"*64
 S="sha256:"+"b"*64
@@ -97,13 +123,15 @@ class CLIContract(unittest.TestCase):
 
     def test_direct_cbb_claude_model_projection_without_bookmaker_inputs(self):
         from models.cbb import test_cbb
-        paths=test_cbb.make_samples()
+        paths={k:v for k,v in test_cbb.make_samples().items()
+               if k not in ("odds","props")}
         p=manifest()
         p.pop("projection")
+        asof=(nowutc()-timedelta(hours=1)).isoformat()
         p["projection_ref"]={
-            "sport":"CBB","event_id":"C1","asof_utc":
-                (nowutc()-timedelta(hours=1)).isoformat(),
+            "sport":"CBB","event_id":"C1","asof_utc":asof,
             "feature_paths":paths,
+            "source_manifest":source_manifest(paths,"CBB","C1",asof),
         }
         p["markets"]=[]
         r=run_from_manifest(p)
@@ -121,10 +149,13 @@ class CLIContract(unittest.TestCase):
             path.write_text(source.replace("\\n",chr(10)))
             p=manifest()
             p.pop("projection")
+            asof=(nowutc()-timedelta(hours=1)).isoformat()
             p["projection_ref"]={
                "sport":"NFL","event_id":"NFL-TEST",
-               "asof_utc":(nowutc()-timedelta(hours=1)).isoformat(),
+               "asof_utc":asof,
                "ratings_csv":str(path),
+               "source_manifest":source_manifest(
+                    {"ratings_csv":str(path)},"NFL","NFL-TEST",asof),
                "forecast":{
                    "home":"Alpha","away":"Beta",
                    "home_proj":"23.800","away_proj":"18.200",
@@ -137,6 +168,57 @@ class CLIContract(unittest.TestCase):
             out=run_from_manifest(p)
             self.assertEqual(out["sport"],"NFL")
             self.assertEqual(out["model_projection_method"],"RECOVERED_MODEL_FUNCTION")
+
+    def test_direct_model_without_pit_manifest_rejected(self):
+        p=manifest()
+        p.pop("projection")
+        p["projection_ref"]={"sport":"CBB","event_id":"C1",
+            "asof_utc":(nowutc()-timedelta(hours=1)).isoformat(),
+            "feature_paths":{}}
+        with self.assertRaisesRegex(ValueError,
+                                    "PIT_SOURCE_MANIFEST_REQUIRED_FOR_DIRECT_MODEL"):
+            run_from_manifest(p)
+
+    def test_direct_model_file_hash_tamper_rejected(self):
+        from models.cbb import test_cbb
+        paths={k:v for k,v in test_cbb.make_samples().items()
+               if k not in ("odds","props")}
+        asof=(nowutc()-timedelta(hours=1)).isoformat()
+        m=source_manifest(paths,"CBB","C1",asof)
+        m["files"][0]["raw_sha256"]="sha256:"+"0"*64
+        p=manifest()
+        p.pop("projection")
+        p["projection_ref"]={"sport":"CBB","event_id":"C1",
+            "asof_utc":asof,"feature_paths":paths,"source_manifest":m}
+        with self.assertRaisesRegex(ValueError,"PIT_FEATURE_RAW_HASH_MISMATCH"):
+            run_from_manifest(p)
+
+    def test_direct_model_future_observation_rejected(self):
+        from models.cbb import test_cbb
+        paths={k:v for k,v in test_cbb.make_samples().items()
+               if k not in ("odds","props")}
+        asof=(nowutc()-timedelta(hours=1)).isoformat()
+        m=source_manifest(paths,"CBB","C1",asof)
+        m["files"][0]["captured_at_utc"]=(nowutc()+timedelta(hours=1)).isoformat()
+        p=manifest()
+        p.pop("projection")
+        p["projection_ref"]={"sport":"CBB","event_id":"C1",
+            "asof_utc":asof,"feature_paths":paths,"source_manifest":m}
+        with self.assertRaisesRegex(ValueError,"PIT_FEATURE_LOOKAHEAD_OR_BAD_CAPTURE_ORDER"):
+            run_from_manifest(p)
+
+    def test_odds_masquerading_as_projection_feature_rejected(self):
+        from models.cbb import test_cbb
+        paths=test_cbb.make_samples()
+        asof=(nowutc()-timedelta(hours=1)).isoformat()
+        p=manifest()
+        p.pop("projection")
+        p["projection_ref"]={"sport":"CBB","event_id":"C1",
+            "asof_utc":asof,"feature_paths":paths,
+            "source_manifest":{"version":"v1"}}
+        with self.assertRaisesRegex(ValueError,
+                                    "PIT_SCHEMA_EXTRA_OR_MISSING_FIELDS"):
+            run_from_manifest(p)
 
     def test_two_team_projection_sources_fail_closed(self):
         p=manifest()

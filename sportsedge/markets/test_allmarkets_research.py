@@ -270,6 +270,16 @@ class CapturedOdds(unittest.TestCase):
         r=price_market(batch(),a,quote(a),other,D)
         self.assertIn("DIFFERENT_QUOTE_SOURCE_EVENT_OR_MARKET",r["reasons"])
 
+    def test_model_feature_freeze_after_quote_blocks_ev(self):
+        from dataclasses import replace
+        late=replace(batch(),asof_utc=D-timedelta(minutes=1),generated_at_utc=D)
+        a=mk()
+        b=mk(selection="AWAY",line="3.5")
+        result=price_market(late,a,quote(a),quote(b,receipt="r2",quote_id="q2"),
+                            D+timedelta(seconds=5))
+        self.assertEqual(result["status"],"BLOCK")
+        self.assertIn("MODEL_FEATURE_FREEZE_AFTER_ODDS_QUOTE",result["reasons"])
+
     def test_missing_other_side_blocks(self):
         r=price_market(batch(),mk(),quote(mk()),None,D)
         self.assertEqual(r["status"],"BLOCK")
@@ -324,6 +334,20 @@ class SGPResearch(unittest.TestCase):
         r=price_sgp(batch(),legs,+220,H,S,D-timedelta(seconds=40),D,
                     quote_book="DraftKings",event_start_at_utc=START)
         self.assertIn("SGP_LEG_FINGERPRINT_MISMATCH",r["reasons"])
+
+    def test_sgp_feature_freeze_after_quote_blocks_probability(self):
+        from dataclasses import replace
+        late=replace(batch(),asof_utc=D-timedelta(seconds=30),
+                     generated_at_utc=D-timedelta(seconds=10))
+        legs=(mk("ML","HOME",""),mk("TOTAL","OVER","40.5"))
+        raw=json.dumps([m.identity() for m in legs],
+                       sort_keys=True,separators=(",",":")).encode()
+        fingerprint="sha256:"+hashlib.sha256(raw).hexdigest()
+        result=price_sgp(late,legs,220,H,fingerprint,
+                         D-timedelta(seconds=40),D+timedelta(seconds=5),
+                         quote_book="DraftKings",event_start_at_utc=START)
+        self.assertEqual(result["status"],"BLOCK")
+        self.assertIn("SGP_MODEL_FEATURES_AFTER_POSTED_QUOTE",result["reasons"])
 
     def test_sgp_no_actual_quote_blocked(self):
         legs=(mk("ML","HOME",""),mk("TOTAL","OVER","40.5"))

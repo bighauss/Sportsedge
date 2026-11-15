@@ -429,6 +429,11 @@ def price_market(
         if len(batch.outcomes)<max(1000,min_simulations):
             raise ValueError("INSUFFICIENT_SIMULATION_COUNT")
         market_cond,decimal_odds=validate_pair(primary,opponent,market,now)
+        # A model updated after the observed quote is NOT a point-in-time
+        # projection against that offer. Re-capture the quote or hold.
+        if (batch.asof_utc > primary.observed_at_utc or
+                batch.asof_utc > opponent.observed_at_utc):
+            raise ValueError("MODEL_FEATURE_FREEZE_AFTER_ODDS_QUOTE")
         outcomes=[settle(batch,o,market) for o in batch.outcomes]
         w=outcomes.count("W");p=outcomes.count("P");l=outcomes.count("L")
         if w<min_tail_count or l<min_tail_count or w+l==0:
@@ -499,6 +504,8 @@ def price_sgp(
             raise ValueError("SGP_QUOTE_FUTURE_DATED")
         if (now-quote_received_at_utc).total_seconds()>300:
             raise ValueError("SGP_QUOTE_STALE")
+        if batch.asof_utc > _time(quote_received_at_utc):
+            raise ValueError("SGP_MODEL_FEATURES_AFTER_POSTED_QUOTE")
         win=0
         for o in batch.outcomes:
             states=[settle(batch,o,m) for m in legs]
