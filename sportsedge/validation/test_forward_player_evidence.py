@@ -178,11 +178,11 @@ class ForwardPlayerEvidence(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"LINEUP_CAPTURE_TOO_LATE"):
                 freeze_player_forecasts(m,now=NOW)
 
-    def test_source_after_observed_quote_blocks(self):
+    def test_quote_before_feature_freeze_blocks(self):
         with TemporaryDirectory() as d:
             m,_=inputs(d)
             m["odds_observed_at_utc"]=iso(ASOF-timedelta(hours=4,minutes=30))
-            with self.assertRaisesRegex(ValueError,"SOURCE_AFTER_ODDS_QUOTE"):
+            with self.assertRaisesRegex(ValueError,"INVALID_ODDS_OBSERVATION_ORDER"):
                 freeze_player_forecasts(m,now=NOW)
 
     def test_extra_api_key_or_auth_claim_is_forbidden(self):
