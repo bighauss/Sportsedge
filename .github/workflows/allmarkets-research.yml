@@ -30,5 +30,7 @@ jobs:
         run: python -m unittest sportsedge.markets.test_pit_source_manifest -v
       - name: Run single-command research CLI smoke tests
         run: python -m unittest sportsedge.markets.test_cli -v
+      - name: Verify five-sport slate reconciliation and blocked-market inventory
+        run: python -m unittest sportsedge.markets.test_slate_orchestrator -v
       - name: Verify old v5 intake/policy and all-sport quote math tests
         run: python -m unittest research.audits.test_multisport_quote_ev_regressions sportsedge.odds.test_issue10_offline -q
