@@ -13,6 +13,10 @@ import json
 
 from .source_ingestion import parse_snapshot_bytes
 
+# nflverse uses LA for the Rams in its public weekly data; SportsEdge
+# canonically stores Rams as LAR. Do not perform fuzzy team matching.
+NFLVERSE_TEAM_ALIASES = {"LA":"LAR"}
+
 NFL32 = frozenset({
     "ARI","ATL","BAL","BUF","CAR","CHI","CIN","CLE","DAL","DEN","DET","GB",
     "HOU","IND","JAX","KC","LAC","LAR","LV","MIA","MIN","NE","NO","NYG",
@@ -75,8 +79,11 @@ def build_offensive_td_shares(
         if field_team and field_recent and field_team != field_recent:
             raise ValueError("CONFLICTING_WEEKLY_TEAM_IDENTIFIERS")
         team=field_team or field_recent
+        team=NFLVERSE_TEAM_ALIASES.get(team,team)
         if not pid or not team or team not in NFL32:
-            raise ValueError("UNKNOWN_OR_MISSING_PLAYER_TEAM_ID")
+            # Do not reveal player IDs/names in public CI failure logs.
+            raise ValueError("UNKNOWN_OR_MISSING_PLAYER_TEAM_ID:"+
+                             "team="+team+";player_id_present="+str(bool(pid)))
         key=(y,w,team,pid)
         if key in seen:
             raise ValueError("DUPLICATE_WEEKLY_PLAYER_TEAM_ENTRY")
