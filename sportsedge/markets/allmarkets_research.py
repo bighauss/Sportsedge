@@ -174,6 +174,8 @@ class Outcome:
     player_stats: dict[str, dict[str, int]] = field(default_factory=dict)
     events: tuple[ScoreEvent, ...] = ()
     events_complete: bool = False
+    # Period props must be separately projected. NEVER reuse full-game stats.
+    player_period_stats: dict[str,dict[str,dict[str,int]]] = field(default_factory=dict)
 
     def __post_init__(self):
         if not isinstance(self.periods, dict):
@@ -186,6 +188,14 @@ class Outcome:
                 raise ValueError("INVALID_PLAYER_STATS")
             if any(type(v)!=int or v<0 for v in stats.values()):
                 raise ValueError("INVALID_PLAYER_STAT_VALUE")
+        for period, players in self.player_period_stats.items():
+            if period not in PERIODS or period=="FG" or not isinstance(players,dict):
+                raise ValueError("INVALID_PLAYER_PROP_PERIOD")
+            for player,stats in players.items():
+                if not player or not isinstance(stats,dict):
+                    raise ValueError("INVALID_PLAYER_PERIOD_STATS")
+                if any(type(v)!=int or v<0 for v in stats.values()):
+                    raise ValueError("INVALID_PLAYER_PERIOD_STAT_VALUE")
 
 
 @dataclass(frozen=True)
@@ -215,6 +225,9 @@ class SimulationBatch:
         for o in self.outcomes:
             if not set(o.player_stats).issubset(self.roster_ids):
                 raise ValueError("PLAYER_STATS_ROSTER_MISMATCH")
+            for period_player_stats in o.player_period_stats.values():
+                if not set(period_player_stats).issubset(self.roster_ids):
+                    raise ValueError("PERIOD_PLAYER_STATS_ROSTER_MISMATCH")
             for e in o.events:
                 if e.team_id not in (self.home_id,self.away_id) or (e.player_id and e.player_id not in self.roster_ids):
                     raise ValueError("SCORING_EVENT_ROSTER_MISMATCH")
@@ -287,9 +300,14 @@ def settle(batch: SimulationBatch, o: Outcome, market: Market) -> str:
         hit=(home+away==0) if market.kind=="NRFI" else (home+away>0)
         return "W" if (hit==(market.selection=="YES")) else "L"
     if market.kind=="PLAYER_PROP":
-        if market.player_id not in o.player_stats or market.stat not in o.player_stats[market.player_id]:
-            raise ValueError("PLAYER_STAT_PROJECTION_MISSING")
-        val=Decimal(o.player_stats[market.player_id][market.stat])
+        if market.period=="FG":
+            stats=o.player_stats
+        else:
+            stats=o.player_period_stats.get(market.period,{})
+        if market.player_id not in stats or market.stat not in stats[market.player_id]:
+            raise ValueError("PERIOD_PLAYER_STAT_PROJECTION_MISSING" if market.period!="FG"
+                             else "PLAYER_STAT_PROJECTION_MISSING")
+        val=Decimal(stats[market.player_id][market.stat])
         line=_decimal(market.line)
         diff=val-line if market.selection=="OVER" else line-val
     else:
@@ -325,8 +343,10 @@ def validate_pair(
         raise ValueError("TWO_SIDED_MARKET_LINE_MISMATCH")
     if primary.book.casefold()!="draftkings" or opponent.book.casefold()!="draftkings":
         raise ValueError("NON_DK_PRICE_USED_AS_DK_TAKEN_QUOTE")
-    if primary.provider_id!=opponent.provider_id or primary.provider_event_id!=opponent.provider_event_id:
-        raise ValueError("DIFFERENT_QUOTE_SOURCE_OR_EVENT")
+    if (primary.provider_id!=opponent.provider_id or
+        primary.provider_event_id!=opponent.provider_event_id or
+        primary.provider_market_id!=opponent.provider_market_id):
+        raise ValueError("DIFFERENT_QUOTE_SOURCE_EVENT_OR_MARKET")
     if primary.event_start_utc!=opponent.event_start_utc:
         raise ValueError("EVENT_START_MISMATCH")
     if primary.receipt_id==opponent.receipt_id or primary.quote_id==opponent.quote_id:
