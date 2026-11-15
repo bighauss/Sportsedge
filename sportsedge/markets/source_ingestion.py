@@ -40,7 +40,7 @@ SOURCES = {
         "Weekly NFL player rushing/receiving/passing stats",
         "Public release; check release asset SHA-256 and date",
         "Published-after-game revision cannot be used to backfill pregame features",
-        ("season","week","season_type","player_id","recent_team","rushing_tds","receiving_tds")),
+        ("season","week","season_type","player_id","rushing_tds","receiving_tds")),
     "NFLVERSE_PBP": Source(
         "NFLVERSE_PBP","NFL","https://github.com/nflverse/nflverse-data",
         "Play-by-play scoring and game/drive outcomes",
@@ -145,6 +145,8 @@ def parse_snapshot_bytes(
         for required in SOURCES[source_id].required_columns:
             if required not in headers:
                 raise ValueError("SOURCE_REQUIRED_COLUMN_MISSING:"+required)
+        if source_id=="NFLVERSE_WEEKLY" and not ({"team","recent_team"} & set(headers)):
+            raise ValueError("SOURCE_TEAM_ID_COLUMN_MISSING")
         rows=list(reader)
         if any(None in r or any(v is None for v in r.values()) for r in rows):
             raise ValueError("SOURCE_RAGGED_CSV_ROW")

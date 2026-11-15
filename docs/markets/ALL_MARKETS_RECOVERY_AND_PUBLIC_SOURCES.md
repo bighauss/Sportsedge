@@ -223,3 +223,34 @@ not prove every field's original publication date.
 python -m unittest sportsedge.markets.test_pit_source_manifest -v
 python -m unittest sportsedge.markets.test_cli -v
 ```
+
+### Actual public 2026 nflverse weekly-data acceptance smoke
+
+`sportsedge/markets/nflverse_public_research_smoke.py` and the
+`nflverse-public-data-smoke.yml` workflow retrieve the **current** published
+2026 nflverse weekly player-stat `.csv.gz` into the GitHub runner's private
+temporary directory (not the tracked repository). It independently recomputes
+the exact raw-data SHA-256, compares with the SHA-256 digest and byte length
+reported by GitHub's release API, parses the actual CSV schema, checks all
+32 NFL team identifiers and validates the registered week cutoff before
+counting historical offensive rushing/receiving TD shares.
+
+The smoke job reports only season, source digest, release-time claim,
+eligible row counts, coverage, and blocked/imperfect statuses. It does
+**not** print or publish raw player rows, inject historical shares into
+betting probabilities, mark past weeks retrospectively as captured, or
+authorize a wager. Missing teams, unexpected column names, duplicate
+player-week IDs, mismatched digest or inaccessible assets **fail the job**.
+
+Command (requires network access and manual source permission compliance):
+
+```bash
+python -m sportsedge.markets.nflverse_public_research_smoke /tmp/sportsedge-nflverse
+python -m unittest sportsedge.markets.test_nflverse_public_research_smoke -v
+```
+
+The GitHub release `updated_at` field is a publisher timestamp **claim**,
+not a signed pregame point-in-time observation. A freshly downloaded file on
+November 15 cannot prove what was publicly available before November 9 or
+earlier. Any historical backtest must use archived snapshots existing before
+that decision, or be transparently marked a retrospective reconstruction.
