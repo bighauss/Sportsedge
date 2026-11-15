@@ -169,3 +169,57 @@ decision; recorded file mtimes and model version names are insufficient
 proof. All outputs remain PAPER/0u, and every tested price stays under the
 same receipt + v2.1 guard. A direct model call does not synthesize passing
 curves, touchdown counts, or real injury news.
+
+### Direct-model point-in-time file manifest (Issue #10 Gate B)
+
+Any `projection_ref` now **requires** `source_manifest` with version
+`SPORTSEDGE_PIT_FILE_MANIFEST_V1`. For each independent model feature file
+(or each non-bookmaker CSV in an MLB feature folder), the manifest binds:
+
+- Exact feature role, local original-file path and its full SHA-256 of raw bytes
+- A registered public source ID for that sport
+- Explicit `data_through_utc`, `observed_at_utc`, `captured_at_utc`
+- Exact `forecast_asof_utc`, `model_trained_until_utc`, sport and event ID
+
+The gate checks `data_through <= observed <= captured <= forecast_asof` and
+`model_trained_until < forecast_asof`. It rejects missing or duplicated roles,
+post-frozen inputs, wrong sports, invalid hashes, unregistered source IDs,
+symlinked feature files and bookmaker odds passed as model input. It checks
+feature bytes **before and after the recovered model executes**, and
+blocks pricing if the model's feature freeze comes after the original
+observed DraftKings quote (including parlay quote).
+
+Illustrative manifest shape (timestamps are **fictional**, not original
+source attestations):
+
+```json
+{
+  "version": "SPORTSEDGE_PIT_FILE_MANIFEST_V1",
+  "sport": "CBB", "event_id": "EXAMPLE-123",
+  "forecast_asof_utc": "2026-11-15T15:00:00Z",
+  "model_trained_until_utc": "2026-11-14T00:00:00Z",
+  "files": [{
+    "role": "teams",
+    "path": "/private/sportsedge/teams.csv",
+    "raw_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_id": "CBB_HOOPR",
+    "data_through_utc": "2026-11-14T10:00:00Z",
+    "observed_at_utc": "2026-11-14T11:00:00Z",
+    "captured_at_utc": "2026-11-14T11:01:00Z"
+  }]
+}
+```
+
+**Integrity is not authentication.** A dishonest caller can claim earlier
+timestamps or mislabel a feed and still produce a valid file hash. Until
+provider publication signatures or independently anchored contemporaneous
+receipts and provenance are audited, the result always says
+`pit_manifest_source_authenticated=false`, remains `PAPER / 0u`, and
+cannot be promoted under Issue #10. Row-level feature-content leakage is
+still a separate chronological audit obligation; file-level time checks do
+not prove every field's original publication date.
+
+```bash
+python -m unittest sportsedge.markets.test_pit_source_manifest -v
+python -m unittest sportsedge.markets.test_cli -v
+```
