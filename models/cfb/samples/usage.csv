@@ -1,0 +1,7 @@
+player,team,pos,market,share,eff,games
+A. Runner,Alpha State,RB,rush_yds,0.55,5.6,10
+A. Wideout,Alpha State,WR,rec_yds,0.27,9.0,10
+A. Wideout,Alpha State,WR,receptions,0.27,0.66,10
+A. Passer,Alpha State,QB,pass_yds,0.95,7.9,10
+B. Runner,Bravo Tech,RB,rush_yds,0.5,4.4,10
+D. Runner,Delta College,RB,rush_yds,0.6,5.0,10

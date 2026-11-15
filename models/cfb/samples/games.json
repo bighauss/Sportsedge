@@ -1,0 +1,22 @@
+[
+ {
+  "id": 901,
+  "season": 2026,
+  "week": 12,
+  "homeTeam": "Alpha State",
+  "awayTeam": "Bravo Tech",
+  "neutralSite": false,
+  "venue": "Alpha Field",
+  "startDate": "2026-11-21T17:00:00Z"
+ },
+ {
+  "id": 902,
+  "season": 2026,
+  "week": 12,
+  "homeTeam": "Charlie U",
+  "awayTeam": "Delta College",
+  "neutralSite": false,
+  "venue": "Charlie Mesa Stadium",
+  "startDate": "2026-11-21T21:00:00Z"
+ }
+]

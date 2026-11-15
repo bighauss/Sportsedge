@@ -1,0 +1,7 @@
+gameId,player,market,line,overOdds,underOdds
+901,A. Runner,rush_yds,84.5,-115,-105
+901,A. Wideout,rec_yds,61.5,-110,-110
+901,A. Wideout,receptions,4.5,-130,110
+901,A. Passer,pass_yds,235.5,-110,-110
+901,B. Runner,rush_yds,62.5,-110,-110
+902,D. Runner,rush_yds,88.5,-110,-110

@@ -1,0 +1,218 @@
+[
+ {
+  "season": 2026,
+  "team": "Alpha State",
+  "conference": "Sample",
+  "games": 10,
+  "offense": {
+   "plays": 772,
+   "drives": 120,
+   "ppa": 0.258,
+   "successRate": 0.45599999999999996,
+   "explosiveness": 1.322,
+   "pointsPerOpportunity": 4.4399999999999995,
+   "fieldPosition": {
+    "averageStart": 68.2
+   },
+   "havoc": {
+    "total": 0.178
+   },
+   "rushingPlays": {
+    "ppa": 0.20800000000000002,
+    "successRate": 0.44599999999999995,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.34600000000000003,
+    "successRate": 0.46599999999999997,
+    "rate": 0.5
+   }
+  },
+  "defense": {
+   "plays": 643,
+   "drives": 120,
+   "ppa": 0.06359999999999999,
+   "successRate": 0.3912,
+   "explosiveness": 1.1924,
+   "pointsPerOpportunity": 3.468,
+   "fieldPosition": {
+    "averageStart": 71.44
+   },
+   "havoc": {
+    "total": 0.187
+   },
+   "rushingPlays": {
+    "ppa": 0.013600000000000001,
+    "successRate": 0.3812,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.11919999999999999,
+    "successRate": 0.4012,
+    "rate": 0.5
+   }
+  }
+ },
+ {
+  "season": 2026,
+  "team": "Bravo Tech",
+  "conference": "Sample",
+  "games": 10,
+  "offense": {
+   "plays": 708,
+   "drives": 120,
+   "ppa": 0.162,
+   "successRate": 0.424,
+   "explosiveness": 1.258,
+   "pointsPerOpportunity": 3.96,
+   "fieldPosition": {
+    "averageStart": 69.8
+   },
+   "havoc": {
+    "total": 0.162
+   },
+   "rushingPlays": {
+    "ppa": 0.112,
+    "successRate": 0.414,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.234,
+    "successRate": 0.434,
+    "rate": 0.5
+   }
+  },
+  "defense": {
+   "plays": 694,
+   "drives": 120,
+   "ppa": 0.1404,
+   "successRate": 0.4168,
+   "explosiveness": 1.2436,
+   "pointsPerOpportunity": 3.852,
+   "fieldPosition": {
+    "averageStart": 70.16
+   },
+   "havoc": {
+    "total": 0.163
+   },
+   "rushingPlays": {
+    "ppa": 0.09040000000000001,
+    "successRate": 0.4068,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.20879999999999999,
+    "successRate": 0.4268,
+    "rate": 0.5
+   }
+  }
+ },
+ {
+  "season": 2026,
+  "team": "Charlie U",
+  "conference": "Sample",
+  "games": 10,
+  "offense": {
+   "plays": 676,
+   "drives": 120,
+   "ppa": 0.11399999999999999,
+   "successRate": 0.408,
+   "explosiveness": 1.226,
+   "pointsPerOpportunity": 3.7199999999999998,
+   "fieldPosition": {
+    "averageStart": 70.6
+   },
+   "havoc": {
+    "total": 0.154
+   },
+   "rushingPlays": {
+    "ppa": 0.064,
+    "successRate": 0.39799999999999996,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.178,
+    "successRate": 0.418,
+    "rate": 0.5
+   }
+  },
+  "defense": {
+   "plays": 719,
+   "drives": 120,
+   "ppa": 0.1788,
+   "successRate": 0.4296,
+   "explosiveness": 1.2692,
+   "pointsPerOpportunity": 4.044,
+   "fieldPosition": {
+    "averageStart": 69.52
+   },
+   "havoc": {
+    "total": 0.151
+   },
+   "rushingPlays": {
+    "ppa": 0.1288,
+    "successRate": 0.4196,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.2536,
+    "successRate": 0.4396,
+    "rate": 0.5
+   }
+  }
+ },
+ {
+  "season": 2026,
+  "team": "Delta College",
+  "conference": "Sample",
+  "games": 10,
+  "offense": {
+   "plays": 740,
+   "drives": 120,
+   "ppa": 0.21,
+   "successRate": 0.44,
+   "explosiveness": 1.29,
+   "pointsPerOpportunity": 4.2,
+   "fieldPosition": {
+    "averageStart": 69.0
+   },
+   "havoc": {
+    "total": 0.17
+   },
+   "rushingPlays": {
+    "ppa": 0.16,
+    "successRate": 0.43,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.29000000000000004,
+    "successRate": 0.45,
+    "rate": 0.5
+   }
+  },
+  "defense": {
+   "plays": 668,
+   "drives": 120,
+   "ppa": 0.102,
+   "successRate": 0.40399999999999997,
+   "explosiveness": 1.218,
+   "pointsPerOpportunity": 3.66,
+   "fieldPosition": {
+    "averageStart": 70.8
+   },
+   "havoc": {
+    "total": 0.175
+   },
+   "rushingPlays": {
+    "ppa": 0.052000000000000005,
+    "successRate": 0.39399999999999996,
+    "rate": 0.5
+   },
+   "passingPlays": {
+    "ppa": 0.16399999999999998,
+    "successRate": 0.414,
+    "rate": 0.5
+   }
+  }
+ }
+]

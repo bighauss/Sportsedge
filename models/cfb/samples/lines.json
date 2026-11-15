@@ -1,0 +1,32 @@
+[
+ {
+  "id": 901,
+  "homeTeam": "Alpha State",
+  "awayTeam": "Bravo Tech",
+  "lines": [
+   {
+    "provider": "sample",
+    "spread": -10.5,
+    "overUnder": 55.5,
+    "homeMoneyline": -400,
+    "awayMoneyline": 310
+   }
+  ],
+  "spreadHomeOdds": -110,
+  "spreadAwayOdds": -110,
+  "overOdds": -110,
+  "underOdds": -110,
+  "homeTT": 33.5,
+  "homeTTOver": -115,
+  "homeTTUnder": -105,
+  "awayTT": 22.5,
+  "awayTTOver": -110,
+  "awayTTUnder": -110,
+  "h1Spread": -6.5,
+  "h1HomeOdds": -110,
+  "h1AwayOdds": -110,
+  "h1Total": 27.5,
+  "h1Over": -110,
+  "h1Under": -110
+ }
+]

@@ -1,0 +1,17 @@
+{
+ "games": "games.json",
+ "advanced": "advanced.json",
+ "talent": "talent.json",
+ "returning": "returning.json",
+ "ratings": "ratings.json",
+ "teams": "teams.json",
+ "venues": "venues.csv",
+ "injuries": "injuries.csv",
+ "weather": "weather.json",
+ "schedule_rest": "rest.csv",
+ "crosscheck": "crosscheck.csv",
+ "lines": "lines.json",
+ "lines_extra": "lines_flat.csv",
+ "usage": "usage.csv",
+ "props": "props.csv"
+}
