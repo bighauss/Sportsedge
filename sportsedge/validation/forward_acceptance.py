@@ -1,0 +1,233 @@
+"""Read-only structural progress audit for SportsEdge Issue #10 hard Gates A-E.
+
+Self-reported manifests, dates, hashes and signed strings do NOT prove bookmaker
+authenticity, real-slate completeness, independent review or positive EV.
+ALWAYS returns PAPER/0u. This code does not make wagers or issue promotions.
+"""
+from __future__ import annotations
+
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+from hashlib import sha256
+import argparse
+import json
+import re
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+CT = ZoneInfo("America/Chicago")
+SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
+CARD_FIELDS = {"card_id", "generated_utc", "price_rows", "missing_price_rows",
+               "stale_quote_rows", "unauthenticated_quote_rows", "guard_bypasses",
+               "pit_total", "pit_complete"}
+CLOSE_FIELDS = {"bet_id", "event_start_utc", "open_observed_utc", "taken_observed_utc",
+                "close_observed_utc", "settled_at_utc", "settlement",
+                "market_identity_matched", "upstream_book_matched"}
+CYCLE_FIELDS = {"cycle_id", "registered_utc", "window_start_utc", "window_end_utc",
+                "leakage_findings", "report_sha256"}
+ROOT_FIELDS = {"schema", "cards", "clv_triples", "calibration_cycles"}
+
+def _keys(obj, allowed, label):
+    if not isinstance(obj, dict) or set(obj) != allowed:
+        raise ValueError("INVALID_FIELDS:" + label)
+    return obj
+
+def _stamp(raw, label):
+    if not isinstance(raw, str):
+        raise ValueError("INVALID_TIMESTAMP:" + label)
+    try:
+        ts = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("INVALID_TIMESTAMP:" + label) from exc
+    if ts.tzinfo is None or ts.utcoffset() != timedelta(0):
+        raise ValueError("UTC_TIMESTAMP_REQUIRED:" + label)
+    return ts.astimezone(timezone.utc)
+
+def _count(raw, label):
+    if type(raw) is not int or raw < 0:
+        raise ValueError("INVALID_COUNT:" + label)
+    return raw
+
+def _unique(items, field, label):
+    values = [item[field] for item in items]
+    if any(type(x) is not str or not x.strip() for x in values) or len(set(values)) != len(values):
+        raise ValueError("EMPTY_OR_DUPLICATE_ID:" + label)
+
+def _consecutive_days(dates):
+    days = sorted({d.toordinal() for d in dates})
+    best = current = 0
+    previous = None
+    for d in days:
+        current = current + 1 if previous is not None and d == previous + 1 else 1
+        best = max(best, current)
+        previous = d
+    return best
+
+def _check_cards(data):
+    cards = []
+    for r in data:
+        _keys(r, CARD_FIELDS, "card")
+        r = dict(r)
+        when = _stamp(r["generated_utc"], "card.generated_utc")
+        for k in CARD_FIELDS - {"card_id", "generated_utc"}:
+            _count(r[k], "card." + k)
+        if not (r["price_rows"] > 0 and r["pit_complete"] <= r["pit_total"]
+                and all(r[k] <= r["price_rows"] for k in
+                        ("missing_price_rows", "stale_quote_rows", "unauthenticated_quote_rows"))):
+            raise ValueError("INCONSISTENT_CARD_COUNTS")
+        clean = not any(r[k] for k in ("missing_price_rows", "stale_quote_rows",
+                                      "unauthenticated_quote_rows"))
+        guard_clean = r["guard_bypasses"] == 0
+        cards.append((when, r, clean, guard_clean))
+    _unique([v[1] for v in cards], "card_id", "cards")
+    cards.sort(key=lambda v: (v[0], v[1]["card_id"]))
+    return cards
+
+def _check_closes(data):
+    structural = 0
+    reasons = Counter()
+    for row in data:
+        _keys(row, CLOSE_FIELDS, "clv")
+        _stamp(row["event_start_utc"], "clv.event_start")
+        open_t = _stamp(row["open_observed_utc"], "clv.open")
+        taken_t = _stamp(row["taken_observed_utc"], "clv.taken")
+        close_t = _stamp(row["close_observed_utc"], "clv.close")
+        settled_t = _stamp(row["settled_at_utc"], "clv.settled")
+        event_t = _stamp(row["event_start_utc"], "clv.event_start")
+        if type(row["market_identity_matched"]) is not bool or type(row["upstream_book_matched"]) is not bool:
+            raise ValueError("INVALID_CLV_MATCH_FLAG")
+        if row["settlement"] not in ("WIN", "LOSS", "PUSH"):
+            reasons["UNSETTLED_OR_INVALID_RESULT"] += 1
+        elif not (open_t <= taken_t < close_t < event_t < settled_t):
+            reasons["CLOSE_CHRONOLOGY_NOT_VALID"] += 1
+        elif not row["market_identity_matched"] or not row["upstream_book_matched"]:
+            reasons["CLV_MARKET_OR_BOOK_UNMATCHED"] += 1
+        else:
+            structural += 1
+    _unique(data, "bet_id", "clv_triples")
+    return structural, dict(sorted(reasons.items()))
+
+def _check_cycles(data):
+    parsed = []
+    for row in data:
+        _keys(row, CYCLE_FIELDS, "cycle")
+        registered = _stamp(row["registered_utc"], "cycle.registered")
+        start = _stamp(row["window_start_utc"], "cycle.start")
+        end = _stamp(row["window_end_utc"], "cycle.end")
+        leak = _count(row["leakage_findings"], "cycle.leakage")
+        if not isinstance(row["report_sha256"], str) or not SHA.fullmatch(row["report_sha256"]):
+            raise ValueError("INVALID_CYCLE_REPORT_HASH")
+        parsed.append((start, end, registered, leak, row))
+    _unique(data, "cycle_id", "calibration_cycles")
+    parsed.sort(key=lambda x: x[0])
+    # Non-overlapping evaluation windows are necessary for independent folds.
+    for i in range(1, len(parsed)):
+        if parsed[i][0] < parsed[i-1][1]:
+            raise ValueError("OVERLAPPING_CALIBRATION_EVALUATIONS")
+    clean = [p for p in parsed if p[2] < p[0] < p[1] and p[3] == 0]
+    return len(clean), len(parsed)
+
+def analyze(manifest):
+    _keys(manifest, ROOT_FIELDS, "root")
+    if manifest["schema"] != "sportsedge-issue10-structural-v1":
+        raise ValueError("UNSUPPORTED_ACCEPTANCE_SCHEMA")
+    for name, cap in (("cards", 100000), ("clv_triples", 200000), ("calibration_cycles", 10000)):
+        if not isinstance(manifest[name], list) or len(manifest[name]) > cap:
+            raise ValueError("INVALID_OR_UNBOUNDED_EVIDENCE_LIST:" + name)
+    cards = _check_cards(manifest["cards"])
+    matched_closes, excluded_closes = _check_closes(manifest["clv_triples"])
+    clean_cycles, cycles = _check_cycles(manifest["calibration_cycles"])
+    latest = cards[-100:]
+    consecutive_clean = 0
+    for _, r, clean, _ in reversed(cards):
+        if not clean:
+            break
+        consecutive_clean += 1
+    consecutive_guards = 0
+    for _, r, _, guard_clean in reversed(cards):
+        if not guard_clean:
+            break
+        consecutive_guards += 1
+    total_pit = sum(row["pit_total"] for _, row, _, _ in latest)
+    complete_pit = sum(row["pit_complete"] for _, row, _, _ in latest)
+    ratio = complete_pit / total_pit if total_pit else 0.0
+    # This is only the longest *reported* calendar-date streak. Without the
+    # external real-slate schedule, full operational coverage is NOT proven.
+    run_dates = [when.astimezone(CT).date() for when, _, clean, guard in cards
+                 if clean and guard]
+    date_streak = _consecutive_days(run_dates)
+    gates = {
+        "A_prices": {"threshold_cards": 100, "reported_clean_recent_streak": consecutive_clean,
+                     "structural_threshold_met": consecutive_clean >= 100},
+        "B_PIT": {"minimum_fraction": 0.95, "reported_total_packages_last_100": total_pit,
+                  "reported_complete_packages_last_100": complete_pit,
+                  "reported_fraction": ratio,
+                  "structural_threshold_met": total_pit > 0 and ratio >= 0.95},
+        "C_calibration": {"minimum_cycles": 3, "reported_cycles": cycles,
+                          "reported_clean_registered_cycles": clean_cycles,
+                          "structural_threshold_met": clean_cycles >= 3},
+        "D_CLV": {"minimum_settled_comparable": 200,
+                   "reported_structurally_comparable_closes": matched_closes,
+                   "reported_exclusion_reasons": excluded_closes,
+                   "structural_threshold_met": matched_closes >= 200},
+        "E_guard": {"threshold_cards": 100, "reported_no_bypass_recent_streak": consecutive_guards,
+                     "structural_threshold_met": consecutive_guards >= 100},
+        "five_days": {"minimum_reported_consecutive_dates": 5,
+                      "reported_calendar_date_streak": date_streak,
+                      "structural_threshold_met": date_streak >= 5},
+    }
+    # No provider attestation, trusted wall-clock source, signed independent
+    # calibration reviews, slate-completeness proof or owner promotion signature
+    # is authenticated by arbitrary JSON input.
+    for x in gates.values():
+        x["externally_certified"] = False
+    return {"state": "PAPER_0U_EXTERNAL_EVIDENCE_NOT_AUTHENTICATED",
+            "official_counted": 0, "approved_stake_u": 0,
+            "input_cards": len(cards), "input_clv_triples": len(manifest["clv_triples"]),
+            "input_calibration_cycles": cycles, "gates": gates,
+            "reported_all_structural_thresholds_met":
+                all(v["structural_threshold_met"] for v in gates.values()),
+            "release_certified": False,
+            "missing_external_proof": [
+                "AUTHENTIC_BOOKMAKER_OBSERVATION_AND_INDEPENDENT_SOURCE_CHAIN",
+                "REAL_SLATE_SCHEDULE_AND_POINT_IN_TIME_FEATURE_PUBLICATION",
+                "INDEPENDENT_SIGNED_CHRONOLOGICAL_CALIBRATION_REVIEW",
+                "AUTHENTIC_SAME_MARKET_SETTLEMENT_AND_CLOSING_RECEIPTS",
+                "INDEPENDENT_POLICY_REVIEW_AND_EXPLICIT_OWNER_PROMOTION",
+            ]}
+
+def _unique_json_pairs(pairs):
+    result = {}
+    for k, v in pairs:
+        if k in result:
+            raise ValueError("DUPLICATE_JSON_KEY:" + k)
+        result[k] = v
+    return result
+
+def report_file(source, destination):
+    src, dst = Path(source), Path(destination)
+    if src.resolve() == dst.resolve():
+        raise ValueError("SOURCE_AND_REPORT_MUST_DIFFER")
+    raw = src.read_bytes()
+    if len(raw) > 20_000_000:
+        raise ValueError("MANIFEST_TOO_LARGE")
+    manifest = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_pairs)
+    report = analyze(manifest)
+    report["input_sha256"] = "sha256:" + sha256(raw).hexdigest()
+    with dst.open("x", encoding="utf-8") as f:
+        json.dump(report, f, sort_keys=True, indent=2, allow_nan=False)
+        f.write("\n")
+    return report
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("manifest_json")
+    parser.add_argument("--report", required=True, help="create-only sanitized JSON report")
+    args = parser.parse_args(argv)
+    report = report_file(args.manifest_json, args.report)
+    print(json.dumps({"state": report["state"], "release_certified": False,
+                      "approved_stake_u": 0, "input_cards": report["input_cards"]}))
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
