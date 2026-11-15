@@ -1,0 +1,15 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Test outputs and untracked research artifacts
+out/
+*.egg-info/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
