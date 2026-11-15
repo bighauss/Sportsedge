@@ -8,6 +8,7 @@ Pipeline: game config (market lines, weather, injuries, roles)
   -> DK scoring per sim -> player distributions
   -> enumerate salary-filtered candidates from the projection-screened player pool
   -> evaluate candidates on the SAME sims (mean, p90, p99, optimal-lineup rate).
+The same sims also price betting markets via markets.py (run(..., raw=list)).
 
 Usage: python models/nfl_dfs/showdown_mc.py [config.json] [sims]
 """
@@ -108,7 +109,8 @@ def sim_team(rng, t, zg, zt, active):
     pts = 6 * tds + xp + 3 * fgm
     return stat, kpts, pts, S(qb)["ints"], tds
 
-def run(cfg, n_sims, seed=7):
+def run(cfg, n_sims, seed=7, raw=None):
+    """raw: optional list; if given, each sim appends {team: (stat, pts)} for market pricing."""
     rng = random.Random(seed)
     teams = cfg["teams"]; names = list(teams)
     out = {p: [] for p in cfg["players"]}
@@ -135,6 +137,8 @@ def run(cfg, n_sims, seed=7):
                     s = stat.get(p)
                     out[p].append(dk_offense(**s) if s else 0.0)
         game.append((res[names[0]][2], res[names[1]][2]))
+        if raw is not None:
+            raw.append({tm: (res[tm][0], res[tm][2]) for tm in names})
     return out, game
 
 def q(xs, p):
