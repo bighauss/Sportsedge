@@ -3,6 +3,16 @@
 Multi-sport betting analytics: NFL, CFB, NBA, CBB, NHL and MLB, across every market (sides, totals, team totals, halves/periods, props).
 Owner: Isaac (phone-only; free tools only). Repo: `bighauss/Sportsedge` (public).
 
+## Permanent owner directive: RUN IT = ALL MARKETS, every time
+
+**No game-lines-only interpretation is permitted.** Unqualified `run it` requests the full scheduled slate across NFL, CFB, CBB, NBA, MLB and NHL; `run it NFL` requests all NFL markets, not just full-game sides/totals. A named sport narrows **sport scope only**, never market scope. A named game narrows **event scope only**, never market scope unless the owner explicitly requests a particular market.
+
+For **every** scheduled/in-scope game, enumerate and attempt capture of **all offered market families**: full-game ML/spreads/totals, team totals, halves, quarters, alternate lines and totals, period and team markets, every available player-stat prop (passing/rushing/receiving/completions/attempts, etc.), TD/first TD/2+ TD, game specials, singles, SGP and other sport-specific categories (NBA/CBB player props and first basket, MLB pitching/hitting/innings, NHL goals/shots/saves and goalie/skater props). Do not equate a player-prop X+ ladder with a two-sided main line.
+
+A market that is not offered, not captured, not independently modeled, identity-unbound, stale, live/closed, not supported by current software or otherwise fails proof must **stay visible in the market-by-market inventory** with an explicit reason: `NOT_OFFERED`, `NOT_CAPTURED`, `NO_MODEL`, `NO_PROVENANCE`, `UNSUPPORTED`, `LIVE_OR_CLOSED` or a more specific reason. Never silently replace missing prop, TD or SGP model evidence with a full-game score projection or imply that absence from a card means absence of markets. Never invent probability, EV, stars, joint probabilities or stakes.
+
+Separate **market coverage** from **wager eligibility**. Display research-only diagnostics and all failures, but retain `PAPER / 0u` without market-specific forward acceptance, authenticated quotes, complete identities, source lineage and calibration. A run is not "full coverage" merely because full-game spreads, totals and ML are priced. The runner must disclose its observed sport/event/market-family coverage and incomplete-source limitations, including unsupported NHL support in any five-sport research CLI.
+
 ## What "run it" means
 Read these in order when researching a slate; **the repository has not been shown to generate a validated live betting card**:
 1. `docs/rules/RUN_IT_STANDARD_v1_NE-DET.md`: base pipeline (Munich NE@DET run)
