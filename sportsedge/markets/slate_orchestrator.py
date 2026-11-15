@@ -108,6 +108,19 @@ def _quote_integrity(data, expected_key, expected_start, used_quotes):
             raise ValueError("MARKET_FAMILY_OUTSIDE_SPORT")
         if period not in PERIODS:
             raise ValueError("MARKET_PERIOD_UNKNOWN")
+        if kind=="SGP":
+            # This CLI does not have a verified posted DraftKings *parlay*
+            # price, correlation model or sportsbook SGP settlement rules.
+            # Permit only an explicit inventory placeholder, not a synthetic
+            # fake price masquerading as a single-leg PriceReceipt.
+            if (period!="FG" or set(m)!={"sport","event_id","kind","period"}
+                    or set(item)-{"market","dk_quote","dk_opposite_quote","v21_inputs"}
+                    or item.get("dk_quote") is not None
+                    or item.get("dk_opposite_quote") is not None
+                    or item.get("v21_inputs") not in (None,{})):
+                raise ValueError("SGP_INVENTORY_ONLY_NO_SINGLE_LEG_QUOTE")
+            families["SGP"]+=1
+            continue
         families[kind]+=1
         for side in ("dk_quote","dk_opposite_quote"):
             q=item.get(side)
@@ -131,6 +144,22 @@ def _quote_integrity(data, expected_key, expected_start, used_quotes):
                 raise ValueError("PROVIDER_QUOTE_ID_REUSED_WITHIN_SLATE")
             used_quotes[quote_key]=expected_key
     return families
+
+
+def _sgp_unpriced_row(event_key):
+    # Not a wager candidate and NOT a v2.1-priced parlay. Preserve visible
+    # row count without substituting independent straight-leg EVs for joint.
+    return {
+        "market": [event_key[0],event_key[1],"SGP","FG"],
+        "research_state":"BLOCK",
+        "research_reasons":["SGP_REQUIRES_POSTED_JOINT_QUOTE_AND_CALIBRATED_EVENTS"],
+        "guard_state":"BLOCK",
+        "guard_reasons":["SGP_NOT_ADMITTED_TO_SINGLE_LEG_V21_GATE"],
+        "v21_status":"NOT_RUN_NO_PROVABLE_SGP_OFFER",
+        "raw_ev_unverified":None,
+        "blended_ev_unverified":None,
+        "official_counted":0,"approved_stake_u":0,"card":None,
+    }
 
 
 def _simple_reason(exc):
@@ -198,7 +227,8 @@ def run_slate(manifest, *, now=None):
         parsed[key]=_quote_integrity(data,key,registry[key],used_quotes)
     events=[]
     totals={"expected":len(registry),"inputs":len(inputs),
-            "no_capture":0,"after_start":0,"priced_research":0,
+            "no_capture":0,"no_market_rows":0,"sgp_only_games":0,
+            "sgp_inventory_rows":0,"after_start":0,"priced_research":0,
             "blocked_research":0,"model_input_failures":0}
     for key,start in sorted(registry.items(),key=lambda x:(x[1],x[0])):
         sport,event_id=key
@@ -225,15 +255,48 @@ def run_slate(manifest, *, now=None):
         elif when >= start:
             event_out.update(status="BLOCK", reasons=["SCHEDULE_EVENT_STARTED"])
             totals["after_start"]+=1
+        elif not inputs[key]["markets"]:
+            event_out.update(
+                status="BLOCK",
+                reasons=["NO_MARKETS_SUBMITTED_OR_OFFERED_UNVERIFIED"],
+                research_rows=[],
+            )
+            totals["no_market_rows"]+=1
         else:
             try:
-                result=run_from_manifest(inputs[key])
+                submitted=inputs[key]["markets"]
+                single_leg=[x for x in submitted
+                            if x["market"]["kind"]!="SGP"]
+                sgp_count=len(submitted)-len(single_leg)
+                totals["sgp_inventory_rows"]+=sgp_count
+                if not single_leg:
+                    rows=[_sgp_unpriced_row(key) for x in submitted]
+                    event_out.update(
+                        status="BLOCK",
+                        reasons=["ONLY_UNPRICED_SGP_INVENTORY_SUBMITTED"],
+                        research_rows=rows,
+                        research_candidates=len(rows),
+                        research_priced=0,
+                        research_blocked=len(rows),
+                    )
+                    totals["sgp_only_games"]+=1
+                    totals["blocked_research"]+=len(rows)
+                    events.append(event_out)
+                    continue
+                priced_manifest={**inputs[key],"markets":single_leg}
+                result=run_from_manifest(priced_manifest)
                 if result.get("sport")!=sport or result.get("event_id")!=event_id:
                     raise ValueError("RESEARCH_OUTPUT_EVENT_NOT_REGISTERED")
                 if result.get("approved_stake_u")!=0 or result.get("official_counted")!=0 or result.get("card") is not None:
                     raise ValueError("RESEARCH_ENGINE_TRIED_TO_PROMOTE_CARD")
-                rows=result.get("rows",[])
-                if len(rows)!=len(inputs[key]["markets"]):
+                priced_rows=result.get("rows",[])
+                if len(priced_rows)!=len(single_leg):
+                    raise ValueError("SILENTLY_DROPPED_RESEARCH_MARKET")
+                priced_iter=iter(priced_rows)
+                rows=[_sgp_unpriced_row(key)
+                      if item["market"]["kind"]=="SGP" else next(priced_iter)
+                      for item in submitted]
+                if len(rows)!=len(submitted):
                     raise ValueError("SILENTLY_DROPPED_RESEARCH_MARKET")
                 event_out["research_candidates"]=len(rows)
                 event_out["research_priced"]=sum(r["research_state"]=="PAPER_0U" for r in rows)
@@ -247,6 +310,7 @@ def run_slate(manifest, *, now=None):
                     model_method=result.get("model_projection_method"),
                     pit_status=result.get("pit_file_manifest_status"),
                     research_rows=rows,
+                    sgp_joint_pricing_certified=False,
                 )
             except (ValueError, KeyError, TypeError, OSError) as exc:
                 totals["model_input_failures"]+=1
