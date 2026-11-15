@@ -146,18 +146,45 @@ def audit(rows,forecasts,*,decision_utc,max_quote_age_s=300,
                 if f_time>=start: reasons.add("FORECAST_AFTER_KICKOFF")
             except (KeyError,ValueError): reasons.add("FORECAST_PROVENANCE_INVALID")
             if kind in ("TOTAL","SPREAD","ML"):
-                try:
-                    if kind=="TOTAL" and abs(dec(f["total"])-dec(line))>gap:
-                        reasons.add("UNEXPLAINED_TOTAL_MODEL_MARKET_GAP")
-                    if kind=="SPREAD" and abs(dec(f["margin_home"])+(
-                        dec(line) if side=="HOME" else -dec(line)))>gap:
-                        reasons.add("UNEXPLAINED_MARGIN_MODEL_MARKET_GAP")
-                    if kind=="ML": dec(f["margin_home"])
-                except (KeyError,ValueError):
-                    reasons.add("NO_INDEPENDENT_SCORE_PROJECTION")
+                # A full-game mean MUST NOT be applied to a half/quarter line.
+                period_forecast=(f if row["period"]=="FG" else
+                                 f.get("periods",{}).get(row["period"]))
+                if not isinstance(period_forecast,dict):
+                    reasons.add("NO_INDEPENDENT_PERIOD_PROJECTION")
+                else:
+                    try:
+                        if kind=="TOTAL" and abs(dec(period_forecast["total"])-dec(line))>gap:
+                            reasons.add("UNEXPLAINED_TOTAL_MODEL_MARKET_GAP")
+                        if kind=="SPREAD" and abs(dec(period_forecast["margin_home"])+(
+                            dec(line) if side=="HOME" else -dec(line)))>gap:
+                            reasons.add("UNEXPLAINED_MARGIN_MODEL_MARKET_GAP")
+                        if kind=="ML": dec(period_forecast["margin_home"])
+                    except (KeyError,ValueError):
+                        reasons.add("NO_INDEPENDENT_SCORE_PROJECTION")
+            if kind=="TEAM_TOTAL":
+                # Team totals must have their own team/period-specific estimate.
+                if not row.get("team_id"):
+                    reasons.add("TEAM_TOTAL_TEAM_ID_UNBOUND")
+                team_forecast=(f.get("team_totals",{}).get(row["period"],{})
+                               .get(row.get("team_id")))
+                if not isinstance(team_forecast,dict):
+                    reasons.add("NO_INDEPENDENT_TEAM_TOTAL_PROJECTION")
+                else:
+                    try:
+                        if abs(dec(team_forecast["mean"])-dec(line))>gap:
+                            reasons.add("UNEXPLAINED_TEAM_TOTAL_MODEL_MARKET_GAP")
+                    except (KeyError,ValueError):
+                        reasons.add("NO_INDEPENDENT_TEAM_TOTAL_PROJECTION")
             if kind in PLAYER and kind not in TD:
                 try:
                     p=f["players"][row.get("player_id")][row.get("stat")]
+                    if row["period"]!="FG":
+                        # No full-game stat distribution can price 1H/1Q props.
+                        if not isinstance(p,dict) or not isinstance(
+                            p.get("periods",{}).get(row["period"]),dict):
+                            reasons.add("NO_INDEPENDENT_PERIOD_PLAYER_PROJECTION")
+                            raise ValueError("PERIOD_PLAYER_FORECAST_MISSING")
+                        p=p["periods"][row["period"]]
                     if not isinstance(p,dict): raise ValueError("INVALID_PLAYER")
                     if utc(p["asof_utc"])>observed or utc(p["asof_utc"])>=start:
                         reasons.add("PLAYER_MODEL_LOOKAHEAD")
