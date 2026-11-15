@@ -20,6 +20,10 @@ REQUIRED_CAPTURE = {'captured_ct','sport','game_time_ct','away','home','game_key
 REQUIRED_RATINGS = {'team','off','def','gp','lg','hfa','asof','half_life','ridge'}
 PLAYER_PREFIX = ('player_prop:',)
 PLAYER_MARKETS = {'attd','first_td','td_2plus'}
+CENSUS_FIELDS = ('source_csv_row','game_key','market','raw_player_label',
+                 'selection_type','source_line','source_american_odds',
+                 'candidate_gsis_id','candidate_dk_outcome_id','binding_status',
+                 'reasons','approved_stake_u')
 
 
 def sha256(path):
@@ -181,9 +185,14 @@ def bridge(capture, ratings_file=None, ratings_sha=None, team_map=None, evidence
     return forecasts,census,report
 
 
-def write_csv(path,rows):
+def write_csv(path,rows,fieldnames=None):
+    # An all-markets capture may validly contain zero player/TD inventory rows.
+    # Emit a header-only census instead of crashing or inventing a player.
+    columns=list(rows[0]) if rows else list(fieldnames or ())
+    if not columns:
+        raise ValueError('EMPTY_REPORT_SCHEMA')
     with open(path,'x',newline='',encoding='utf-8') as f:
-        w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+        w=csv.DictWriter(f,fieldnames=columns);w.writeheader();w.writerows(rows)
 
 
 def main():
@@ -203,7 +212,7 @@ def main():
     out=Path(args.output_dir)
     out.mkdir(parents=True,exist_ok=False)
     write_csv(out/'ratings_half_PAPER_0U.csv',a)
-    write_csv(out/'roster_binding_census_PAPER_0U.csv',b)
+    write_csv(out/'roster_binding_census_PAPER_0U.csv',b,CENSUS_FIELDS)
     (out/'bridge_audit.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
     print(json.dumps(report,indent=2,sort_keys=True))
 

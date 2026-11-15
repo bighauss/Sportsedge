@@ -1,0 +1,28 @@
+name: R4 quote pairing and NFL roster-bridge contracts
+on:
+  pull_request:
+    paths:
+      - 'research/audit/**'
+      - 'research/nfl_20261115/**'
+      - '.github/workflows/research-quote-bridge-contracts.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/audit/**'
+      - 'research/nfl_20261115/**'
+      - '.github/workflows/research-quote-bridge-contracts.yml'
+permissions:
+  contents: read
+jobs:
+  python-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify R4 quote grouping and integrated fail-closed validator
+        run: python -m unittest research.audit.test_r4_pairing_adversarial research.audit.test_board_receipt_contract_r4 -v
+      - name: Verify NFL ratings and roster bridge, including zero-prop captures
+        run: python -m unittest discover -s research/nfl_20261115 -p 'test_nfl_ratings_roster_bridge_r1.py' -v

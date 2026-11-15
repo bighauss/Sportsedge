@@ -4,6 +4,8 @@ from research.audit.r4_pairing_adversarial import audit_rows, normalize_line
 def row(side="HOME", line="-3.5", **kw):
     d=dict(sport="NFL",event_id="EVT-1",book="DK",market="SPREAD",
            period="FG",side=side,line=line,captured_utc="2026-11-15T19:00:00Z",
+           event_start_utc="2026-11-15T20:00:00Z",
+           provider_quote_id=f"{side}:{line}:{kw.get('market','SPREAD')}:{kw.get('player_id','')}:{kw.get('stat','')}",
            player_id="",team_id="",stat="")
     d.update(kw)
     return d
@@ -45,6 +47,15 @@ class AdversarialPairTests(unittest.TestCase):
                 row("OVER","274.5",market="PLAYER_PROP",player_id="P1",stat="PASS_YDS"),
                 row("UNDER","274.5",market="PLAYER_PROP",player_id="P1",stat="PASS_YDS")]
         self.assertEqual(audit_rows(offers),[])
+    def test_two_total_ladders(self):
+        offers=[row("OVER","45.5",market="TOTAL"),row("UNDER","45.5",market="TOTAL"),
+                row("OVER","48.5",market="TOTAL"),row("UNDER","48.5",market="TOTAL")]
+        self.assertEqual(audit_rows(offers),[])
+    def test_pair_does_not_hide_reused_book_quote_id(self):
+        offers=[row("HOME","-3.5",provider_quote_id="reused"),
+                row("AWAY","+3.5",provider_quote_id="reused")]
+        self.assertIn("REUSED_CANONICAL_BOOK_QUOTE_ID",
+                      {reason for issue in audit_rows(offers) for reason in issue["reasons"]})
     def test_partial_alt_ladder_still_blocked(self):
         offers=[row("HOME","-3.5"),row("AWAY","+3.5"),row("HOME","-6.5")]
         self.assertEqual([x["row"] for x in audit_rows(offers)],[4])
