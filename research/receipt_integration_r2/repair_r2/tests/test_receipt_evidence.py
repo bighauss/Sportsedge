@@ -97,4 +97,75 @@ class EvidenceTests(unittest.TestCase):
             w=csv.DictWriter(f,fieldnames=list(self.snap[0]));w.writeheader();w.writerows(self.snap)
         self.assertEqual(gate.audit_evidence(self.snap_path,self.receipts)['verdict'],'BLOCK')
 
+    def _rewrite_snap(self):
+        with self.snap_path.open('w', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=list(self.snap[0]))
+            w.writeheader()
+            w.writerows(self.snap)
+
+    def test_duplicate_header_blocked_before_receipt_read(self):
+        lines = self.snap_path.read_text().splitlines()
+        lines[0] += ',quote_id'
+        self.snap_path.write_text(chr(10).join(lines) + chr(10))
+        result = gate.audit_evidence(self.snap_path, self.receipts)
+        self.assertEqual(result['verdict'], 'BLOCK')
+        self.assertEqual(result['error'], 'SNAPSHOT_DUPLICATE_HEADER')
+        self.assertEqual(result['official_counted'], 0)
+
+    def test_duplicate_header_case_variant_blocked(self):
+        lines = self.snap_path.read_text().splitlines()
+        lines[0] += ',QUOTE_ID'
+        self.snap_path.write_text(chr(10).join(lines) + chr(10))
+        self.assertEqual(gate.audit_evidence(self.snap_path, self.receipts)['error'],
+                         'SNAPSHOT_DUPLICATE_HEADER')
+
+    def test_underflow_and_overflow_are_blocked(self):
+        original = self.snap_path.read_text()
+        records = list(csv.reader(original.splitlines()))
+        for altered in (records[1][:-1], records[1]+['EXTRA']):
+            with self.snap_path.open('w', newline='') as f:
+                w = csv.writer(f)
+                w.writerow(records[0])
+                w.writerow(altered)
+            result = gate.audit_evidence(self.snap_path, self.receipts)
+            self.assertEqual(result['verdict'], 'BLOCK')
+            self.assertEqual(result['error'], 'SNAPSHOT_RAGGED_ROW')
+            self.assertEqual(result['official_counted'], 0)
+
+    def test_quote_json_duplicate_key_rejected_before_r1(self):
+        old = self.snap[0]['quote_receipt_sha256']
+        raw = (self.receipts / (old+'.json')).read_bytes()
+        new_raw = raw.replace(b'"quote_id": "q1"', b'"quote_id": "q1", "quote_id": "shadow"', 1)
+        self.assertNotEqual(raw, new_raw)
+        digest = hashlib.sha256(new_raw).hexdigest()
+        (self.receipts / (digest+'.json')).write_bytes(new_raw)
+        self.snap[0]['quote_receipt_sha256'] = digest
+        self._rewrite_snap()
+        result = gate.audit_evidence(self.snap_path, self.receipts)
+        self.assertEqual(result['verdict'], 'BLOCK')
+        self.assertIn('RECEIPT_DUPLICATE_JSON_KEY:quote_id', str(result))
+        self.assertEqual(result['official_counted'], 0)
+
+    def test_same_book_quote_id_distinct_receipts_rejected(self):
+        old = self.snap[1]['quote_receipt_sha256']
+        q = json.loads((self.receipts / (old+'.json')).read_text())
+        q['quote_id'] = 'q1'
+        new_raw = (json.dumps(q, sort_keys=True)+chr(10)).encode()
+        digest = hashlib.sha256(new_raw).hexdigest()
+        (self.receipts / (digest+'.json')).write_bytes(new_raw)
+        self.snap[1]['quote_receipt_sha256'] = digest
+        self.snap[1]['quote_id'] = 'q1'
+        self._rewrite_snap()
+        result = gate.audit_evidence(self.snap_path, self.receipts)
+        self.assertEqual(result['verdict'], 'BLOCK')
+        self.assertIn('DUPLICATE_BOOK_QUOTE_ID', str(result))
+        self.assertEqual(result['official_counted'], 0)
+
+    def test_bad_utf8_snapshot_returns_consistent_block_report(self):
+        self.snap_path.write_bytes(bytes([0xff, 0xfe, 0xff]))
+        result = gate.audit_evidence(self.snap_path, self.receipts)
+        self.assertEqual(result['verdict'], 'BLOCK')
+        self.assertEqual(result['error'], 'INVALID_SNAPSHOT_CSV')
+        self.assertEqual((result['n_rows'], result['official_counted']), (0,0))
+
 if __name__=='__main__':unittest.main()
