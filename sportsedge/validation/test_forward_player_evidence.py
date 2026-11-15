@@ -9,6 +9,7 @@ from copy import deepcopy
 from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 from pathlib import Path
+from unittest.mock import patch
 from tempfile import TemporaryDirectory
 import csv
 import io
@@ -22,8 +23,8 @@ from sportsedge.validation.forward_player_evidence import (
 from sportsedge.markets.player_forecast_intake import REQUIRED
 
 NOW = datetime(2026,11,15,17,0,0,tzinfo=timezone.utc)
-ASOF = NOW - timedelta(hours=1)
-START = NOW + timedelta(hours=8)
+ASOF = NOW - timedelta(minutes=30)
+START = NOW + timedelta(hours=1)
 END = START + timedelta(hours=3)
 AFTER = END + timedelta(hours=1)
 H = "sha256:"+"a"*64
@@ -338,6 +339,52 @@ class ForwardPlayerEvidence(unittest.TestCase):
             r.update(write(d,"actual_twice.csv",twice))
             with self.assertRaisesRegex(ValueError,"DUPLICATE_PLAYER_STAT_FINAL"):
                 grade_frozen_capture(grade_request(d,h,r),now=AFTER)
+
+    def test_stale_lineup_evidence_blocks_freeze(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            m["lineup_file"]["observed_at_utc"]=iso(START-timedelta(hours=3))
+            with self.assertRaisesRegex(ValueError,"STALE_LINEUP_OBSERVATION"):
+                freeze_player_forecasts(m,now=NOW)
+
+    def test_unregistered_lineup_source_blocks_freeze(self):
+        with TemporaryDirectory() as d:
+            m,_=inputs(d)
+            m["lineup_file"]["source_name"]="UNREGISTERED"
+            with self.assertRaisesRegex(ValueError,"UNREGISTERED_LINEUP_SOURCE"):
+                freeze_player_forecasts(m,now=NOW)
+
+    def test_subfolder_cwd_cannot_write_private_archive_inside_repository(self):
+        with TemporaryDirectory() as d:
+            repo_root=Path(__file__).resolve().parents[2]
+            with patch.object(Path,"cwd",return_value=repo_root/"docs"):
+                with self.assertRaisesRegex(ValueError,"PRIVATE_EVIDENCE_MUST_BE_OUTSIDE_REPOSITORY"):
+                    _write_private_create_only(repo_root/"research"/"leak.json",{"state":"PAPER"})
+
+    def test_forged_archive_denominator_rejected_even_with_matching_hash(self):
+        with TemporaryDirectory() as d:
+            m,final=inputs(d)
+            obj=freeze_player_forecasts(m,now=NOW)
+            obj["frozen_rows"]=0
+            raw=(json.dumps(obj,sort_keys=True,separators=(",",":"))+"\\n").encode()
+            p=Path(d)/"frozen.json"
+            p.write_bytes(raw)
+            h="sha256:"+sha256(raw).hexdigest()
+            with self.assertRaisesRegex(ValueError,"FROZEN_ARCHIVE_DENOMINATOR_INVALID"):
+                grade_frozen_capture(grade_request(d,h,final),now=AFTER)
+
+    def test_result_stat_case_and_whitespace_normalized(self):
+        with TemporaryDirectory() as d:
+            m,final=inputs(d,actual_value="8")
+            obj=freeze_player_forecasts(m,now=NOW)
+            h=_write_private_create_only(Path(d)/"frozen.json",obj)
+            raw=csv_bytes([{"event_id":"GAME1","player_id":"P1",
+                           "team_id":"BUF","stat":" rec_yds ","actual":"8"}],
+                           ("event_id","player_id","team_id","stat","actual"))
+            final.update(write(d,"actual_normalized.csv",raw))
+            out=grade_frozen_capture(grade_request(d,h,final),now=AFTER)
+            self.assertEqual(out["graded_rows"],1)
+            self.assertEqual(out["results"][0]["actual"],8)
 
     def test_duplicate_json_manifest_key_fails(self):
         from sportsedge.validation.forward_player_evidence import _strict_json
