@@ -17,7 +17,8 @@ class ContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)/"board.csv"
             with p.open("w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=FIELDS)
+                fields=FIELDS+sorted({key for row in rows for key in row}-set(FIELDS))
+                writer = csv.DictWriter(f, fieldnames=fields)
                 writer.writeheader()
                 writer.writerows(rows)
             return validate(p)
