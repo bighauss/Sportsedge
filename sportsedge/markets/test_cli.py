@@ -95,6 +95,61 @@ class CLIContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"UNSUPPORTED_OR_SECRET_FIELD"):
             run_from_manifest(p)
 
+    def test_direct_cbb_claude_model_projection_without_bookmaker_inputs(self):
+        from models.cbb import test_cbb
+        paths=test_cbb.make_samples()
+        p=manifest()
+        p.pop("projection")
+        p["projection_ref"]={
+            "sport":"CBB","event_id":"C1","asof_utc":
+                (nowutc()-timedelta(hours=1)).isoformat(),
+            "feature_paths":paths,
+        }
+        p["markets"]=[]
+        r=run_from_manifest(p)
+        self.assertEqual(r["event_id"],"C1")
+        self.assertEqual(r["model_projection_method"],"RECOVERED_MODEL_FUNCTION")
+        self.assertEqual(r["approved_stake_u"],0)
+
+    def test_direct_nfl_frozen_ridge_recomputation_in_research_cli(self):
+        source=("team,off,def,gp,lg,hfa,asof,half_life,ridge\\n"
+                "Alpha,2,1,5,21,1.6,2026-11-15,45,5\\n"
+                "Beta,-1,0,5,21,1.6,2026-11-15,45,5\\n")
+        # Construct physical CSV from actual newlines, not untrusted caller odds.
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"ratings.csv"
+            path.write_text(source.replace("\\n",chr(10)))
+            p=manifest()
+            p.pop("projection")
+            p["projection_ref"]={
+               "sport":"NFL","event_id":"NFL-TEST",
+               "asof_utc":(nowutc()-timedelta(hours=1)).isoformat(),
+               "ratings_csv":str(path),
+               "forecast":{
+                   "home":"Alpha","away":"Beta",
+                   "home_proj":"23.800","away_proj":"18.200",
+                   "model_version":"SPORTSEDGE_NFL_RIDGE_R1",
+                   "asof_ct":"2026-11-15T12:00:00+00:00",
+               }
+            }
+            p["distribution"]["sport"]="NFL"
+            p["markets"]=[]
+            out=run_from_manifest(p)
+            self.assertEqual(out["sport"],"NFL")
+            self.assertEqual(out["model_projection_method"],"RECOVERED_MODEL_FUNCTION")
+
+    def test_two_team_projection_sources_fail_closed(self):
+        p=manifest()
+        p["projection_ref"]={"sport":"CBB"}
+        with self.assertRaisesRegex(ValueError,"EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED"):
+            run_from_manifest(p)
+
+    def test_no_projection_source_fail_closed(self):
+        p=manifest()
+        del p["projection"]
+        with self.assertRaisesRegex(ValueError,"EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED"):
+            run_from_manifest(p)
+
     def test_create_only_cli_does_not_overwrite_archives(self):
         with tempfile.TemporaryDirectory() as d:
             src=Path(d)/"input.json"; dest=Path(d)/"out.json"
