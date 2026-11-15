@@ -1,0 +1,7 @@
+nflreadpy
+sportsdataverse
+pybaseball
+nba_api
+polars
+pandas
+requests
