@@ -27,7 +27,7 @@ PROPS = {"pass_yds": lambda s: s["py"], "pass_tds": lambda s: s["ptd"], "rush_yd
 def price(cfg, n, seed=7):
     if type(n) is not int or n < 2:
         raise ValueError("Need at least two Monte Carlo samples")
-    if list(cfg["teams"]) != [t for t in cfg["teams"]] or len(cfg["teams"]) != 2:
+    if len(cfg["teams"]) != 2:
         raise ValueError("Two distinct game teams required")
     raw = []
     mc.run(cfg, n, seed=seed, raw=raw)
