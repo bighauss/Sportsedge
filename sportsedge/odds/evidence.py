@@ -14,9 +14,15 @@ import json
 import re
 
 SHA_PATTERN = re.compile(r"^sha256:[a-f0-9]{64}$")
-PERIODS = frozenset({"FG", "1H", "2H", "1Q", "2Q", "3Q", "4Q"})
-KINDS = frozenset({"MONEYLINE", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP", "ATTD", "FIRST_TD", "TD_2PLUS"})
-SIDES = frozenset({"HOME", "AWAY", "OVER", "UNDER", "YES", "NO", "DRAW"})
+SPORTS = frozenset({"NFL","CFB","CBB","NBA","MLB"})
+FOOTBALL = frozenset({"NFL","CFB"})
+BASKETBALL = frozenset({"CBB","NBA"})
+PERIODS = frozenset({"FG", "1H", "2H", "1Q", "2Q", "3Q", "4Q", "F5", "1IN"})
+KINDS = frozenset({"MONEYLINE", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP", "ATTD", "FIRST_TD", "TD_2PLUS", "FIRST_BASKET", "NRFI", "YRFI"})
+SIDES = frozenset({"HOME", "AWAY", "OVER", "UNDER", "YES", "NO"})
+YES_NO = frozenset({"ATTD","FIRST_TD","TD_2PLUS","FIRST_BASKET","NRFI","YRFI"})
+NUMERIC = frozenset({"SPREAD","TOTAL","TEAM_TOTAL","PLAYER_PROP"})
+SETTLEMENTS = frozenset({"REGULATION","INCLUDES_OT","POSTED_RULES"})
 
 
 def utc(value: datetime, label: str) -> datetime:
@@ -75,29 +81,56 @@ class MarketKey:
             v = getattr(self, k)
             if not isinstance(v, str) or not v.strip() or v != v.strip():
                 raise ValueError("INVALID_MARKET_ID:" + k)
-        if self.sport != self.sport.upper() or self.kind not in KINDS:
+        if self.kind == "ML":
+            # Versioned adapters may emit either spelling. Reconcile exactly.
+            object.__setattr__(self, "kind", "MONEYLINE")
+        if self.sport not in SPORTS or self.kind not in KINDS:
             raise ValueError("INVALID_SPORT_OR_MARKET_KIND")
         if self.period not in PERIODS or self.side not in SIDES:
             raise ValueError("INVALID_PERIOD_OR_SIDE")
+        if self.settlement not in SETTLEMENTS:
+            raise ValueError("UNKNOWN_SETTLEMENT_CONTRACT")
+        if self.sport=="MLB" and self.period not in {"FG","F5","1IN"}:
+            raise ValueError("PERIOD_UNSUPPORTED_FOR_BASEBALL")
+        if self.sport!="MLB" and self.period in {"F5","1IN"}:
+            raise ValueError("BASEBALL_PERIOD_ON_OTHER_SPORT")
+        if self.kind in ("NRFI","YRFI") and (self.sport!="MLB" or self.period!="1IN"):
+            raise ValueError("FIRST_INNING_ONLY_MLB")
+        if self.kind=="FIRST_BASKET" and (self.sport not in BASKETBALL or self.period!="FG"):
+            raise ValueError("FIRST_BASKET_ONLY_BASKETBALL_FG")
+        if self.kind in ("ATTD","FIRST_TD","TD_2PLUS") and self.sport not in FOOTBALL:
+            raise ValueError("TOUCHDOWN_MARKET_ONLY_FOOTBALL")
+        if self.kind in ("MONEYLINE","SPREAD"):
+            if self.side not in ("HOME","AWAY"):
+                raise ValueError("TEAM_SIDE_REQUIRED")
+        elif self.kind in ("TOTAL","TEAM_TOTAL","PLAYER_PROP"):
+            if self.side not in ("OVER","UNDER"):
+                raise ValueError("OVER_UNDER_REQUIRED")
+        elif self.kind in YES_NO:
+            if self.side not in ("YES","NO"):
+                raise ValueError("YES_NO_REQUIRED")
         if self.kind == "MONEYLINE":
-            if self.line not in ("", "0"):
+            if self.line not in ("", "0", "0.0", "+0", "-0"):
                 raise ValueError("ML_LINE_MUST_BE_EMPTY")
-            # Normalization prevents the same book/side/event from carrying
-            # distinct canonical keys solely because one exporter uses "0".
             object.__setattr__(self, "line", "")
-        elif self.kind in ("ATTD", "FIRST_TD", "TD_2PLUS"):
-            # Player yes/no outcomes are categorical; never accept a fabricated
-            # numeric line or equate such a quote with a line-free market.
+        elif self.kind in YES_NO:
             if self.line != "":
                 raise ValueError("YES_NO_MARKET_CANNOT_HAVE_LINE")
         else:
-            object.__setattr__(self, "line", str(dec(self.line, "line").normalize()))
+            d=dec(self.line, "line")
+            if self.kind!="SPREAD" and d<0:
+                raise ValueError("NEGATIVE_OVER_UNDER_LINE")
+            object.__setattr__(self, "line", str(d.normalize()))
         if self.kind == "PLAYER_PROP" and not (self.player_id and self.stat):
             raise ValueError("MISSING_PLAYER_OR_STAT_ID")
-        if self.kind in ("ATTD", "FIRST_TD", "TD_2PLUS") and not self.player_id:
+        if self.kind in ("ATTD","FIRST_TD","TD_2PLUS","FIRST_BASKET") and not self.player_id:
             raise ValueError("MISSING_PLAYER_ID")
         if self.kind == "TEAM_TOTAL" and not self.team_id:
             raise ValueError("MISSING_TEAM_ID")
+        for field in ("team_id","player_id","stat","event_id"):
+            value=getattr(self,field)
+            if not isinstance(value,str) or value!=value.strip():
+                raise ValueError("INVALID_MARKET_PARTICIPANT_ID:"+field)
 
     def key(self) -> tuple[str, ...]:
         return (self.sport, self.event_id, self.kind, self.period,
