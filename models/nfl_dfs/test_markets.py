@@ -70,7 +70,7 @@ class MarketsSyntheticTests(unittest.TestCase):
     def test_spread_and_total_are_strict_cover_not_push(self):
         g = self.priced()["game"]
         self.assertEqual(g["CIN -3.5"], 0.5)
-        self.assertEqual(g["over 40.5"], 0.75)
+        self.assertEqual(g["over 40.5"], 1.0)
 
     def test_team_totals_derive_from_same_team_samples(self):
         g = self.priced()["game"]
