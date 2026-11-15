@@ -1,0 +1,6 @@
+game_id,player,stat,line,over_price,under_price
+G1,Mason Falslev,pts,17.5,-115,-105
+G1,Graham Ike,reb,7.5,-110,-110
+G1,Braden Huff,pts,14.5,-110,-110
+G2,Kylan Boswell,tpm,1.5,-130,+100
+G2,Duke Guard,ast,4.5,+105,-125

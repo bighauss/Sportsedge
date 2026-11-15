@@ -1,0 +1,16 @@
+game_id,market,side,line,price_american,opp_price_american
+G1,ml,home,,+120,-142
+G1,ml,away,,-142,+120
+G1,spread,home,2.5,-110,-110
+G1,spread,away,-2.5,-110,-110
+G1,total,over,150.5,-110,-110
+G1,total,under,150.5,-110,-110
+G1,team_total_home,over,73.5,-115,-105
+G1,h1_total,under,71.5,-110,-110
+G2,ml,away,,-180,+150
+G2,ml,home,,+150,-180
+G2,spread,home,4.5,-110,-110
+G2,total,over,142.5,-110,-110
+G2,total,under,142.5,-110,-110
+G2,h1_spread,home,2.5,-110,-110
+G2,team_total_away,under,75.5,-110,-110
