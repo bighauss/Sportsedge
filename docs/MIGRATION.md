@@ -1,8 +1,8 @@
 # Migration log (Nov 15 2026)
 
 ## Sources
-1. **Old repo `isaacrome21-sys/SportsEdge`.** That GitHub account is suspended and the repo returns 404, so no files could be copied. Its history is summarized below.
-2. **Shared Google Drive folder `SportsEdge` (+ NOTES).** Current rules, models, handoffs, boards and run logs. See `MANIFEST_drive_to_repo.csv` for the files copied.
+1. **Old repo `isaacrome21-sys/SportsEdge`.** That old repository returned 404 through the available connection. Neither its state nor its history could be independently verified; the following description is a historical handoff summary.
+2. **Shared Google Drive folder `SportsEdge` (+ NOTES).** Current rules, models, handoffs, boards and run logs. The 38-file baseline came from `SportsEdge_FULL_repo_20261115.zip` (SHA-256 `6bfbba25a35f6312d0e8b856f6527b7cd506020d87386e29a14c714600a0ad22`); the manifest was not included in the repo.
 3. **Isaac's Nov 15 notes.** Ruleset review, tracking-data survey, prompt libraries, nflverse/data-stack guide (`docs/research/`, `docs/data/`).
 
 ## Left on Drive (archive, not copied)
@@ -29,6 +29,13 @@ Copy specific ones on request.
 ## Included in the bundle (exact Drive bytes)
 Rules (v1, v2, NGS + CFB/CBB addenda, v2.1 restoration + corrections), five model READMEs, five sport models, CFB/NBA/MLB tests, engine/sportsedge_v2.py, ratings/props v0.2, Nov 13 handoff.
 
-## Known gaps (to fix next)
-- Tests: CFB needs `make_samples.py` + `samples/` (not on Drive); NBA needs its `sample/` CSVs (KeyError G1); MLB test reports 1 failure. NHL and CBB test files are not on Drive.
-- `sportsedge_guarded_v5_runner_r2.py` left out: it imports `sportsedge_board_guard_r1` / `sportsedge_slate_reconciler_r1`, which aren't in Drive's root folder.
+## Test-recovery follow-up (Nov 15)
+- PR #1 merged the 38-file baseline. The CFB generator and synthetic fixtures, NBA and MLB sample CSVs, and original NHL/CBB tests actually existed on Drive in separate uploads; the baseline handoff had described some of them as missing. They are recovered in a follow-up branch.
+- After recovering the original synthetic inputs, local tests passed: CFB, NBA, CBB; MLB 6/6; NHL 31/31 checks. Those are software tests and **not** calibrated betting-edge evidence.
+- The recovery PR removes tracked compiled `.pyc` files, adds `.gitignore`, and installs CI; remote CI results must be checked separately.
+
+## Remaining blockers
+- Adopted frozen v5 engine and guarded runner are not integrated here; the wrapper imports board-guard and slate-reconciler helpers missing from the baseline. Do not invent dummy replacements.
+- No live authenticated DraftKings captures, source-as-of fixtures, validated starter/goalie availability, closing-line comparisons or calibrated model evidence were included.
+- v2.1 risk and audit rules are binding, but standalone model scripts do not yet demonstrate complete end-to-end compliance; keep outputs PAPER / 0u.
+- See `docs/audits/2026-11-15_migration_audit.md` for evidence and next steps.
