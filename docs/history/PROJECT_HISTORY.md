@@ -1,6 +1,8 @@
+> **Verified status correction (2026-11-15):** PR #1 migrated a 38-file baseline. PR #2 added five synthetic model test suites. PR #3 archived history. PR #5 restored the byte-pinned frozen v5 source and research guards. This document contains historical claims that cannot be independently checked against the old inaccessible repository. No historical betting-edge validation is implied.
+
 # SportsEdge project history and standing rulings
 
-Compiled Nov 15 2026 from the project's working notes. The old repo (`isaacrome21-sys/SportsEdge`) is gone (account suspended), so this file is the record of what it held and what was decided.
+Compiled Nov 15 2026 from working notes and memory. The older `isaacrome21-sys/SportsEdge` repo returned 404 to available access, so old Git commits and code have NOT been verified here. This is a narrative handoff, not a restored or auditable Git history.
 
 ## Timeline
 - **Early 2026:** FastAPI/Streamlit/SQLAlchemy prototype, then Google Sheets + ChatGPT system: Monte Carlo (25k iterations), v1.9 Auditable Calculation Standard, The Odds API via Apps Script, nine sport modules (MLB, NFL, CFB, NBA, CBB, Tennis, NASCAR, UFC, Golf).
@@ -9,9 +11,9 @@ Compiled Nov 15 2026 from the project's working notes. The old repo (`isaacrome2
 - **Oct 24–31 2026:** multi-agent work (Claude, ChatGPT, Muse, Grok) through the #2447 relay issue. One evidence ladder for every sport. The 50-pick gate was repealed on Oct 31.
 - **Nov 7 2026:** GitHub suspended. SportsEdge rebuilt to run in chat. Isaac screenshots DK boards and says "run it".
 - **Nov 9 2026:** shared Google Drive folder + NOTES becomes the relay. `sportsedge_v2.py` is the portable engine of record, with hourly Claude engine work.
-- **Nov 11 2026:** engine of record moves to v3. "Run it" means every market with an edge, using SportsEdge's own projections.
+- **Nov 11 2026:** adopted frozen **v5** portable engine (SHA-256 `72ccaad75b066315f31137f40556321b7057a28119760a6a0b1c2e28da78e02f`); candidate v3/v4 testing preceded adoption. "Run it" means every market with an edge, using SportsEdge's own projections.
 - **Nov 14 2026:** new public GitHub account `bighauss`.
-- **Nov 15 2026:** RUN IT STANDARD v1 (NE@DET Munich), v2 all-sport deep models, then the v2.1 restoration (quarter-Kelly sizing, caps). Repo migrated to `bighauss/Sportsedge`. Claude owns the repo.
+- **Nov 15 2026:** RUN IT STANDARD v1 (NE@DET Munich), v2 all-sport deep models, then the v2.1 restoration (quarter-Kelly sizing, caps). Repo migrated to `bighauss/Sportsedge`. The owner operates the repo; collaborating assistants contribute with reviewable commits.
 
 ## Old-repo architecture (what was built)
 - **Promotion ladder:** VALIDATED_MATH → PRODUCTION_LOGIC_PASS → CI_ATTESTED → DEPLOYED. Market state machine: NO_ENGINE → EXPERIMENTAL → VALIDATED_MODEL → READY_FOR_POLICY → OFFICIAL → REVOKED.
