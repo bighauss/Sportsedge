@@ -142,6 +142,115 @@ class MarketSettlement(unittest.TestCase):
             mk("TOTAL","OVER","9.5",sport="MLB",period="1H")
 
 
+
+class CompleteGameAndSynchronousQuotes(unittest.TestCase):
+    def test_basketball_regulation_tie_needs_overtime_for_all_fg_markets(self):
+        o=Outcome({"Q1":(20,20),"Q2":(18,18),"Q3":(21,21),"Q4":(22,22)})
+        b=SimulationBatch("NBA","e1","H","A",frozenset(),H,S,
+                          D-timedelta(hours=1),D-timedelta(minutes=4),(o,))
+        for kind,line,selection in (("ML","","HOME"),("TOTAL","160.5","OVER"),
+                                    ("TEAM_TOTAL","80.5","OVER")):
+            with self.subTest(kind=kind):
+                m=mk(kind,selection,line,sport="NBA",
+                     team="H" if kind=="TEAM_TOTAL" else "")
+                with self.assertRaisesRegex(ValueError,"OVERTIME_OUTCOME_MISSING"):
+                    settle(b,o,m)
+
+    def test_overtime_resolution_and_unresolved_further_overtime(self):
+        reg={"Q1":(20,20),"Q2":(18,18),"Q3":(21,21),"Q4":(22,22)}
+        b=SimulationBatch("NBA","e1","H","A",frozenset(),H,S,
+                          D-timedelta(hours=1),D-timedelta(minutes=4),(Outcome(reg),))
+        self.assertEqual(settle(b,Outcome({**reg,"OT":(5,7)}),
+                           mk("ML","AWAY","",sport="NBA")),"W")
+        with self.assertRaisesRegex(ValueError,"OVERTIME_FINAL_TIE_UNRESOLVED"):
+            settle(b,Outcome({**reg,"OT":(5,5)}),
+                   mk("TOTAL","OVER","155.5",sport="NBA"))
+
+    def test_nfl_regulation_tie_no_ot_blocks_but_regulation_only_settles(self):
+        reg={"Q1":(7,7),"Q2":(0,0),"Q3":(3,3),"Q4":(7,7)}
+        with self.assertRaisesRegex(ValueError,"OVERTIME_OUTCOME_MISSING"):
+            settle(batch(),Outcome(reg),mk("TOTAL","OVER","35.5"))
+        self.assertEqual(settle(batch(),Outcome(reg),
+                         mk("TOTAL","UNDER","35.5",settlement="REGULATION")),"W")
+        self.assertEqual(settle(batch(),Outcome({**reg,"OT":(0,0)}),
+                         mk("ML","HOME","")),"P")
+
+    def test_phantom_overtime_after_decided_regulation_is_blocked(self):
+        o=Outcome({"Q1":(7,0),"Q2":(0,0),"Q3":(0,0),"Q4":(0,0),"OT":(3,0)})
+        with self.assertRaisesRegex(ValueError,"OVERTIME_WITHOUT_REGULATION_TIE"):
+            settle(batch(),o,mk("SPREAD","HOME","-3.5"))
+
+    def test_mlb_nine_inning_tie_needs_extras_for_fg_markets(self):
+        reg={"I"+str(i):(0,0) for i in range(1,10)}
+        b=SimulationBatch("MLB","e1","H","A",frozenset(),H,S,
+                          D-timedelta(hours=1),D-timedelta(minutes=4),(Outcome(reg),))
+        for kind,line,side in (("ML","","HOME"),("TOTAL","0.5","UNDER")):
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(ValueError,"MLB_EXTRA_INNINGS_OUTCOME_MISSING"):
+                    settle(b,Outcome(reg),mk(kind,side,line,sport="MLB"))
+        self.assertEqual(settle(b,Outcome(reg),
+                         mk("TOTAL","UNDER","0.5",sport="MLB",
+                            period="F5",settlement="REGULATION")),"W")
+
+    def test_mlb_extra_innings_resolved_vs_phantom_or_incomplete(self):
+        reg={"I"+str(i):(0,0) for i in range(1,10)}
+        b=SimulationBatch("MLB","e1","H","A",frozenset(),H,S,
+                          D-timedelta(hours=1),D-timedelta(minutes=4),(Outcome(reg),))
+        self.assertEqual(settle(b,Outcome({**reg,"EXTRA":(1,0)}),
+                         mk("ML","HOME","",sport="MLB")),"W")
+        with self.assertRaisesRegex(ValueError,"MLB_FINAL_TIE_UNRESOLVED"):
+            settle(b,Outcome({**reg,"EXTRA":(1,1)}),
+                   mk("ML","HOME","",sport="MLB"))
+        with self.assertRaisesRegex(ValueError,"EXTRA_INNINGS_WITHOUT_NINE_INNING_TIE"):
+            settle(b,Outcome({**reg,"I9":(1,0),"EXTRA":(1,0)}),
+                   mk("TOTAL","OVER","0.5",sport="MLB"))
+
+    def test_unverified_posted_rules_do_not_resolve_a_regulation_tie(self):
+        reg={"Q1":(7,7),"Q2":(0,0),"Q3":(0,0),"Q4":(0,0)}
+        with self.assertRaisesRegex(ValueError,"POSTED_SETTLEMENT_RULE_UNVERIFIED"):
+            settle(batch(),Outcome(reg),mk("TOTAL","OVER","20.5",
+                                         settlement="POSTED_RULES"))
+
+    def test_missing_overtime_blocks_all_market_probabilities(self):
+        tied=Outcome({"Q1":(7,7),"Q2":(0,0),"Q3":(7,7),"Q4":(0,0)})
+        b=SimulationBatch("NFL","e1","H","A",frozenset(),H,S,
+                          D-timedelta(hours=1),D-timedelta(minutes=4),
+                          tuple([tied]*1200))
+        m=mk("ML","HOME","")
+        r=price_market(b,m,quote(m),
+            quote(mk("ML","AWAY",""),receipt="r2",quote_id="q2"),D)
+        self.assertEqual(r["status"],"BLOCK")
+        self.assertIn("OVERTIME_OUTCOME_MISSING",r["reasons"])
+        self.assertEqual(r["approved_stake_u"],0)
+
+    def test_two_sided_quotes_must_be_from_nearby_observations(self):
+        m=mk()
+        x=quote(m,observed=D-timedelta(seconds=70))
+        y=quote(mk(selection="AWAY",line="3.5"),
+                receipt="r2",quote_id="q2",observed=D-timedelta(seconds=170))
+        p=price_market(batch(),m,x,y,D)
+        self.assertEqual(p["status"],"BLOCK")
+        self.assertIn("TWO_SIDED_QUOTE_SNAPSHOT_SKEW",p["reasons"])
+        self.assertEqual(p["approved_stake_u"],0)
+
+    def test_close_in_time_two_sided_quotes_remain_paper(self):
+        m=mk()
+        x=quote(m,observed=D-timedelta(seconds=80))
+        y=quote(mk(selection="AWAY",line="3.5"),
+                receipt="r2",quote_id="q2",observed=D-timedelta(seconds=100))
+        p=price_market(batch(),m,x,y,D)
+        self.assertEqual(p["status"],"PAPER_0U")
+        self.assertEqual(p["approved_stake_u"],0)
+
+    def test_unsafe_quote_pair_skew_configuration_rejected(self):
+        m=mk()
+        x=quote(m,observed=D-timedelta(seconds=80))
+        y=quote(mk(selection="AWAY",line="3.5"),
+                receipt="r2",quote_id="q2",observed=D-timedelta(seconds=100))
+        with self.assertRaisesRegex(ValueError,"UNSAFE_TWO_SIDED_QUOTE_SKEW_LIMIT"):
+            validate_pair(x,y,m,D,max_pair_skew_seconds=301)
+
+
 class CapturedOdds(unittest.TestCase):
     def test_no_vig_exact_pair_unpromotable(self):
         a=mk()
