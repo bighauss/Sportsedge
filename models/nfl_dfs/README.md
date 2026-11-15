@@ -20,6 +20,22 @@ python models/nfl_dfs/test_showdown_mc.py
 ## Salaries auto-pull
 `fetch_dk_salaries.py` pulls DK's public lobby and draftables JSON into `data/dk_auto/`. The endpoints are unofficial. The fetcher has not been run yet, and the scheduled workflow still needs to be added.
 
+## Free public NFL game-log adapter (research only)
+
+`public_nfl_gamelogs.py` reads pregame ESPN-derived raw box-score logs from
+[`xtheredshirtx/fanduel-player-data`](https://github.com/xtheredshirtx/fanduel-player-data/tree/main/NFL/csv).
+It discards FanDuel fantasy-point fields and NEVER uses DK's AvgPointsPerGame.
+It reports per-game box-score features only; **it does not change the showdown projections or lineups**, and the data must be cross-checked against a second official source before promotion.
+
+Example, after downloading `NFL_offense_game_log_2026_as_of_2026-11-15.csv`:
+
+```
+python models/nfl_dfs/public_nfl_gamelogs.py NFL_offense_game_log_2026_as_of_2026-11-15.csv --kickoff-date 2026-11-15 --teams PIT CIN --recent-games 5
+python models/nfl_dfs/test_public_nfl_gamelogs.py
+```
+
+Missing from this free file: **pass attempts, rush attempts, targets, snaps, routes, injury reports, ownership, salaries**. Recompute any DK scoring independently from raw box-score inputs rather than importing provider scoring fields.
+
 ## Sources (PIT@CIN 2026-11-15)
 - Odds: SI/BetMGM: CIN -3.5, ML -190/+160, O/U 49.5 (opened 47.5)
 - Weather: Sharp Football, mysportsweather, Local12: 42F, calm, dry
