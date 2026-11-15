@@ -17,6 +17,37 @@ QUOTE_FIELDS = ('provider','source_url','provider_event_id','event_id','quote_id
                 'book','sport','market','period','side','line','team_id',
                 'odds_american','observed_at_utc','ingested_at_utc','game_start_utc')
 
+def unique_json_object(pairs):
+    """Do not let a second JSON key silently override the claimed quote identity."""
+    out = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError('RECEIPT_DUPLICATE_JSON_KEY:' + key)
+        out[key] = value
+    return out
+
+def parse_snapshot(raw):
+    """Fail closed on duplicate headers, missing cells and ambiguous CSV rows."""
+    try:
+        reader = csv.DictReader(raw.decode('utf-8-sig').splitlines(),
+                                restval=None, restkey=None, strict=True)
+        headers = reader.fieldnames or []
+        if not headers or any(not isinstance(h, str) or not h.strip() for h in headers):
+            raise ValueError('SNAPSHOT_HEADER_INVALID')
+        normalized = [h.strip().casefold() for h in headers]
+        if len(set(normalized)) != len(headers):
+            raise ValueError('SNAPSHOT_DUPLICATE_HEADER')
+        needed = {'quote_receipt_sha256', 'event_source_id', 'event_id',
+                  'quote_id', 'book', 'captured_at_utc', 'decision_at_utc'}
+        if not needed.issubset(headers):
+            raise ValueError('SNAPSHOT_REQUIRED_HEADER_MISSING')
+        rows = list(reader)
+        if any(None in r or any(v is None for v in r.values()) for r in rows):
+            raise ValueError('SNAPSHOT_RAGGED_ROW')
+        return rows
+    except (csv.Error, UnicodeError) as exc:
+        raise ValueError('INVALID_SNAPSHOT_CSV') from exc
+
 def canonical_line(v, market):
     if str(market).upper() == 'ML':
         if str(v or '0').strip() in ('','0','+0','-0'): return Decimal(0)
@@ -37,8 +68,14 @@ def checked_receipt(receipt_dir, row):
     b = target.read_bytes()
     if not b or len(b)>2_000_000:raise ValueError('RECEIPT_SIZE_INVALID')
     if hashlib.sha256(b).hexdigest()!=want:raise ValueError('RECEIPT_BYTES_HASH_MISMATCH')
-    try: q=json.loads(b.decode('utf-8'))
-    except (ValueError,UnicodeError) as e:raise ValueError('RECEIPT_JSON_INVALID') from e
+    try:
+        q = json.loads(b.decode('utf-8'), object_pairs_hook=unique_json_object)
+    except ValueError as e:
+        if str(e).startswith('RECEIPT_DUPLICATE_JSON_KEY:'):
+            raise
+        raise ValueError('RECEIPT_JSON_INVALID') from e
+    except UnicodeError as e:
+        raise ValueError('RECEIPT_JSON_INVALID') from e
     if not isinstance(q,dict):raise ValueError('RECEIPT_QUOTE_NOT_OBJECT')
     for k in QUOTE_FIELDS:
         if not str(q.get(k,'')).strip():raise ValueError('RECEIPT_MISSING:'+k)
@@ -73,16 +110,22 @@ def checked_receipt(receipt_dir, row):
 
 def audit_evidence(snapshot_csv,receipt_dir):
     raw=Path(snapshot_csv).read_bytes();source_sha=hashlib.sha256(raw).hexdigest()
-    try:rows=list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))
-    except (csv.Error,UnicodeError) as e:
-        return {'verdict':'BLOCK','error':'INVALID_SNAPSHOT_CSV','source_sha256':source_sha,'rows':[]}
-    results=[];seen=set()
+    try:
+        rows = parse_snapshot(raw)
+    except ValueError as e:
+        return {'verdict':'BLOCK','error':str(e),'source_sha256':source_sha,
+                'n_rows':0,'linked_rows':0,'failed_rows':0,
+                'externally_authenticated':False,'official_counted':0,'rows':[]}
+    results=[];seen=set();seen_quotes=set()
     for i,row in enumerate(rows,2):
         if None in row:results.append({'row':i,'error':'EXTRA_SNAPSHOT_CELLS'});continue
         try:
             q=checked_receipt(receipt_dir,row)
             if q['sha256'] in seen:raise ValueError('RECEIPT_FILE_REUSED')
-            seen.add(q['sha256']);results.append({'row':i,'status':'LINKED','sha256':q['sha256'],'quote_id':q['quote_id']})
+            qkey = (str(row['book']).strip().casefold(), str(q['quote_id']).strip())
+            if qkey in seen_quotes:raise ValueError('DUPLICATE_BOOK_QUOTE_ID')
+            seen.add(q['sha256']);seen_quotes.add(qkey)
+            results.append({'row':i,'status':'LINKED','sha256':q['sha256'],'quote_id':q['quote_id']})
         except (ValueError,OSError,KeyError) as e:results.append({'row':i,'error':str(e)})
     failed=sum('error' in x for x in results)
     return {'verdict':'BYTE_LINKAGE_PASS_NOT_PROVIDER_AUTHENTICATED' if rows and not failed else 'BLOCK',
