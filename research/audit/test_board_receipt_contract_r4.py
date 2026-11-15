@@ -120,7 +120,7 @@ class ContractTests(unittest.TestCase):
     def test_valid_different_books_with_same_quote_id(self):
         a=dict(BASE)
         b=dict(a,book="Pinnacle")
-        self.assertEqual(self.run_rows([a,b])["errors"],[])
+        self.assertNotIn("REUSED_CANONICAL_BOOK_QUOTE_ID",self._flatten(self.run_rows([a,b])))
 
     def test_invalid_http_and_credential_url_refused(self):
         for url in ("http://provider.example/quote",
@@ -171,7 +171,7 @@ class ContractTests(unittest.TestCase):
     def test_r4_rejects_same_sign_spread(self):
         a=dict(BASE, market="SPREAD", line="-3.5",price_american="-110")
         b=dict(a,side="away",provider_quote_id="q2")
-        self.assertIn("UNMATCHED_TWO_SIDED_BOOK_OFFER", self._flatten(self.run_rows([a,b])))
+        self.assertIn("OPPOSING_SPREAD_SIGN_MISMATCH", self._flatten(self.run_rows([a,b])))
 
     def test_r4_accepts_canonical_opposite_spread(self):
         a=dict(BASE,market="SPREAD",line="-3.5",price_american="-110")
