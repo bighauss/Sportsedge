@@ -1,0 +1,28 @@
+name: Strict quote-board receipt R4 (research only)
+on:
+  pull_request:
+    paths:
+      - 'research/audit/board_receipt_contract_r4.py'
+      - 'research/audit/test_board_receipt_contract_r4.py'
+      - '.github/workflows/quote-receipt-r4.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/audit/board_receipt_contract_r4.py'
+      - 'research/audit/test_board_receipt_contract_r4.py'
+      - '.github/workflows/quote-receipt-r4.yml'
+permissions:
+  contents: read
+jobs:
+  structural-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile read-only research quote preflight
+        run: python -m compileall -q research/audit/board_receipt_contract_r4.py
+      - name: Verify 26 synthetic fail-closed quote-board cases
+        run: python -m unittest research.audit.test_board_receipt_contract_r4 -v
