@@ -79,13 +79,19 @@ class MarketKey:
             raise ValueError("INVALID_SPORT_OR_MARKET_KIND")
         if self.period not in PERIODS or self.side not in SIDES:
             raise ValueError("INVALID_PERIOD_OR_SIDE")
-        if self.kind == "MONEYLINE" and self.line not in ("", "0"):
-            raise ValueError("ML_LINE_MUST_BE_EMPTY")
-        if self.kind != "MONEYLINE":
-            # Total/spread/props must include a genuine line. ATTD/TD yes-no markets
-            # can use a blank line, but not a fabricated zero.
-            if self.kind not in ("ATTD", "FIRST_TD", "TD_2PLUS") or self.line:
-                object.__setattr__(self, "line", str(dec(self.line, "line").normalize()))
+        if self.kind == "MONEYLINE":
+            if self.line not in ("", "0"):
+                raise ValueError("ML_LINE_MUST_BE_EMPTY")
+            # Normalization prevents the same book/side/event from carrying
+            # distinct canonical keys solely because one exporter uses "0".
+            object.__setattr__(self, "line", "")
+        elif self.kind in ("ATTD", "FIRST_TD", "TD_2PLUS"):
+            # Player yes/no outcomes are categorical; never accept a fabricated
+            # numeric line or equate such a quote with a line-free market.
+            if self.line != "":
+                raise ValueError("YES_NO_MARKET_CANNOT_HAVE_LINE")
+        else:
+            object.__setattr__(self, "line", str(dec(self.line, "line").normalize()))
         if self.kind == "PLAYER_PROP" and not (self.player_id and self.stat):
             raise ValueError("MISSING_PLAYER_OR_STAT_ID")
         if self.kind in ("ATTD", "FIRST_TD", "TD_2PLUS") and not self.player_id:
@@ -228,10 +234,15 @@ def evaluate_dual_source(
             issues.append("EVENT_START_MISMATCH")
         if primary.provider == secondary.provider and primary.receipt_id == secondary.receipt_id:
             issues.append("REUSED_SOURCE_RECEIPT")
-        # A BestBook aggregation of a DraftKings price is not a second book.
-        # Even independent transport endpoints may share one underlying bookmaker.
-        if primary.upstream_book.casefold() == secondary.upstream_book.casefold():
+        # Two logos from a single aggregator/capture path are not two
+        # independently authenticated data sources. Reject both shared
+        # collection paths and shared underlying bookmakers, irrespective of
+        # their receipt IDs or displayed prices.
+        if primary.upstream_book.strip().casefold() == secondary.upstream_book.strip().casefold():
             issues.append("NO_INDEPENDENT_UPSTREAM_BOOK")
+        if (primary.provider.strip().casefold() == secondary.provider.strip().casefold()
+                or primary.upstream_provider.strip().casefold() == secondary.upstream_provider.strip().casefold()):
+            issues.append("NO_INDEPENDENT_CAPTURE_PATH")
         if not market_mapping_verified:
             issues.append("CROSS_PROVIDER_MARKET_MAP_UNVERIFIED")
         gap = str(abs(implied(primary.odds_american) - implied(secondary.odds_american)))
@@ -259,7 +270,13 @@ class CLVTriple:
             reasons.append("CLV_MARKET_DEFINITION_MISMATCH")
         if len({p.game_start_utc for p in q}) != 1:
             reasons.append("CLV_EVENT_START_MISMATCH")
-        if not (q[0].observed_at_utc <= q[1].observed_at_utc <= q[2].observed_at_utc < q[0].game_start_utc):
+        if len({p.upstream_book.strip().casefold() for p in q}) != 1:
+            reasons.append("CLV_BOOK_MISMATCH")
+        if len({(p.provider.strip().casefold(),p.upstream_provider.strip().casefold()) for p in q}) != 1:
+            reasons.append("CLV_CAPTURE_PATH_MISMATCH")
+        if len({(p.provider_event_id,p.provider_market_id) for p in q}) != 1:
+            reasons.append("CLV_PROVIDER_MARKET_MISMATCH")
+        if not (q[0].observed_at_utc <= q[1].observed_at_utc < q[2].observed_at_utc < q[0].game_start_utc):
             reasons.append("CLV_TIME_ORDER_INVALID")
         if len({p.receipt_id for p in q}) != 3:
             reasons.append("CLV_RECEIPT_REUSED")
