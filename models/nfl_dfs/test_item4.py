@@ -100,6 +100,21 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(cfg["teams"]["PIT"]["fga"],0.0)
         self.assertNotIn("AvgPointsPerGame",str(cfg))
 
+    def test_local_date_required_for_us_evening_kickoff(self):
+        self.manifest.pop("game_date_local")
+        self.save_manifest()
+        with self.assertRaises(builder.Blocked):
+            builder.build(self.manifest_path,lookback=2,min_games=2)
+
+    def test_special_scoring_from_raw_boxscore(self):
+        row={field:"0" for field in backtest.RESULT_HEADER}
+        row.update(player_name="Tester",team="PIT",pos="WR",
+                   two_point_conversions="1",return_tds="1",offensive_fumble_td="1")
+        self.assertEqual(backtest.observed_score(row),14)
+        row.update(pos="DST",points_allowed="17",
+                   blocked_kicks="1",two_point_returns="1")
+        self.assertEqual(backtest.observed_score(row),5)
+
     def test_bad_hash_blocked(self):
         self.manifest["pbp"]["sha256"]="00"*32
         self.save_manifest()
