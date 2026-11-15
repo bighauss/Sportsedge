@@ -75,6 +75,24 @@ def run_research_board(
         x["independent_model_verified"]=False
         guard=gate_candidate(x,dual,pit,None,now,chain=chain,
                              ledger=ledger,closing_observations=closing_observations)
+        # The recovered v2.1 gate stores its own contract decision.
+        # Preserve original quote SHA/IDs in the *same chain* as a distinct,
+        # explicitly unverified source record (never overwrite its report).
+        quote_audit_hash=None
+        if chain is not None:
+            quote_audit_hash=chain.append({
+                "decision_id":x["bet_id"]+":QUOTE",
+                "asof_utc":now.isoformat(),
+                "market_key":list(c.market.identity()),
+                "primary_receipt_id":c.dk_quote.receipt_id if c.dk_quote else None,
+                "secondary_receipt_id":c.dk_other_side.receipt_id if c.dk_other_side else None,
+                "source_payload_hashes":[q.raw_payload_sha256 for q in
+                     (c.dk_quote,c.dk_other_side) if q is not None],
+                "state":"BLOCK",
+                "reason_codes":["QUOTE_HASHES_NOT_PROVIDER_AUTHENTICATION"],
+                "pit_status":"UNVERIFIED","v21_status":guard["v21_status"],
+                "approved_stake_u":0,"official_counted":0,
+            })
         rows.append({
             "market":c.market.identity(),
             "research_state":priced["status"],
@@ -86,6 +104,7 @@ def run_research_board(
             "v21_status":guard["v21_status"],
             "decision_id":x["bet_id"],
             "audit_hash":guard["hash_chain_head"],
+            "quote_audit_hash":quote_audit_hash,
             "official_counted":0,"approved_stake_u":0,"card":None,
         })
     return {
