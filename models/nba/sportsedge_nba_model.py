@@ -181,16 +181,39 @@ def project_game(g, data):
 
 # ----------------------------- game markets ----------------------------------
 def novig(rows):
-    """attach nv_p by pairing two sides of the same game/market/|line|"""
+    """Attach no-vig probability only to a verified complementary quote pair."""
     groups = {}
     for r in rows:
+        r["nv_p"] = None
         key = (r["game_id"], r["market"], abs(_num(r["line"])) if r["line"] else "")
         groups.setdefault(key, []).append(r)
     for g in groups.values():
-        imps = [1 / am_to_dec(r["price"]) for r in g]
-        s = sum(imps)
-        for r, i in zip(g, imps):
-            r["nv_p"] = i / s if len(g) == 2 else None
+        if len(g) != 2:
+            continue
+        a, b = g
+        sa, sb = a["selection"].upper(), b["selection"].upper()
+        mk = a["market"].upper()
+        if mk.endswith("TOTAL") or "_TT_" in mk or mk.startswith("TT_"):
+            if {sa, sb} != {"OVER", "UNDER"} or _num(a["line"]) != _num(b["line"]):
+                continue
+        elif mk.endswith("SPREAD"):
+            if sa == sb or abs(_num(a["line"]) + _num(b["line"])) > 1e-9:
+                continue
+        elif mk.endswith("ML"):
+            if sa == sb or a["line"] or b["line"]:
+                continue
+        else:
+            continue
+        try:
+            values = [float(r["price"]) for r in g]
+            if any(not math.isfinite(p) or int(p) != p or abs(p) < 100 for p in values):
+                continue
+            imps = [1 / am_to_dec(p) for p in values]
+            total = sum(imps)
+            for r, i in zip(g, imps):
+                r["nv_p"] = i / total
+        except (ValueError, TypeError, ZeroDivisionError, OverflowError):
+            continue
     return rows
 
 def price_game_market(r, proj):
@@ -298,9 +321,18 @@ def price_props(data, players):
 
 # ----------------------------- picks / filter / stacks -----------------------
 def _pick(gid, market, sel, line, dec, p, push, nv, proj_val, ou, note, signal):
+    if nv is None:
+        raise ValueError("NO_VIG_OPPOSITE_PRICE_MISSING")
+    if not (math.isfinite(p) and math.isfinite(push) and math.isfinite(nv)
+            and 0 <= p <= 1 and 0 <= push < 1 and 0 <= nv <= 1
+            and p + push <= 1 + 1e-9):
+        raise ValueError("INVALID_MODEL_OR_MARKET_PROBABILITIES")
     raw = ev(p, dec, push)
-    pb = P_MODEL_W * p + (1 - P_MODEL_W) * nv if nv is not None else p
-    blend = ev(pb, dec, push * (1 - P_MODEL_W) if nv is not None else push)
+    # Two-way no-vig odds imply P(win | no push). Blend on THAT same basis.
+    # Retain the model's push probability and settle pushes as stake refunds.
+    model_conditional = p / (1 - push)
+    pb = (P_MODEL_W * model_conditional + (1 - P_MODEL_W) * nv) * (1 - push)
+    blend = ev(pb, dec, push)
     return {"game_id": gid, "market": market, "selection": sel, "line": line,
             "price_dec": round(dec, 3), "model_p": round(p, 4),
             "novig_p": round(nv, 4) if nv is not None else "", "blend_p": round(pb, 4),
@@ -313,6 +345,9 @@ def price_games(data, projs):
     for r in rows:
         proj = projs.get(r["game_id"])
         if not proj:
+            continue
+        # A one-sided / ambiguous board cannot supply a no-vig market baseline.
+        if r.get("nv_p") is None:
             continue
         p, push, mu, kind = price_game_market(r, proj)
         sel = r["selection"].upper()
