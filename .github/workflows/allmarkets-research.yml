@@ -24,5 +24,7 @@ jobs:
         run: python -m unittest sportsedge.markets.test_projection_bridge -v
       - name: Exercise full RUN IT research pipeline through recovered v2.1
         run: python -m unittest sportsedge.markets.test_run_it_research -v
+      - name: Verify all five sports' independent player-stat forecast intake
+        run: python -m unittest sportsedge.markets.test_player_forecast_intake -v
       - name: Verify old v5 intake/policy and all-sport quote math tests
         run: python -m unittest research.audits.test_multisport_quote_ev_regressions sportsedge.odds.test_issue10_offline -q
