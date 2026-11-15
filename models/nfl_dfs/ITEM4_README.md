@@ -20,7 +20,8 @@ Create an input_manifest.json in the same folder, like this example
 (the timestamps are illustrative and not evidence of an actual snapshot):
 
     {
-      "kickoff_utc": "2026-11-15T20:20:00Z",
+      "kickoff_utc": "2026-11-16T01:20:00Z",
+      "game_date_local": "2026-11-15",
       "template": {"path": "template.json", "sha256": "ACTUAL_SHA256",
                    "captured_at_utc": "2026-11-15T17:00:00Z"},
       "pbp": {"path": "pbp.csv", "sha256": "ACTUAL_SHA256",
@@ -31,7 +32,9 @@ Create an input_manifest.json in the same folder, like this example
 
 Hashes must be accurate lowercase hexadecimal SHA256 values. Files must
 exist and match, paths must stay inside the snapshot directory, and capture
-times must precede kickoff. The PBP for target teams must not include the
+times must precede kickoff. The explicitly supplied local game date (not UTC date, since US night games
+can start the following UTC day) prevents a same-game lookahead bug.
+The PBP for target teams must not include the
 target game or later matches.
 
 ## Build research inputs
