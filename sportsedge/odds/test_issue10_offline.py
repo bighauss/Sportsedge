@@ -35,6 +35,70 @@ def quote(book="DraftKings", provider="DKDirect", upstream="DraftKings", *,
 
 
 class TestMarketAndDual(unittest.TestCase):
+
+    def test_moneyline_blank_and_zero_aliases_have_one_market_identity(self):
+        first = MarketKey("NFL", "match-1", "MONEYLINE", "FG", "HOME", line="")
+        second = MarketKey("NFL", "match-1", "MONEYLINE", "FG", "HOME", line="0")
+        self.assertEqual(first.key(), second.key())
+        self.assertEqual(first.line, second.line)
+
+    def test_touchdown_yes_no_markets_reject_fabricated_numeric_lines(self):
+        for kind in ("ATTD", "FIRST_TD", "TD_2PLUS"):
+            for invalid_line in ("0", "1", "0.5"):
+                with self.subTest(kind=kind, line=invalid_line):
+                    with self.assertRaisesRegex(ValueError, "YES_NO_MARKET_CANNOT_HAVE_LINE"):
+                        MarketKey("NFL", "match-1", kind, "FG", "YES",
+                                  line=invalid_line, player_id="player-1")
+
+    def test_distinct_book_logos_same_aggregator_chain_still_blocked(self):
+        from dataclasses import replace
+        first=quote("DK-offer",provider="BestBookFeed",upstream="DraftKings")
+        second=quote("FD-offer",provider="BestBookFeed",upstream="FanDuel")
+        second=replace(second,upstream_provider="BestBookFeed",receipt_id="fd-unique")
+        result=evaluate_dual_source(first,second,D,market_mapping_verified=True)
+        self.assertEqual(result.state, "BLOCK")
+        self.assertIn("NO_INDEPENDENT_CAPTURE_PATH",result.reasons)
+
+    def test_distinct_transport_names_shared_underlying_feed_still_blocked(self):
+        from dataclasses import replace
+        first=quote("DK-offer",provider="BestBookFeed",upstream="DraftKings")
+        second=quote("FD-offer",provider="MirrorOfBestBook",upstream="FanDuel")
+        second=replace(second,upstream_provider="BestBookFeed")
+        result=evaluate_dual_source(first,second,D,market_mapping_verified=True)
+        self.assertIn("NO_INDEPENDENT_CAPTURE_PATH",result.reasons)
+
+    def test_clv_close_from_different_book_is_not_same_book_clv(self):
+        from dataclasses import replace
+        o=quote(raw_odds=-105,observed=D-timedelta(minutes=4),receipt_id="clv-open")
+        t=quote(raw_odds=-110,observed=D-timedelta(minutes=3),receipt_id="clv-taken")
+        c=quote("FD", "FanDuel", "FanDuel", raw_odds=-120,
+                observed=D-timedelta(minutes=2),receipt_id="clv-close")
+        self.assertIn("CLV_BOOK_MISMATCH",CLVTriple(o,t,c).audit()["reason"])
+        self.assertFalse(CLVTriple(o,t,c).audit()["valid_structural_match"])
+
+    def test_clv_vendor_market_id_changed_is_not_same_market_triple(self):
+        from dataclasses import replace
+        o=quote(raw_odds=-105,observed=D-timedelta(minutes=4),receipt_id="clv-open")
+        t=quote(raw_odds=-110,observed=D-timedelta(minutes=3),receipt_id="clv-taken")
+        c=replace(quote(raw_odds=-120,observed=D-timedelta(minutes=2),
+                        receipt_id="clv-close"),provider_market_id="another-market")
+        report=CLVTriple(o,t,c).audit()
+        self.assertIn("CLV_PROVIDER_MARKET_MISMATCH",report["reason"])
+        self.assertFalse(report["valid_structural_match"])
+
+    def test_clv_replayed_same_timestamp_close_is_not_forward_close(self):
+        o=quote(raw_odds=-105,observed=D-timedelta(minutes=4),receipt_id="clv-open")
+        t=quote(raw_odds=-110,observed=D-timedelta(minutes=3),receipt_id="clv-taken")
+        c=quote(raw_odds=-120,observed=D-timedelta(minutes=3),receipt_id="clv-close")
+        self.assertIn("CLV_TIME_ORDER_INVALID",CLVTriple(o,t,c).audit()["reason"])
+
+    def test_genuinely_distinct_book_and_collection_path_still_research_only(self):
+        primary=quote("DK",provider="DKDirect",upstream="DraftKings")
+        secondary=quote("FD",provider="FDDirect",upstream="FanDuel")
+        result=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        self.assertEqual(result.state,"RESEARCH_ONLY")
+        self.assertEqual(result.approved_stake_u,0)
+
     def test_same_market_normalized_decimal(self):
         a = quote(line="-3.50").market
         b = quote(line="-3.5").market
