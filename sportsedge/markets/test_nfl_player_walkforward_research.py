@@ -125,6 +125,58 @@ class NFLPlayerHistoricalStudy(unittest.TestCase):
         self.assertLess(output["totals"]["RUSH_YDS"]["baseline"]["n"],160)
         self.assertTrue(output["missing_player_actuals_not_assumed_zero"])
 
+
+    def test_missing_current_week_stat_is_not_mislabeled_absent_player(self):
+        weekly,ngs=make_data()
+        changed=[]
+        for r in weekly:
+            item=dict(r)
+            if item["week"]=="8" and item["team"]=="SEA":
+                item["passing_yards"]=""
+            changed.append(item)
+        baseline=study(weekly,ngs)
+        result=study(tuple(changed),ngs)
+        self.assertEqual(result["counts"]["missing_actual_stat"],1)
+        self.assertEqual(result["counts"]["not_observed_in_holdout"],0)
+        self.assertEqual(result["counts"]["graded"],baseline["counts"]["graded"]-1)
+        self.assertEqual(result["folds"][3]["ungraded_absent_or_missing_stat"],
+                         baseline["folds"][3]["ungraded_absent_or_missing_stat"]+1)
+        self.assertEqual(result["folds"][3]["stats"]["PASS_YDS"]["baseline"]["n"],
+                         baseline["folds"][3]["stats"]["PASS_YDS"]["baseline"]["n"]-1)
+        self.assertEqual(result["official_counted"],0)
+
+    def test_zero_current_week_result_remains_graduated_not_missing(self):
+        weekly,ngs=make_data()
+        changed=[]
+        for r in weekly:
+            item=dict(r)
+            if item["week"]=="8" and item["team"]=="SEA":
+                item["passing_yards"]="0"
+            changed.append(item)
+        baseline=study(weekly,ngs)
+        result=study(tuple(changed),ngs)
+        self.assertEqual(result["counts"]["missing_actual_stat"],0)
+        self.assertEqual(result["counts"]["not_observed_in_holdout"],0)
+        self.assertEqual(result["counts"]["graded"],baseline["counts"]["graded"])
+
+    def test_ungraded_categories_exhaust_all_conditional_forecasts(self):
+        weekly,ngs=make_data()
+        changed=[]
+        for r in weekly:
+            item=dict(r)
+            if item["week"]=="8" and item["team"]=="SEA":
+                item["receiving_yards"]="NA"
+            changed.append(item)
+        changed=tuple(r for r in changed
+                      if not (r["week"]=="7" and r["team"]=="GB"))
+        result=study(changed,ngs)
+        counted=(result["counts"]["graded"]+
+                 result["counts"]["not_observed_in_holdout"]+
+                 result["counts"]["missing_actual_stat"])
+        self.assertEqual(counted,result["counts"]["conditional_roster_candidates"])
+        self.assertGreater(result["counts"]["not_observed_in_holdout"],0)
+        self.assertGreater(result["counts"]["missing_actual_stat"],0)
+
     def test_cross_team_duplicate_same_player_isnt_silently_reassigned(self):
         weekly,ngs=make_data()
         same=dict(weekly[0])
