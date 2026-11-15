@@ -1,4 +1,4 @@
-import json, os, sys, unittest
+import copy, json, os, random, sys, unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import showdown_mc as m
 
@@ -9,6 +9,16 @@ class T(unittest.TestCase):
         self.assertEqual(m.dk_dst(0, 0, 0, 0, 0), 10)
         self.assertEqual(m.dk_dst(24, 3, 1, 0, 0), 5)
         self.assertEqual(m.dk_dst(40, 0, 0, 0, 0), -4)
+
+    def test_missed_field_goals_have_no_penalty(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        cfg = json.load(open(os.path.join(here, "games", "PIT_CIN_2026-11-15.json")))
+        team = copy.deepcopy(cfg["teams"]["PIT"])
+        team.update(fga=100.0, fg_short=0.0, fg40=0.0, fg50=0.0,
+                    pass_td=0.0, rush_td=0.0)
+        active = {p: True for p in cfg["players"]}
+        _, kicker_points, _, _, _ = m.sim_team(random.Random(42), team, 0, 0, active)
+        self.assertEqual(kicker_points, 0.0)
 
     def test_sim_and_lineups(self):
         here = os.path.dirname(os.path.abspath(__file__))
