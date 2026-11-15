@@ -26,5 +26,7 @@ jobs:
         run: python -m unittest sportsedge.markets.test_run_it_research -v
       - name: Verify all five sports' independent player-stat forecast intake
         run: python -m unittest sportsedge.markets.test_player_forecast_intake -v
+      - name: Run single-command research CLI smoke tests
+        run: python -m unittest sportsedge.markets.test_cli -v
       - name: Verify old v5 intake/policy and all-sport quote math tests
         run: python -m unittest research.audits.test_multisport_quote_ev_regressions sportsedge.odds.test_issue10_offline -q
