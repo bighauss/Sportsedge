@@ -184,10 +184,42 @@ def stars(ev):
     return 5 if ev >= 0.08 else 4 if ev >= 0.05 else 3 if ev >= 0.03 else 2 if ev >= 0.015 else 1
 
 def price_row(p_model, price, opp_price):
+    # Both *observed* sides are required: a single implied probability contains vig.
+    if opp_price in (None, "") or price in (None, ""):
+        raise ValueError("NO_VIG_REQUIRES_TWO_CAPTURED_PRICES")
+    for item in (price, opp_price):
+        v = float(item)
+        if not math.isfinite(v) or v != int(v) or abs(v) < 100:
+            raise ValueError("INVALID_AMERICAN_PRICE")
     dec = am_to_dec(price)
-    pm = novig(price, opp_price) if opp_price not in (None, "") else am_to_imp(price)
+    pm = novig(price, opp_price)
     pb = W_MODEL_MKT * p_model + (1 - W_MODEL_MKT) * pm
     return dict(model_p=p_model, market_p=pm, blend_p=pb, raw_ev=p_model * dec - 1, blend_ev=pb * dec - 1)
+
+
+def captured_opposite(o, odds):
+    """Validate actual reciprocal two-sided prices for the same captured market."""
+    gid, mk, side = o["game_id"], o["market"], o["side"].lower()
+    sides = {"home": "away", "away": "home"} if mk in ("ml", "spread") else {"over": "under", "under": "over"}
+    if side not in sides:
+        raise ValueError("UNKNOWN_MARKET_SIDE")
+    raw_line = o.get("line")
+    l1 = float(raw_line) if raw_line not in ("", None) else 0.0
+    candidate = []
+    for r in odds:
+        if r is o or r["game_id"] != gid or r["market"] != mk or r["side"].lower() != sides[side]:
+            continue
+        rl = r.get("line")
+        l2 = float(rl) if rl not in ("", None) else 0.0
+        if (mk == "spread" and abs(l1 + l2) < 1e-9) or (mk != "spread" and abs(l1 - l2) < 1e-9):
+            candidate.append(r)
+    if len(candidate) != 1:
+        raise ValueError("MISSING_OR_AMBIGUOUS_OPPOSITE_QUOTE")
+    cp = candidate[0]["price_american"]
+    declared = o.get("opp_price_american")
+    if declared not in ("", None) and float(declared) != float(cp):
+        raise ValueError("DECLARED_OPPOSING_PRICE_MISMATCH")
+    return cp
 
 def contradicts(side, line, proj_val):
     if proj_val is None: return False
@@ -217,7 +249,12 @@ def run_card(inputs, out_dir="."):
         pv = projection_for(pj, mk)
         label = f"{g['away']}@{g['home']} {mk} {sd} {line:g}" if mk != "ml" else f"{g['away']}@{g['home']} ML {g[sd]}"
         if contradicts(sd, line, pv): dropped.append(label); continue
-        pr = price_row(model_prob(pj, mk, sd, line), o["price_american"], o.get("opp_price_american"))
+        try:
+            opposite_price = captured_opposite(o, odds)
+            pr = price_row(model_prob(pj, mk, sd, line), o["price_american"], opposite_price)
+        except (ValueError, TypeError, OverflowError) as exc:
+            dropped.append(f"{label} NO_PRICE_PAIR:{exc}")
+            continue
         rows.append(dict(type="game", game_id=o["game_id"], bet=label, side=sd, line=line, price=o["price_american"], proj=pv, **pr))
     for p in props:
         g, pj = projs[p["game_id"]]
