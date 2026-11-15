@@ -1,0 +1,30 @@
+name: Claude NFL v2.1 fail-closed research QA
+on:
+  pull_request:
+    paths:
+      - 'research/claude_nfl_20261114/**'
+      - 'docs/SPORTSEDGE_OPERATING_STANDARD.md'
+      - 'docs/audits/2026-11-15_professional_engineering_pass.md'
+      - '.github/workflows/v21-fail-closed-qa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/claude_nfl_20261114/**'
+      - '.github/workflows/v21-fail-closed-qa.yml'
+permissions:
+  contents: read
+jobs:
+  audit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile source without external dependencies
+        run: python -m compileall -q research/claude_nfl_20261114
+      - name: Original immutable source regression tests
+        run: python research/claude_nfl_20261114/test_recovery.py -q
+      - name: Fail-closed v2.1 and replay regressions
+        run: python research/claude_nfl_20261114/test_v21_fail_closed_repair.py -q
