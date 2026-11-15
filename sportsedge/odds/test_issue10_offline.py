@@ -164,6 +164,115 @@ class TestMarketAndDual(unittest.TestCase):
             DualSourceDecision("RESEARCH_ONLY", (), "one", "two", None, approved_stake_u=1)
 
 
+    def test_each_sport_accepts_one_valid_total(self):
+        for sport in ("NFL","CFB","CBB","NBA","MLB"):
+            with self.subTest(sport=sport):
+                m=MarketKey(sport,"game", "TOTAL","FG","OVER",line="44.50")
+                self.assertEqual(m.line,"44.5")
+
+    def test_market_kind_rejects_wrong_side(self):
+        cases=[("MONEYLINE","OVER", "", "TEAM_SIDE_REQUIRED"),
+               ("SPREAD","YES","-3.5","TEAM_SIDE_REQUIRED"),
+               ("TOTAL","HOME","42.5","OVER_UNDER_REQUIRED"),
+               ("PLAYER_PROP","YES","19.5","OVER_UNDER_REQUIRED"),
+               ("ATTD","OVER","","YES_NO_REQUIRED"),
+               ("NRFI","HOME","","YES_NO_REQUIRED")]
+        for kind,side,line,expected in cases:
+            sport="MLB" if kind=="NRFI" else "NFL"
+            period="1IN" if kind=="NRFI" else "FG"
+            kwargs={"player_id":"P1","stat":"REC_YDS"} if kind=="PLAYER_PROP" else (
+                {"player_id":"P1"} if kind=="ATTD" else {})
+            with self.subTest(kind=kind,side=side), self.assertRaisesRegex(ValueError,expected):
+                MarketKey(sport,"game",kind,period,side,line=line,**kwargs)
+
+    def test_categorical_market_not_numeric_line(self):
+        for sport,kind,period in (("NFL","ATTD","FG"),
+                                  ("NFL","FIRST_TD","FG"),
+                                  ("NFL","TD_2PLUS","FG"),
+                                  ("NBA","FIRST_BASKET","FG"),
+                                  ("MLB","NRFI","1IN"),
+                                  ("MLB","YRFI","1IN")):
+            kwargs={"player_id":"player-1"} if kind not in ("NRFI","YRFI") else {}
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError,"YES_NO_MARKET_CANNOT_HAVE_LINE"):
+                MarketKey(sport,"game",kind,period,"YES",line="0.5",**kwargs)
+
+    def test_sport_market_crossovers_are_refused(self):
+        cases=[("NBA","ATTD","FG","TOUCHDOWN_MARKET_REQUIRES_FG_FOOTBALL"),
+               ("MLB","FIRST_TD","FG","TOUCHDOWN_MARKET_REQUIRES_FG_FOOTBALL"),
+               ("CFB","FIRST_BASKET","FG","FIRST_BASKET_REQUIRES_FG_BASKETBALL"),
+               ("NFL","NRFI","1IN","PERIOD_NOT_SUPPORTED_BY_SPORT"),
+               ("NBA","YRFI","FG","FIRST_INNING_ONLY_MLB")]
+        for sport,kind,period,reason in cases:
+            kwargs={"player_id":"player-1"} if kind not in ("NRFI","YRFI") else {}
+            with self.subTest(sport=sport,kind=kind), self.assertRaisesRegex(ValueError,reason):
+                MarketKey(sport,"game",kind,period,"YES",**kwargs)
+
+    def test_real_supported_market_families_accept_valid_identity(self):
+        items=[("NFL","FIRST_TD","FG","YES",{"player_id":"P"}),
+               ("CFB","TD_2PLUS","FG","YES",{"player_id":"P"}),
+               ("NBA","FIRST_BASKET","FG","NO",{"player_id":"P"}),
+               ("CBB","FIRST_BASKET","FG","YES",{"player_id":"P"}),
+               ("MLB","NRFI","1IN","YES",{}),
+               ("MLB","YRFI","1IN","NO",{})]
+        for sport,kind,period,side,kwargs in items:
+            with self.subTest(sport=sport,kind=kind):
+                self.assertEqual(MarketKey(sport,"game",kind,period,side,**kwargs).kind,kind)
+
+    def test_mlb_period_restrictions_and_first_five(self):
+        ok=MarketKey("MLB","game","TOTAL","F5","OVER",line="4.5")
+        self.assertEqual(ok.period,"F5")
+        with self.assertRaisesRegex(ValueError,"PERIOD_NOT_SUPPORTED_BY_SPORT"):
+            MarketKey("MLB","game","TOTAL","1H","OVER",line="4.5")
+        with self.assertRaisesRegex(ValueError,"PERIOD_NOT_SUPPORTED_BY_SPORT"):
+            MarketKey("NFL","game","SPREAD","F5","HOME",line="-1.5")
+
+    def test_first_td_not_second_quarter_only(self):
+        with self.assertRaisesRegex(ValueError,"TOUCHDOWN_MARKET_REQUIRES_FG_FOOTBALL"):
+            MarketKey("NFL","game","FIRST_TD","1Q","YES",player_id="P1")
+
+    def test_categorical_player_market_requires_player_id(self):
+        with self.assertRaisesRegex(ValueError,"MISSING_PLAYER_ID"):
+            MarketKey("NBA","game","FIRST_BASKET","FG","YES")
+        with self.assertRaisesRegex(ValueError,"MISSING_PLAYER_ID"):
+            MarketKey("NFL","game","TD_2PLUS","FG","YES")
+
+    def test_team_total_requires_team_id_even_when_line_and_side_valid(self):
+        with self.assertRaisesRegex(ValueError,"MISSING_TEAM_ID"):
+            MarketKey("NFL","game","TEAM_TOTAL","FG","OVER",line="25.5")
+
+    def test_total_cannot_have_player_id_or_stat(self):
+        with self.assertRaisesRegex(ValueError,"UNEXPECTED_PLAYER_STAT_ID"):
+            MarketKey("NFL","game","TOTAL","FG","UNDER",line="42.5",player_id="P")
+        with self.assertRaisesRegex(ValueError,"UNEXPECTED_PLAYER_STAT_ID"):
+            MarketKey("NBA","game","SPREAD","FG","HOME",line="-5.5",stat="POINTS")
+
+    def test_numeric_total_negative_rejected_but_negative_spread_valid(self):
+        with self.assertRaisesRegex(ValueError,"NEGATIVE_NON_SPREAD_LINE"):
+            MarketKey("CBB","game","TOTAL","FG","OVER",line="-1.5")
+        with self.assertRaisesRegex(ValueError,"NEGATIVE_NON_SPREAD_LINE"):
+            MarketKey("NBA","game","PLAYER_PROP","FG","OVER",line="-0.5",player_id="P1",stat="POINTS")
+        self.assertEqual(MarketKey("NFL","game","SPREAD","FG","AWAY",line="-7.50").line,"-7.5")
+
+    def test_draw_not_conflated_with_two_way_moneyline(self):
+        with self.assertRaisesRegex(ValueError,"INVALID_PERIOD_OR_SIDE"):
+            MarketKey("CFB","game","MONEYLINE","FG","DRAW")
+
+    def test_blank_sport_and_unknown_sport_refused(self):
+        for sport in ("NHL","SOCCER","nfl"):
+            with self.subTest(sport=sport), self.assertRaisesRegex(ValueError,"INVALID_SPORT_OR_MARKET_KIND"):
+                MarketKey(sport,"game","TOTAL","FG","OVER",line="44.5")
+
+    def test_settlement_not_inferable_from_arbitrary_strings(self):
+        with self.assertRaisesRegex(ValueError,"UNVERIFIED_SETTLEMENT_RULE"):
+            MarketKey("NFL","game","MONEYLINE","FG","HOME",settlement="OT_PROBABLY")
+
+    def test_mlb_innings_scored_without_line_identity_collision(self):
+        a=MarketKey("MLB","game","TOTAL","FG","OVER",line="8.5",settlement="INCLUDES_OT")
+        b=MarketKey("MLB","game","TOTAL","F5","OVER",line="8.5",settlement="REGULATION")
+        self.assertNotEqual(a.key(),b.key())
+
+
+
 class TestPITandCLV(unittest.TestCase):
     def test_missing_required_feature(self):
         pit = PITBinding((), frozenset({"starting_qb"}), D-timedelta(minutes=2))

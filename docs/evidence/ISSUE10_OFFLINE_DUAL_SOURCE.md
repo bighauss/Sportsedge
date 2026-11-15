@@ -12,6 +12,28 @@
 
 Test: `python -m unittest sportsedge.odds.test_issue10_offline -v` (stdlib Python 3.12+, from repository root).
 
+## Strict five-sport market identity and settlement checks
+
+Offline quote normalization now shares fail-closed sport and market-family
+boundaries with the five-sport research engine. Only **NFL, CFB, CBB, NBA,
+MLB** are supported. Home/away outcomes are restricted to moneyline/spread;
+over/under to numeric totals, team totals and player props; yes/no to
+categorical touchdown, first-basket and MLB first-inning outcomes. A valid
+player ID is mandatory for any player-dependent quote, and team totals require
+a team ID. Unexpected player IDs in unrelated totals/ML/spreads are blocked.
+
+Football TD first/anytime/2+ markets require full-game football, first basket
+requires full-game basketball, NRFI/YRFI require MLB first inning, and MLB
+supports FG/F5/1IN rather than synthetic quarters. Total/prop numeric lines
+cannot be negative; spreads may be signed. Numeric lines are canonicalized
+without collapsing distinct settlement rules. Arbitrary settlement strings,
+unsupported sports and three-way DRAW prices are **BLOCK**.
+
+The `MarketKey.settlement` string is still *caller-supplied*, not an
+independently verified official bookmaker rule. Structural normalization does
+not prove a legal or genuine offer, live API access, matched original payload
+authenticity, independent closing lines, calibrated EV, or permission to wager.
+
 ## BestBook.app policy
 
 BestBook is an odds aggregator and research/comparison app; its public app listing does not constitute a documented, licensed developer API. The adapter is **disabled for automatic extraction** until the user supplies legitimate export/API documentation and authorization. An authorized raw export can be parsed only after its field schema and upstream original bookmaker are validated.
