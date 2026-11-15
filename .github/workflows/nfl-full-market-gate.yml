@@ -1,0 +1,24 @@
+name: NFL full-market and prop quote gate
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/markets/nfl_full_market_gate.py'
+      - 'sportsedge/markets/test_nfl_full_market_gate.py'
+      - '.github/workflows/nfl-full-market-gate.yml'
+  push:
+    paths:
+      - 'sportsedge/markets/nfl_full_market_gate.py'
+      - 'sportsedge/markets/test_nfl_full_market_gate.py'
+      - '.github/workflows/nfl-full-market-gate.yml'
+jobs:
+  nfl-full-market:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile separate research gate
+        run: python -m py_compile sportsedge/markets/nfl_full_market_gate.py
+      - name: Run pregame, prop, X+, touchdown and gap regressions
+        run: python -m unittest sportsedge.markets.test_nfl_full_market_gate -v
