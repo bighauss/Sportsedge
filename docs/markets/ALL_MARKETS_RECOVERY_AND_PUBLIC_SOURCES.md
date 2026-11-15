@@ -150,3 +150,22 @@ data lineage; input SHA values must eventually be cross-referenced with
 the frozen upstream model and provenance receipts before any live use.
 No sport-specific live provider APIs, sportsbook auth or validation thresholds
 are bypassed.
+
+### Bind directly to recovered models (new projection_ref)
+
+Rather than manually entering expected scores into `projection`, the create-only
+CLI also accepts **exactly one** `projection_ref`. For CFB/CBB/NBA/MLB,
+provide `sport`, `event_id`, `asof_utc` and a mapping of the recovered
+model's frozen `feature_paths`; the model's projection function runs without
+calling the legacy card/EV writer. For NFL, provide `sport: "NFL"`,
+`event_id`, `asof_utc`, `ratings_csv`, and the named
+`forecast` record; the existing R1 deterministic recomputation gate
+verifies the expected team points from the ratings first.
+
+The output differentiates `RECOVERED_MODEL_FUNCTION` from
+`CALLER_SUPPLIED_UNVERIFIED_MEAN`. Neither implies that the underlying
+historical source files were observed before the game's original price
+decision; recorded file mtimes and model version names are insufficient
+proof. All outputs remain PAPER/0u, and every tested price stays under the
+same receipt + v2.1 guard. A direct model call does not synthesize passing
+curves, touchdown counts, or real injury news.
