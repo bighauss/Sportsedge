@@ -29,7 +29,7 @@ from sportsedge.markets.player_forecast_intake import (
     ingest_player_forecast_csv,
 )
 from sportsedge.markets.ngs_public_research_smoke import NFL_TEAMS
-from sportsedge.markets.source_ingestion import SOURCES
+from sportsedge.markets.source_ingestion import SOURCES, parse_snapshot_bytes
 from sportsedge.markets.allmarkets_research import STAT_NAMES
 
 SHA = re.compile(r"sha256:[a-f0-9]{64}\Z")
@@ -181,15 +181,24 @@ def _sources(items, *, freeze_time, event_start, odds_observed):
     for row in items:
         _exact(row, SOURCE_KEYS, "source_receipt")
         source_id = _id(row["source_id"], "source_id")
-        if source_id not in SOURCES or SOURCES[source_id].sport != "NFL":
-            raise ValueError("UNREGISTERED_NFL_SOURCE")
+        if source_id not in ("NFLVERSE_WEEKLY", "NFLVERSE_NGS"):
+            raise ValueError("NFL_PLAYER_SOURCE_NOT_ALLOWLISTED")
         if (source_id, row["raw_sha256"]) in seen:
             raise ValueError("DUPLICATE_SOURCE_SNAPSHOT")
         seen.add((source_id, row["raw_sha256"]))
-        _, digest = _raw_file(row, fields=SOURCE_KEYS)
+        raw, digest = _raw_file(row, fields=SOURCE_KEYS)
         observed = _time(row["observed_at_utc"])
         captured = _time(row["captured_at_utc"])
         through = _time(row["data_through_utc"])
+        receipt, snapshots = parse_snapshot_bytes(
+            source_id, raw, observed, captured)
+        if not snapshots:
+            raise ValueError("EMPTY_REGISTERED_SOURCE_ROWS")
+        if source_id == "NFLVERSE_NGS":
+            ngs_fields = {"season", "week", "season_type",
+                          "player_gsis_id", "team_abbr"}
+            if not ngs_fields.issubset(receipt.schema_columns):
+                raise ValueError("NFL_NGS_SOURCE_ID_OR_WEEK_COLUMNS_MISSING")
         if not (through <= observed <= captured <= freeze_time < event_start):
             raise ValueError("SOURCE_CAPTURE_OR_PUBLICATION_TOO_LATE")
         if odds_observed is not None and captured > odds_observed:
@@ -312,6 +321,11 @@ def freeze_player_forecasts(request, *, now=None):
             "asof_utc": row["asof_utc"],
             "source_snapshot_sha256": row["source_snapshot_sha256"],
         })
+    # Detect a file swapped between initial intake and evidence construction.
+    _raw_file(r["forecast_file"])
+    _raw_file(r["lineup_file"], fields=LINEUP_FILE_KEYS)
+    for source in r["source_files"]:
+        _raw_file(source, fields=SOURCE_KEYS)
     # Input cannot assert a trusted provider, clock, author or lineup signature.
     return {
         "schema": RESEARCH_FREEZE, "state": "PAPER_0U_FORWARD_CAPTURE_ONLY",
@@ -435,6 +449,9 @@ def main(argv=None):
     data = _json_file(args.request_json)
     result = (freeze_player_forecasts(data) if args.command == "freeze"
               else grade_frozen_capture(data))
+    if args.command == "freeze" and datetime.now(timezone.utc) >= _time(
+            result["start_utc"]):
+        raise ValueError("FREEZE_OUTPUT_WOULD_BE_WRITTEN_AFTER_KICKOFF")
     sha = _write_private_create_only(args.private_output_json, result)
     print(json.dumps({
         "state": result["state"], "output_sha256": sha,
