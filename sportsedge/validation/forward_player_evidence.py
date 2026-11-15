@@ -23,14 +23,14 @@ import math
 import os
 import re
 
-from .player_forecast_intake import (
+from sportsedge.markets.player_forecast_intake import (
     REQUIRED as FORECAST_FIELDS,
     FORBIDDEN as FORECAST_FORBIDDEN,
     ingest_player_forecast_csv,
 )
-from .ngs_public_research_smoke import NFL_TEAMS
-from .source_ingestion import SOURCES
-from .allmarkets_research import STAT_NAMES
+from sportsedge.markets.ngs_public_research_smoke import NFL_TEAMS
+from sportsedge.markets.source_ingestion import SOURCES
+from sportsedge.markets.allmarkets_research import STAT_NAMES
 
 SHA = re.compile(r"sha256:[a-f0-9]{64}\Z")
 IDS = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")
