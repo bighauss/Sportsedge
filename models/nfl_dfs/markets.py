@@ -12,7 +12,9 @@ import json, os, statistics, sys
 import showdown_mc as mc
 
 def american(p):
-    p = min(max(p, 1e-4), 1 - 1e-4)
+    """Sampled P=0 or P=1 cannot support a finite fair price: return missing."""
+    if not 0 < p < 1:
+        return None
     return round(-100 * p / (1 - p)) if p >= 0.5 else round(100 * (1 - p) / p)
 
 def implied(odds):
@@ -23,20 +25,59 @@ PROPS = {"pass_yds": lambda s: s["py"], "pass_tds": lambda s: s["ptd"], "rush_yd
          "anytime_td": lambda s: s["rtd"] + s["rctd"]}
 
 def price(cfg, n, seed=7):
+    if type(n) is not int or n < 2:
+        raise ValueError("Need at least two Monte Carlo samples")
+    if list(cfg["teams"]) != [t for t in cfg["teams"]] or len(cfg["teams"]) != 2:
+        raise ValueError("Two distinct game teams required")
     raw = []
     mc.run(cfg, n, seed=seed, raw=raw)
     away, home = list(cfg["teams"])
     A = [r[away][1] for r in raw]; H = [r[home][1] for r in raw]
-    out = {"tag": cfg["tag"], "sims": n, "label": "RESEARCH / PAPER", "game": {}, "props": []}
+    out = {"tag": cfg["tag"], "sims": n, "label": "RESEARCH / PAPER",
+           "book_prices_available": False, "contest_ev": "BLOCKED_NO_OWNERSHIP_AND_PAYOUTS",
+           "market_ev": "BLOCKED_NO_AUTHENTICATED_MATCHED_BOOK_QUOTES",
+           "game": {}, "props": [], "inventory": {
+               "modeled_research": ["moneyline", "spread", "total", "team_total",
+                                    "player_pass_yards", "player_pass_tds",
+                                    "player_rush_yards", "player_rec_yards",
+                                    "player_receptions", "anytime_td", "td_2plus"],
+               "blocked": {
+                   "halves": "NO_PERIOD_SIMULATION",
+                   "quarters": "NO_PERIOD_SIMULATION",
+                   "first_td": "NO_ORDERED_SCORE_EVENTS",
+                   "sgp": "NO_CALIBRATED_JOINT_SETTLEMENT_AND_BOOK_PRICE",
+                   "alternate_lines": "NOT_CAPTURED_AND_NOT_ENUMERATED",
+                   "player_completions": "NO_STAT_SIMULATION",
+                   "player_attempts": "NO_STAT_SIMULATION",
+                   "player_targets": "NO_STAT_SIMULATION",
+                   "dst_sacks": "NO_INDEPENDENTLY_VALIDATED_DEFENSE_PROP",
+                   "other_offered_markets": "NOT_CAPTURED",
+               },
+               "source_status": "NO_AUTHENTICATED_BOOK_PRICE_RECEIPTS"
+           }}
     g = out["game"]
     g["proj"] = {away: round(statistics.fmean(A), 2), home: round(statistics.fmean(H), 2),
                  "total": round(statistics.fmean(a + h for a, h in zip(A, H)), 2),
                  "home_margin": round(statistics.fmean(h - a for a, h in zip(A, H)), 2)}
     pw = sum(h > a for a, h in zip(A, H)) / n; pt = sum(h == a for a, h in zip(A, H)) / n
-    g["moneyline"] = {home: american(pw / (1 - pt)), away: american((1 - pw - pt) / (1 - pt))}
+    p_home_cond = pw / (1 - pt) if pt < 1 else None
+    g["moneyline"] = {home: american(p_home_cond) if p_home_cond is not None else None,
+                      away: american(1 - p_home_cond) if p_home_cond is not None else None}
+    g["moneyline_note"] = "Fair American odds conditional on non-tie; missing if unpriceable"
+    g["p_tie"] = round(pt, 4)
     sp = cfg["market"]["spread_home"]; tot = cfg["market"]["total"]
-    g[f"{home} -{sp}"] = round(sum(h - a > sp for a, h in zip(A, H)) / n, 4)
-    g[f"over {tot}"] = round(sum(a + h > tot for a, h in zip(A, H)) / n, 4)
+    cover = sum(h - a > sp for a, h in zip(A, H)) / n
+    spread_push = sum(h - a == sp for a, h in zip(A, H)) / n
+    over = sum(a + h > tot for a, h in zip(A, H)) / n
+    total_push = sum(a + h == tot for a, h in zip(A, H)) / n
+    g[f"{home} -{sp}"] = round(cover, 4)
+    g[f"over {tot}"] = round(over, 4)
+    g["spread_settlement"] = {
+        "home_cover": round(cover, 4), "away_cover": round(1-cover-spread_push, 4),
+        "push": round(spread_push, 4)}
+    g["total_settlement"] = {
+        "over": round(over, 4), "under": round(1-over-total_push, 4),
+        "push": round(total_push, 4)}
     for tm, xs in ((away, A), (home, H)):
         med = statistics.median(xs) + 0.5
         g[f"{tm} team total fair"] = med
@@ -52,12 +93,21 @@ def price(cfg, n, seed=7):
             if statistics.fmean(vals) < (0.25 if mk == "anytime_td" else 1.5): continue
             if mk == "anytime_td":
                 pr = sum(v >= 1 for v in vals) / n
-                out["props"].append(dict(player=p, team=tm, market="anytime_td", p_yes=round(pr, 4), fair=american(pr)))
+                p2 = sum(v >= 2 for v in vals) / n
+                out["props"].append(dict(player=p, team=tm, market="anytime_td",
+                                         p_yes=round(pr, 4), fair=american(pr),
+                                         fair_status="INSUFFICIENT_SAMPLE_EXTREME" if pr in (0,1) else "RESEARCH"))
+                out["props"].append(dict(player=p, team=tm, market="td_2plus",
+                                         p_yes=round(p2, 4), fair=american(p2),
+                                         fair_status="INSUFFICIENT_SAMPLE_EXTREME" if p2 in (0,1) else "RESEARCH"))
             else:
                 line = round(statistics.median(vals)) + 0.5
                 pr = sum(v > line for v in vals) / n
                 out["props"].append(dict(player=p, team=tm, market=mk, mean=round(statistics.fmean(vals), 2),
                                          fair_line=line, p_over=round(pr, 4)))
+    out["inventory"]["note"] = (
+        "These markets are distributions, not verified prices or full DK board coverage. "
+        "Unmodeled or uncaptured families remain visible. Simulation alone is not a betting edge.")
     return out
 
 def main():
