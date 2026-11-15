@@ -24,7 +24,8 @@ class ContractTests(unittest.TestCase):
             return validate(p)
     def test_clean_still_blocked(self):
         r = self.run_rows([BASE])
-        self.assertEqual(r["errors"], [])
+        self.assertIn("UNMATCHED_TWO_SIDED_BOOK_OFFER", self._flatten(r))
+        self.assertFalse(r["structural_ok"])
         self.assertEqual(r["status"], "BLOCK")
         self.assertEqual(r["approved_stake_u"], 0)
     def test_duplicate_selection(self):
@@ -32,14 +33,14 @@ class ContractTests(unittest.TestCase):
         r = self.run_rows([BASE, second])
         self.assertIn("DUPLICATE_SELECTION_SNAPSHOT", r["errors"][-1]["reasons"])
     def test_two_sides_allowed(self):
-        second = dict(BASE, side="away", provider_quote_id="quote-2")
+        second = dict(BASE, side="away", price_american="-140", provider_quote_id="quote-2")
         self.assertEqual(self.run_rows([BASE, second])["errors"], [])
     def test_reused_quote(self):
         second = dict(BASE, side="away")
         self.assertIn("REUSED_PROVIDER_QUOTE_ID", self.run_rows([BASE, second])["errors"][-1]["reasons"])
     def test_same_quote_other_book(self):
         second = dict(BASE, side="away", book="OTHER")
-        self.assertEqual(self.run_rows([BASE, second])["errors"], [])
+        self.assertNotIn("REUSED_PROVIDER_QUOTE_ID",self._flatten(self.run_rows([BASE, second])))
     def test_conflicting_start(self):
         second = dict(BASE, event_start_utc="2026-11-15T19:00:00Z", side="away", provider_quote_id="quote-2")
         self.assertIn("CONFLICTING_EVENT_START", self.run_rows([BASE, second])["errors"][-1]["reasons"])
@@ -81,7 +82,7 @@ class ContractTests(unittest.TestCase):
         a=dict(BASE,market="PLAYER_PROP",side="over",line="10.5",
                player_id="P1",stat="RECEPTIONS")
         b=dict(a,player_id="P2",provider_quote_id="q2")
-        self.assertEqual(self.run_rows([a,b])["errors"],[])
+        self.assertNotIn("CANONICAL_DUPLICATE_SELECTION",self._flatten(self.run_rows([a,b])))
 
     def test_player_prop_requires_player_and_stat(self):
         a=dict(BASE,market="PLAYER_PROP",side="over",line="10.5")
@@ -158,7 +159,55 @@ class ContractTests(unittest.TestCase):
 
     def test_rematch_other_event(self):
         second = dict(BASE, event_id="evt-2", provider_quote_id="quote-2")
-        self.assertEqual(self.run_rows([BASE, second])["errors"], [])
+        self.assertNotIn("CANONICAL_DUPLICATE_SELECTION",self._flatten(self.run_rows([BASE, second])))
+
+
+    def test_r4_now_blocks_lone_home_side(self):
+        r=self.run_rows([BASE])
+        self.assertFalse(r["structural_ok"])
+        self.assertEqual(r["structural_rows_clean"],0)
+        self.assertIn("UNMATCHED_TWO_SIDED_BOOK_OFFER",self._flatten(r))
+
+    def test_r4_rejects_same_sign_spread(self):
+        a=dict(BASE, market="SPREAD", line="-3.5",price_american="-110")
+        b=dict(a,side="away",provider_quote_id="q2")
+        self.assertIn("UNMATCHED_TWO_SIDED_BOOK_OFFER", self._flatten(self.run_rows([a,b])))
+
+    def test_r4_accepts_canonical_opposite_spread(self):
+        a=dict(BASE,market="SPREAD",line="-3.5",price_american="-110")
+        b=dict(a,side="away",line="+3.5",provider_quote_id="q2")
+        r=self.run_rows([a,b])
+        self.assertEqual(r["errors"],[])
+        self.assertEqual(r["structural_rows_clean"],2)
+        self.assertTrue(r["structural_ok"])
+        self.assertFalse(r["source_authenticated"])
+
+    def test_r4_rejects_negative_total_and_unicode_line(self):
+        a=dict(BASE,market="TOTAL",side="over",line="-2.5")
+        self.assertIn("NEGATIVE_NON_SPREAD_LINE",self._flatten(self.run_rows([a])))
+        a=dict(BASE,market="SPREAD",line="３.５")
+        self.assertIn("NON_ASCII_OR_INVALID_NUMERIC_LINE",self._flatten(self.run_rows([a])))
+
+    def test_r4_rejects_book_alias_duplicate_quote(self):
+        a=dict(BASE,side="home",book="DK")
+        b=dict(a,side="away",book="DraftKings",provider_quote_id=a["provider_quote_id"])
+        self.assertIn("REUSED_CANONICAL_BOOK_QUOTE_ID",self._flatten(self.run_rows([a,b])))
+
+    def test_r4_distinguishes_player_ladders_and_names(self):
+        a=dict(BASE,market="PLAYER_PROP",player_id="P1",stat="PASS_YDS",
+               side="over",line="249.5",price_american="-110")
+        b=dict(a,side="under",provider_quote_id="u1")
+        cc=dict(a,line="274.5",provider_quote_id="o2")
+        d=dict(cc,side="under",provider_quote_id="u2")
+        self.assertTrue(self.run_rows([a,b,cc,d])["structural_ok"])
+        e=dict(a,player_id="p1",provider_quote_id="another")
+        self.assertIn("CANONICAL_DUPLICATE_SELECTION",self._flatten(self.run_rows([a,e])))
+
+    def test_r4_declared_same_book_underround_flag(self):
+        a=dict(BASE,price_american="+150")
+        b=dict(a,side="away",provider_quote_id="q2")
+        self.assertIn("SUSPICIOUS_SAME_BOOK_OVERROUND_REVIEW",
+                      self._flatten(self.run_rows([a,b])))
 
 if __name__ == "__main__":
     unittest.main()
