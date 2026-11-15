@@ -126,3 +126,27 @@ promotion after 100 samples; no promises of profit.
 > Invalid market calibration -> PAPER / 0u. An apparent +EV longshot based only
 > on historical scoring shares is never official. No unverified data or paid
 > service should be silently substituted.
+
+## One-command read-only market research
+
+The optional `sportsedge/markets/cli.py` accepts a JSON manifest with the frozen
+independent team-score projection, explicit research-only score SD and period
+shares, candidate markets, two exact DraftKings quote-side receipts and optional
+independent player moment CSV. It runs the shared joint-scenario research pricer
+and the recovered v2.1 control diagnostic on every candidate. Output is
+**create-only** and contains `card: null`, `approved_stake_u: 0` and
+`official_counted: 0`. It cannot call any bookmaker or promote a play.
+
+```bash
+python -m sportsedge.markets.cli PRIVATE_INPUT.json PRIVATE_OUTPUT.json
+python -m unittest sportsedge.markets.test_cli -v
+```
+
+It intentionally refuses unrecognized fields including API keys. Store real
+source/price files privately, outside the public repository. Synthetic test
+inputs in `test_cli.py` are not actual odds. The CLI's team-score projection
+manifest is a *caller-supplied research object*, not independently verified
+data lineage; input SHA values must eventually be cross-referenced with
+the frozen upstream model and provenance receipts before any live use.
+No sport-specific live provider APIs, sportsbook auth or validation thresholds
+are bypassed.
