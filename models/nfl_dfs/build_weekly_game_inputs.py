@@ -91,6 +91,8 @@ def build(manifest_path,lookback=5,min_games=3):
             raise Blocked("Missing exact GSIS identity for "+name)
     raw=load_snapshot_csv(paths["weekly"],CORE)
     if not raw: raise Blocked("Empty weekly source")
+    if "team" not in raw[0] and "recent_team" not in raw[0]:
+        raise Blocked("Weekly source missing both team and recent_team columns")
     per_team=defaultdict(lambda:defaultdict(dict))
     excluded_current=0
     excluded_unbound=0
