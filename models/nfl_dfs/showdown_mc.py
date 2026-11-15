@@ -4,9 +4,9 @@ Python standard library only. RESEARCH / PAPER: a DFS projection is never Model_
 and contest EV is BLOCKED because no validated ownership feed exists.
 
 Pipeline: game config (market lines, weather, injuries, roles)
-  -> correlated play-level Monte Carlo of the whole game (both offenses, kickers, DSTs)
+  -> correlated attempt-level approximate simulation (both offenses, kickers, DSTs)
   -> DK scoring per sim -> player distributions
-  -> enumerate every legal CPT+5 FLEX lineup (<= $50k, both teams)
+  -> enumerate salary-filtered candidates from the projection-screened player pool
   -> evaluate candidates on the SAME sims (mean, p90, p99, optimal-lineup rate).
 
 Usage: python models/nfl_dfs/showdown_mc.py [config.json] [sims]
@@ -98,7 +98,7 @@ def sim_team(rng, t, zg, zt, active):
         u = rng.random()
         dist_pts, mk = (5, t["fg50"]) if u < 0.17 else ((4, t["fg40"]) if u < 0.47 else (3, t["fg_short"]))
         if rng.random() < mk: fgm += 1; kpts += dist_pts
-        else: kpts -= 1
+        # DK NFL Showdown has no missed-field-goal penalty.
     xp = sum(1 for _ in range(tds) if rng.random() < 0.95)
     kpts += xp
     pts = 6 * tds + xp + 3 * fgm
@@ -200,12 +200,14 @@ def main():
                          value=round(statistics.fmean(xs) / s["FLEX"] * 1000, 2)))
     proj.sort(key=lambda r: -r["mean"])
     pool = [r["player"] for r in proj if r["mean"] >= cfg.get("pool_min_mean", 1.5)]
-    stats, cpt_rate, flex_rate, n_legal = optimize(sims, sal, pool)
+    stats, cpt_rate, flex_rate, n_filtered = optimize(sims, sal, pool)
     for r in proj:
         r["cpt_opt_rate"] = round(cpt_rate.get(r["player"], 0), 4)
         r["flex_opt_rate"] = round(flex_rate.get(r["player"], 0), 4)
     a = [g[0] for g in game]; b = [g[1] for g in game]; names = list(cfg["teams"])
-    summary = dict(sims=n, legal_lineups=n_legal, evaluated=len(stats),
+    summary = dict(sims=n, filtered_candidates=n_filtered, evaluated_shortlist=len(stats),
+                   pool_size=len(pool), salary_floor=46000,
+                   candidate_note="Not exhaustive: player pool mean filter, >=$46,000 salary, and top-4000 preselection per objective.",
                    team_mean={names[0]: round(statistics.fmean(a), 2), names[1]: round(statistics.fmean(b), 2)},
                    total_mean=round(statistics.fmean([x + y for x, y in game]), 2),
                    p_win={names[1]: round(sum(y > x for x, y in game) / n, 3)},

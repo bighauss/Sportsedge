@@ -4,9 +4,12 @@
 
 ## What it does
 1. `games/<GAME>.json` holds every input that changes the game: market spread/total, pass/rush volume, target shares, catch rate, yards per catch, red-zone TD weights, carry shares, YPC, INT/fumble rates, kicking by distance, DST sacks/turnovers, weather, and the injury active-probability for each player.
-2. `showdown_mc.py` simulates the **whole game, play by play** (default 20,000 sims). There is one shared pace factor plus a scoring factor for each team, so stacks correlate naturally. A passing TD credits both the QB and the receiver. DST points allowed equal the opponent's simulated score.
+2. `showdown_mc.py` approximates a **whole game at the pass/rush-attempt level**, NOT play-by-play or drive-by-drive (default 20,000 sims). There is one shared pace factor plus a scoring factor for each team, so stacks correlate naturally. A passing TD credits both the QB and the receiver. DST points allowed equal the opponent's simulated score.
 3. DK scoring is exact, including bonuses and DST tiers.
-4. It enumerates every legal lineup (CPT + 5 FLEX, at most $50k, both teams) and scores the candidates on the same sims for mean, p90, p99 and optimal-lineup rate.
+4. It enumerates **filtered candidate lineups** (CPT + 5 FLEX, at most $50k, both teams) from players above a mean-point floor and with at least $46k spent, then ranks up to 4,000 per objective on shared sims. The reported optimal-lineup rates are conditional on this shortlist, **not** the true best-lineup probability over all DK-legal combinations.
+
+## Audit limitations
+The simulator makes passing TDs in a separate step from completed passes, and models defensive takeaways and scoring events approximately. The resulting distribution is research-only and may misstate tails and player correlations. Kicker missed field goals score zero under official DK Showdown rules; the earlier negative-point penalty was a bug fixed by this review. Do not use this model to claim verified DFS profitability or betting value.
 
 ## Run
 ```
@@ -16,6 +19,22 @@ python models/nfl_dfs/test_showdown_mc.py
 
 ## Salaries auto-pull
 `fetch_dk_salaries.py` pulls DK's public lobby and draftables JSON into `data/dk_auto/`. The endpoints are unofficial. The fetcher has not been run yet, and the scheduled workflow still needs to be added.
+
+## Free public NFL game-log adapter (research only)
+
+`public_nfl_gamelogs.py` reads pregame ESPN-derived raw box-score logs from
+[`xtheredshirtx/fanduel-player-data`](https://github.com/xtheredshirtx/fanduel-player-data/tree/main/NFL/csv).
+It discards FanDuel fantasy-point fields and NEVER uses DK's AvgPointsPerGame.
+It reports per-game box-score features only; **it does not change the showdown projections or lineups**, and the data must be cross-checked against a second official source before promotion.
+
+Example, after downloading `NFL_offense_game_log_2026_as_of_2026-11-15.csv`:
+
+```
+python models/nfl_dfs/public_nfl_gamelogs.py NFL_offense_game_log_2026_as_of_2026-11-15.csv --kickoff-date 2026-11-15 --teams PIT CIN --recent-games 5
+python models/nfl_dfs/test_public_nfl_gamelogs.py
+```
+
+Missing from this free file: **pass attempts, rush attempts, targets, snaps, routes, injury reports, ownership, salaries**. Recompute any DK scoring independently from raw box-score inputs rather than importing provider scoring fields.
 
 ## Sources (PIT@CIN 2026-11-15)
 - Odds: SI/BetMGM: CIN -3.5, ML -190/+160, O/U 49.5 (opened 47.5)
