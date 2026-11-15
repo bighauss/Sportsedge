@@ -1,0 +1,28 @@
+name: Five-sport all-markets research engine
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/markets/**'
+      - 'docs/markets/**'
+      - '.github/workflows/allmarkets-research.yml'
+  push:
+    paths:
+      - 'sportsedge/markets/**'
+      - 'docs/markets/**'
+      - '.github/workflows/allmarkets-research.yml'
+jobs:
+  unit-and-intake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run deterministic scenario/quote/calibration tests
+        run: python -m unittest sportsedge.markets.test_allmarkets_research -v
+      - name: Check recovered five-sport projection bridge
+        run: python -m unittest sportsedge.markets.test_projection_bridge -v
+      - name: Exercise full RUN IT research pipeline through recovered v2.1
+        run: python -m unittest sportsedge.markets.test_run_it_research -v
+      - name: Verify old v5 intake/policy and all-sport quote math tests
+        run: python -m unittest research.audits.test_multisport_quote_ev_regressions sportsedge.odds.test_issue10_offline -q
