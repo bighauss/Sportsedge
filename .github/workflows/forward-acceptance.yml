@@ -1,0 +1,24 @@
+name: Issue 10 prospective evidence threshold tests
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/validation/**'
+      - '.github/workflows/forward-acceptance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sportsedge/validation/**'
+      - '.github/workflows/forward-acceptance.yml'
+permissions:
+  contents: read
+jobs:
+  offline-thresholds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m compileall -q sportsedge/validation
+      - run: python -m unittest sportsedge.validation.test_forward_acceptance -v
