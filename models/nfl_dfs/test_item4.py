@@ -82,7 +82,8 @@ class PipelineTests(unittest.TestCase):
             w=csv.DictWriter(f,fieldnames=builder.PBP_COLUMNS)
             w.writeheader();w.writerows(plays)
         self.pbp=put(pbp,pbp.read_bytes())
-        self.manifest={"kickoff_utc":"2026-11-15T20:20:00Z",
+        self.manifest={"kickoff_utc":"2026-11-16T01:20:00Z",
+                       "game_date_local":"2026-11-15",
                        "template":self.template,"roster":self.roster,"pbp":self.pbp}
         self.manifest_path=self.root/"inputs.json"
         self.save_manifest()
@@ -106,7 +107,7 @@ class PipelineTests(unittest.TestCase):
             builder.build(self.manifest_path,lookback=2,min_games=2)
 
     def test_post_kickoff_capture_blocked(self):
-        self.manifest["pbp"]["captured_at_utc"]="2026-11-15T21:00:00Z"
+        self.manifest["pbp"]["captured_at_utc"]="2026-11-16T02:00:00Z"
         self.save_manifest()
         with self.assertRaises(builder.Blocked):
             builder.build(self.manifest_path,lookback=2,min_games=2)
