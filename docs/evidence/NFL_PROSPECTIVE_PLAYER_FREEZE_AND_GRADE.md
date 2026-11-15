@@ -36,7 +36,13 @@ python -m sportsedge.validation.forward_player_evidence \
     /private/nfl_frozen_event_20261116.json
 ```
 
-The resulting JSON is created once, never overwritten. It hashes its
+The resulting JSON is created once, never overwritten. Model source bytes
+are hashed and bound to its output, and each original nflverse/NGS source
+file is checked row by row against the specified NFL `season`/`week`. A
+current-season `week=0` NGS aggregate, the event's own week, any later week
+or a future season causes a hard refusal even if the caller falsely labels
+the source's `data_through_utc` as earlier. All source/forecast/model/lineup
+file hashes are rechecked before the freeze object is returned. It hashes its
 independent input files and includes every candidate as either
 `PAPER_0U_FROZEN_UNVERIFIED` or `BLOCK` with exact rejection reasons.
 Unknown, inactive, unbound, missing-source or insufficient-volume player
@@ -63,14 +69,14 @@ Final grades are also separate create-only JSON records and include their
 original frozen-archive and results-file hashes. They do not modify the
 prior file, assert a settled bet, compute bogus CLV, or authorize stakes.
 
-**Schema:** `sportsedge-nfl-player-forward-freeze-v1` accepts the
-root keys `schema,event_id,home_id,away_id,start_utc,forecast_asof_utc,
-forecast_file,lineup_file,source_files,roster_player_ids,
-odds_observed_at_utc`. `forecast_file` has `path,raw_sha256`.
+**Schema:** `sportsedge-nfl-player-forward-freeze-v2` accepts the
+root keys `schema,event_id,home_id,away_id,season,week,start_utc,
+forecast_asof_utc,forecast_file,model_artifact,lineup_file,
+source_files,roster_player_ids,odds_observed_at_utc`. `forecast_file` and `model_artifact` both require `path,raw_sha256`.
 `lineup_file` adds `source_name,observed_at_utc,captured_at_utc`.
 Each `source_files` entry adds `source_id,observed_at_utc,
 captured_at_utc,data_through_utc`.
-`sportsedge-nfl-player-forward-grade-v1` accepts
+`sportsedge-nfl-player-forward-grade-v2` accepts
 `schema,frozen_capture_path,frozen_capture_sha256,event_id,
 event_final_at_utc,result_file`, where `result_file` carries
 `path,raw_sha256,source_id,observed_at_utc,captured_at_utc`.
