@@ -40,8 +40,8 @@ SOURCE_KEYS = frozenset({
 })
 FREEZE_KEYS = frozenset({
     "schema", "event_id", "home_id", "away_id", "start_utc", "forecast_asof_utc",
-    "forecast_file", "lineup_file", "source_files", "roster_player_ids",
-    "odds_observed_at_utc",
+    "forecast_file", "model_artifact", "lineup_file", "source_files",
+    "roster_player_ids", "odds_observed_at_utc", "season", "week",
 })
 RESULT_KEYS = frozenset({
     "schema", "frozen_capture_path", "frozen_capture_sha256",
@@ -56,8 +56,8 @@ RESULT_FILE_KEYS = frozenset({
 })
 LINEUP_KEYS = frozenset({"event_id", "player_id", "team_id", "status"})
 RESULT_FIELDS = ("event_id", "player_id", "team_id", "stat", "actual")
-RESEARCH_FREEZE = "sportsedge-nfl-player-forward-freeze-v1"
-RESEARCH_GRADE = "sportsedge-nfl-player-forward-grade-v1"
+RESEARCH_FREEZE = "sportsedge-nfl-player-forward-freeze-v2"
+RESEARCH_GRADE = "sportsedge-nfl-player-forward-grade-v2"
 LINEUP_STATES = {"ACTIVE", "INACTIVE", "UNCONFIRMED"}
 ZERO_KEYS = {"approved_stake_u": 0, "official_counted": 0, "card": None}
 
@@ -173,7 +173,8 @@ def _write_private_create_only(path, obj):
     return "sha256:" + sha256(raw).hexdigest()
 
 
-def _sources(items, *, freeze_time, event_start, odds_observed):
+def _sources(items, *, freeze_time, event_start, odds_observed,
+             season: int, week: int):
     if not isinstance(items, list) or not items or len(items) > 15:
         raise ValueError("SOURCE_RECEIPTS_REQUIRED")
     parsed = []
@@ -199,6 +200,18 @@ def _sources(items, *, freeze_time, event_start, odds_observed):
                           "player_gsis_id", "team_abbr"}
             if not ngs_fields.issubset(receipt.schema_columns):
                 raise ValueError("NFL_NGS_SOURCE_ID_OR_WEEK_COLUMNS_MISSING")
+        # A source's declared data-through timestamp alone is not proof of
+        # its historical rows. Reject any current/future event-week row,
+        # including the week=0 season-to-date NGS aggregate.
+        for record in snapshots:
+            try:
+                y = int(record["season"])
+                w = int(record["week"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("SOURCE_YEAR_OR_WEEK_INVALID") from exc
+            if w < 0 or y > season or (y == season and
+                    (w == 0 or w >= week)):
+                raise ValueError("SOURCE_ROW_SAME_OR_FUTURE_GAME_WEEK")
         if not (through <= observed <= captured <= freeze_time < event_start):
             raise ValueError("SOURCE_CAPTURE_OR_PUBLICATION_TOO_LATE")
         if odds_observed is not None and captured > odds_observed:
@@ -225,6 +238,10 @@ def freeze_player_forecasts(request, *, now=None):
     home, away = _id(r["home_id"], "home_id"), _id(r["away_id"], "away_id")
     if home not in NFL_TEAMS or away not in NFL_TEAMS or home == away:
         raise ValueError("INVALID_NFL_MATCHUP")
+    if (type(r["season"]) is not int or type(r["week"]) is not int
+            or not 2000 <= r["season"] <= 2100
+            or not 1 <= r["week"] <= 22):
+        raise ValueError("INVALID_NFL_EVENT_SEASON_WEEK")
     start = _time(r["start_utc"])
     asof = _time(r["forecast_asof_utc"])
     now_utc = _clock(now)
@@ -233,8 +250,10 @@ def freeze_player_forecasts(request, *, now=None):
     quote = _time(r["odds_observed_at_utc"]) if r["odds_observed_at_utc"] else None
     if quote is not None and not asof <= quote <= now_utc:
         raise ValueError("INVALID_ODDS_OBSERVATION_ORDER")
+    _, model_hash = _raw_file(r["model_artifact"])
     sources = _sources(r["source_files"], freeze_time=asof,
-                       event_start=start, odds_observed=quote)
+                       event_start=start, odds_observed=quote,
+                       season=r["season"], week=r["week"])
     sources_by_id = {(s["source_id"], s["sha256"]) for s in sources}
     raw_forecast, forecast_hash = _raw_file(r["forecast_file"])
     headers, rows = _csv(raw_forecast, FORECAST_FIELDS)
@@ -323,6 +342,7 @@ def freeze_player_forecasts(request, *, now=None):
         })
     # Detect a file swapped between initial intake and evidence construction.
     _raw_file(r["forecast_file"])
+    _raw_file(r["model_artifact"])
     _raw_file(r["lineup_file"], fields=LINEUP_FILE_KEYS)
     for source in r["source_files"]:
         _raw_file(source, fields=SOURCE_KEYS)
@@ -330,9 +350,12 @@ def freeze_player_forecasts(request, *, now=None):
     return {
         "schema": RESEARCH_FREEZE, "state": "PAPER_0U_FORWARD_CAPTURE_ONLY",
         "event_id": event, "home_id": home, "away_id": away,
+        "season": r["season"], "week": r["week"],
         "start_utc": start.isoformat(), "forecast_asof_utc": asof.isoformat(),
         "locally_written_at_utc": now_utc.isoformat(),
-        "forecast_csv_sha256": forecast_hash, "lineup_csv_sha256": lineup_hash,
+        "forecast_csv_sha256": forecast_hash,
+        "model_artifact_sha256": model_hash,
+        "lineup_csv_sha256": lineup_hash,
         "lineup_source_name": r["lineup_file"]["source_name"],
         "lineup_observed_at_utc": lineup_observed.isoformat(),
         "lineup_captured_at_utc": lineup_captured.isoformat(),
