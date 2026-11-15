@@ -1,0 +1,36 @@
+name: NFLverse 2026 public data smoke (research only)
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/markets/nflverse_public_research_smoke.py'
+      - 'sportsedge/markets/public_release_capture.py'
+      - 'sportsedge/markets/nfl_td_shares.py'
+      - 'sportsedge/markets/source_ingestion.py'
+      - 'sportsedge/markets/test_nflverse_public_research_smoke.py'
+      - '.github/workflows/nflverse-public-data-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate hash, archive and cutoff failure-path fixtures
+        run: python -m unittest sportsedge.markets.test_nflverse_public_research_smoke -v
+      - name: Download current public 2026 nflverse weekly snapshot into runner private temp
+        env:
+          SPORTSEDGE_PUBLIC_DATA_DIR: ${{ runner.temp }}/sportsedge-nflverse-evidence
+        run: |
+          mkdir -p "$SPORTSEDGE_PUBLIC_DATA_DIR"
+          python -m sportsedge.markets.nflverse_public_research_smoke "$SPORTSEDGE_PUBLIC_DATA_DIR"
+      - name: Assert current raw dataset did not enter repository
+        run: |
+          if git status --porcelain | grep -E 'stats_player_week_2026|NFL_WEEKLY_2026_'; then
+            echo 'Unexpected raw player-data file in source tree' >&2
+            exit 1
+          fi
