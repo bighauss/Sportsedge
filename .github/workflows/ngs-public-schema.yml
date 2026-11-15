@@ -1,0 +1,31 @@
+name: NFL NGS public schema audit (PAPER only)
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/markets/ngs_public_research_smoke.py'
+      - 'sportsedge/markets/test_ngs_public_research_smoke.py'
+      - '.github/workflows/ngs-public-schema.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-ngs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run Next Gen weekly source and integrity adversarial checks
+        run: python -m unittest sportsedge.markets.test_ngs_public_research_smoke -v
+      - name: Capture passing, rushing and receiving NGS original assets and inspect schema
+        env:
+          SPORTSEDGE_NGS_ARCHIVE: ${{ runner.temp }}/sportsedge-ngs-archive
+        run: python -m sportsedge.markets.ngs_public_research_smoke "$SPORTSEDGE_NGS_ARCHIVE"
+      - name: Ensure NGS original CSV assets stayed outside the source repository
+        run: |
+          if git status --porcelain | grep -E '(ngs_passing|ngs_rushing|ngs_receiving)'; then
+            echo 'Raw NGS file unexpectedly present in repo' >&2
+            exit 1
+          fi
