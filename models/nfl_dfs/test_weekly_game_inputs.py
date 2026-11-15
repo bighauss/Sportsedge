@@ -75,7 +75,7 @@ class WeeklyAdapterTests(unittest.TestCase):
     def save_weekly(self,rows):
         import io
         buf=io.StringIO()
-        writer=csv.DictWriter(buf,fieldnames=self.columns)
+        writer=csv.DictWriter(buf,fieldnames=self.columns,extrasaction="ignore")
         writer.writeheader();writer.writerows(rows)
         self.manifest["weekly"]=self.store("weekly.csv.gz",
                                             gzip.compress(buf.getvalue().encode(),mtime=0))
