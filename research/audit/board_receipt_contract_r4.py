@@ -122,6 +122,7 @@ def validate(path):
     result={"status":"BLOCK","official_counted":0,"approved_stake_u":0,
             "input_sha256":"sha256:"+sha256(raw).hexdigest(),
             "rows":0,"errors":[],"structural_rows_clean":0,
+            "structural_ok":False,
             "source_authenticated":False,
             "bookmaker_independence_authenticated":False,
             "note":"Unverified offline board; 0u even if structurally clean."}
@@ -194,7 +195,18 @@ def validate(path):
         seen.add(identity)
         if errors:result["errors"].append({"row":n,"reasons":sorted(set(errors))})
         else:result["structural_rows_clean"]+=1
-    result["rows"]=len(rows)
+    # R4 originally checked rows independently; a one-sided/mispaired board
+    # could appear clean. Canonical pair audit is now part of actual validate().
+    # This remains an offline, unauthenticated PAPER/0u validator.
+    from research.audit.r4_pairing_adversarial import audit_rows
+    combined = {e["row"]: set(e["reasons"]) for e in result["errors"]}
+    for e in audit_rows(rows):
+        combined.setdefault(e["row"], set()).update(e["reasons"])
+    result["errors"] = [{"row": number, "reasons": sorted(reasons)}
+                        for number, reasons in sorted(combined.items())]
+    result["structural_rows_clean"] = len(rows) - len(combined)
+    result["structural_ok"] = not combined
+    result["rows"] = len(rows)
     return result
 
 def main(argv=None):
