@@ -72,6 +72,14 @@ def build(manifest_path, lookback=5, min_games=3):
     root=manifest_path.parent
     m=json.loads(manifest_path.read_text(encoding="utf-8"))
     kickoff=utc(m["kickoff_utc"])
+    if "game_date_local" not in m:
+        raise Blocked("Local game date required: UTC kickoff may be next day")
+    try:
+        game_date=datetime.strptime(m["game_date_local"],"%Y-%m-%d").date()
+    except ValueError as ex:
+        raise Blocked("game_date_local must be YYYY-MM-DD") from ex
+    if not 0 <= (kickoff.date()-game_date).days <= 1:
+        raise Blocked("game_date_local inconsistent with kickoff UTC")
     paths={key:verified(root,m,key,kickoff) for key in ("pbp","roster","template")}
     cfg=json.loads(paths["template"].read_text(encoding="utf-8"))
     teams=list(cfg["teams"])
@@ -95,7 +103,7 @@ def build(manifest_path, lookback=5, min_games=3):
             if r["posteam"]!=tm or r["season_type"]!="REG": continue
             try: day=datetime.strptime(r["game_date"],"%Y-%m-%d").date()
             except ValueError as ex: raise Blocked("Invalid game date") from ex
-            if day >= kickoff.date():
+            if day >= game_date:
                 raise Blocked(f"Current/future game present: {r['game_id']}")
             gid=r["game_id"]
             if not gid: raise Blocked("Missing game ID")
@@ -177,6 +185,7 @@ def build(manifest_path, lookback=5, min_games=3):
              "use":"diagnostic only; no uncalibrated NGS multiplier"}
     cfg["_auto_build"]={
         "status":"PAPER_RESEARCH_ONLY", "kickoff_utc":m["kickoff_utc"],
+        "game_date_local":m["game_date_local"],
         "pre_game_only":True,"team_coverage":diagnostics,
         "sources":{k:{"sha256":m[k]["sha256"],"captured_at_utc":m[k]["captured_at_utc"]}
             for k in ("pbp","roster","template","ngs_receiving") if k in m},
