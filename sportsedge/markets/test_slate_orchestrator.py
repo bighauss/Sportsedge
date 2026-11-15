@@ -135,15 +135,25 @@ class FiveSportSlateContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"SGP_INVENTORY_ONLY_NO_SINGLE_LEG_QUOTE"):
             run_slate(f)
 
-    def test_multiple_sgp_placeholders_kept_in_original_order(self):
+    def test_duplicate_sgp_placeholders_refused_as_inflated_market_census(self):
         f=fixture()
         event=f["event_inputs"][0]["manifest"]
         sgp={"market":{"sport":"CBB","event_id":"GAME-1","kind":"SGP","period":"FG"}}
         event["markets"]=[deepcopy(sgp),*event["markets"],deepcopy(sgp)]
+        with self.assertRaisesRegex(ValueError,"DUPLICATE_UNPRICED_SGP_INVENTORY"):
+            run_slate(f)
+
+    def test_single_sgp_after_straight_keeps_original_order(self):
+        f=fixture()
+        event=f["event_inputs"][0]["manifest"]
+        event["markets"].append({"market":{
+            "sport":"CBB","event_id":"GAME-1","kind":"SGP","period":"FG"}})
         out=run_slate(f)
         rows=next(e for e in out["events"] if e["sport"]=="CBB")["research_rows"]
-        self.assertEqual([r["research_state"] for r in rows],["BLOCK","PAPER_0U","BLOCK"])
-        self.assertEqual(out["counts"]["sgp_inventory_rows"],2)
+        self.assertEqual([r["research_state"] for r in rows],["PAPER_0U","BLOCK"])
+        self.assertEqual(out["counts"]["sgp_inventory_rows"],1)
+        self.assertEqual(out["counts"]["priced_research"],1)
+        self.assertEqual(out["counts"]["blocked_research"],1)
 
     def test_no_game_silently_dropped_if_capture_missing(self):
         f=fixture();f["event_inputs"].pop()
