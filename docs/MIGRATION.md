@@ -29,6 +29,14 @@ Copy specific ones on request.
 ## Included in the bundle (exact Drive bytes)
 Rules (v1, v2, NGS + CFB/CBB addenda, v2.1 restoration + corrections), five model READMEs, five sport models, CFB/NBA/MLB tests, engine/sportsedge_v2.py, ratings/props v0.2, Nov 13 handoff.
 
-## Known gaps (to fix next)
-- Tests: CFB needs `make_samples.py` + `samples/` (not on Drive); NBA needs its `sample/` CSVs (KeyError G1); MLB test reports 1 failure. NHL and CBB test files are not on Drive.
-- `sportsedge_guarded_v5_runner_r2.py` left out: it imports `sportsedge_board_guard_r1` / `sportsedge_slate_reconciler_r1`, which aren't in Drive's root folder.
+## Tests (Nov 15 2026)
+All five sport models pass an end-to-end test on synthetic data:
+- MLB, NBA, CFB: added `make_samples.py` (the sample folders were never on Drive).
+- NHL (`test_sportsedge_nhl.py`) and CBB (`test_cbb.py`): new tests that build their own samples.
+- CI runs everything on each push (`.github/workflows/tests.yml`).
+
+Sample data is fake and only exercises code paths; it says nothing about edge.
+
+## Still open
+- `sportsedge_guarded_v5_runner_r2.py` is left out. It imports `sportsedge_board_guard_r1` / `sportsedge_slate_reconciler_r1`, which aren't in the Drive root.
+- The models don't yet apply the v2.1 restoration (quarter-Kelly sizing, 5u/2u/3u caps, confidence tags, prop minimums, audit footer).
