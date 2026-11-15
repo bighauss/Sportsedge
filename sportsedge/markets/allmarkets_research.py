@@ -397,7 +397,9 @@ def price_sgp(
     batch: SimulationBatch, legs: tuple[Market, ...],
     quoted_american: int | None, quote_payload_sha256: str | None,
     quote_legs_sha256: str | None, quote_received_at_utc: datetime | None,
-    decision_at_utc: datetime, *, min_scenarios: int=1000, min_joint_wins: int=25,
+    decision_at_utc: datetime, *,
+    quote_book: str | None = None, event_start_at_utc: datetime | None = None,
+    min_scenarios: int=1000, min_joint_wins: int=25,
 ) -> dict:
     """Joint-play scenario pricing. No parlay independence multiplication, ever.
 
@@ -418,8 +420,12 @@ def price_sgp(
         for m in legs:
             if m.event_id!=batch.event_id or m.sport!=batch.sport:
                 raise ValueError("SGP_LEG_DIFFERENT_EVENT")
-        if quoted_american is None or not quote_payload_sha256 or not quote_legs_sha256 or quote_received_at_utc is None:
+        if (quoted_american is None or not quote_payload_sha256 or not quote_legs_sha256
+                or quote_received_at_utc is None or event_start_at_utc is None
+                or quote_book is None or quote_book.casefold()!="draftkings"):
             raise ValueError("EXACT_DK_SGP_PRICE_RECEIPT_REQUIRED")
+        if not (now < _time(event_start_at_utc)):
+            raise ValueError("SGP_ALREADY_STARTED")
         _hash(quote_payload_sha256);_hash(quote_legs_sha256)
         fingerprint=sha256(json.dumps([m.identity() for m in legs],sort_keys=True,
             separators=(",",":")).encode()).hexdigest()
