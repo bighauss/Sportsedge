@@ -21,6 +21,7 @@ import sys
 
 from .allmarkets_research import Market,PriceReceipt
 from .projection_bridge import TeamProjection, from_claude_sport, from_nfl_ridge
+from .pit_source_manifest import verify_model_feature_manifest
 from .projection_distribution import DistributionInput,generate_score_scenarios
 from .player_forecast_intake import ingest_player_forecast_csv
 from .run_it_research import MarketCandidate,run_research_board
@@ -73,20 +74,30 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
                         "simulation_seed"},"root")
     if ("projection" in payload)==("projection_ref" in payload):
         raise ValueError("EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED")
+    pit_manifest_audit=None
     if "projection_ref" in payload:
         ref=_only_keys(payload["projection_ref"],
             {"sport","event_id","asof_utc","feature_paths",
-             "ratings_csv","forecast"},"projection_ref")
+             "ratings_csv","forecast","source_manifest"},"projection_ref")
         sport=ref.get("sport")
         asof=_iso(ref["asof_utc"])
+        if "source_manifest" not in ref:
+            raise ValueError("PIT_SOURCE_MANIFEST_REQUIRED_FOR_DIRECT_MODEL")
         if sport=="NFL":
             if "feature_paths" in ref or not ref.get("ratings_csv") or not isinstance(ref.get("forecast"),dict):
                 raise ValueError("NFL_RIDGE_FORECAST_SOURCE_REQUIRED")
+            paths={"ratings_csv":ref["ratings_csv"]}
+            pit_manifest_audit=verify_model_feature_manifest(
+                ref["source_manifest"],paths,sport=sport,
+                event_id=ref["event_id"],forecast_asof_utc=asof)
             projection=from_nfl_ridge(ref["ratings_csv"],ref["forecast"],
                 event_id=ref["event_id"],frozen_asof_utc=asof)
         elif sport in ("CFB","CBB","NBA","MLB"):
             if "forecast" in ref or "ratings_csv" in ref or not isinstance(ref.get("feature_paths"),dict):
                 raise ValueError("CLAUDE_MODEL_FEATURE_FILES_REQUIRED")
+            pit_manifest_audit=verify_model_feature_manifest(
+                ref["source_manifest"],ref["feature_paths"],sport=sport,
+                event_id=ref["event_id"],forecast_asof_utc=asof)
             projection=from_claude_sport(sport,ref["feature_paths"],
                 ref["event_id"],asof_utc=asof)
         else:
@@ -144,6 +155,13 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     results["input_version"]="SPORTSEDGE_FIVE_SPORT_RESEARCH_CLI_V1"
     results["generated_at_utc"]=datetime.now(timezone.utc).isoformat()
     results["generator_unvalidated"]=True
+    results["pit_file_manifest_status"]=(
+        pit_manifest_audit.status if pit_manifest_audit else "NOT_CHECKED")
+    results["pit_file_hash"]=(
+        pit_manifest_audit.data_sha256 if pit_manifest_audit else None)
+    results["pit_file_count"]=(
+        pit_manifest_audit.file_count if pit_manifest_audit else 0)
+    results["pit_manifest_source_authenticated"]=False
     results["model_projection_method"]=("RECOVERED_MODEL_FUNCTION"
             if "projection_ref" in payload else "CALLER_SUPPLIED_UNVERIFIED_MEAN")
     results["source_transport_authentication"]=False
