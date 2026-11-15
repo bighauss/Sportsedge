@@ -68,6 +68,16 @@ class NFLPlayerHistoricalStudy(unittest.TestCase):
         self.assertFalse(r["historical_publisher_snapshots_at_original_decision"])
         self.assertFalse(r["confirmed_lineups_or_rosters_available"])
 
+    def test_ewma_compared_with_two_naive_forecasts_on_same_rows(self):
+        r=study()
+        for stat,values in r["totals"].items():
+            n=values["baseline"]["n"]
+            self.assertEqual(values["naive_last_observed"]["n"],n)
+            self.assertEqual(values["naive_trailing_three_equal"]["n"],n)
+            self.assertGreater(values["naive_last_observed"]["mae"],0)
+        self.assertIn("LAST_OBSERVED",
+                      r["baselines_compared_on_identical_graded_rows"])
+
     def test_future_week10_and_week11_cannot_change_prior_holdouts(self):
         weekly,ngs=make_data()
         prior=study(weekly,ngs)
