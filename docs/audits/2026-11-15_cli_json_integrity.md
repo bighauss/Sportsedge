@@ -1,0 +1,7 @@
+# RUN IT research CLI strict source-manifest decoding — November 15, 2026
+
+The prior one-command CLI used Python's default `json.loads`: duplicate raw JSON keys silently overwrote earlier values, and `NaN`/`Infinity` tokens were accepted despite not being valid JSON. This could turn a quote's odds, model inputs or raw IDs into an untraceable last-key-wins value before any downstream receipt validation. The report writer also opened the output before validating it could serialize as strict JSON.
+
+New research-only controls: reject nested and root duplicate JSON keys, reject nonstandard nonfinite JSON tokens, cap the raw input at 20,000,000 bytes, validate the output's strict JSON encoding before file creation, and remove any freshly created partial output after an I/O error. Existing destinations remain exclusive-create and cannot be overwritten. Five deterministic synthetic tests reproduce duplicate-quote/duplicate-root, nonfinite token, excessive-size and nonfinite-result failures.
+
+No live source admission or source authentication is added. No model coefficients, historical cards, actual odds, v5 engine, private receipt bytes or owner policy are changed. Every output remains PAPER/0u with no official stake.

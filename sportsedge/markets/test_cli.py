@@ -232,6 +232,68 @@ class CLIContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED"):
             run_from_manifest(p)
 
+
+    def test_duplicate_nested_quote_json_key_rejected_before_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            inp=Path(d)/"dup.json";out=Path(d)/"out.json"
+            raw=json.dumps(manifest())
+            self.assertIn('"odds_american": -110',raw)
+            inp.write_text(raw.replace('"odds_american": -110',
+                         '"odds_american": -110, "odds_american": 220',1))
+            with self.assertRaisesRegex(ValueError,"RUN_MANIFEST_DUPLICATE_JSON_KEY:odds_american"):
+                main([str(inp),str(out)])
+            self.assertFalse(out.exists())
+
+    def test_duplicate_top_level_keys_are_never_last_write_wins(self):
+        with tempfile.TemporaryDirectory() as d:
+            inp=Path(d)/"dup.json";out=Path(d)/"out.json"
+            raw=json.dumps(manifest())
+            inp.write_text(raw.replace('"simulation_count": 1100',
+                        '"simulation_count": 1100, "simulation_count": 1200',1))
+            with self.assertRaisesRegex(ValueError,"RUN_MANIFEST_DUPLICATE_JSON_KEY:simulation_count"):
+                main([str(inp),str(out)])
+            self.assertFalse(out.exists())
+
+    def test_json_nan_infinity_constants_rejected_before_projection(self):
+        for value in ("NaN","Infinity","-Infinity"):
+            with self.subTest(value=value),tempfile.TemporaryDirectory() as d:
+                inp=Path(d)/"num.json";out=Path(d)/"out.json"
+                raw=json.dumps(manifest())
+                inp.write_text(raw.replace('"simulation_count": 1100',
+                           '"simulation_count": '+value,1))
+                with self.assertRaisesRegex(ValueError,"RUN_MANIFEST_NONFINITE_JSON_NUMBER"):
+                    main([str(inp),str(out)])
+                self.assertFalse(out.exists())
+
+    def test_oversized_manifest_is_refused_before_parser(self):
+        from sportsedge.markets.cli import MAX_MANIFEST_BYTES
+        with tempfile.TemporaryDirectory() as d:
+            inp=Path(d)/"large.json";out=Path(d)/"out.json"
+            inp.write_bytes(b" "* (MAX_MANIFEST_BYTES+1))
+            with self.assertRaisesRegex(ValueError,"RUN_MANIFEST_TOO_LARGE"):
+                main([str(inp),str(out)])
+            self.assertFalse(out.exists())
+
+    def test_failed_nonfinite_report_serialization_creates_no_output(self):
+        # Some offline source-model fixtures deliberately disable socket.socket.
+        # unittest.mock imports asyncio/ssl and is unavailable in that fixture
+        # state; directly patch and restore the local call instead.
+        from sportsedge.markets import cli
+        with tempfile.TemporaryDirectory() as d:
+            inp=Path(d)/"input.json";out=Path(d)/"output.json"
+            inp.write_text(json.dumps(manifest()))
+            result={"status":"PAPER_0U_RESEARCH_ONLY","submitted_candidates":0,
+                    "unverified_probability":float("nan"),
+                    "official_counted":0,"approved_stake_u":0}
+            original=cli.run_from_manifest
+            try:
+                cli.run_from_manifest=lambda _payload: result
+                with self.assertRaisesRegex(ValueError,"Out of range float"):
+                    main([str(inp),str(out)])
+            finally:
+                cli.run_from_manifest=original
+            self.assertFalse(out.exists())
+
     def test_create_only_cli_does_not_overwrite_archives(self):
         with tempfile.TemporaryDirectory() as d:
             src=Path(d)/"input.json"; dest=Path(d)/"out.json"
