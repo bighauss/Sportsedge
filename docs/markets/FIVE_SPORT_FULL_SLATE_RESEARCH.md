@@ -91,6 +91,25 @@ identities, not guessed lines. Missing such inputs → BLOCK / 0u.
   bookmaker offered that market or no true +EV opportunity exists. SGP
   research has a separate joint-scenario pricer, but SGP output is NOT
   silently manufactured by the single-leg CLI.
+- An event with **zero** submitted markets is `BLOCK:
+  NO_MARKETS_SUBMITTED_OR_OFFERED_UNVERIFIED`, counted in
+  `counts.no_market_rows`, and is **not** called a successfully processed
+  research game. It is never counted as no value or no available offers.
+- The straight-leg CLI does not price SGPs. A separate explicit **SGP
+  inventory-only placeholder** can be submitted as
+  `{"market":{"sport":"NFL","event_id":"EXAMPLE","kind":"SGP","period":"FG"}}`.
+  This emits an individual visible BLOCK with reason
+  `SGP_REQUIRES_POSTED_JOINT_QUOTE_AND_CALIBRATED_EVENTS`, retains its
+  position in the input and keeps unrelated straight legs evaluable. Any
+  fake single-leg SGP quote or caller assertion that its v2.1 gate passed
+  is refused for the entire intake. An SGP-only game is BLOCK, not
+  processed/priceable, and the SGP row is counted as blocked.
+- Only the correctly typed straight-leg candidates actually run the
+  existing `v2.1` research guard. An unpriced SGP placeholder is **not
+  promoted** into that gate; its row says explicitly that v2.1 was not
+  run, because no valid joint-market wager candidate exists. No parlay
+  EV, made-up correlation or stake is generated.
+
 - Entire sports with no registered scheduled games say
   `NO_AUTHENTICATED_SCHEDULE_EVIDENCE`, not "0 valid bets."
 - Event failures retain a sanitized BLOCK code; the five-sport report never
