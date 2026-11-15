@@ -21,9 +21,11 @@ from build_game_inputs import Blocked, utc
 
 
 OFFENSE = ("pass_yd","pass_td","pass_int","rush_yd","rush_td",
-           "receptions","rec_yd","rec_td","fumbles_lost")
+           "receptions","rec_yd","rec_td","fumbles_lost",
+           "two_point_conversions","return_tds","offensive_fumble_td")
 KICKER = ("fg_0_39","fg_40_49","fg_50_plus","xp_made")
-DEFENSE = ("points_allowed","sacks","dst_int","fumble_recoveries","dst_td","safeties")
+DEFENSE = ("points_allowed","sacks","dst_int","fumble_recoveries","dst_td","safeties",
+           "blocked_kicks","two_point_returns")
 RESULT_HEADER = ("player_name","team","pos") + OFFENSE + KICKER + DEFENSE
 
 
@@ -53,12 +55,15 @@ def observed_score(row):
     if pos=="K":
         return 3*get("fg_0_39")+4*get("fg_40_49")+5*get("fg_50_plus")+get("xp_made")
     if pos=="DST":
-        return mc.dk_dst(get("points_allowed"),get("sacks"),get("dst_int"),
-                         get("fumble_recoveries"),get("dst_td"),get("safeties"))
+        return (mc.dk_dst(get("points_allowed"),get("sacks"),get("dst_int"),
+                          get("fumble_recoveries"),get("dst_td"),get("safeties"))
+                + 2*get("blocked_kicks") + 2*get("two_point_returns"))
     if pos in ("QB","RB","WR","TE"):
-        return mc.dk_offense(py=get("pass_yd"),ptd=get("pass_td"),ints=get("pass_int"),
-                             ry=get("rush_yd"),rtd=get("rush_td"),rec=get("receptions"),
-                             rcy=get("rec_yd"),rctd=get("rec_td"),fum=get("fumbles_lost"))
+        return (mc.dk_offense(py=get("pass_yd"),ptd=get("pass_td"),ints=get("pass_int"),
+                              ry=get("rush_yd"),rtd=get("rush_td"),rec=get("receptions"),
+                              rcy=get("rec_yd"),rctd=get("rec_td"),fum=get("fumbles_lost"))
+                + 2*get("two_point_conversions") + 6*get("return_tds")
+                + 6*get("offensive_fumble_td"))
     raise Blocked(f"Unsupported position {pos}")
 
 
