@@ -189,6 +189,8 @@ class ResearchForecast:
     observed_actual: float|None
     model_uncertainty_sd_unfitted: float
     candidate_has_verified_active_status: bool=False
+    last_observed_mean: float|None=None
+    trailing_three_equal_mean: float|None=None
     def __post_init__(self):
         if self.last_training_week>=self.eval_week:
             raise ValueError("LOOKAHEAD_LAST_TRAINING_WEEK")
@@ -198,6 +200,9 @@ class ResearchForecast:
             raise ValueError("INVALID_UNCALIBRATED_PLAYER_WIDTH")
         if self.candidate_has_verified_active_status:
             raise ValueError("STARTER_STATUS_CANNOT_BE_INFERRED_FROM_GAME_LOGS")
+        for x in (self.last_observed_mean,self.trailing_three_equal_mean):
+            if x is not None and (x<0 or not isfinite(x)):
+                raise ValueError("INVALID_NAIVE_BENCHMARK")
 
 
 def _metrics(errs:list[float])->dict|None:
@@ -240,6 +245,8 @@ def historical_player_walkforward(
     folds=[]
     for week in range(first_test_week,through_week+1):
         baseline_errors={stat:[] for stat in STATS}
+        last_errors={stat:[] for stat in STATS}
+        equal3_errors={stat:[] for stat in STATS}
         paired_base={stat:[] for stat in STATS}
         paired_ngs={stat:[] for stat in STATS}
         present=0;absent=0;total=0
@@ -281,7 +288,9 @@ def historical_player_walkforward(
                 rec=ResearchForecast(pid,team,week,stat,recent[-1][0],
                      round(baseline,4),
                      round(candidate,4) if candidate is not None else None,
-                     observed,round(width,4))
+                     observed,round(width,4),
+                     last_observed_mean=recent[-1][1],
+                     trailing_three_equal_mean=mean(x for _,x,_ in recent))
                 forecasts.append(rec);total+=1
                 counts["conditional_roster_candidates"]+=1
                 if observed is None:
@@ -290,6 +299,9 @@ def historical_player_walkforward(
                 counts["graded"]+=1;present+=1
                 e=observed-baseline
                 baseline_errors[stat].append(e)
+                last_errors[stat].append(observed-recent[-1][1])
+                equal3_errors[stat].append(
+                    observed-mean(x for _,x,_ in recent))
                 if candidate is not None:
                     paired_base[stat].append(e)
                     paired_ngs[stat].append(observed-candidate)
@@ -300,6 +312,8 @@ def historical_player_walkforward(
             "ungraded_absent_or_missing_stat":absent,
             "stats":{
                 stat:{"baseline":_metrics(baseline_errors[stat]),
+                      "naive_last_observed":_metrics(last_errors[stat]),
+                      "naive_trailing_three_equal":_metrics(equal3_errors[stat]),
                       "paired_baseline":_metrics(paired_base[stat]),
                       "paired_ngs":_metrics(paired_ngs[stat]),
                       "paired_delta_mae_ngs_minus_baseline":(
@@ -312,16 +326,22 @@ def historical_player_walkforward(
         raise ValueError("NO_CHRONOLOGICAL_FOLDS")
     totals={}
     for stat in STATS:
-        base=[];paired_b=[];paired_n=[]
+        base=[];paired_b=[];paired_n=[];last=[];equal3=[]
         for f in forecasts:
             if f.stat!=stat or f.observed_actual is None:
                 continue
             base.append(f.observed_actual-f.baseline_mean)
+            if f.last_observed_mean is not None:
+                last.append(f.observed_actual-f.last_observed_mean)
+            if f.trailing_three_equal_mean is not None:
+                equal3.append(f.observed_actual-f.trailing_three_equal_mean)
             if f.ngs_candidate_mean is not None:
                 paired_b.append(f.observed_actual-f.baseline_mean)
                 paired_n.append(f.observed_actual-f.ngs_candidate_mean)
         totals[stat]={
             "baseline":_metrics(base),
+            "naive_last_observed":_metrics(last),
+            "naive_trailing_three_equal":_metrics(equal3),
             "paired_baseline":_metrics(paired_b),
             "paired_ngs":_metrics(paired_n),
             "paired_delta_mae_ngs_minus_baseline":(
@@ -335,6 +355,8 @@ def historical_player_walkforward(
         "last_test_week":through_week,
         "model":"LAG3_EWMA_0.2_0.3_0.5",
         "ngs_candidate":"0.65_X_LAG3_BASELINE_0.35_X_PRIOR_NGS_EFFICIENCY",
+        "baselines_compared_on_identical_graded_rows":(
+            "LAST_OBSERVED","TRAILING_3_EQUAL","LAG3_EWMA"),
         "baseline_and_ngs_pair_on_same_actual_player_weeks":True,
         "trained_only_on_strictly_lower_week_numbers":True,
         "historical_publisher_snapshots_at_original_decision":False,
