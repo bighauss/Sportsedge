@@ -294,7 +294,14 @@ def historical_player_walkforward(
                 forecasts.append(rec);total+=1
                 counts["conditional_roster_candidates"]+=1
                 if observed is None:
-                    counts["not_observed_in_holdout"]+=1;absent+=1
+                    # A current-week player/team row whose particular stat is
+                    # missing is DIFFERENT from an absent player-week row.
+                    # Both remain ungraded; never substitute zero for either.
+                    if actual_row is None:
+                        counts["not_observed_in_holdout"]+=1
+                    else:
+                        counts["missing_actual_stat"]+=1
+                    absent+=1
                     continue
                 counts["graded"]+=1;present+=1
                 e=observed-baseline
@@ -324,6 +331,10 @@ def historical_player_walkforward(
         })
     if not folds:
         raise ValueError("NO_CHRONOLOGICAL_FOLDS")
+    if (counts["graded"]+counts["missing_actual_stat"]+
+            counts["not_observed_in_holdout"] !=
+            counts["conditional_roster_candidates"]):
+        raise ValueError("INCONSISTENT_PLAYER_HOLDOUT_DENOMINATOR")
     totals={}
     for stat in STATS:
         base=[];paired_b=[];paired_n=[];last=[];equal3=[]
