@@ -1,0 +1,64 @@
+name: Prospective public NFL source archive (PAPER only)
+
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/validation/forward_public_nfl_archive.py'
+      - 'sportsedge/validation/test_forward_public_nfl_archive.py'
+      - '.github/workflows/prospective-public-nfl-source.yml'
+  workflow_dispatch:
+    inputs:
+      event_id:
+        description: 'Optional canonical event identifier for separate verification'
+        required: false
+        type: string
+      event_start_utc:
+        description: 'Optional event kickoff UTC (e.g. 2026-11-17T01:15:00Z); requires event_id'
+        required: false
+        type: string
+  schedule:
+    # Daily public-source observations; GitHub schedule may be delayed or skipped.
+    - cron: '37 9,20 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  public-nfl-source-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Forward public-source contract tests
+        run: python -m unittest sportsedge.validation.test_forward_public_nfl_archive -v
+      - name: Capture public nflverse raw release bytes and verified publisher digest
+        env:
+          EVENT_ID: ${{ inputs.event_id || '' }}
+          EVENT_START_UTC: ${{ inputs.event_start_utc || '' }}
+          ARCHIVE_PARENT: ${{ runner.temp }}/sportsedge-nfl-forward-public
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=("$ARCHIVE_PARENT")
+          if [[ -n "$EVENT_ID" || -n "$EVENT_START_UTC" ]]; then
+            if [[ -z "$EVENT_ID" || -z "$EVENT_START_UTC" ]]; then
+              echo 'Both event ID and UTC kickoff are required for event-scoped capture' >&2
+              exit 2
+            fi
+            args+=(--event-id "$EVENT_ID" --event-start-utc "$EVENT_START_UTC")
+          fi
+          python -m sportsedge.validation.forward_public_nfl_archive "${args[@]}"
+      - name: Retain original public athlete-stat archive and manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nflverse-forward-source-${{ github.run_id }}
+          path: ${{ runner.temp }}/sportsedge-nfl-forward-public/forward_nfl_*/
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 6
