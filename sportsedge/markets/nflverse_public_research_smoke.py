@@ -67,6 +67,10 @@ def verify_weekly_public_archive(
         "total_csv_rows": archive["rows"],
         "eligible_regular_season_rows": shares["eligible_weekly_rows"],
         "excluded_post_cutoff_rows": shares["excluded_future_weekly_rows"],
+        "excluded_non_scoring_missing_player_id_rows": (
+            shares["excluded_non_scoring_rows_without_player_id"]),
+        "unattributed_offensive_scoring_tds": (
+            shares["unattributed_offensive_scoring_tds"]),
         "teams_seen_before_cutoff": shares["teams_observed"],
         "player_scoring_share_rows": len(shares["entries"]),
         "provider_data_asof_authentication": False,
