@@ -22,6 +22,18 @@ jobs:
           python-version: '3.12'
       - name: Validate hash, archive and cutoff failure-path fixtures
         run: python -m unittest sportsedge.markets.test_nflverse_public_research_smoke -v
+      - name: Inspect only the public weekly CSV column names
+        run: |
+          python - <<'PY'
+          import csv, gzip, io, json
+          from urllib.request import Request, urlopen
+          url = 'https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv.gz'
+          with urlopen(Request(url, headers={'User-Agent':'SportsEdge-Research-SchemaAudit'}), timeout=40) as response:
+              with gzip.GzipFile(fileobj=response) as gz:
+                  with io.TextIOWrapper(gz, encoding='utf-8-sig') as text_stream:
+                      header = next(csv.reader(text_stream))
+          print('PUBLIC_NFLVERSE_2026_COLUMNS=' + json.dumps(header))
+          PY
       - name: Download current public 2026 nflverse weekly snapshot into runner private temp
         env:
           SPORTSEDGE_PUBLIC_DATA_DIR: ${{ runner.temp }}/sportsedge-nflverse-evidence
