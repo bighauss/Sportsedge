@@ -228,8 +228,9 @@ def evaluate_dual_source(
             issues.append("EVENT_START_MISMATCH")
         if primary.provider == secondary.provider and primary.receipt_id == secondary.receipt_id:
             issues.append("REUSED_SOURCE_RECEIPT")
-        if (primary.upstream_book.casefold() == secondary.upstream_book.casefold()
-            and primary.upstream_provider.casefold() == secondary.upstream_provider.casefold()):
+        # A BestBook aggregation of a DraftKings price is not a second book.
+        # Even independent transport endpoints may share one underlying bookmaker.
+        if primary.upstream_book.casefold() == secondary.upstream_book.casefold():
             issues.append("NO_INDEPENDENT_UPSTREAM_BOOK")
         if not market_mapping_verified:
             issues.append("CROSS_PROVIDER_MARKET_MAP_UNVERIFIED")
