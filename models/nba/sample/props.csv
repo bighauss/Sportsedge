@@ -1,0 +1,11 @@
+game_id,player,stat,line,over_price,under_price
+G1,Nikola Jokic,PTS,28.5,-115,-105
+G1,Nikola Jokic,REB,12.5,-110,-110
+G1,Nikola Jokic,AST,9.5,+105,-125
+G1,Nikola Jokic,PRA,51.5,-110,-110
+G1,Jayson Tatum,PTS,27.5,-110,-110
+G1,Jayson Tatum,3PM,3.5,+120,-145
+G1,Peyton Watson,PTS,7.5,-110,-110
+G2,LeBron James,PTS,25.5,-110,-110
+G2,Bam Adebayo,REB,10.5,-120,+100
+G2,Tyler Herro,PTS,22.5,-110,-110

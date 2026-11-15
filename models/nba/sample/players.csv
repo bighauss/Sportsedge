@@ -1,0 +1,13 @@
+player,team,pos,starter,minutes,usage,pts_pm,reb_pm,ast_pm,fg3m_pm
+Jayson Tatum,BOS,F,1,36,0.300,0.75,0.24,0.14,0.090
+Jaylen Brown,BOS,G,1,34,0.280,0.68,0.17,0.10,0.065
+Derrick White,BOS,G,1,33,0.190,0.48,0.13,0.15,0.090
+Nikola Jokic,DEN,C,1,36,0.310,0.80,0.36,0.27,0.040
+Jamal Murray,DEN,G,1,34,0.270,0.62,0.12,0.18,0.075
+Aaron Gordon,DEN,F,1,30,0.190,0.48,0.20,0.10,0.030
+Peyton Watson,DEN,F,0,20,0.160,0.40,0.18,0.07,0.035
+LeBron James,LAL,F,1,35,0.290,0.71,0.21,0.23,0.060
+Anthony Davis,LAL,C,1,35,0.290,0.72,0.34,0.10,0.010
+Jaxson Hayes,LAL,C,0,14,0.130,0.45,0.32,0.05,0.000
+Bam Adebayo,MIA,C,1,34,0.240,0.55,0.29,0.12,0.010
+Tyler Herro,MIA,G,1,34,0.280,0.70,0.15,0.15,0.100
