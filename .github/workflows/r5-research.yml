@@ -1,0 +1,39 @@
+name: R5 recovery source checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  research-r5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install 'numpy>=1.24'
+      - name: Assert pinned v5 engine hash and identical recovered twin
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          e=Path('engine/sportsedge_v5.py').read_bytes()
+          t=Path('research/r5/nfl/sportsedge_v5.py').read_bytes()
+          expected='72ccaad75b066315f31137f40556321b7057a28119760a6a0b1c2e28da78e02f'
+          assert hashlib.sha256(e).hexdigest()==expected
+          assert e==t
+          PY
+      - name: Compile recovered research source
+        run: python -m compileall -q engine research/r5 research/closure_20261113
+      - name: Run 87 synthetic regressions
+        run: |
+          python research/r5/nfl/test_family_passkill_r1.py
+          python research/r5/nfl/test_nfl_daily_lane_r2.py
+          python research/r5/cfb/test_cfb_event_completeness_r2.py
+          python research/r5/cfb/test_cfb_event_completeness_r3_recovered.py
+          python research/r5/cfb/test_cfb_event_completeness_r4.py
+          python research/r5/cfb/test_cfb_event_completeness_r5.py
+          python research/r5/nba/test_nba_append_guard_r3.py
