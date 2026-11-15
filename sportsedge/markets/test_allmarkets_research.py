@@ -289,8 +289,9 @@ class ProjectionsAndForward(unittest.TestCase):
             at=D+timedelta(days=i)
             actual_h=20+(i%6)
             actual_a=17+(i%3)
+            # Holdout test uses a genuinely frozen model fitted before ALL windows.
             rows.append(FrozenGame(str(i),"NFL",at,at-timedelta(hours=1),
-                at-timedelta(days=2),23,19,actual_h,actual_a,H))
+                D-timedelta(days=2),23,19,actual_h,actual_a,H))
         report=walk_forward_score_audit(rows)
         self.assertEqual(report["status"],"RESEARCH_HOLDOUT_REVIEW")
         self.assertGreaterEqual(report["completed_folds"],3)
