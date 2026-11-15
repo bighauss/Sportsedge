@@ -65,6 +65,86 @@ class FiveSportSlateContract(unittest.TestCase):
         self.assertEqual(out["approved_stake_u"],0)
         self.assertIsNone(out["card"])
 
+    def test_zero_market_event_does_not_count_as_processed_game(self):
+        out=run_slate(fixture())
+        event=next(e for e in out["events"] if e["event_id"]=="NFL-E2")
+        self.assertEqual(event["status"],"BLOCK")
+        self.assertIn("NO_MARKETS_SUBMITTED_OR_OFFERED_UNVERIFIED",event["reasons"])
+        self.assertEqual(out["counts"]["no_market_rows"],1)
+        self.assertEqual(out["five_sports"]["NFL"]["research_processed_games"],0)
+        self.assertEqual(event["research_candidates"],0)
+
+    def test_sgp_inventory_keeps_valid_straight_research_alive(self):
+        f=fixture()
+        event=f["event_inputs"][0]["manifest"]
+        event["markets"].insert(0,{"market":{
+            "sport":"CBB","event_id":"GAME-1","kind":"SGP","period":"FG"}})
+        out=run_slate(f)
+        cbb=next(e for e in out["events"] if e["sport"]=="CBB")
+        self.assertEqual(cbb["status"],"PAPER_0U_RESEARCH_ONLY")
+        self.assertEqual(cbb["research_candidates"],2)
+        self.assertEqual(cbb["research_priced"],1)
+        self.assertEqual(cbb["research_blocked"],1)
+        self.assertEqual(cbb["research_rows"][0]["research_state"],"BLOCK")
+        self.assertIn("SGP_REQUIRES_POSTED_JOINT_QUOTE_AND_CALIBRATED_EVENTS",
+                      cbb["research_rows"][0]["research_reasons"])
+        self.assertEqual(cbb["research_rows"][1]["guard_state"],"BLOCK")
+        self.assertEqual(out["counts"]["sgp_inventory_rows"],1)
+        self.assertFalse(cbb["sgp_joint_pricing_certified"])
+        self.assertEqual((out["approved_stake_u"],out["official_counted"]),(0,0))
+
+    def test_sgp_only_is_block_not_false_priced_model(self):
+        f=fixture()
+        f["event_inputs"][1]["manifest"]["markets"]=[
+            {"market":{"sport":"NFL","event_id":"NFL-E2",
+                       "kind":"SGP","period":"FG"}}]
+        out=run_slate(f)
+        nfl=next(e for e in out["events"] if e["sport"]=="NFL")
+        self.assertEqual(nfl["status"],"BLOCK")
+        self.assertEqual(nfl["research_candidates"],1)
+        self.assertEqual(nfl["research_priced"],0)
+        self.assertEqual(nfl["research_blocked"],1)
+        self.assertIn("ONLY_UNPRICED_SGP_INVENTORY_SUBMITTED",nfl["reasons"])
+        self.assertEqual(out["counts"]["sgp_only_games"],1)
+        self.assertEqual(out["five_sports"]["NFL"]["research_processed_games"],0)
+
+    def test_sgp_fake_single_leg_price_is_rejected(self):
+        f=fixture()
+        quote=deepcopy(f["event_inputs"][0]["manifest"]["markets"][0]["dk_quote"])
+        f["event_inputs"][0]["manifest"]["markets"].append({
+            "market":{"sport":"CBB","event_id":"GAME-1","kind":"SGP","period":"FG"},
+            "dk_quote":quote,
+        })
+        with self.assertRaisesRegex(ValueError,"SGP_INVENTORY_ONLY_NO_SINGLE_LEG_QUOTE"):
+            run_slate(f)
+
+    def test_non_full_game_sgp_placeholder_is_rejected(self):
+        f=fixture()
+        f["event_inputs"][0]["manifest"]["markets"].append({
+            "market":{"sport":"CBB","event_id":"GAME-1","kind":"SGP","period":"1H"},
+        })
+        with self.assertRaisesRegex(ValueError,"SGP_INVENTORY_ONLY_NO_SINGLE_LEG_QUOTE"):
+            run_slate(f)
+
+    def test_sgp_cannot_claim_v21_guard_passed(self):
+        f=fixture()
+        f["event_inputs"][0]["manifest"]["markets"].append({
+            "market":{"sport":"CBB","event_id":"GAME-1","kind":"SGP","period":"FG"},
+            "v21_inputs":{"source_receipt_verified":True},
+        })
+        with self.assertRaisesRegex(ValueError,"SGP_INVENTORY_ONLY_NO_SINGLE_LEG_QUOTE"):
+            run_slate(f)
+
+    def test_multiple_sgp_placeholders_kept_in_original_order(self):
+        f=fixture()
+        event=f["event_inputs"][0]["manifest"]
+        sgp={"market":{"sport":"CBB","event_id":"GAME-1","kind":"SGP","period":"FG"}}
+        event["markets"]=[deepcopy(sgp),*event["markets"],deepcopy(sgp)]
+        out=run_slate(f)
+        rows=next(e for e in out["events"] if e["sport"]=="CBB")["research_rows"]
+        self.assertEqual([r["research_state"] for r in rows],["BLOCK","PAPER_0U","BLOCK"])
+        self.assertEqual(out["counts"]["sgp_inventory_rows"],2)
+
     def test_no_game_silently_dropped_if_capture_missing(self):
         f=fixture();f["event_inputs"].pop()
         out=run_slate(f)
