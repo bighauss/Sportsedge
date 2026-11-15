@@ -119,6 +119,10 @@ def _quote_integrity(data, expected_key, expected_start, used_quotes):
                     or item.get("dk_opposite_quote") is not None
                     or item.get("v21_inputs") not in (None,{})):
                 raise ValueError("SGP_INVENTORY_ONLY_NO_SINGLE_LEG_QUOTE")
+            if families["SGP"] >= 1:
+                # No posted parlay ID or distinct legs exist in an inventory
+                # placeholder. Repeating it cannot represent a second offer.
+                raise ValueError("DUPLICATE_UNPRICED_SGP_INVENTORY")
             families["SGP"]+=1
             continue
         families[kind]+=1
