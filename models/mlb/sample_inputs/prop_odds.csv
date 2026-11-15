@@ -1,0 +1,10 @@
+game_id,player_id,market,line,over_price,under_price
+G1,P1,K,6.5,-120,100
+G1,P2,K,4.5,-105,-115
+G1,P1,OUTS,17.5,-110,-110
+G1,CHC3,HITS,0.5,-200,160
+G1,CHC4,TB,1.5,120,-150
+G1,STL4,HR,0.5,400,-600
+G2,P3,K,7.5,105,-125
+G2,NYY2,TB,1.5,-110,-110
+G2,COL5,HITS,0.5,-160,130

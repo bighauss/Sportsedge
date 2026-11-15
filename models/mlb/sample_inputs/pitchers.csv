@@ -1,0 +1,5 @@
+player_id,name,team,p_throws,g,gs,ip,xera,xwoba,k_percent,bb_percent,csw_percent,velo_season,velo_last3,bf_per_start,tto3_xwoba,usage_FF,whiff_FF,usage_SI,whiff_SI,usage_FC,whiff_FC,usage_SL,whiff_SL,usage_CU,whiff_CU,usage_CH,whiff_CH,usage_FS,whiff_FS
+P1,Pitcher1,CHC,R,18,18,105,3.4,0.258,27,6.5,29.4,94.5,94.6,24,0.34,26.9,32,6.9,18,13.1,26,19.2,33,4.6,16,5.4,31,23.8,21
+P2,Pitcher2,STL,L,18,18,105,4.6,0.349,19,8.9,27.8,94.5,93.6,22,0.34,7.7,28,19.8,16,19.8,33,7.7,18,13.2,22,7.7,35,24.2,35
+P3,Pitcher3,NYY,R,18,18,105,3.1,0.235,30,7.0,30.0,94.5,94.6,25,0.34,28.7,16,4.9,32,18.9,19,18.9,24,13.9,28,4.9,19,9.8,32
+P4,Pitcher4,COL,R,18,18,105,5.3,0.402,17,9.5,27.4,94.5,94.6,22,0.34,17.2,33,10.4,33,16.4,35,23.1,21,19.4,26,7.5,18,6.0,32
