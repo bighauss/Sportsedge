@@ -12,7 +12,7 @@ timestamps in a self-authored JSON manifest.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 from pathlib import Path
 import argparse
@@ -59,6 +59,9 @@ RESULT_FIELDS = ("event_id", "player_id", "team_id", "stat", "actual")
 RESEARCH_FREEZE = "sportsedge-nfl-player-forward-freeze-v2"
 RESEARCH_GRADE = "sportsedge-nfl-player-forward-grade-v2"
 LINEUP_STATES = {"ACTIVE", "INACTIVE", "UNCONFIRMED"}
+# Source label policy, NOT authentication of the purported upstream publisher.
+LINEUP_SOURCES = frozenset({"NFL_CLUB_INACTIVES_CLAIM"})
+MAX_LINEUP_AGE = timedelta(hours=2)
 ZERO_KEYS = {"approved_stake_u": 0, "official_counted": 0, "card": None}
 
 
@@ -152,7 +155,9 @@ def _write_private_create_only(path, obj):
     destination = Path(path)
     cwd = Path.cwd().resolve()
     absolute = destination.resolve()
-    if absolute == cwd or cwd in absolute.parents:
+    repo_root = Path(__file__).resolve().parents[2]
+    if (absolute == cwd or cwd in absolute.parents or
+            absolute == repo_root or repo_root in absolute.parents):
         raise ValueError("PRIVATE_EVIDENCE_MUST_BE_OUTSIDE_REPOSITORY")
     if destination.is_symlink():
         raise ValueError("SYMLINK_OUTPUT_REFUSED")
@@ -263,11 +268,15 @@ def freeze_player_forecasts(request, *, now=None):
         raise ValueError("EMPTY_OR_EXCESSIVE_PLAYER_FORECASTS")
     raw_lineup, lineup_hash = _raw_file(
         r["lineup_file"], fields=LINEUP_FILE_KEYS)
-    _id(r["lineup_file"]["source_name"], "lineup_source_name")
+    lineup_source = _id(r["lineup_file"]["source_name"], "lineup_source_name")
+    if lineup_source not in LINEUP_SOURCES:
+        raise ValueError("UNREGISTERED_LINEUP_SOURCE")
     lineup_observed = _time(r["lineup_file"]["observed_at_utc"])
     lineup_captured = _time(r["lineup_file"]["captured_at_utc"])
     if not lineup_observed <= lineup_captured <= asof:
         raise ValueError("LINEUP_CAPTURE_TOO_LATE_FOR_FORECAST")
+    if start - lineup_observed > MAX_LINEUP_AGE:
+        raise ValueError("STALE_LINEUP_OBSERVATION")
     if quote is not None and lineup_captured > quote:
         raise ValueError("LINEUP_CAPTURE_AFTER_ODDS")
     _, lineup_rows = _csv(raw_lineup, LINEUP_KEYS)
@@ -401,6 +410,25 @@ def grade_frozen_capture(request, *, now=None):
     captured_at = _time(source["captured_at_utc"])
     if not ended <= observed <= captured_at <= now_utc:
         raise ValueError("RESULT_OBSERVATION_BEFORE_FINAL_OR_IN_FUTURE")
+    archive_rows = capture.get("forecast_rows")
+    if (not isinstance(archive_rows, list) or
+            type(capture.get("frozen_rows")) is not int or
+            type(capture.get("blocked_rows")) is not int or
+            capture["frozen_rows"] < 0 or capture["blocked_rows"] < 0 or
+            capture["frozen_rows"] + capture["blocked_rows"] != len(archive_rows)):
+        raise ValueError("FROZEN_ARCHIVE_DENOMINATOR_INVALID")
+    counted_frozen = 0
+    for record in archive_rows:
+        if not isinstance(record, dict) or record.get("state") not in (
+                "BLOCK", "PAPER_0U_FROZEN_UNVERIFIED"):
+            raise ValueError("FROZEN_ROW_STATE_INVALID")
+        if record["state"] != "BLOCK":
+            counted_frozen += 1
+            mean = record.get("forecast_mean")
+            if type(mean) not in (int, float) or not math.isfinite(mean):
+                raise ValueError("FROZEN_ACCEPTED_MEAN_INVALID")
+    if counted_frozen != capture["frozen_rows"]:
+        raise ValueError("FROZEN_ARCHIVE_DENOMINATOR_INVALID")
     headers, rows = _csv(raw_results, RESULT_FIELDS)
     if set(headers) != set(RESULT_FIELDS):
         raise ValueError("UNEXPECTED_RESULT_COLUMNS")
@@ -408,19 +436,20 @@ def grade_frozen_capture(request, *, now=None):
     for row in rows:
         if row["event_id"] != event:
             raise ValueError("RESULT_EVENT_MISMATCH")
-        key = (row["player_id"], row["team_id"], row["stat"])
+        key = (row["player_id"].strip(), row["team_id"].strip(),
+               row["stat"].strip().upper())
         if key in results:
             raise ValueError("DUPLICATE_PLAYER_STAT_FINAL")
         try:
             n = float(row["actual"])
         except ValueError as exc:
             raise ValueError("INVALID_FINAL_STAT") from exc
-        if not math.isfinite(n) or (n < 0 and row["stat"] not in
+        if not math.isfinite(n) or (n < 0 and key[2] not in
                     ("PASS_YDS", "REC_YDS", "RUSH_YDS")):
             raise ValueError("INVALID_FINAL_STAT")
         results[key] = n
     graded = []
-    for row in capture["forecast_rows"]:
+    for row in archive_rows:
         key = row["player_id"], row["team_id"], row["stat"]
         outcome = results.get(key)
         status = ("NOT_GRADED_BLOCKED" if row["state"] == "BLOCK" else
@@ -435,7 +464,8 @@ def grade_frozen_capture(request, *, now=None):
             "actual_minus_prediction": round(err, 6) if err is not None else None,
         })
     n = sum(x["state"] == "GRADED_RESEARCH_ONLY" for x in graded)
-    if n + sum(x["state"] != "GRADED_RESEARCH_ONLY" for x in graded) != len(graded):
+    if (n + sum(x["state"] == "UNRESOLVED_MISSING_FINAL_STAT" for x in graded)
+           + sum(x["state"] == "NOT_GRADED_BLOCKED" for x in graded) != len(archive_rows)):
         raise ValueError("GRADE_DENOMINATOR_MISMATCH")
     return {
         "schema": RESEARCH_GRADE, "state": "PAPER_0U_GRADED_NOT_CERTIFIED",
