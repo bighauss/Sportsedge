@@ -31,7 +31,7 @@ def validate_manifest(document):
             errors.append(f"row_{index}_not_object")
             continue
         name = row.get("source")
-        names.append(name)
+        names.append(name if isinstance(name, str) else None)
         if name not in EXPECTED:
             errors.append(f"row_{index}_unknown_source")
         if row.get("status") != "observed" or row.get("research_only") is not True:
