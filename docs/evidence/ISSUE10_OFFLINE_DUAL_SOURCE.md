@@ -70,3 +70,20 @@ exponents, are rejected before archiving. All test transports are mocked.
 These checks do **not** prove independent original DraftKings/FanDuel
 offer authenticity. The Odds API remains one aggregator collection path,
 so these responses do not satisfy Issue #10's independent two-source gate.
+
+## Gate E candidate-to-receipt binding
+
+The Issue #10 research card gate now **re-checks** the supplied receipts
+at decision time, even if the caller passes a `DualSourceDecision` object
+claiming to be RESEARCH_ONLY. It checks primary/secondary receipt IDs,
+an actually present secondary quote, duplicate receipt IDs, identical exact
+selection identity and fresh/independent upstream collection paths. Explicit
+candidate event, sport, market, period, side, line, price and applicable
+team/player/settlement fields are checked against the primary quote. A
+mismatch is BLOCK, not merely a diagnostic warning. Valid equivalent
+numeric line spellings remain equivalent; unrelated alternate lines do not.
+
+This is a **structural safeguard only**. It treats cross-source mapping as a
+hypothesis to check consistency, not independent authentication. It never
+asserts that actual DK/secondary offers existed, replaces missing external
+receipts, promotes a model, or releases a real betting card.

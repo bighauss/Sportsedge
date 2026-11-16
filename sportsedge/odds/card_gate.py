@@ -7,10 +7,59 @@ forward calibration and closing-line evidence are not available in this module.
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from research.risk.v21_risk_contract import diagnostic
-from .evidence import DualSourceDecision, PITBinding, QuoteReceipt, utc
+from .evidence import (DualSourceDecision, PITBinding, QuoteReceipt,
+                       evaluate_dual_source, utc)
 from .storage import EvidenceChain
+
+
+def _numeric_identity(value, expected):
+    if isinstance(value, bool):
+        return False
+    try:
+        first, second = Decimal(str(value)), Decimal(str(expected))
+    except (InvalidOperation, ValueError, TypeError):
+        return False
+    return first.is_finite() and second.is_finite() and first == second
+
+
+def _candidate_receipt_mismatches(candidate, primary):
+    """Validate candidate's declared selection against the original quote.
+
+    Absence is handled by mandatory v2.1 candidate schema. Explicitly
+    conflicting declared fields must never be treated as merely missing.
+    """
+    checks = {
+        "event_id": primary.market.event_id,
+        "sport": primary.market.sport,
+        "market": primary.market.kind,
+        "period": primary.market.period,
+        "side": primary.market.side,
+        "team_id": primary.market.team_id,
+        "player_id": primary.market.player_id,
+        "stat": primary.market.stat,
+        "settlement": primary.market.settlement,
+    }
+    errors = []
+    for name, expected in checks.items():
+        if name in candidate and candidate[name] != expected:
+            errors.append("CANDIDATE_" + name.upper() + "_QUOTE_MISMATCH")
+    if "price_american" in candidate and not _numeric_identity(
+            candidate["price_american"], primary.odds_american):
+        errors.append("CANDIDATE_PRICE_QUOTE_MISMATCH")
+    if "line" in candidate:
+        source_line = candidate["line"]
+        if primary.market.kind == "MONEYLINE":
+            valid = source_line in ("", "0", 0)
+        elif primary.market.line == "":
+            valid = source_line == ""
+        else:
+            valid = _numeric_identity(source_line, primary.market.line)
+        if not valid:
+            errors.append("CANDIDATE_LINE_QUOTE_MISMATCH")
+    return errors
 
 
 def gate_candidate(
@@ -41,6 +90,27 @@ def gate_candidate(
         reasons.append("DUAL_SOURCE_GATE_BLOCKED")
     if primary is None:
         reasons.append("PRIMARY_RECEIPT_MISSING")
+    if secondary is None:
+        reasons.append("SECONDARY_RECEIPT_MISSING")
+    binding_problems = []
+    if primary is not None:
+        binding_problems.extend(_candidate_receipt_mismatches(candidate, primary))
+    # The supplied research decision alone is not trusted to describe the
+    # actual receipts. Re-run structural market, clock and independence checks
+    # against these objects; TRUE here means only a local schema comparison,
+    # NEVER externally verified source mapping or original book transport.
+    structural = evaluate_dual_source(
+        primary, secondary, now, market_mapping_verified=True)
+    if structural.state == "BLOCK":
+        binding_problems.extend("RECHECK:" + x for x in structural.reasons)
+    if dual.primary_receipt_id != (primary.receipt_id if primary else None):
+        binding_problems.append("DUAL_PRIMARY_RECEIPT_ID_MISMATCH")
+    if dual.secondary_receipt_id != (secondary.receipt_id if secondary else None):
+        binding_problems.append("DUAL_SECONDARY_RECEIPT_ID_MISMATCH")
+    if primary is not None and secondary is not None and (
+            primary.receipt_id == secondary.receipt_id):
+        binding_problems.append("DUPLICATED_PRIMARY_SECONDARY_RECEIPT_ID")
+    reasons.extend(binding_problems)
     pit_problems = ()
     if pit is None:
         reasons.append("PIT_PACKAGE_MISSING")
@@ -60,8 +130,9 @@ def gate_candidate(
     if v21_blocked:
         reasons.append("V21_POLICY_BLOCKED")
     state = "BLOCK" if (
-        dual.state != "RESEARCH_ONLY" or primary is None or pit is None
-        or bool(pit_problems) or v21_blocked
+        dual.state != "RESEARCH_ONLY" or primary is None or secondary is None
+        or pit is None or bool(binding_problems) or bool(pit_problems)
+        or v21_blocked
     ) else "PAPER_0U"
     report = {
         "status": state, "card": None, "approved_stake_u": 0,

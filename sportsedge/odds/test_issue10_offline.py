@@ -412,6 +412,87 @@ class TestExportAndStorage(unittest.TestCase):
                 chain.append({"api_key":"SECRET","decision_id":"b","asof_utc":D.isoformat(),
                               "approved_stake_u":0,"official_counted":0})
 
+    def test_card_gate_rechecks_exact_candidate_quote_identity(self):
+        from unittest.mock import patch
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        candidate={
+            "bet_id":"paper-a", "event_id":primary.market.event_id,
+            "sport":"NFL","market":"SPREAD","period":"FG","side":"HOME",
+            "line":"-3.50","price_american":-110,
+        }
+        with patch("sportsedge.odds.card_gate.diagnostic",
+                   return_value={"status":"PAPER_0U","flags":[]}):
+            good=gate_candidate(candidate,dual,pit,primary,D,secondary=secondary)
+            self.assertEqual(good["status"],"PAPER_0U")
+            self.assertIsNone(good["card"])
+            self.assertEqual(good["approved_stake_u"],0)
+            cases={
+                "event_id":("DIFFERENT","CANDIDATE_EVENT_ID_QUOTE_MISMATCH"),
+                "sport":("CFB","CANDIDATE_SPORT_QUOTE_MISMATCH"),
+                "market":("MONEYLINE","CANDIDATE_MARKET_QUOTE_MISMATCH"),
+                "period":("1H","CANDIDATE_PERIOD_QUOTE_MISMATCH"),
+                "side":("AWAY","CANDIDATE_SIDE_QUOTE_MISMATCH"),
+                "line":("-2.5","CANDIDATE_LINE_QUOTE_MISMATCH"),
+                "price_american":(-125,"CANDIDATE_PRICE_QUOTE_MISMATCH"),
+                "team_id":("NOT_THIS_MARKET","CANDIDATE_TEAM_ID_QUOTE_MISMATCH"),
+            }
+            for key,(bad,reason) in cases.items():
+                with self.subTest(field=key):
+                    outcome=gate_candidate({**candidate,key:bad},dual,pit,primary,D,
+                                           secondary=secondary)
+                    self.assertEqual(outcome["status"],"BLOCK")
+                    self.assertIn(reason,outcome["reasons"])
+                    self.assertEqual(outcome["approved_stake_u"],0)
+
+    def test_forged_dual_receipt_ids_do_not_create_paper_eligible_card(self):
+        from unittest.mock import patch
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        forged=dataclasses.replace(dual,primary_receipt_id="unrelated-receipt")
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        with patch("sportsedge.odds.card_gate.diagnostic",
+                   return_value={"status":"PAPER_0U","flags":[]}):
+            output=gate_candidate({"bet_id":"paper-b"},forged,pit,primary,D,
+                                  secondary=secondary)
+        self.assertEqual(output["status"],"BLOCK")
+        self.assertIn("DUAL_PRIMARY_RECEIPT_ID_MISMATCH",output["reasons"])
+
+    def test_missing_secondary_cannot_be_hidden_by_forged_dual_status(self):
+        from unittest.mock import patch
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        with patch("sportsedge.odds.card_gate.diagnostic",
+                   return_value={"status":"PAPER_0U","flags":[]}):
+            output=gate_candidate({"bet_id":"paper-c"},dual,pit,primary,D)
+        self.assertEqual(output["status"],"BLOCK")
+        self.assertIn("SECONDARY_RECEIPT_MISSING",output["reasons"])
+        self.assertIn("RECHECK:SECONDARY_MISSING",output["reasons"])
+
+    def test_dual_independence_and_stale_secondary_rechecked_at_decision(self):
+        from unittest.mock import patch
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        variants=[
+            (quote("BB-DK","BestBook","DraftKings"),"RECHECK:NO_INDEPENDENT_UPSTREAM_BOOK"),
+            (quote("OLD","OldSource","OldBook",observed=D-timedelta(minutes=6)),"RECHECK:SECONDARY_STALE"),
+        ]
+        with patch("sportsedge.odds.card_gate.diagnostic",
+                   return_value={"status":"PAPER_0U","flags":[]}):
+            for changed,reason in variants:
+                with self.subTest(reason=reason):
+                    output=gate_candidate({"bet_id":"paper-d"},dual,pit,primary,D,
+                                          secondary=changed)
+                    self.assertEqual(output["status"],"BLOCK")
+                    self.assertIn(reason,output["reasons"])
+
     def test_card_gate_calls_v21_and_never_emits_card(self):
         primary=quote()
         secondary=quote("FD","FanDuel","FanDuel")
