@@ -151,6 +151,7 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
     seen = Counter(
         (row.get("sport"), row.get("event_id").strip().casefold())
         for row in parsed if isinstance(row, dict) and
+        isinstance(row.get("sport"), str) and
         isinstance(row.get("event_id"), str) and row.get("event_id").strip()
     )
     margin, total = [], []
