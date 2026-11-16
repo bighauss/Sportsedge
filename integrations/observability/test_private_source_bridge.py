@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from integrations.observability.private_source_bridge import (
     SCHEMA, BridgeHold, _json, transform, private_cli,
@@ -240,6 +241,22 @@ class PrivateBridgeTests(unittest.TestCase):
         self.attempt["model"]["probability"]=1.2
         _, report=transform(self.raw(self.attempt))
         self.assertEqual(report["blocked_rows"],1)
+
+    def test_private_os_error_path_never_leaks_into_report(self):
+        secret_path="/private/customer-identity-secret-original.json"
+        with patch("integrations.observability.private_source_bridge._read",
+                   side_effect=OSError("ACCESS DENIED: " + secret_path)):
+            _, report = transform(self.raw(self.attempt))
+        self.assertEqual(report["blocked_rows"], 1)
+        self.assertEqual(report["rows"][0]["reason"], "PRIVATE_ORIGINAL_IO_FAILURE")
+        self.assertNotIn(secret_path, json.dumps(report))
+
+    def test_excessively_nested_json_quarantines_row_not_whole_batch(self):
+        malicious=b'{"nested":' + b'['*1200 + b'0' + b']'*1200 + b'}'
+        _, report=transform(self.raw(self.attempt) + [malicious])
+        self.assertEqual(report["attempted_rows"], 2)
+        self.assertEqual(report["blocked_rows"], 1)
+        self.assertIn("ORIGINAL_JSON_MALFORMED", report["rows"][1]["reason"])
 
     def test_private_cli_writes_two_owner_only_create_once_files(self):
         attempts=self.root/"attempts.jsonl"
