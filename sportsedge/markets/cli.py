@@ -173,6 +173,8 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
             "sd_total":fitted_dispersion["sd_total"],
             "model_sha256":fitted_dispersion["fitter_model_sha256"],
             "training_end_utc":_iso(ref["fit_asof_utc"]),
+            "margin_total_correlation":fitted_dispersion[
+                "margin_total_residual_correlation"],
             "status":settings["status"]}
         if not using_period_fit:
             dd["period_shares"]=tuple(settings["period_shares"])
@@ -260,6 +262,11 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
         fitted_dispersion["accepted_rows"] if fitted_dispersion else 0)
     results["dispersion_fit_model_sha256"]=(
         fitted_dispersion["fitter_model_sha256"] if fitted_dispersion else None)
+    results["margin_total_correlation_used"]=distribution.margin_total_correlation
+    results["margin_total_correlation_source"]=(
+        "TRAIN_ONLY_SAME_GAME_RESIDUALS_UNCALIBRATED" if fitted_dispersion
+        else "LEGACY_ZERO_ASSUMPTION_UNCALIBRATED")
+    results["margin_total_correlation_forward_calibrated"]=False
     results["period_share_calibration_verified"]=False
     results["period_fit_status"]=(
         fitted_periods["status"] if fitted_periods else "NOT_TRAINED_FROM_PERIOD_LEDGER")
