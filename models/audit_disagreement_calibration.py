@@ -17,7 +17,7 @@ def utc(s):
 # Legacy eleven-column G2 datasets are still reportable as unverified
 # research. Fully identified market rows must be complete and cannot silently
 # mix with legacy copies of the same game/market/selection.
-IDENTITY_FIELDS=("book","period","settlement","line","player_id","team_id","stat")
+IDENTITY_FIELDS=("sport","book","period","settlement","line","player_id","team_id","stat")
 MANDATORY_EXTENDED=("sport","book","period","settlement")
 LINE_MARKETS=frozenset(("spread","spreads","total","totals","teamtotal","teamtotals","tt",
                          "alternatespread","alternatetotal","playerprop","prop"))
