@@ -16,3 +16,4 @@ jobs:
           python-version: '3.11'
       - run: python -m compileall -q research/risk
       - run: python research/risk/test_v21_risk_contract.py
+      - run: python -m unittest research.risk.test_strict_v21_v22 -v
