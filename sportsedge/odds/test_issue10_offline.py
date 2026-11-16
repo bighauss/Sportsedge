@@ -15,6 +15,8 @@ from sportsedge.odds.evidence import (
 )
 from sportsedge.odds.storage import EvidenceChain, REPOSITORY_ROOT
 from sportsedge.odds.card_gate import gate_candidate
+from research.risk.v22_policy_guard import VERSION as SELECTED_V22_POLICY
+from research.risk.strict_v21_v22 import POLICY_VERSION as EXECUTED_STRICT_POLICY
 
 UTC = timezone.utc
 D = datetime(2026, 11, 15, 17, 3, tzinfo=UTC)
@@ -426,7 +428,11 @@ class TestExportAndStorage(unittest.TestCase):
         with patch("sportsedge.odds.card_gate.diagnostic",
                    return_value={"status":"PAPER_0U","flags":[]}):
             good=gate_candidate(candidate,dual,pit,primary,D,secondary=secondary)
-            self.assertEqual(good["status"],"PAPER_0U")
+            self.assertEqual(good["status"],"BLOCK")
+            self.assertIn("GATE_E_V22_CARD_LEDGER_NOT_CONNECTED",good["reasons"])
+            self.assertIn("SELECTED_V22_POLICY_VERSION_MISSING_OR_MISMATCHED",good["reasons"])
+            self.assertFalse(good["gate_e_v22_connected"])
+            self.assertTrue(good["risk_policy_conflict"])
             self.assertIsNone(good["card"])
             self.assertEqual(good["approved_stake_u"],0)
             cases={
