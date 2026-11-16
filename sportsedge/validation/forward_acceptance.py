@@ -26,8 +26,13 @@ def require_private_path(candidate, *, label):
     Resolved paths also reject symlinks into the public source tree. This is
     a privacy boundary, not independent evidence authentication.
     """
-    resolved = Path(candidate).resolve()
-    if resolved == REPOSITORY_ROOT or REPOSITORY_ROOT in resolved.parents:
+    # Check both spellings: a public checkout symlink that *points out* to a
+    # private file remains dangerous because the lexical public path may be
+    # committed/exposed; a private symlink that points *in* is likewise refused.
+    lexical = Path(os.path.abspath(candidate))
+    resolved = lexical.resolve()
+    if (lexical == REPOSITORY_ROOT or REPOSITORY_ROOT in lexical.parents
+            or resolved == REPOSITORY_ROOT or REPOSITORY_ROOT in resolved.parents):
         raise ValueError("PRIVATE_" + label + "_INSIDE_PUBLIC_REPOSITORY")
     return resolved
 
@@ -259,10 +264,16 @@ def report_file(source, destination):
                + "\n").encode("utf-8")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(dst, flags, 0o600)
-    with os.fdopen(fd, "wb") as out:
-        out.write(payload)
-        out.flush()
-        os.fsync(out.fileno())
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(payload)
+            out.flush()
+            os.fsync(out.fileno())
+    except BaseException:
+        # O_EXCL means the destination was created by this invocation.
+        # Do not leave an incomplete report that could be treated as evidence.
+        dst.unlink(missing_ok=True)
+        raise
     return report
 
 def main(argv=None):
