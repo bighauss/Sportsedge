@@ -1,0 +1,20 @@
+name: Independent top-20 forensic evidence gate (offline)
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  top20-forensics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile research/audit/top20_original_evidence_gate.py research/audit/test_top20_original_evidence_gate.py
+      - run: python -m unittest discover -s research/audit -p 'test_top20_original_evidence_gate.py' -v
+      - run: python -m unittest discover -s research/audit -p 'test_g18_forensic_replay.py' -v
+      - run: python -m unittest discover -s research/audit -p 'test_pregame_edge_audit.py' -v
