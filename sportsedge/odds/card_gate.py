@@ -209,9 +209,25 @@ def gate_candidate(
     pit_problems = ()
     if pit is None:
         reasons.append("PIT_PACKAGE_MISSING")
-    elif primary is not None:
-        pit_problems = pit.check(primary)
-        reasons.extend(pit_problems)
+    else:
+        # A zero-feature PIT package must not masquerade as a validated freeze.
+        if not pit.required_features:
+            reasons.append("PIT_REQUIRED_FEATURE_SET_EMPTY")
+        if not pit.features:
+            reasons.append("PIT_FEATURE_SNAPSHOTS_EMPTY")
+        if primary is None:
+            reasons.append("PIT_PRIMARY_QUOTE_UNAVAILABLE")
+        else:
+            try:
+                pit_problems = pit.check(primary)
+                reasons.extend(pit_problems)
+            except (TypeError, ValueError, KeyError, AttributeError) as exc:
+                reasons.append("PIT_INVALID:" + type(exc).__name__)
+        if secondary is not None:
+            try:
+                reasons.extend("SECONDARY_" + issue for issue in pit.check(secondary))
+            except (TypeError, ValueError, KeyError, AttributeError) as exc:
+                reasons.append("PIT_SECONDARY_INVALID:" + type(exc).__name__)
     v21_flags = v21.get("flags", ())
     if not isinstance(v21_flags, (list, tuple)) or any(
         not isinstance(flag, str) or not flag for flag in v21_flags
