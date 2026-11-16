@@ -1,0 +1,21 @@
+name: NFL QB PIT feature contract
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/qb_efficiency_pit_contract.py'
+      - 'models/nfl/test_qb_efficiency_pit_contract.py'
+      - '.github/workflows/nfl-qb-pit-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qb-pit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run quarterback PIT adversarial tests
+        run: python -m unittest models.nfl.test_qb_efficiency_pit_contract -v
