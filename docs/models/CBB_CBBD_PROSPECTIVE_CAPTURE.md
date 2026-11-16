@@ -18,7 +18,7 @@ CBBD currently offers a free key (1,000 calls/month shared with football) at htt
 
     python cbbd_prospective_capture.py capture --season 2027 --start-utc 2026-11-15T00:00:00Z --end-utc 2026-11-15T23:59:59Z --private-dir /private/sportsedge/cbb
 
-The command returns only sanitized private output paths and digest. The original response bytes and a separate manifest are create-only, hashed, timestamped by the local capture process, and written outside GitHub. The Bearer key is transmitted only in the HTTPS request header. No credential means NO NETWORK. Redirects, unexpected URL/content type, oversized body, duplicate JSON keys, wrong season and possible 3,000-game truncation are rejected. An interrupted pair write can leave an orphan; never overwrite or silently discard it.
+The command returns only sanitized private output paths and digest. The original response bytes and a separate manifest are create-only, hashed, timestamped by the local capture process, and written outside GitHub. The destination is checked BEFORE the credentialed request, rejecting both lexical public-checkout paths and symlink-resolved paths; a private mode-0700 directory is required. Individual raw, manifest and final-report files are exclusive mode-0600 writes with fsync and rollback of partial individual files. The Bearer key is transmitted only in the HTTPS request header. No credential means NO NETWORK. Redirects, unexpected URL/content type, oversized body, duplicate JSON keys, wrong season and possible 3,000-game truncation are rejected. An interrupted pair write can leave an orphan; never overwrite or silently discard it.
 
 4. Convert the original response OFFLINE using the exact returned filenames:
 
