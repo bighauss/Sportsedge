@@ -142,6 +142,14 @@ def golden_regression(raw):
             "failed": 0, "official_counted": 0, "approved_stake_u": 0}
 
 
+def _same_typed_dict(given, expected):
+    """Prevent bool==0, 0==False, or 1==True in policy/security fields."""
+    return (type(given) is dict and set(given) == set(expected) and all(
+        type(given[key]) is type(value) and given[key] == value
+        for key, value in expected.items()
+    ))
+
+
 def _finite_usd(raw, name):
     if type(raw) is not str or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]{1,4})?", raw):
         raise GovernanceError("INVALID_USD_AMOUNT:" + name)
@@ -192,11 +200,11 @@ def validate_manifest(raw, *, pr_number, base_commit, changed_paths):
         "role", "repo_write", "secrets_read", "production_deploy",
         "market_release", "merge_rights",
     }, "permissions")
-    if (permissions != {
+    if (not _same_typed_dict(permissions, {
         "role": "CODING_AGENT", "repo_write": "BRANCH_ONLY",
         "secrets_read": False, "production_deploy": False,
         "market_release": False, "merge_rights": "REPO_RULES_ONLY",
-    }):
+    })):
         raise GovernanceError("AGENT_LEAST_PRIVILEGE_NOT_DECLARED")
     baseline = _keys(doc["baseline"], {
         "metric", "before", "unit", "source_state",
@@ -211,8 +219,9 @@ def validate_manifest(raw, *, pr_number, base_commit, changed_paths):
     else:
         raise GovernanceError("BASELINE_SOURCE_STATE_INVALID")
     golden = _keys(doc["golden"], {"sha256", "cases", "suite"}, "golden")
-    if golden != {"sha256": GOLDEN_SHA256, "cases": GOLDEN_CASES,
-                  "suite": "SYNTHETIC_AGENT_SAFETY"}:
+    if not _same_typed_dict(golden, {
+            "sha256": GOLDEN_SHA256, "cases": GOLDEN_CASES,
+            "suite": "SYNTHETIC_AGENT_SAFETY"}):
         raise GovernanceError("GOLDEN_PIN_INVALID")
     evaluation = _keys(doc["evaluation"], {
         "method", "test_command", "external_review_state",
@@ -250,11 +259,11 @@ def validate_manifest(raw, *, pr_number, base_commit, changed_paths):
             raise GovernanceError("MEASURED_COST_RECEIPT_DIGEST_REQUIRED")
     else:
         raise GovernanceError("COST_MEASUREMENT_STATE_INVALID")
-    if doc["release_claims"] != {
+    if not _same_typed_dict(doc["release_claims"], {
             "policy_id": RISK_POLICY, "production_ready": False,
             "external_owner_approval_verified": False,
             "source_authenticated": False, "model_release_certified": False,
-            "official_counted": 0, "approved_stake_u": 0}:
+            "official_counted": 0, "approved_stake_u": 0}):
         raise GovernanceError("PRODUCTION_OR_SOURCE_PROMOTION_CLAIM_REFUSED")
     # A manifest is untrusted PR data. Its assertions are NOT verification,
     # a merge approval, proof of outside review, or permission to bet.
