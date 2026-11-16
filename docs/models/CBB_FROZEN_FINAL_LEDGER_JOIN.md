@@ -6,7 +6,8 @@ This strictly offline link joins the original frozen pregame CBB research board 
 
 1. Original frozen board JSON: the original private board captured BEFORE the games. It includes original per-game rows (including BLOCKED), freeze UTC, season-end year, model hash and source digests. NEVER recreate it from final-season Torvik tables.
 2. CBBD locally observed finals: source report from the original CBBD /games capture and converter. CBBD_LOCAL_FINAL_RECEIPTS_V1 records published_utc=captured_utc=first local snapshot observation. This is a conservative upper bound and NOT independently authenticated original provider publication time.
-3. Both must remain outside the PUBLIC Git checkout. The join refuses lexical and symlink-resolved public-checkout paths, requires a private mode-0700 output directory and mode-0600 exclusive fsynced report writes. A partial newly created ledger is removed on sidecar failure. Source bytes are never edited.
+3. The ORIGINAL CBBD raw JSON response and its original CBBD manifest are mandatory additional inputs to the join CLI. The saved response must match the normalized final report digest, row count and original observation UTC. Every final score/team/event reported as valid must agree with the provider response; hiding a valid unique final as BLOCKED fails the import (no silent selection of winners). This is local response-to-derived-data verification, not provider publication attestation.
+4. All must remain outside the PUBLIC Git checkout. The join refuses lexical and symlink-resolved public-checkout paths, requires a private mode-0700 output directory and mode-0600 exclusive fsynced report writes. A partial newly created ledger is removed on sidecar failure. Source bytes are never edited.
 
 Strict matching requires the original game ID, season, home and away CBBD team IDs, source SHA, full-game incl-OT final settlement, frozen pre-tip prediction, and final observation AFTER tipoff. No fuzzy aliases, score guesswork or backdated source clocks.
 
@@ -17,12 +18,14 @@ A reported hash and captured timestamp can prove local consistency, not independ
     python cbbd_frozen_final_join.py \
       --frozen-board /private/sportsedge/cbb/original_board.json \
       --finals /private/sportsedge/cbb/cbbd_finals.json \
+      --provider-raw /private/sportsedge/cbb/cbbd_original.raw.json \
+      --provider-manifest /private/sportsedge/cbb/cbbd_original.manifest.json \
       --ledger /private/sportsedge/cbb/new_scored_input.json \
       --audit /private/sportsedge/cbb/new_join_audit.json
 
 The new ledger is a JSON array with prediction, final and quote fields for EVERY original board row, including blocked records. Original prediction rows are not edited. A final is null unless the same CBBD season, event, team IDs, first-local capture clock and source SHA pass. Quote is ALWAYS null: never backfill market odds from a later close or invent EV.
 
-All duplicate original board IDs are quarantined, including the first copy. All duplicate final receipt IDs are also quarantined even when one is valid-looking. Missing, incorrect, incomplete and late receipts remain explicit null final with a detailed join reason; out-of-slate finals remain counted separately. The sidecar contains original board file SHA-256, final receipt file SHA-256 and generated ledger SHA-256, full source-row counts, joins and rejections. This is a local digest trail, NOT WORM authentication.
+All duplicate original board IDs are quarantined, including the first copy. All duplicate final receipt IDs are also quarantined even when one is valid-looking. Missing, incorrect, incomplete and late receipts remain explicit null final with a detailed join reason; out-of-slate finals remain counted separately. The sidecar contains original board file SHA-256, final receipt file SHA-256, original provider raw response SHA-256 and generated ledger SHA-256, full source-row counts, joins and rejections. This is a local digest trail, NOT WORM authentication.
 
 ## Evaluate only when real untouched prospective receipts exist
 
