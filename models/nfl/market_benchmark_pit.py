@@ -269,7 +269,7 @@ def evaluate_market_rows(rows, *, freshness_seconds=300):
             key = (row["game_id"], row["period"], row["market"], row["book"],
                    row["provider_event_id"], row["provider_market_id"],
                    row["provider_outcome_id"], row["selection"],
-                   row["line"], row["quote_receipt_id"])
+                   row["line"], row["decision_utc"])
             if key in seen:
                 raise ValueError("DUPLICATE_SAME_MARKET_OUTCOME_PRICE")
             seen.add(key)
