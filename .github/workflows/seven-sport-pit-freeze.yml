@@ -20,3 +20,6 @@ jobs:
       - run: python -m unittest sportsedge.validation.test_prospective_forecast_receipt -v
       - run: python -m compileall -q sportsedge/validation/firecrawl_espn_injury_intake.py
       - run: python -m unittest sportsedge.validation.test_firecrawl_espn_injury_intake -v
+      - run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - run: python -m compileall -q sportsedge/validation/firecrawl_espn_forward_archive.py
+      - run: python -m unittest sportsedge.validation.test_firecrawl_espn_forward_archive -v
