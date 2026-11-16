@@ -50,3 +50,23 @@ Do not invent URLs, API response schemas, auth signatures, last-updated timestam
 4. Establish chronological calibration, genuine close triples and independently audited v2.1 end-to-end controls. Follow Issue #10's 5-day / 200-settlement / 100-card requirements, then require signed owner promotion.
 
 No historical cards, engine formulas or v5 SHA modified. All recovered v5 modules remain unchanged.
+
+## The Odds API capture transport and private-path safeguards
+
+The permissioned research-only aggregator intake in
+`sportsedge/odds/free_odds_aggregator_intake.py` checks both the lexical
+and symlink-resolved destination against the actual public repository root
+**before** any credit-consuming HTTP request. A nested process working
+directory cannot make the public checkout appear private.
+
+The API key is carried in a URL parameter required by the provider's
+documented v4 endpoint. Automatic HTTP redirects are explicitly refused
+using a dedicated HTTPS opener, so a redirect destination cannot receive
+that key. Any anomalous final response URL is refused as well; HTTP errors
+are surfaced as redacted status codes rather than raw URLs. Non-finite
+provider JSON numbers, including `NaN`, `Infinity` and overflow-to-infinity
+exponents, are rejected before archiving. All test transports are mocked.
+
+These checks do **not** prove independent original DraftKings/FanDuel
+offer authenticity. The Odds API remains one aggregator collection path,
+so these responses do not satisfy Issue #10's independent two-source gate.
