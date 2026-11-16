@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-SOURCES = frozenset({"BESTBOOK", "ACTION_NETWORK", "COVERS", "SCORES_AND_ODDS", "DIRECT_BOOK", "THE_ODDS_API"})
+SOURCES = frozenset({"BESTBOOK", "ACTION_NETWORK", "COVERS", "SCORES_AND_ODDS", "DIRECT_BOOK", "THE_ODDS_API", "ODDS_GAP"})
 KINDS = frozenset({"MONEYLINE", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP", "ATTD", "FIRST_TD", "TD_2PLUS", "FIRST_BASKET", "NRFI", "YRFI", "OTHER"})
 SPORTS = frozenset({"NFL", "CFB", "CBB", "NBA", "MLB", "NHL", "PGA"})
 OPPOSITE_SIDES = {
