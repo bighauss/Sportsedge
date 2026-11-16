@@ -9,7 +9,7 @@
 - Compare model conditional probability `p_win / (p_win+p_loss)` to same-line no-vig `q_taken/(q_taken+q_opposite)`; report Brier score and log loss **excluding pushes**, which are still graded and counted in original-odds hypothetical ROI.
 - Report paired Brier gain `market Brier - model Brier`. **Positive means model beats the market baseline on that observed set, not proof of profit.**
 - Bootstrap the paired Brier difference **clustered by game**, rather than counting markets from the same NFL game as independent. Confidence interval is only shown when at least **30 distinct games** have nonpush outcomes.
-- Preserve invalid/late/stale/duplicate rows in a reason-coded rejection inventory. Enforce both provider-observed and local-captured quote ages at the decision, default ≤300 seconds pregame. Neither timestamp is independently authenticated here.
+- Preserve invalid/late/stale/duplicate rows in a reason-coded rejection inventory. **Quarantine all copies** of a repeated same-book/period/market/line/selection/decision, including contradictory versions, not just the second copy. Report their original row numbers and exclude them from hypothetical ROI and calibration regardless of input order. Enforce both provider-observed and local-captured quote ages at the decision, default ≤300 seconds pregame. Neither timestamp is independently authenticated here.
 - Detect exact push from the signed **home** spread, game/individual team total, or an explicit **two-way NFL moneyline tie-push rule**. No three-way ML, period or prop pricing is inferred.
 - Display NO CAPTURE for missing families rather than inferring not offered.
 
@@ -55,6 +55,8 @@ python -m unittest discover -s models/nfl -p 'test_market_benchmark_pit.py' -v
 ```
 
 The output includes original input hash, every rejected source row+reason, each accepted diagnostic row, outcomes, hypothetical 1u-per-row ROI and net units, market-only/no-vig conditional Brier and log-loss, and clustered 95% bootstrap interval. Its `approved_stake_u` and `official_counted` are always zero.
+
+**Private evidence protection:** Original candidate JSON and result paths are rejected if their lexical or symlink-resolved paths fall inside the public checkout. Raw JSON rejects duplicated keys at any nesting level and nonfinite `NaN`/`Infinity` literals (never last-key-wins). Output is exclusive-create (`0600`), fsynced before success, and deleted if the newly-created file fails writing or syncing; original source bytes are not modified. These structural controls are not publisher attestations or proof of genuine pregame prices.
 
 ### Key limitations
 

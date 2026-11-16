@@ -17,7 +17,26 @@ from pathlib import Path
 import random
 import re
 
-from score_walkforward_pit import utc
+from score_walkforward_pit import utc, private_evidence_path, create_private_output
+
+def _unique_json_keys(pairs):
+    data = {}
+    for key, value in pairs:
+        if key in data:
+            raise ValueError("DUPLICATE_JSON_KEY:" + key)
+        data[key] = value
+    return data
+
+
+def _reject_nonfinite_json(value):
+    raise ValueError("NONFINITE_JSON_LITERAL:" + value)
+
+
+def strict_json_payload(raw):
+    """Reject duplicate fields, including nested IDs and prices, before grading."""
+    return json.loads(raw, object_pairs_hook=_unique_json_keys,
+                      parse_constant=_reject_nonfinite_json)
+
 
 HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
 MARKETS = frozenset({
@@ -259,24 +278,36 @@ def evaluate_market_rows(rows, *, freshness_seconds=300):
         raise ValueError("INVALID_PREGAME_FRESHNESS_LIMIT")
     if not isinstance(rows, list):
         raise ValueError("ROWS_ARRAY_REQUIRED")
-    accepted = []
+    qualified = []
     rejected = []
-    seen = set()
     for i, raw in enumerate(rows, 1):
         try:
             row = _validate(raw, freshness_seconds=freshness_seconds)
-            # Same recorded outcome/market/line/side/decision is one row.
-            key = (row["game_id"], row["period"], row["market"], row["book"],
-                   row["provider_event_id"], row["provider_market_id"],
-                   row["provider_outcome_id"], row["selection"],
-                   row["line"], row["decision_utc"])
-            if key in seen:
-                raise ValueError("DUPLICATE_SAME_MARKET_OUTCOME_PRICE")
-            seen.add(key)
+            # Preserve original source-row identity BEFORE grouping, even when
+            # contradictory copies would otherwise each pass individual gates.
             row["source_row"] = i
-            accepted.append(row)
+            qualified.append(row)
         except (ValueError, KeyError, TypeError, OverflowError) as exc:
             rejected.append({"source_row": i, "reason": str(exc)})
+
+    def same_selection_key(row):
+        # Quote ID and price are NOT part of identity: repeated or conflicting
+        # copies of one offered selection must both be quarantined.
+        return (row["game_id"].strip(), row["period"], row["market"],
+                " ".join(row["book"].casefold().split()),
+                row["provider_event_id"].strip(), row["provider_market_id"].strip(),
+                row["provider_outcome_id"].strip(), row["selection"], row["line"],
+                row["decision_utc"])
+
+    counts = Counter(same_selection_key(row) for row in qualified)
+    accepted = []
+    for row in qualified:
+        if counts[same_selection_key(row)] > 1:
+            rejected.append({"source_row": row["source_row"],
+                             "reason": "DUPLICATE_SAME_MARKET_OUTCOME_PRICE_ALL_COPIES"})
+        else:
+            accepted.append(row)
+    rejected.sort(key=lambda item: item["source_row"])
     by_market = {}
     for m in sorted(MARKETS):
         subset = [r for r in accepted if r["market"] == m]
@@ -322,13 +353,16 @@ def main():
     parser.add_argument("--out", required=True)
     parser.add_argument("--freshness-seconds", type=int, default=300)
     args = parser.parse_args()
-    raw = Path(args.rows).read_bytes()
-    rows = json.loads(raw)
+    # Both original input and detailed output contain sensitive quote prices.
+    # Check paths before touching source bytes, including outward aliases.
+    input_path = private_evidence_path(args.rows)
+    private_evidence_path(args.out)
+    raw = input_path.read_bytes()
+    rows = strict_json_payload(raw)
     report = evaluate_market_rows(rows, freshness_seconds=args.freshness_seconds)
     report["local_original_input_sha256"] = "sha256:" + sha256(raw).hexdigest()
-    with Path(args.out).open("x", encoding="utf-8") as f:
-        json.dump(report, f, sort_keys=True, indent=2)
-        f.write("\n")
+    payload = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    create_private_output(args.out, payload)
     print(json.dumps({"status": report["status"],
                       "input_rows": report["input_rows"],
                       "accepted": report["accepted_research_rows"],

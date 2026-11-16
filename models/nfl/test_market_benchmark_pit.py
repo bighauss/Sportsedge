@@ -1,9 +1,14 @@
 """Synthetic regression contract for NFL same-line, as-of odds baseline."""
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from market_benchmark_pit import evaluate_market_rows
+from market_benchmark_pit import evaluate_market_rows, main, strict_json_payload
+from score_walkforward_pit import REPO_ROOT
 
 SHA = "sha256:" + "f"*64
 
@@ -157,14 +162,89 @@ class NFLPITMarketBenchmarkTests(unittest.TestCase):
         self.assertIn("NO_NONPUSH_MODEL_MASS",
                       out["rejected_rows"][0]["reason"])
 
-    def test_duplicate_same_observation_not_double_counted(self):
+    def test_duplicate_same_observation_quarantines_all_copies(self):
         a=row()
         b=deepcopy(a)
-        out=evaluate_market_rows([a,b])
-        self.assertEqual(out["input_rows"],2)
-        self.assertEqual(out["accepted_research_rows"],1)
-        self.assertIn("DUPLICATE_SAME_MARKET_OUTCOME_PRICE",
-                      out["rejected_rows"][0]["reason"])
+        for source in ([a,b],[b,a]):
+            out=evaluate_market_rows(source)
+            self.assertEqual(out["input_rows"],2)
+            self.assertEqual(out["accepted_research_rows"],0)
+            self.assertEqual(len(out["rejected_rows"]),2)
+            self.assertEqual([r["source_row"] for r in out["rejected_rows"]],[1,2])
+            self.assertTrue(all("DUPLICATE_SAME_MARKET_OUTCOME_PRICE_ALL_COPIES"
+                                in r["reason"] for r in out["rejected_rows"]))
+            self.assertEqual(out["market_evaluations"]["SPREAD"]["status"],"NOT_CAPTURED")
+
+    def test_conflicting_duplicate_prices_never_select_first(self):
+        original=row()
+        conflicting=deepcopy(original)
+        conflicting["american_taken"]=+120
+        conflicting["american_opposite"]=-140
+        conflicting["model_p_win"]=0.4
+        conflicting["model_p_loss"]=0.35
+        for attempted in ([original,conflicting],[conflicting,original]):
+            result=evaluate_market_rows(attempted)
+            self.assertEqual(result["accepted_research_rows"],0)
+            self.assertEqual(len(result["rejected_rows"]),2)
+            self.assertEqual(result["market_evaluations"]["SPREAD"]["status"],"NOT_CAPTURED")
+
+    def test_legitimate_alternate_lines_are_not_quarantined(self):
+        a=row()
+        b=deepcopy(a)
+        b["home_spread_or_total_line"]=-3.5
+        result=evaluate_market_rows([a,b])
+        self.assertEqual(result["accepted_research_rows"],2)
+        self.assertEqual(result["rejected_rows"],[])
+
+    def test_case_normalized_same_book_duplicate_quarantined(self):
+        a=row()
+        b=deepcopy(a)
+        b["book"]="draftkings"
+        result=evaluate_market_rows([a,b])
+        self.assertEqual(result["accepted_research_rows"],0)
+        self.assertEqual(len(result["rejected_rows"]),2)
+
+    def test_original_json_never_uses_last_key_wins_or_nan(self):
+        for bad,reason in (
+            (b'[{"market":"TOTAL","market":"MONEYLINE_2WAY"}]',"DUPLICATE_JSON_KEY"),
+            (b'[{"data":{"p":0.2,"p":0.9}}]',"DUPLICATE_JSON_KEY"),
+            (b'[{"model_p_win":NaN}]',"NONFINITE_JSON_LITERAL"),
+            (b'[{"model_p_win":Infinity}]',"NONFINITE_JSON_LITERAL"),
+        ):
+            with self.subTest(bad=bad),self.assertRaisesRegex(ValueError,reason):
+                strict_json_payload(bad)
+
+    def test_market_benchmark_cli_writes_private_0600_create_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            source=root/"candidates.json"
+            dest=root/"report.json"
+            raw=json.dumps([row()]).encode("utf-8")
+            source.write_bytes(raw)
+            argv=["market_benchmark_pit.py","--rows",str(source),"--out",str(dest)]
+            with patch("sys.argv",argv):
+                main()
+            result=json.loads(dest.read_bytes())
+            self.assertEqual(result["input_rows"],1)
+            self.assertEqual(result["official_counted"],0)
+            self.assertEqual(dest.stat().st_mode & 0o777,0o600)
+            self.assertEqual(source.read_bytes(),raw)
+            with patch("sys.argv",argv),self.assertRaises(FileExistsError):
+                main()
+
+    def test_market_benchmark_cli_refuses_public_repo_file_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            private=root/"candidates.json"
+            private.write_bytes(json.dumps([row()]).encode("utf-8"))
+            for incoming,outgoing in (
+                (str(REPO_ROOT/"models"/"nfl"/"private_candidates.json"),str(root/"report.json")),
+                (str(private),str(REPO_ROOT/"models"/"nfl"/"report.json")),
+            ):
+                with self.subTest(incoming=incoming,outgoing=outgoing):
+                    args=["market_benchmark_pit.py","--rows",incoming,"--out",outgoing]
+                    with patch("sys.argv",args),self.assertRaisesRegex(ValueError,"PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                        main()
 
     def test_thirty_distinct_events_cluster_ci_reported(self):
         rows=[]
