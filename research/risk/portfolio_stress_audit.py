@@ -91,6 +91,8 @@ def valid_row(row, *, max_quote_age_minutes=120):
     if row["evaluation_split"] != "OOS":
         raise ValueError("NOT_OUT_OF_SAMPLE")
     stake = finite(row["stake_units"], "STAKE_UNITS", low=1e-12)
+    if row["stake_basis"] == "PAPER_FLAT" and not math.isclose(stake, 1.0, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError("PAPER_FLAT_REQUIRES_ONE_UNIT")
     payout = american_payout(row["price_american"])
     commission = finite(row.get("commission_rate") or "0", "COMMISSION_RATE", low=0, high=1)
     rule = instant(row["rules_effective_utc"])
@@ -292,9 +294,12 @@ def group_results(rows, field):
     groups = collections.defaultdict(list)
     for x in rows:
         groups[x[field] or "UNKNOWN"].append(x)
-    return {k: {"performance": status_summary(v), "event_count": len(set((x["sport"], x["event_id"]) for x in v)),
-                "insufficient_30_events": len(set((x["sport"], x["event_id"]) for x in v)) < 30}
-            for k, v in sorted(groups.items())}
+    result = {}
+    for k, v in sorted(groups.items()):
+        independent = len({(x["sport"], x["event_id"]) for x in v if x["net"] is not None and x["risk"] > 0})
+        result[k] = {"performance": status_summary(v), "event_count": independent,
+                     "insufficient_30_events": independent < 30}
+    return result
 
 
 def audit(input_rows, *, iterations=2000):
@@ -326,7 +331,8 @@ def audit(input_rows, *, iterations=2000):
     settled = [x for x in accepted if x["net"] is not None]
     game_returns = collections.defaultdict(float)
     for x in settled:
-        game_returns[(x["sport"],x["event_id"])] += x["net"]
+        if x["risk"] > 0:
+            game_returns[(x["sport"],x["event_id"])] += x["net"]
     variance = statistics.variance(game_returns.values()) if len(game_returns) >= 30 else None
     return {
         "status": "PAPER_STRUCTURAL_RESEARCH_NOT_PROVIDER_AUTHENTICATED",
