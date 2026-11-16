@@ -23,6 +23,26 @@ python -m sportsedge.odds.free_odds_aggregator_intake NFL /private/sportsedge-or
 
 **Release limitation:** A key proves authentication to an **aggregator**, not to DraftKings and FanDuel independently. The Odds API can report different upstream book names but cannot alone prove two original authenticated sportsbook source chains as required by Issue #10 Gate A. No line is credited as independent +EV or CLV without separate trusted-book/source original receipts. No player/stat forecasts, real distributions, historical odds, WORM timestamps, future CLV or calibration are supplied by this adapter. It always emits PAPER / 0u, never places wagers or certifies release; protected frozen v5 remains unchanged.
 
+## One-command capture + normalization (private runtime)
+
+On a machine you control, after you have legally provisioned the provider API key in the environment, capture a genuine provider event ID at TAKE time and once again within ten minutes before kickoff at CLOSE time. These commands **do not run on ChatGPT's servers, GitHub Actions, or in the background**: you or an authorized local task scheduler must invoke them at the actual clock times.
+
+```sh
+# Save SPORTSEDGE_ODDS_API_KEY in your private OS environment.
+# Never commit, paste, log or pass it as a command-line argument.
+python -m sportsedge.odds.prospective_clv_cycle NFL /private/sportsedge-original-odds \
+  --event-id ACTUAL_PROVIDER_EVENT_ID --phase TAKE
+# At T−5 minutes, while pregame odds are still actually available:
+python -m sportsedge.odds.prospective_clv_cycle NFL /private/sportsedge-original-odds \
+  --event-id ACTUAL_PROVIDER_EVENT_ID --phase CLOSE
+```
+
+The utility makes one authorized event-scoped API call per invocation using the documented HTTPS endpoint. It safely writes the private original response and SHA256 manifest, and in the same command creates the private normalized two-sided quote CSV and companion audit report. Output names contain unique capture identifiers and phases, and each file is create-only. Original provider response bytes are never rewritten. Provider credentials are not stored in source code, filenames or manifests. The provider-claimed market update timestamp, local capture timestamp, event and exact line are retained separately.
+
+Once both captures exist, run the existing `ledger/historical_clv_bridge.py` with the actual **TAKE phase CSV path** and **CLOSE phase CSV path**; do not guess generated filenames. A TAKE-labeled board snapshot is **not** proof that anybody wagered that selection. The resulting paper CLV compares observed market probabilities; it is not a performance ledger for actual bets.
+
+No account credentials, local executor, cron job, provider schedule or independent DraftKings receipt was created automatically. A missing key, missing real provider event ID, public checkout destination, stale/one-sided odds or post-start market remains BLOCK/PAPER; unmatched markets are visible with rejection counts. This is a convenience command, not a replacement for the separately verified source provenance, finalized lineup evidence, market-specific model calibration, or Issue #10 release gates.
+
 ## Private raw captures → provisional price-history comparison
 
 The built-in six-sport source-archival path can now normalize **only** paired, fresh, point-in-time full-game moneylines, spreads and totals from the user-authorized **The Odds API** raw responses into the strict historical CLV CSV contract. This supplies a concrete free-tier **prospective** closing-price workflow; it does NOT provide the provider's past historical odds on the free plan, convert relayed prices into independent DK receipts, or connect BestBook automatically.
@@ -50,4 +70,4 @@ PGA **Majors outrights** are addressed by a separate provider-specific path, not
 
 The provider's documented free tier has **500 credits/month**, current odds only. Its historical odds endpoint is paid; this source cannot retroactively fill pre-kickoff prices that were never saved. Budget polling frequency to the rate and credit allowance shown by the genuine provider response. Never store API keys in code, chat, CI, GitHub or manifests.
 
-**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export -v` (synthetic only).
+**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle -v` (synthetic only).
