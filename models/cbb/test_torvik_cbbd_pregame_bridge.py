@@ -122,6 +122,28 @@ class TorvikCbddBridgeTests(unittest.TestCase):
                                 kind="TORVIK_RATINGS",season=2027,clock=lambda:DATA_TIME)
             self.assertEqual(list(output.iterdir()),[])
 
+    def test_manifest_write_failure_rolls_back_new_original(self):
+        # Fail the SECOND exclusive output, after raw CSV was successfully saved.
+        import torvik_cbbd_pregame_bridge as module
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "input.csv"
+            write_csv(source, raw_ratings())
+            original_bytes = source.read_bytes()
+            directory = root / "archive"
+            real_create = module._private_create
+            def fail_manifest(path, raw):
+                if str(path).endswith(".manifest.json"):
+                    raise OSError("synthetic manifest storage failure")
+                return real_create(path, raw)
+            with patch.object(module, "_private_create", side_effect=fail_manifest):
+                with self.assertRaisesRegex(OSError, "synthetic manifest storage failure"):
+                    archive_csv(source_path=source, private_dir=directory,
+                                kind="TORVIK_RATINGS", season=2027,
+                                clock=lambda: DATA_TIME)
+            self.assertEqual(list(directory.iterdir()), [])
+            self.assertEqual(source.read_bytes(), original_bytes)
+
     def test_full_prospective_projection_is_score_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             kw=fixtures(tmp)
