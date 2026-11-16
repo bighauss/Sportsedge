@@ -51,6 +51,18 @@ class Validation(unittest.TestCase):
         z=run(row(market='SPREAD',side='home',line='-5.5'),
               row(market='SPREAD',side='home',line='-6.5'))
         self.assertEqual(z['diagnostic_eligible'],2)
+    def test_numeric_alt_line_format_duplicates_not_counted(self):
+        a=row(market='SPREAD',side='HOME',line='+06.50')
+        b=row(market='spread',side='home',line='6.5')
+        z=run(a,b)
+        self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertEqual(len(z['flagged']),2)
+        self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in x['flags'] for x in z['flagged']))
+    def test_negative_line_format_duplicates_not_counted(self):
+        a=row(market='TOTAL',side='under',line='−05.500')
+        b=row(market='total',side='UNDER',line='-5.5')
+        z=run(a,b)
+        self.assertEqual(z['diagnostic_eligible'],0)
     def test_quote_not_pregame(self):
         z=run(row(captured_utc='2026-11-15T17:00:00Z'))
         self.assertIn('QUOTE_NOT_PREGAME',z['flagged'][0]['flags'])
