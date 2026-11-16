@@ -1,0 +1,114 @@
+"""Synthetic tests only. No provider calls or real betting records."""
+import csv
+import hashlib
+import tempfile
+import unittest
+from pathlib import Path
+from historical_clv_bridge import Blocked, FIELDS, compare, load_csv, parse_quote, run
+
+BASE = dict.fromkeys(FIELDS, "")
+BASE.update(source="BESTBOOK", source_url="https://bestbook.app/", sport="NFL",
+    event_id="nfl-2026-example", source_event_id="provider-event-1",
+    source_market_id="source-market-1", mapping_version="manual-crosswalk-v1",
+    book="DraftKings", market_kind="TOTAL", period="FG", settlement="INCLUDES_OT",
+    selection_id="OVER", opposite_selection_id="UNDER", line="49.5", opposite_line="49.5",
+    price_american="-110", opposite_price_american="-110",
+    observed_at_utc="2026-11-15T20:00:00Z", captured_at_utc="2026-11-15T20:00:01Z",
+    kickoff_utc="2026-11-16T01:20:00Z")
+
+def q(role="TAKE", **kwargs):
+    return parse_quote({**BASE, **kwargs}, role)
+
+class Tests(unittest.TestCase):
+    def test_positive_prob_clv_from_exact_two_sided_prices(self):
+        take=q()
+        close=q("HISTORY", observed_at_utc="2026-11-16T01:15:00Z",
+                captured_at_utc="2026-11-16T01:15:01Z",
+                price_american="-125", opposite_price_american="+105")
+        r=compare([take],[close])[0]
+        self.assertEqual(r["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+        self.assertGreater(float(r["clv_probability_points"]),0)
+        self.assertEqual(r["official_counted"],0)
+    def test_cross_source_reference_only_even_if_same_book(self):
+        take=q(source="DIRECT_BOOK",source_url="https://sportsbook.draftkings.com/")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:17:00Z",captured_at_utc="2026-11-16T01:17:00Z")
+        self.assertEqual(compare([take],[close])[0]["status"],"CROSS_SOURCE_REFERENCE_ONLY")
+    def test_late_import_retroactive_unverified(self):
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:17:00Z",captured_at_utc="2026-11-17T02:00:00Z")
+        self.assertEqual(compare([q()],[close])[0]["status"],"RETROSPECTIVE_HISTORY_UNVERIFIED")
+    def test_line_change_not_matched(self):
+        close=q("HISTORY",line="50.5",opposite_line="50.5",observed_at_utc="2026-11-16T01:17:00Z",captured_at_utc="2026-11-16T01:17:00Z")
+        self.assertEqual(compare([q()],[close])[0]["status"],"NO_EXACT_MATCHED_CLOSE")
+    def test_other_book_not_matched(self):
+        close=q("HISTORY",book="FanDuel",observed_at_utc="2026-11-16T01:17:00Z",captured_at_utc="2026-11-16T01:17:00Z")
+        self.assertEqual(compare([q()],[close])[0]["status"],"NO_EXACT_MATCHED_CLOSE")
+    def test_after_kickoff_observation_rejected(self):
+        with self.assertRaisesRegex(Blocked,"CHRONOLOGY"):
+            q("HISTORY",observed_at_utc="2026-11-16T01:21:00Z",captured_at_utc="2026-11-16T01:21:00Z")
+    def test_take_imported_after_kickoff_rejected(self):
+        with self.assertRaisesRegex(Blocked,"TAKE_NOT"):
+            q(captured_at_utc="2026-11-16T01:21:00Z")
+    def test_close_outside_ten_minutes_is_absent(self):
+        close=q("HISTORY",observed_at_utc="2026-11-16T00:50:00Z",captured_at_utc="2026-11-16T00:50:00Z")
+        self.assertEqual(compare([q()],[close])[0]["status"],"NO_EXACT_MATCHED_CLOSE")
+    def test_latest_observation_is_selected(self):
+        earlier=q("HISTORY",observed_at_utc="2026-11-16T01:12:00Z",captured_at_utc="2026-11-16T01:12:00Z")
+        latest=q("HISTORY",observed_at_utc="2026-11-16T01:18:00Z",captured_at_utc="2026-11-16T01:18:00Z")
+        self.assertEqual(compare([q()],[earlier,latest])[0]["close_observed_utc"],latest.observed.isoformat())
+    def test_ambiguous_latest_refuses_choice(self):
+        t="2026-11-16T01:18:00Z"
+        a=q("HISTORY",observed_at_utc=t,captured_at_utc=t)
+        b=q("HISTORY",source="COVERS",source_url="https://www.covers.com/",observed_at_utc=t,captured_at_utc=t)
+        self.assertEqual(compare([q()],[a,b])[0]["status"],"AMBIGUOUS_LAST_CLOSE")
+    def test_spread_requires_opposite_signed_line(self):
+        with self.assertRaisesRegex(Blocked,"SPREAD_OPPOSITE_SIGN"):
+            q(market_kind="SPREAD",selection_id="HOME",opposite_selection_id="AWAY",
+              line="+3.5",opposite_line="+3.5")
+    def test_prop_requires_player_and_stat(self):
+        with self.assertRaisesRegex(Blocked,"UNBOUND_PLAYER_PROP"):
+            q(market_kind="PLAYER_PROP")
+    def test_missing_opposite_odds_rejected(self):
+        with self.assertRaisesRegex(Blocked,"MISSING_REQUIRED_EVIDENCE"):
+            q(opposite_price_american="")
+    def test_unknown_source_rejected(self):
+        with self.assertRaisesRegex(Blocked,"UNSUPPORTED_SOURCE"):
+            q(source="UNAUTHORIZED_SCRAPER")
+    def test_source_observation_later_than_capture_rejected(self):
+        with self.assertRaisesRegex(Blocked,"CHRONOLOGY"):
+            q(observed_at_utc="2026-11-15T20:00:02Z")
+    def test_same_source_mismatched_market_ids_research_flag(self):
+        close=q("HISTORY", source_market_id="new-id", observed_at_utc="2026-11-16T01:17:00Z",captured_at_utc="2026-11-16T01:17:00Z")
+        self.assertEqual(compare([q()],[close])[0]["status"],"PROVIDER_MARKET_CROSSWALK_UNVERIFIED")
+    def test_duplicate_take_rejected(self):
+        with self.assertRaisesRegex(Blocked,"DUPLICATE_CANONICAL_TAKE"):
+            compare([q(),q()],[])
+    def test_csv_hash_and_duplicate_detection(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/"take.csv"
+            with p.open("w",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerow(BASE)
+            loaded,digest=load_csv(p,"TAKE")
+            self.assertEqual(len(loaded),1)
+            self.assertEqual(digest,hashlib.sha256(p.read_bytes()).hexdigest())
+            with p.open("a",newline="") as f:
+                csv.DictWriter(f,fieldnames=FIELDS).writerow(BASE)
+            with self.assertRaisesRegex(Blocked,"DUPLICATE_SOURCE"):
+                load_csv(p,"TAKE")
+    def test_covers_no_individual_prices_not_fabricated(self):
+        with self.assertRaisesRegex(Blocked,"MISSING_REQUIRED_EVIDENCE"):
+            q(source="COVERS",source_url="https://www.covers.com/sportsoddshistory",source_event_id="")
+    def test_result_denominator_retained_with_unmatched(self):
+        with tempfile.TemporaryDirectory() as d:
+            take=Path(d)/"take.csv"; hist=Path(d)/"hist.csv"
+            with take.open("w",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerow(BASE)
+            data={**BASE,"source":"SCORES_AND_ODDS","source_url":"https://www.scoresandodds.com/",
+                  "book":"FanDuel","observed_at_utc":"2026-11-16T01:18:00Z","captured_at_utc":"2026-11-16T01:18:00Z"}
+            with hist.open("w",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerow(data)
+            result=run(take,[hist]);self.assertEqual(result["take_rows"],1)
+            self.assertEqual(result["comparable_rows"],0)
+            self.assertEqual(len(result["matches"]),1)
+
+if __name__ == "__main__":
+    unittest.main()
