@@ -53,3 +53,15 @@ python research/audit/test_pregame_edge_audit.py
 ```
 CI runs the five sport suites, 87 additional R5 synthetic regressions, and 12 pregame evidence-audit tests. Betting calibration, source verification and real-world profitability require separate forward evidence.
 
+
+## AI/ML monitoring (research only)
+
+The optional [SportsEdge AI evaluation stack](docs/research/AI_EVALUATION_STACK_2026-11-15.md)
+provides a local, fail-closed source → frozen prediction → quote → result
+diagnostic, synthetic CI tests, an offline Promptfoo safety-contract
+suite, and opt-in Whylogs/MLflow local exporters with a disabled-by-default
+Langfuse aggregate tracing hook. Optional aggregate comparison can flag
+changes in blocked-row rate, matched-close coverage or descriptive Brier
+score; it does **not** authenticate provider bytes or release any market.
+No model weights or official cards are changed. Live agent telemetry,
+provider credentials and verified original betting odds remain unconnected.
