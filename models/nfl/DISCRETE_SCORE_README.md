@@ -61,7 +61,15 @@ python models/nfl/discrete_score_pit.py \
 python -m unittest discover -s models/nfl -p 'test_discrete_score_pit.py' -v
 ```
 
-The output is create-only, includes local byte hashes and the denominator/exclusion census and always says `PAPER_HOLD_0U`, `approved_stake_u=0`.
+## Private source and output integrity (R2)
+
+All `--target`, `--history` and optional `--lines` JSON files **must reside outside the public Git checkout**. The output path must also be outside that checkout. Both the lexical path and the symlink-resolved destination are checked before any private source read or file creation; in-repository symlink aliases to private data are refused.
+
+Input parsing rejects duplicated JSON keys at **any nesting level**, `NaN`/`Infinity` literals, missing fields, time-order violations and non-finite scores. The exact raw bytes read once for each source are the bytes SHA-256 hashes in the audit output, preventing a second-read hash from describing different data. Those hashes are **local integrity evidence only**, not a provider publication timestamp or authentication certificate.
+
+The output is **exclusive-create**, mode `0600`, flush/fsync and best-effort rollback on failed writes. Existing outputs and symlinks are never overwritten. Use a real private destination directory created and permissioned by the operator. Neither this CLI nor these tests upload originals to GitHub, Drive or a sportsbook.
+
+The output includes local byte hashes and the denominator/exclusion census and always says `PAPER_HOLD_0U`, `approved_stake_u=0`. The `margin_3_frequency`/`margin_7_frequency` fields preserve the positive home-margin direction. New `abs_margin_3_frequency`/`abs_margin_7_frequency` fields count both home and away exact-key outcomes. No key-number frequency is hard-coded as a fair price.
 
 ## Validation still required
 

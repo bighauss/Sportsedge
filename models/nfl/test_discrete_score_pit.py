@@ -1,9 +1,20 @@
 """Research-only empirical discrete NFL scoring regression tests."""
 from copy import deepcopy
+from contextlib import redirect_stdout
+from hashlib import sha256
+from io import StringIO
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+import tempfile
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from discrete_score_pit import score_distribution
+from discrete_score_pit import score_distribution, main
+from score_walkforward_pit import REPO_ROOT
 
 SHA = "sha256:" + "b" * 64
 
@@ -57,6 +68,8 @@ class DiscreteNFLPITTests(unittest.TestCase):
         self.assertEqual(out["census"]["eligible_prior_residual_pairs"], 60)
         self.assertEqual(out["score_diagnostics"]["margin_3_frequency"], .25)
         self.assertEqual(out["score_diagnostics"]["margin_7_frequency"], .25)
+        self.assertEqual(out["score_diagnostics"]["abs_margin_3_frequency"], .25)
+        self.assertEqual(out["score_diagnostics"]["abs_margin_7_frequency"], .5)
         self.assertEqual(out["markets"]["MONEYLINE"]["home_win"], .5)
         self.assertEqual(out["markets"]["MONEYLINE"]["tie"], .25)
         self.assertEqual(out["markets"]["MONEYLINE"]["away_win"], .25)
@@ -186,6 +199,134 @@ class DiscreteNFLPITTests(unittest.TestCase):
         self.assertEqual(out["source_authentication"], "NOT_INDEPENDENTLY_ATTESTED")
         self.assertEqual(out["calibration"], "UNVERIFIED_EMPIRICAL_RESIDUALS")
         self.assertFalse(out["markets"]["SPREAD"]["source_authentication"])
+
+
+class DiscreteScorePrivateArchiveTests(unittest.TestCase):
+    """CLI tests never need provider network access or real game data."""
+
+    def _fixture_files(self, temp):
+        t, h, l = fixtures()
+        paths = {
+            "target": Path(temp) / "target.json",
+            "history": Path(temp) / "history.json",
+            "lines": Path(temp) / "lines.json",
+            "out": Path(temp) / "research.json",
+        }
+        for key, item in (("target", t), ("history", h), ("lines", l)):
+            paths[key].write_text(json.dumps(item), encoding="utf-8")
+        return paths
+
+    def _run(self, files, *, overrides=None):
+        args = [
+            "discrete_score_pit.py",
+            "--target", str(files["target"]),
+            "--history", str(files["history"]),
+            "--lines", str(files["lines"]),
+            "--out", str(files["out"]),
+        ]
+        for flag, value in (overrides or {}).items():
+            args[args.index("--" + flag) + 1] = str(value)
+        with patch.object(sys, "argv", args), redirect_stdout(StringIO()):
+            main()
+
+    def test_private_create_only_mode_0600_and_exact_source_hashes(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            self._run(files)
+            self.assertEqual(stat.S_IMODE(files["out"].stat().st_mode), 0o600)
+            decoded = json.loads(files["out"].read_bytes())
+            self.assertEqual(decoded["status"], "PAPER_HOLD_0U")
+            self.assertEqual(decoded["approved_stake_u"], 0)
+            for key in ("target", "history", "lines"):
+                actual = "sha256:" + sha256(files[key].read_bytes()).hexdigest()
+                self.assertEqual(decoded["local_input_sha256"][key], actual)
+            original = files["out"].read_bytes()
+            with self.assertRaises(FileExistsError):
+                self._run(files)
+            self.assertEqual(original, files["out"].read_bytes())
+
+    def test_all_three_raw_inputs_reject_nested_duplicate_json_keys(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            samples = {
+                "target": b'{"x":{"z":1,"z":2}}',
+                "history": b'[{"nested":{"q":1,"q":2}}]',
+                "lines": b'{"x": 1,"x": 2}',
+            }
+            for key, raw in samples.items():
+                with self.subTest(file=key):
+                    backups = {k: files[k].read_bytes()
+                               for k in ("target", "history", "lines")}
+                    files[key].write_bytes(raw)
+                    with self.assertRaisesRegex(ValueError, "DUPLICATE_JSON_KEY"):
+                        self._run(files)
+                    self.assertFalse(files["out"].exists())
+                    for k, value in backups.items():
+                        files[k].write_bytes(value)
+
+    def test_nonfinite_literal_rejected_before_forecast_scoring(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            payload = files["target"].read_bytes().replace(
+                b'"projected_home": 20.0', b'"projected_home": NaN'
+            )
+            files["target"].write_bytes(payload)
+            with self.assertRaisesRegex(ValueError, "NONFINITE_JSON_LITERAL"):
+                self._run(files)
+            self.assertFalse(files["out"].exists())
+
+    def test_reject_checkout_lexical_source_and_output_before_read(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            forbidden = REPO_ROOT / "forbidden_internal_private.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                self._run(files, overrides={"out": forbidden})
+            with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                self._run(files, overrides={"history": forbidden})
+            self.assertFalse(files["out"].exists())
+
+    def test_reject_checkout_symlink_alias_to_external_private_file(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            # Even if target resolves outside checkout, the lexical alias
+            # used by the process would be publicly reachable from Git.
+            alias = REPO_ROOT / "models" / "nfl" / "test_private_discrete_alias.json"
+            try:
+                alias.symlink_to(files["target"])
+                with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                    self._run(files, overrides={"target": alias})
+            finally:
+                alias.unlink(missing_ok=True)
+            self.assertFalse(files["out"].exists())
+
+    def test_existing_output_symlink_rejected_and_target_not_modified(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            protected = Path(tmp) / "protected_existing.json"
+            protected.write_bytes(b"DO_NOT_CHANGE")
+            files["out"].symlink_to(protected)
+            with self.assertRaisesRegex(ValueError, "PRIVATE_OUTPUT_SYMLINK_REFUSED"):
+                self._run(files)
+            self.assertEqual(protected.read_bytes(), b"DO_NOT_CHANGE")
+
+    def test_partial_output_removed_on_fsync_failure(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            with patch("score_walkforward_pit.os.fsync",
+                       side_effect=OSError("synthetic-fsync-fail")):
+                with self.assertRaisesRegex(OSError, "synthetic-fsync-fail"):
+                    self._run(files)
+            self.assertFalse(files["out"].exists())
+
+    def test_key_numbers_both_margin_signs(self):
+        t, h, l = fixtures()
+        h[0]["final_home"] = 21
+        h[0]["final_away"] = 24
+        out = score_distribution(t, h, lines=l)
+        self.assertEqual(out["score_diagnostics"]["margin_3_frequency"], round(14/60, 8))
+        self.assertEqual(out["score_diagnostics"]["abs_margin_3_frequency"], .25)
+        self.assertEqual(out["score_diagnostics"]["abs_margin_7_frequency"], .5)
+        self.assertEqual(out["approved_stake_u"], 0)
 
 
 if __name__=="__main__":
