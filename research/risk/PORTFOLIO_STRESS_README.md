@@ -26,6 +26,8 @@ Optional: `player_id,quarterback_id,theme_id,commission_rate`.
 - `result=WIN|LOSS|PUSH|VOID|PENDING`. Settled results need two distinct *claimed* settlement source IDs, and a final timestamp after kickoff. Those IDs are not authenticated merely because their strings differ. No `LIKELY WIN`, inferred player stats, missing finals, or altered bets are silently accepted.
 - Returns use original recorded odds with fixed units risked; winner-only commission is optional and applied to winning profit. `PUSH` is a zero-return selection that counts in the risked-units denominator; `VOID` is zero return and does **not** count in that denominator; `PENDING` stays in the population and is excluded from realized returns until settled.
 
+Provider event IDs may repeat between sports. Game clustering and exposure use the namespaced identity `(sport, event_id)`; report keys use `SPORT:event_id`, never a bare provider ID.
+
 ## Output interpretation
 
 1. All rejected rows are preserved with indexed reasons; **all duplicate IDs and duplicate canonical selections are rejected** regardless of source order.
