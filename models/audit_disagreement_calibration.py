@@ -33,36 +33,48 @@ def parse(rows):
             if r["outcome"] not in ("0","1"):raise ValueError("UNSETTLED_OR_PUSH")
             odds=int(r["odds"]); profit=(odds/100 if odds>=100 else 100/abs(odds)) if abs(odds)>=100 else None
             if profit is None or odds==0:raise ValueError("INVALID_ODDS")
-            good.append((r["market"],p,q,int(r["outcome"]),profit))
+            good.append((r["market"],p,q,int(r["outcome"]),profit,r["event_id"]))
         except (ValueError,TypeError,KeyError) as e:blocked.append({"row":i,"reason":str(e)})
     return good,blocked
 def bucket(x):
-    a=round(abs(x),4)
-    return "0-5pp" if a<.05 else "5-10pp" if a<.10 else "10-20pp" if a<.20 else "20pp+"
+    """No four-place rounding: that had advanced 4.996pp into the 5-10pp band.
+
+    Tolerate only floating-point subtraction noise at the *exact* thresholds.
+    A genuine 9.996pp gap remains below 10pp, while .6-.5 is exactly 10pp.
+    """
+    a=abs(float(x))
+    if not math.isfinite(a):raise ValueError("INVALID_DISAGREEMENT")
+    for boundary,label in ((.05,"0-5pp"),(.10,"5-10pp"),(.20,"10-20pp")):
+        if a<boundary and not math.isclose(a,boundary,rel_tol=0,abs_tol=1e-12):
+            return label
+    return "20pp+"
 def stats(rows):
     n=len(rows)
-    if not n:return {"n":0,"roi":None,"observed_wilson_95":None,"insufficient_n30":True,"brier":None,"market_brier":None,"log_loss":None,"market_log_loss":None,"bias":None,"observed":None,"predicted":None}
-    wins=sum(y for _,_,_,y,_ in rows)
+    if not n:return {"n":0,"unique_events":0,"insufficient_unique_events_30":True,"roi":None,"observed_wilson_95":None,"insufficient_n30":True,"brier":None,"market_brier":None,"log_loss":None,"market_log_loss":None,"bias":None,"observed":None,"predicted":None}
+    wins=sum(y for _,_,_,y,_,_ in rows)
     z=1.95996398454; ph=wins/n; den=1+z*z/n
     mid=(ph+z*z/(2*n))/den; rad=z*math.sqrt(ph*(1-ph)/n+z*z/(4*n*n))/den
-    return {"n":n,"insufficient_n30":n<30,"observed_wilson_95":[round(max(0,mid-rad),6),round(min(1,mid+rad),6)],"roi":round(sum(profit if y else -1 for _,_,_,y,profit in rows)/n,6),"brier":round(sum((p-y)**2 for _,p,q,y,_ in rows)/n,6),
-        "market_brier":round(sum((q-y)**2 for _,p,q,y,_ in rows)/n,6),
-        "log_loss":round(-sum(y*math.log(p)+(1-y)*math.log1p(-p) for _,p,q,y,_ in rows)/n,6),
-        "market_log_loss":round(-sum(y*math.log(q)+(1-y)*math.log1p(-q) for _,p,q,y,_ in rows)/n,6),
-        "bias":round(sum(p-y for _,p,q,y,_ in rows)/n,6),
-        "observed":round(sum(y for _,p,q,y,_ in rows)/n,6),
-        "predicted":round(sum(p for _,p,q,y,_ in rows)/n,6)}
+    events=len({event for *_,event in rows})
+    return {"n":n,"unique_events":events,
+        "insufficient_unique_events_30":events<30,
+        "insufficient_n30":n<30,"observed_wilson_95":[round(max(0,mid-rad),6),round(min(1,mid+rad),6)],"roi":round(sum(profit if y else -1 for _,_,_,y,profit,_ in rows)/n,6),"brier":round(sum((p-y)**2 for _,p,q,y,_,_ in rows)/n,6),
+        "market_brier":round(sum((q-y)**2 for _,p,q,y,_,_ in rows)/n,6),
+        "log_loss":round(-sum(y*math.log(p)+(1-y)*math.log1p(-p) for _,p,q,y,_,_ in rows)/n,6),
+        "market_log_loss":round(-sum(y*math.log(q)+(1-y)*math.log1p(-q) for _,p,q,y,_,_ in rows)/n,6),
+        "bias":round(sum(p-y for _,p,q,y,_,_ in rows)/n,6),
+        "observed":round(sum(y for _,p,q,y,_,_ in rows)/n,6),
+        "predicted":round(sum(p for _,p,q,y,_,_ in rows)/n,6)}
 def audit(rows):
     valid,blocked=parse(rows);groups=defaultdict(list);cal=defaultdict(list)
     for row in valid:
-        m,p,q,y,_=row
+        m,p,q,y,_,event_id=row
         groups[(m,bucket(p-q),"model_above" if p>q else "model_below_or_equal")].append(row)
         cal[(m,min(9,int(p*10)))].append(row)
     return {"status":"RESEARCH_ONLY_NOT_VALIDATED_EV","accepted":len(valid),"blocked":blocked,
         "overall":stats(valid),
         "disagreement":[{"market":m,"bucket":b,"direction":d,**stats(v)} for (m,b,d),v in sorted(groups.items())],
         "calibration":[{"market":m,"decile":d,**stats(v)} for (m,d),v in sorted(cal.items())],
-        "caution":"ROI is hypothetical flat 1u at original odds, not verified execution. Missing pushes excluded; no CLV or upstream price authenticity certification."}
+        "caution":"ROI is hypothetical flat 1u per retained selection at original odds, NOT verified execution; correlated alt lines share events. A large number of selections with fewer than 30 distinct events is not sufficient independent evidence. Missing pushes excluded; no CLV, sportsbook-provider authentication, or original point-in-time feature certification."}
 def main():
     p=argparse.ArgumentParser();p.add_argument("csv");p.add_argument("--output");a=p.parse_args()
     with open(a.csv,newline="") as f: result=audit(csv.DictReader(f))
