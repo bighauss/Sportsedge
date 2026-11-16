@@ -82,7 +82,16 @@ class BestBookSlateIntegration(unittest.TestCase):
             for name in ("research_priced", "research_blocked", "status", "approved_stake_u",
                          "official_counted", "research_candidates"):
                 self.assertEqual(basic[name], enriched[name])
-            self.assertEqual(basic.get("research_rows"), enriched.get("research_rows"))
+            # Existing runner records actual wall-clock decision IDs on each
+            # invocation, so compare stable research state and EV, not IDs.
+            before=basic.get("research_rows",[])
+            after=enriched.get("research_rows",[])
+            self.assertEqual(len(before),len(after))
+            for a,b in zip(before,after):
+                for field in ("market","research_state","guard_state",
+                              "approved_stake_u","official_counted",
+                              "raw_ev_unverified","blended_ev_unverified"):
+                    self.assertEqual(a.get(field),b.get(field))
         self.assertEqual(original["counts"], integrated["counts"])
         self.assertEqual(integrated["status"] if "status" in integrated else
                          integrated["state"], "BLOCK_OFFICIAL_RELEASE_RESEARCH_ONLY")
