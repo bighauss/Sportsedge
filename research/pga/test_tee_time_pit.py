@@ -42,6 +42,19 @@ class TeeTimeContract(unittest.TestCase):
         raw,man=fixture(rows)
         with self.assertRaisesRegex(ValueError,"TEE_TIME_NOT_FUTURE"):
             audit(raw,man,frozen_utc=FROZEN,expected_player_ids=["p1","p2"])
+    def test_conflicting_duplicate_json_key_rejected(self):
+        raw, man = fixture()
+        raw = raw.replace(b'"player_id": "p1"', b'"player_id": "p1", "player_id": "p2"', 1)
+        man["sha256"] = hashlib.sha256(raw).hexdigest()
+        with self.assertRaisesRegex(ValueError, "ORIGINAL_JSON_INVALID"):
+            audit(raw, man, frozen_utc=FROZEN, expected_player_ids=["p1", "p2"])
+
+    def test_nonstring_source_claim_rejected(self):
+        raw, man = fixture()
+        man["source_receipt_id"] = {"unverified": True}
+        with self.assertRaisesRegex(ValueError, "SOURCE_PROVENANCE_MISSING"):
+            audit(raw, man, frozen_utc=FROZEN, expected_player_ids=["p1", "p2"])
+
     def test_missing_provider_claim_rejected(self):
         raw,man=fixture()
         man["source"]=""
