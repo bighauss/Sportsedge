@@ -77,6 +77,8 @@ def strict_json(raw):
     try:
         return json.loads(raw, object_pairs_hook=unique,
                           parse_constant=reject_nonfinite)
+    except Blocked:
+        raise
     except (ValueError, UnicodeError) as exc:
         raise Blocked("Corrupt or ambiguous original JSON evidence") from exc
 
