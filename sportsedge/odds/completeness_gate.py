@@ -101,7 +101,7 @@ def _core_absence(row, start):
     sides = ("HOME", "AWAY") if family in ("ML", "SPREAD") else ("OVER", "UNDER")
     if side not in sides:
         raise CompletenessError("CORE_ABSENCE_WRONG_SIDE")
-    if row["reason"] not in CORE_ABSENCE_REASONS:
+    if not isinstance(row["reason"], str) or row["reason"] not in CORE_ABSENCE_REASONS:
         raise CompletenessError("CORE_ABSENCE_REASON_UNVERIFIED_OR_INVALID")
     if _utc(row["noted_at_utc"]) >= start:
         raise CompletenessError("CORE_ABSENCE_NOTED_AFTER_START")
@@ -120,6 +120,8 @@ def _recorded_quote(row, start):
     captured = _utc(row["captured_utc"])
     if observed > captured:
         raise CompletenessError("ORIGINAL_TIMESTAMP_AFTER_CAPTURE")
+    if (captured - observed).total_seconds() > 300:
+        raise CompletenessError("STALE_ORIGINAL_QUOTE_GT_300S")
     if observed >= start or captured >= start:
         raise CompletenessError("POST_START_QUOTE")
     h = row.get("source_receipt_sha256")
