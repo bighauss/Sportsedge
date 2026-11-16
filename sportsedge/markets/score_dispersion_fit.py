@@ -23,7 +23,8 @@ DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SPORTS = frozenset({"NFL", "CFB", "CBB", "NBA", "MLB"})
 REQUIRED = frozenset({
     "sport", "event_id", "start_utc", "forecast_asof_utc",
-    "model_trained_until_utc", "features_published_utc", "final_published_utc",
+    "model_trained_until_utc", "features_published_utc", "features_captured_utc",
+    "final_published_utc", "final_captured_utc",
     "projection_home", "projection_away", "final_home", "final_away",
     "model_sha256", "feature_sha256", "forecast_sha256", "final_sha256",
 })
@@ -87,8 +88,11 @@ def _one(record, sport, cutoff):
     freeze = _clock(record["forecast_asof_utc"], "forecast")
     trained = _clock(record["model_trained_until_utc"], "model_trained")
     published = _clock(record["features_published_utc"], "features_published")
+    captured = _clock(record["features_captured_utc"], "features_captured")
     final = _clock(record["final_published_utc"], "final_published")
-    if not (trained < freeze < start < final < cutoff and published <= freeze):
+    settled = _clock(record["final_captured_utc"], "final_captured")
+    if not (trained < freeze < start < final <= settled < cutoff
+            and published <= captured <= freeze):
         raise ValueError("LOOKAHEAD_OR_UNAVAILABLE_RESULT")
     for key in ("model_sha256", "feature_sha256", "forecast_sha256", "final_sha256"):
         _hash(record[key], key)
@@ -152,6 +156,7 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
     margin, total = [], []
     dates = set()
     latest = None
+    trained_models = set()
     failed = Counter()
     for index, row in enumerate(parsed):
         error = errors[index]
@@ -167,6 +172,7 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
                     error = str(exc).splitlines()[0][:100]
                 else:
                     dates.add(start.date())
+                    trained_models.add(row["model_sha256"])
                     latest = published if latest is None else max(published, latest)
                     margin.append(m)
                     total.append(t)
@@ -177,10 +183,14 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
     ready = n >= minimum_training and len(dates) >= minimum_dates and not failed
     width_m = stdev(margin) if n >= 2 else None
     width_t = stdev(total) if n >= 2 else None
+    fit_failures = []
+    if len(trained_models) != 1:
+        fit_failures.append("MIXED_OR_MISSING_FORECAST_MODEL")
     if ready and (width_m is None or width_t is None or
                   not 0.1 <= width_m <= 150 or not 0.1 <= width_t <= 150):
+        fit_failures.append("DEGENERATE_OR_OUT_OF_RANGE_FITTED_WIDTHS")
+    if fit_failures:
         ready = False
-        failed["DEGENERATE_OR_OUT_OF_RANGE_FITTED_WIDTHS"] += 1
     # Source/code/spec identity, not remotely signed historical attestation.
     spec = {"version":FITTER_VERSION, "source_sha256":source_digest,
             "sport":sport,"fit_asof_utc":cutoff_utc,
@@ -197,6 +207,8 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
         "source_file_sha256":source_digest, "fitter_model_sha256":model_digest,
         "total_rows":len(parsed), "accepted_rows":n,
         "blocked_rows":len(parsed)-n, "blocked_reasons":dict(sorted(failed.items())),
+        "fit_failures":fit_failures,
+        "training_model_sha256":next(iter(trained_models)) if len(trained_models)==1 else None,
         "distinct_start_dates":len(dates), "minimum_training":minimum_training,
         "minimum_dates":minimum_dates,
         "latest_accepted_final_published_utc":latest.isoformat() if latest else None,
