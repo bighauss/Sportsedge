@@ -186,7 +186,7 @@ def load_export(export_path, manifest_path, *, kind, freeze_utc, tipoff_utc,
             destination.write_bytes(raw)
         archive = str(destination)
     evidence = {"provider": "hoop_explorer", "scope_id": manifest["scope_id"],
-                "source_url": manifest["source_url"], "sha256": sha,
+                "season": season, "source_url": manifest["source_url"], "sha256": sha,
                 "captured_utc": manifest["captured_utc"],
                 "published_utc": manifest["published_utc"],
                 "data_through_utc": manifest["data_through_utc"],
@@ -352,8 +352,8 @@ def main(argv=None):
             args.lineups_export, args.lineups_manifest, kind="lineup",
             freeze_utc=args.freeze_utc, tipoff_utc=args.tipoff_utc,
             archive_dir=args.archive_dir)
-        if le["scope_id"] != pe["scope_id"]:
-            raise Blocked("LINEUP_AND_PLAYER_SOURCE_SCOPES_DIFFER")
+        if le["scope_id"] != pe["scope_id"] or le["season"] != pe["season"]:
+            raise Blocked("LINEUP_AND_PLAYER_SOURCE_SCOPE_OR_SEASON_DIFFER")
     profile = json.loads(Path(args.role_profile).read_text()) if args.role_profile else None
     report = research_report(
         players, pe, target_player_id=args.target_player_id,
