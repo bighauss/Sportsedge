@@ -197,6 +197,15 @@ def gate_candidate(
             forward = evaluate_forward(forward_freeze, forward_rows)
             if forward.get("status") != "PAPER_0U_UNATTESTED_FORWARD_RESEARCH":
                 reasons.append("FORWARD_HOLDOUT_INVALID_STATUS")
+            # A paper status by itself can describe 20/20 still-unsettled
+            # historical selections, which is not a scored calibration test.
+            # Make the missing denominator/metrics explicit. Even a positive
+            # scored count remains unverified research and BLOCK/0u.
+            scored=forward.get("scored")
+            if (type(scored) is not int or scored < 1
+                    or not isinstance(forward.get("model"),dict)
+                    or not isinstance(forward.get("book"),dict)):
+                reasons.append("FORWARD_HOLDOUT_NO_SCORED_RESULTS")
         except (Hold, TypeError, ValueError, KeyError, AttributeError) as exc:
             reasons.append("FORWARD_HOLDOUT_INVALID:" + str(exc))
     pit_problems = ()
