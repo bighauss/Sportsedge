@@ -119,7 +119,7 @@ class ForecastReceiptTests(unittest.TestCase):
 
     def test_mutating_freeze_record_after_prediction_fails_link(self):
         blob=json.loads(self.freeze_path.read_text())
-        blob["model_version"]="tampered"
+        blob["registered_utc_claimed"]="2026-11-15T23:01:00+00:00"
         file_desc(self.freeze_path,json.dumps(blob).encode())
         with self.assertRaisesRegex(ValueError,"FORECAST_DOES_NOT_BIND"):
             record_files(self.freeze_path,self.forecast_path,
