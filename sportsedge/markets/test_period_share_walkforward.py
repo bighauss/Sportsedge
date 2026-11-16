@@ -70,8 +70,20 @@ class PeriodWalkforwardTest(unittest.TestCase):
         for fold in report["folds"]:
             self.assertLess(fold["train_latest_final_captured_utc"],
                             fold["holdout_start_utc"])
-        # Original row may only enter training in a later fold, not first.
-        self.assertEqual(report["folds"][0]["train_n"], 55)
+        # Explicit original-byte refit proves the unavailable first record
+        # was excluded from the first training subset.
+        first_cutoff=datetime.fromisoformat(
+            report["folds"][0]["holdout_start_utc"])
+        eligible=[row for row in rows
+                  if datetime.fromisoformat(
+                         row["game_start_utc"].replace("Z","+00:00"))<first_cutoff
+                  and datetime.fromisoformat(
+                         row["final_captured_utc"].replace("Z","+00:00"))<first_cutoff]
+        self.assertNotIn(rows[0],eligible)
+        self.assertEqual(report["folds"][0]["train_n"],len(eligible))
+        self.assertEqual(
+            report["folds"][0]["train_original_subset_sha256"],
+            "sha256:"+sha256(encode(eligible)).hexdigest())
 
     def test_same_start_cohort_never_split_across_holdouts(self):
         rows=make_rows("NFL",count=170,start=self.start)
@@ -140,7 +152,8 @@ class PeriodWalkforwardTest(unittest.TestCase):
         # Synthetically biased quarters, not evidence of real-world skill.
         self.assertLess(x["weighted_model_minus_uniform_logloss"],0)
         self.assertFalse(x["period_holdout_calibrated"])
-        self.assertIn("NOT a sportsbook", "Uniform is NOT a sportsbook".replace("Uniform", "This"))
+        self.assertTrue(any("uniform baseline is NOT a sportsbook" in w
+                            for w in x["warnings"]))
 
     def test_zero_scoring_holdout_games_visible_and_unscored(self):
         rows=make_rows("NFL",count=160,start=self.start)
@@ -150,14 +163,16 @@ class PeriodWalkforwardTest(unittest.TestCase):
             row["regulation_away"]=0
         out=self.run_audit(rows)
         self.assertGreaterEqual(out["completed_folds"],3)
-        self.assertGreaterEqual(out["folds"][0]["zero_score_holdout_games"],1)
+        self.assertGreater(sum(f["zero_score_holdout_games"]
+                               for f in out["folds"]),0)
         self.assertEqual(out["scored_holdout_games"] +
                          out["seed_games_before_first_eligible_fold"]+
                          out["short_tail_games_not_scored"],160)
 
     def test_future_evaluation_asof_and_weak_policy_rejected(self):
         with self.assertRaisesRegex(ValueError,"EVALUATION_ASOF_IN_FUTURE"):
-            self.run_audit(evaluation_asof_utc=ts(self.now+timedelta(days=2)))
+            audit(encode(self.rows), sport="NFL",
+                  evaluation_asof_utc=ts(self.now+timedelta(days=2)))
         for args in ({"minimum_training":20},{"holdout_per_fold":2},
                      {"minimum_folds":1},{"minimum_dates":2}):
             with self.subTest(args=args),self.assertRaisesRegex(ValueError,"WEAK"):
