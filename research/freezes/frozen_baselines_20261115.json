@@ -2,14 +2,14 @@
   "schema": "sportsedge-research-code-freezes-v1",
   "baseline_commit": "d9399409a86d63346b7fe0597c415fd406fd97fe",
   "recorded_ct": "2026-11-15",
-  "policy_id": "SPORTSEDGE_RISK_V2_1_OWNER_LOCK_2026-11-15",
+  "policy_id": "SPORTSEDGE_RISK_2026_11_15_LOCK_V1",
   "release": "PAPER_0U",
   "official_counted": 0,
   "hash_type": "git_blob_sha1_content_address_not_authentication",
-  "evidence_scope": "Only checked-in model code is pinned. No provider receipts, historical model freezes, odds or true as-of data are authenticated.",
+  "evidence_scope": "PREFREEZE SOURCE-CODE PINS ONLY. True model freeze requires original input hashes, weights/config, witnessed pregame output probabilities, contemporaneous source timestamps, and an audit of the final exact commit. CBB original 496 picks missing; NHL standalone not integrated; PGA account unauthorized. No historical hashes or provider timestamps are inferred.",
   "sports": {
     "NFL": {
-      "status": "CODE_BASELINE_LOCKED_RESEARCH",
+      "status": "PREFREEZE_CODE_PIN_ONLY_PIT_DATA_MISSING",
       "cohort": "2026_NFL_WEEKS_5_TO_9_RETROSPECTIVE_PLAYER_RESEARCH",
       "sources": {
         "models/nfl/epa_ridge_pit.py": "df4978dcfaaa2925344218302e58862da0eb2e1f",
@@ -19,7 +19,7 @@
       "forward_state": "NOT_YET_AUTHENTICATED"
     },
     "CBB": {
-      "status": "CODE_PINNED_ORIGINAL_496_MISSING",
+      "status": "PREFREEZE_CODE_PIN_ONLY_G18_ORIGINAL_MISSING",
       "sources": {
         "models/cbb/sportsedge_cbb_model.py": "f02dd29ef444f49cdf4560a86d5b8a517519081d",
         "models/cbb/torvik_cbbd_pregame_bridge.py": "bfc75e0375d13d6be900c83f9bafe0f3deb10f62",
@@ -50,7 +50,7 @@
       "forward_state": "WAITING_POINT_IN_TIME_INPUTS"
     },
     "NHL": {
-      "status": "CODE_BASELINE_LOCKED_UNCALIBRATED",
+      "status": "PREFREEZE_CODE_PIN_ONLY_NEEDS_KERNEL_INTEGRATION",
       "sources": {
         "models/nhl/sportsedge_nhl_model.py": "7bdc447550e8ff5750ec3515a587fd92a65ba74c"
       },
@@ -71,10 +71,10 @@
   },
   "risk_contract": {
     "path": "research/risk/v21_risk_contract.py",
-    "git_blob_sha1": "f9758c771e1f4f482c5cad889c1883b5626ce9ae",
+    "git_blob_sha1": "1ac864e5036edc644b87a513c74d186e3c64e587",
     "limits": {
       "daily_u": 5,
-      "game_u": 2,
+      "game_u": 1,
       "theme_u": 3,
       "quarter_kelly": 0.25,
       "initial_min_u": 0.25,
