@@ -91,6 +91,8 @@ def valid_row(row, *, max_quote_age_minutes=120):
     if row["evaluation_split"] != "OOS":
         raise ValueError("NOT_OUT_OF_SAMPLE")
     stake = finite(row["stake_units"], "STAKE_UNITS", low=1e-12)
+    if row["stake_basis"] == "PAPER_FLAT" and not math.isclose(stake, 1.0, rel_tol=0.0, abs_tol=1e-9):
+        raise ValueError("PAPER_FLAT_REQUIRES_ONE_UNIT")
     payout = american_payout(row["price_american"])
     commission = finite(row.get("commission_rate") or "0", "COMMISSION_RATE", low=0, high=1)
     rule = instant(row["rules_effective_utc"])
