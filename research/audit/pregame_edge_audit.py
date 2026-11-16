@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+from decimal import Decimal, InvalidOperation
 from collections import Counter
 from pathlib import Path
 
@@ -41,8 +42,16 @@ def identity(row):
     val = lambda k:(row.get(k) or '').strip().casefold()
     market = val('market').replace('moneyline','ml').replace('money_line','ml')
     period = {'full_game':'fg','fullgame':'fg','h1':'1h','first_half':'1h'}.get(val('period'),val('period'))
-    line = val('line')
-    if market == 'ml' and line in ('', '0', '0.0', '+0', '-0'): line='0'
+    line = val('line').replace('−', '-').replace('＋', '+')
+    if market == 'ml' and not line: line='0'
+    # Different textual representations of the SAME alternate line must
+    # collide, without collapsing genuinely distinct alternate ladders.
+    try:
+        number = Decimal(line)
+        if number.is_finite():
+            line = '0' if number == 0 else format(number.normalize(), 'f')
+    except InvalidOperation:
+        pass
     return '|'.join((val('sport'),val('event_id'),period,market,val('side'),line,val('player_id')))
 
 def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
