@@ -80,7 +80,10 @@ def _canonical_line(line: object) -> str:
     if line is None or str(line).strip() == '':
         return ''
     try:
-        return format(Decimal(str(line).strip()).normalize(), 'f')
+        value = Decimal(str(line).strip())
+        if not value.is_finite():
+            raise ValueError('INVALID_MARKET_LINE')
+        return format(value.normalize(), 'f')
     except InvalidOperation as exc:
         raise ValueError('INVALID_MARKET_LINE') from exc
 
@@ -91,12 +94,48 @@ def _market_id(market: str) -> str:
             'spreads':'spread'}.get(s, s)
 
 
+def _book_id(book: str) -> str:
+    """Normalize common spelling variants without changing upstream prices."""
+    name = ' '.join(book.casefold().split())
+    return {'dk': 'draftkings', 'draft kings': 'draftkings',
+            'fd': 'fanduel', 'fan duel': 'fanduel'}.get(name, name)
+
+
 def _selection_fingerprint(row: dict) -> tuple:
+    """Keep participant/stat identity: different teams can have identical TT lines."""
+    market = _market_id(str(row['market']))
+    line = _canonical_line(row.get('line'))
+    if market == 'ml' and line in ('', '0'):
+        line = ''
     return (row['sport'], row['event_id'], when(row['game_start_utc']).isoformat(),
-            row['book'].strip().casefold(), str(row['period']).strip().casefold(),
-            _market_id(str(row['market'])), str(row['side']).strip().casefold(),
-            _canonical_line(row.get('line')), str(row.get('player_id', '')).strip(),
-            when(row['captured_utc']).isoformat())
+            _book_id(row['book']), str(row['period']).strip().casefold(),
+            market, str(row['side']).strip().casefold(), line,
+            str(row.get('player_id', '')).strip(),
+            when(row['captured_utc']).isoformat(),
+            str(row.get('team_id') or '').strip().casefold(),
+            str(row.get('stat') or '').strip().casefold())
+
+
+def _mirror_key(fingerprint: tuple) -> tuple:
+    """Opposite selections from one quote instant must not both inflate ROI.
+
+    Totals/props compare the same threshold; spread home/away compare equal
+    *magnitude* because they commonly have opposite signed handicap lines.
+    Team and stat are part of the identity, preventing false prop/TT matches.
+    """
+    sport, event, start, book, period, market, side, line, player, capture, team, stat = fingerprint
+    if side not in ('home', 'away', 'over', 'under', 'yes', 'no'):
+        return None
+    if market in ('spread', 'puckline', 'runline') and side in ('home', 'away'):
+        if line == '':
+            return None
+        line = format(abs(Decimal(line)).normalize(), 'f')
+    return (sport, event, start, book, period, market, line, player, capture, team, stat)
+
+
+def _is_opposed(sides: set[str]) -> bool:
+    return any(pair <= sides for pair in (
+        {'home', 'away'}, {'over', 'under'}, {'yes', 'no'}))
 
 
 def _validate_market_pair(row: dict) -> float:
@@ -208,7 +247,7 @@ def replay(rows: list[dict]) -> dict:
     unqualified = 0
     all_ids = set()
     fingerprints = set()
-    mirror_checks: dict[tuple, set[str]] = defaultdict(set)
+    mirror_checks: dict[tuple, list[dict]] = defaultdict(list)
     for n, row in enumerate(rows, 2):
         try:
             _asof_check(row)
@@ -234,15 +273,30 @@ def replay(rows: list[dict]) -> dict:
             unit = {'W': profit, 'L': -1.0, 'P': 0.0}[outcome]
             all_ids.add(selection_id)
             fingerprints.add(fingerprint)
-            mirror_key = (fingerprint[0],fingerprint[1],fingerprint[2],fingerprint[3],
-                          fingerprint[4],fingerprint[5],fingerprint[7],fingerprint[8],fingerprint[9])
-            mirror_checks[mirror_key].add(fingerprint[6])
-            accepted.append({'event_id': row['event_id'], 'sport': row['sport'],
-                             'market': row['market'], 'side': row['side'],
-                             'selection_id': selection_id, 'game_start_utc': when(row['game_start_utc']),
-                             'outcome': outcome, 'p': p, 'q': q, 'unit': unit})
+            record = {'event_id': row['event_id'], 'sport': row['sport'],
+                      'market': row['market'], 'side': row['side'],
+                      'selection_id': selection_id, 'game_start_utc': when(row['game_start_utc']),
+                      'outcome': outcome, 'p': p, 'q': q, 'unit': unit,
+                      '_original_csv_line': n}
+            accepted.append(record)
+            mirror_key = _mirror_key(fingerprint)
+            if mirror_key is not None:
+                mirror_checks[mirror_key].append(record)
         except (ValueError, TypeError, KeyError) as exc:
             rejected.append({'row': n, 'selection_id': row.get('selection_id'), 'reason': str(exc)})
+
+    # Fail CLOSED: source prices containing both sides at the same quote instant
+    # are not an independently qualified portfolio. Quarantine every member;
+    # merely displaying a mirrored-side warning would contaminate ROI/Brier.
+    mirror_groups = [group for group in mirror_checks.values()
+                     if _is_opposed({r['side'].strip().casefold() for r in group})]
+    quarantined_lines = {r['_original_csv_line'] for group in mirror_groups for r in group}
+    for group in mirror_groups:
+        for r in group:
+            rejected.append({'row': r['_original_csv_line'],
+                             'selection_id': r['selection_id'],
+                             'reason': 'MIRRORED_QUALIFIED_PAIR_QUARANTINED'})
+    accepted = [r for r in accepted if r['_original_csv_line'] not in quarantined_lines]
     accepted.sort(key=lambda r: (r['game_start_utc'], r['selection_id']))
     ledger = []
     balance = peak = max_drawdown = 0.0
@@ -263,11 +317,8 @@ def replay(rows: list[dict]) -> dict:
         'status': 'REPLAY_PAPER_0U_NOT_EXECUTION_AUTHENTICATED',
         'input_rows': len(rows), 'unqualified': unqualified,
         'rejected_qualified_or_invalid': rejected, 'eligible': len(accepted),
-        'possible_opposite_side_selection_groups': sum(
-            ('over' in sides and 'under' in sides) or
-            ('home' in sides and 'away' in sides) or
-            ('yes' in sides and 'no' in sides)
-            for sides in mirror_checks.values()),
+        'possible_opposite_side_selection_groups': len(mirror_groups),
+        'mirror_quarantined_rows': len(quarantined_lines),
         'overall': _summary(accepted),
         'max_drawdown_units': round(max_drawdown, 6),
         'by_market': [{'sport': sport, 'market': market, **_summary(group)}
@@ -277,7 +328,7 @@ def replay(rows: list[dict]) -> dict:
                             'observed_win_rate': round(mean(r['outcome'] == 'W' for r in group), 6),
                             **_summary(group)} for (sport, market, bucket), group in sorted(cal.items())],
         'ledger': ledger,
-        'warning': 'Scoring previously frozen records is not a walk-forward TRAINING run; unauthenticated hashes do not certify sportsbook availability, execution, or a profitable edge.',
+        'warning': 'Same-time opposite qualified sides are quarantined from ROI/calibration. Scoring previously frozen records is not walk-forward TRAINING; self-reported hashes do not certify sportsbook availability, execution or profitable edge.',
     }
 
 

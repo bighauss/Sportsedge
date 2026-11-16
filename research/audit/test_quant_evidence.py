@@ -43,6 +43,86 @@ class QuantEvidenceTests(unittest.TestCase):
         out=replay([dict(BASE),same])
         self.assertEqual(out['eligible'],1)
         self.assertEqual(out['rejected_qualified_or_invalid'][0]['reason'],'DUPLICATE_CANONICAL_QUALIFIED_BET')
+    def test_opposite_spread_sides_quarantined_not_in_roi(self):
+        home = dict(BASE)
+        away = dict(BASE, selection_id='B2', side='away', line='+3.5',
+                    outcome='L', price_american='+150')
+        report = replay([home, away])
+        self.assertEqual(report['eligible'], 0)
+        self.assertEqual(report['overall']['n'], 0)
+        self.assertIsNone(report['overall']['roi'])
+        self.assertEqual(report['mirror_quarantined_rows'], 2)
+        self.assertEqual(report['possible_opposite_side_selection_groups'], 1)
+        self.assertEqual({x['reason'] for x in report['rejected_qualified_or_invalid']},
+                         {'MIRRORED_QUALIFIED_PAIR_QUARANTINED'})
+        self.assertEqual({x['row'] for x in report['rejected_qualified_or_invalid']}, {2, 3})
+
+    def test_mirrored_alias_book_names_still_quarantine(self):
+        home = dict(BASE)
+        away = dict(BASE, selection_id='B2', book='DraftKings', side='away',
+                    line='3.5', outcome='L')
+        report = replay([home, away])
+        self.assertEqual(report['mirror_quarantined_rows'], 2)
+        self.assertEqual(report['eligible'], 0)
+
+    def test_different_capture_times_not_forced_into_same_pair(self):
+        home = dict(BASE)
+        away = dict(BASE, selection_id='B2', side='away', line='3.5',
+                    captured_utc='2026-11-15T12:03:00Z', outcome='L')
+        report = replay([home, away])
+        self.assertEqual(report['eligible'], 2)
+        self.assertEqual(report['mirror_quarantined_rows'], 0)
+
+    def test_independent_team_totals_do_not_false_pair(self):
+        home = dict(BASE, market='TEAM_TOTAL', side='over', line='79.5',
+                    team_id='H001')
+        away = dict(BASE, market='team_total', side='under', line='79.5',
+                    team_id='A002', selection_id='B2', outcome='L')
+        report = replay([home, away])
+        self.assertEqual(report['eligible'], 2)
+        self.assertEqual(report['mirror_quarantined_rows'], 0)
+
+    def test_same_team_total_opposite_sides_quarantined(self):
+        over = dict(BASE, market='team_total', side='over', line='79.5',
+                    team_id='H001')
+        under = dict(BASE, market='TEAM_TOTAL', side='under', line='79.50',
+                     team_id='H001', selection_id='B2', outcome='L')
+        report = replay([over, under])
+        self.assertEqual(report['eligible'], 0)
+        self.assertEqual(report['mirror_quarantined_rows'], 2)
+
+    def test_different_team_total_same_side_not_duplicate(self):
+        team_a = dict(BASE, market='TEAM_TOTAL', side='over', line='79.5',
+                      team_id='H001')
+        team_b = dict(BASE, market='TEAM_TOTAL', side='over', line='79.5',
+                      team_id='A002', selection_id='B2', outcome='L')
+        report = replay([team_a, team_b])
+        self.assertEqual(report['eligible'], 2)
+        self.assertEqual(report['mirror_quarantined_rows'], 0)
+
+    def test_moneyline_blank_and_zero_are_mirrors(self):
+        home = dict(BASE, market='ml', side='home', line='', outcome='W')
+        away = dict(BASE, market='moneyline', side='away', line='0.0',
+                    selection_id='B2', outcome='L')
+        report = replay([home, away])
+        self.assertEqual(report['eligible'], 0)
+        self.assertEqual(report['mirror_quarantined_rows'], 2)
+
+    def test_invalid_nonfinite_line_is_rejected(self):
+        report = replay([dict(BASE,line='NaN')])
+        self.assertEqual(report['eligible'], 0)
+        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
+                         'INVALID_MARKET_LINE')
+
+    def test_duplicate_book_alias_same_side_still_refused(self):
+        original = dict(BASE)
+        duplicate = dict(BASE, selection_id='B2', book='DraftKings',
+                         line='-3.50')
+        report = replay([original, duplicate])
+        self.assertEqual(report['eligible'], 1)
+        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
+                         'DUPLICATE_CANONICAL_QUALIFIED_BET')
+
     def test_pair_line_or_side_mismatch_denied(self):
         pair=dict(BASE,market_p_no_vig='.5',paired_quote_sha256=H,paired_price_american='-110',
             paired_captured_utc=BASE['captured_utc'],paired_event_id='E1',paired_book='DK',
