@@ -24,7 +24,7 @@ jobs:
         run: python test_sportsedge_nhl.py
       - name: CBB
         working-directory: models/cbb
-        run: python test_cbb.py
+        run: python test_cbb.py && python -m unittest test_cbb_shared_possessions.py
       - name: NFL DFS (Showdown and point-in-time replay)
         working-directory: models/nfl_dfs
         run: python test_showdown_mc.py && python test_public_nfl_gamelogs.py && python test_item4.py && python test_weekly_game_inputs.py
