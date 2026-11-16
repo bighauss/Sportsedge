@@ -1,0 +1,18 @@
+name: Open-Meteo point-in-time forecast intake (synthetic)
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  open-meteo-pit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile sportsedge/data/open_meteo_pit.py sportsedge/data/test_open_meteo_pit.py
+      - run: python -m unittest sportsedge.data.test_open_meteo_pit -v
