@@ -1,0 +1,23 @@
+name: BestBook public-reference adapter (synthetic only)
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/odds/bestbook_public_reference.py'
+      - 'sportsedge/odds/test_bestbook_public_reference.py'
+      - 'docs/data/NO_SIGNUP_FREE_SOURCES_20261115.md'
+      - '.github/workflows/bestbook-public-reference.yml'
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  public-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile sportsedge/odds/bestbook_public_reference.py sportsedge/odds/test_bestbook_public_reference.py
+      - run: python -m unittest sportsedge.odds.test_bestbook_public_reference -v
