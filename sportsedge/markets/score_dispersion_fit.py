@@ -16,7 +16,7 @@ import json
 import math
 from pathlib import Path
 import re
-from statistics import stdev
+from statistics import stdev, mean
 
 UTC = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -186,12 +186,26 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
     ready = n >= minimum_training and len(dates) >= minimum_dates and not failed
     width_m = stdev(margin) if n >= 2 else None
     width_t = stdev(total) if n >= 2 else None
+    # Pearson correlation of the SAME original margin and total residuals.
+    # Never calculate covariance from independently sampled game subsets.
+    # Exact +1/-1 correlation is degenerate for a bivariate generator and
+    # fails closed instead of being silently clipped.
+    correlation = None
+    if (n >= 2 and width_m is not None and width_t is not None
+            and width_m > 0 and width_t > 0):
+        mu_m, mu_t = mean(margin), mean(total)
+        correlation = (sum((a-mu_m)*(b-mu_t)
+                       for a,b in zip(margin,total))
+                       / ((n-1)*width_m*width_t))
     fit_failures = []
     if len(trained_models) != 1:
         fit_failures.append("MIXED_OR_MISSING_FORECAST_MODEL")
     if ready and (width_m is None or width_t is None or
                   not 0.1 <= width_m <= 150 or not 0.1 <= width_t <= 150):
         fit_failures.append("DEGENERATE_OR_OUT_OF_RANGE_FITTED_WIDTHS")
+    if ready and (correlation is None or not math.isfinite(correlation)
+                  or abs(correlation) >= 0.999):
+        fit_failures.append("DEGENERATE_MARGIN_TOTAL_COVARIANCE")
     if fit_failures:
         ready = False
     # Source/code/spec identity, not remotely signed historical attestation.
@@ -217,6 +231,8 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
         "latest_accepted_final_published_utc":latest.isoformat() if latest else None,
         "sd_margin":round(width_m, 10) if ready else None,
         "sd_total":round(width_t, 10) if ready else None,
+        "margin_total_residual_correlation":round(correlation, 10) if ready else None,
+        "correlation_status":"TRAIN_ONLY_RESEARCH_NOT_FORWARD_CALIBRATED",
         "status_warning":("Research-only empirical residual variance. Operator "
             "timestamps and hashes are unverified; no independently authenticated "
             "PIT source, calibration, period split, odds or betting EV."),

@@ -62,6 +62,10 @@ class DistributionInput:
     # Optional empirical period-share data/code fingerprint. The separate
     # score-width fit/model identity remains in model_sha256.
     period_fit_model_sha256: str | None = None
+    # Zero exactly preserves the old research Gaussian sampling path.
+    # Nonzero is accepted only via an independently frozen fit ledger in
+    # RUN IT; it is NOT calibrated tail dependence or a validated SGP copula.
+    margin_total_correlation: float = 0.0
 
     def __post_init__(self):
         _hash(self.model_sha256)
@@ -72,6 +76,10 @@ class DistributionInput:
             raise ValueError("CALIBRATION_STATUS_UNSUPPORTED")
         if not (0.1<=self.sd_margin<=150 and 0.1<=self.sd_total<=150):
             raise ValueError("DISPERSION_WIDTH_OUT_OF_BOUNDS")
+        if (type(self.margin_total_correlation) not in (int, float)
+                or not math.isfinite(self.margin_total_correlation)
+                or abs(self.margin_total_correlation) >= .999):
+            raise ValueError("MARGIN_TOTAL_CORRELATION_INVALID")
         expected_lengths=((9,) if self.sport=="MLB" else
                           (2,4) if self.sport=="CBB" else (4,))
         if len(self.period_shares) not in expected_lengths:
@@ -176,13 +184,28 @@ def generate_score_scenarios(
     spec_digest=scenario_spec_digest(
         projection,dispersion,roster_ids,player_moments,count,seed)
     rng=random.Random(seed)
+    # The nonzero fitted branch samples the same TOTAL latent Gaussian and
+    # a correlated MARGIN latent Gaussian, not independent uncertainty.
+    # Use the UNCLIPPED total draw for z1, to avoid introducing artificial
+    # dependence when scores are clamped at zero.
+    rho=dispersion.margin_total_correlation
+    retained=math.sqrt(1-rho*rho)
     outcomes=[]
     for _ in range(count):
         # Only independently fitted dispersion could make these win chances reliable.
-        total=max(0,round(rng.gauss(projection.expected_home+projection.expected_away,
-                                   dispersion.sd_total)))
-        margin=rng.gauss(projection.expected_home-projection.expected_away,
-                         dispersion.sd_margin)
+        expected_total=projection.expected_home+projection.expected_away
+        expected_margin=projection.expected_home-projection.expected_away
+        total_latent=rng.gauss(expected_total,dispersion.sd_total)
+        total=max(0,round(total_latent))
+        if rho == 0:
+            # Exact legacy draw path: avoids an accidental probability
+            # regression for all unchanged, uncalibrated research studies.
+            margin=rng.gauss(expected_margin,dispersion.sd_margin)
+        else:
+            total_z=(total_latent-expected_total)/dispersion.sd_total
+            independent_z=rng.gauss(0.0,1.0)
+            margin=expected_margin+dispersion.sd_margin*(
+                rho*total_z+retained*independent_z)
         home=max(0,min(total,round((total+margin)/2)))
         away=total-home
         h_parts=split_int(rng,home,dispersion.period_shares)
