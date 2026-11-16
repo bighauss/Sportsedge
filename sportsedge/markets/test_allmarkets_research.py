@@ -441,12 +441,16 @@ class ProjectionsAndForward(unittest.TestCase):
     def test_calibration_requires_three_chronological_folds(self):
         rows=[]
         for i in range(135):
-            at=D+timedelta(days=i)
+            # All synthetic events/finals must already exist at audit time.
+            at=D-timedelta(days=180)+timedelta(days=i)
             actual_h=20+(i%6)
             actual_a=17+(i%3)
-            # Holdout test uses a genuinely frozen model fitted before ALL windows.
+            # Forecast model fitted before ALL heldout windows, with original
+            # result publication/capture explicitly AFTER each event.
             rows.append(FrozenGame(str(i),"NFL",at,at-timedelta(hours=1),
-                D-timedelta(days=2),23,19,actual_h,actual_a,H))
+                D-timedelta(days=200),23,19,actual_h,actual_a,H,
+                final_published_utc=at+timedelta(hours=3),
+                final_captured_utc=at+timedelta(hours=4)))
         report=walk_forward_score_audit(rows)
         self.assertEqual(report["status"],"RESEARCH_HOLDOUT_REVIEW")
         self.assertGreaterEqual(report["completed_folds"],3)
