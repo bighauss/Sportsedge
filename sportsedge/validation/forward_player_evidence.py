@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import stat
 
 from sportsedge.markets.player_forecast_intake import (
     REQUIRED as FORECAST_FIELDS,
@@ -491,6 +492,98 @@ def _json_file(path):
     return _strict_json(raw)
 
 
+def _trusted_registry_root(value):
+    """Require one operator-provisioned, owner-only shared filesystem root.
+
+    This constrains one deployment/namespace, NOT all hosts or filesystems.
+    The caller must not choose a new registry per run.
+    """
+    if not isinstance(value, str) or not value or not Path(value).is_absolute():
+        raise ValueError("TRUSTED_REGISTRY_ABSOLUTE_PATH_REQUIRED")
+    lexical = Path(os.path.abspath(value))
+    repo = Path(__file__).resolve().parents[2]
+    cwd = Path.cwd().resolve()
+    if (lexical == repo or repo in lexical.parents or
+            lexical == cwd or cwd in lexical.parents or
+            any(p.is_symlink() for p in (lexical, *lexical.parents))):
+        raise ValueError("TRUSTED_REGISTRY_OUTSIDE_PUBLIC_REPO_NO_SYMLINKS")
+    if not lexical.is_dir():
+        raise ValueError("TRUSTED_REGISTRY_DIRECTORY_MISSING")
+    mode = lexical.stat()
+    if (not stat.S_ISDIR(mode.st_mode) or
+            stat.S_IMODE(mode.st_mode) != 0o700 or
+            mode.st_uid != os.getuid()):
+        raise ValueError("TRUSTED_REGISTRY_REQUIRES_OWNER_DIRECTORY_0700")
+    return lexical
+
+
+def _freeze_registry_path(root, payload):
+    """Deterministic name: one physical event+season/week across all clients."""
+    event = _id(payload["event_id"], "registry_event")
+    season, week = payload["season"], payload["week"]
+    if (type(season) is not int or type(week) is not int or
+            not 2000 <= season <= 2100 or not 1 <= week <= 22):
+        raise ValueError("INVALID_REGISTRY_EVENT_SEASON_WEEK")
+    return root / f"freeze-{season:04d}-w{week:02d}-{event}.json"
+
+
+def _grade_registry_path(root, frozen, source_sha):
+    """One grade per immutable original frozen SHA and exact event identity."""
+    digest = _sha(source_sha)[7:]
+    event = _id(frozen["event_id"], "grade_event")
+    season, week = frozen["season"], frozen["week"]
+    # Validate all components with the same event identity contract.
+    _freeze_registry_path(root, frozen)
+    return root / f"grade-{season:04d}-w{week:02d}-{event}-{digest}.json"
+
+
+def _read_registered_freeze(root, request):
+    """Reject grading a freeze stored outside the one canonical registry."""
+    p = request.get("frozen_capture_path")
+    if not isinstance(p, str) or not Path(p).is_absolute():
+        raise ValueError("GRADE_FROZEN_SOURCE_NOT_IN_CANONICAL_REGISTRY")
+    path = Path(os.path.abspath(p))
+    if path.parent != root or path.is_symlink():
+        raise ValueError("GRADE_FROZEN_SOURCE_NOT_IN_CANONICAL_REGISTRY")
+    # This is the single original FD from which the SHA and identity are
+    # checked. No symlinks and no future rewrite of original bytes.
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        st = os.fstat(fd)
+        if (not stat.S_ISREG(st.st_mode) or st.st_mode & 0o077 or
+                not 0 < st.st_size <= 8_000_000):
+            raise ValueError("REGISTERED_FREEZE_MUST_BE_OWNER_PRIVATE_REGULAR_FILE")
+        with os.fdopen(fd, "rb") as src:
+            fd = -1
+            raw = src.read(8_000_001)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+    if len(raw) > 8_000_000:
+        raise ValueError("REGISTERED_FREEZE_OVERSIZED")
+    actual_sha = "sha256:" + sha256(raw).hexdigest()
+    if actual_sha != _sha(request["frozen_capture_sha256"]):
+        raise ValueError("REGISTERED_FREEZE_SHA_MISMATCH")
+    frozen = _strict_json(raw)
+    if not isinstance(frozen, dict) or frozen.get("event_id") != request.get("event_id"):
+        raise ValueError("REGISTERED_FREEZE_EVENT_MISMATCH")
+    expected = _freeze_registry_path(root, frozen)
+    if path != expected:
+        raise ValueError("GRADE_FROZEN_SOURCE_NOT_IN_CANONICAL_REGISTRY")
+    return frozen
+
+
+def _require_canonical_output(requested, expected):
+    if not isinstance(requested, str) or not Path(requested).is_absolute():
+        raise ValueError("NONCANONICAL_FREEZE_OR_GRADE_OUTPUT_REFUSED")
+    literal = Path(requested)
+    if (".." in literal.parts or "." in literal.parts or
+            Path(os.path.abspath(requested)) != expected or
+            any(x.is_symlink() for x in (literal, *literal.parents))):
+        raise ValueError("NONCANONICAL_FREEZE_OR_GRADE_OUTPUT_REFUSED")
+    return expected
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -498,14 +591,26 @@ def main(argv=None):
         sub = commands.add_parser(command)
         sub.add_argument("request_json")
         sub.add_argument("private_output_json")
+        sub.add_argument("--registry-root", required=True,
+                         help="One admin-provisioned shared 0700 directory; not per run")
     args = parser.parse_args(argv)
+    root = _trusted_registry_root(args.registry_root)
     data = _json_file(args.request_json)
+    # Grade must bind to the unique canonical freeze *before* processing
+    # outcomes; otherwise an arbitrary original capture can be cherry-picked.
+    frozen = _read_registered_freeze(root, data) if args.command == "grade" else None
     result = (freeze_player_forecasts(data) if args.command == "freeze"
               else grade_frozen_capture(data))
-    if args.command == "freeze" and datetime.now(timezone.utc) >= _time(
-            result["start_utc"]):
-        raise ValueError("FREEZE_OUTPUT_WOULD_BE_WRITTEN_AFTER_KICKOFF")
-    sha = _write_private_create_only(args.private_output_json, result)
+    if args.command == "freeze":
+        if _clock(None) >= _time(result["start_utc"]):
+            raise ValueError("FREEZE_OUTPUT_WOULD_BE_WRITTEN_AFTER_KICKOFF")
+        path = _freeze_registry_path(root, result)
+    else:
+        path = _grade_registry_path(root, frozen, result["frozen_archive_sha256"])
+    _require_canonical_output(args.private_output_json, path)
+    # The deterministic shared path is the actual O_EXCL lock and artifact:
+    # a second process cannot write a different 'accepted' event freeze/grade.
+    sha = _write_private_create_only(path, result)
     print(json.dumps({
         "state": result["state"], "output_sha256": sha,
         "approved_stake_u": 0, "official_counted": 0,
