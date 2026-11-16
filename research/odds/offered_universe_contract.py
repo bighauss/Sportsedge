@@ -54,7 +54,9 @@ def census(original_bytes, manifest, rows):
             raise UniverseHold("DUPLICATE_OFFER")
         seen.add(key)
         state=row.get("status")
-        if state not in ALLOWED:
+        # Avoid unhashable list/dict values causing a TypeError and skipping
+        # the fail-closed census/recorded exclusion reason.
+        if not isinstance(state,str) or state not in ALLOWED:
             raise UniverseHold("UNCLASSIFIED_OFFER")
         if state=="EXCLUDED" and (not isinstance(row.get("exclusion_reason"),str) or not row["exclusion_reason"].strip()):
             raise UniverseHold("EXCLUSION_REASON_REQUIRED")
