@@ -34,6 +34,140 @@ class Tests(unittest.TestCase):
   report=audit([row(),row(selection="away",market_p=".4",outcome="0")])
   self.assertEqual(report["accepted"],2)
 
+ def test_snapshots_same_decision_do_not_count_as_more_bets(self):
+  first=row(snapshot_utc="2026-11-15T19:00:00Z",odds="-110")
+  later=row(snapshot_utc="2026-11-15T20:00:00Z",odds="+105")
+  a=audit([first,later])
+  self.assertEqual(a["accepted"],0)
+  self.assertEqual(len(a["blocked"]),2)
+  self.assertTrue(all(x["reason"]=="DUPLICATE" for x in a["blocked"]))
+
+ def test_same_game_alt_total_lines_are_distinct_and_clustered(self):
+  extra=dict(sport="NFL",book="DraftKings",period="FG",settlement="INCLUDES_OT")
+  r1=row(market="total",selection="under",line="48.5",**extra)
+  r2=row(market="total",selection="under",line="49.5",**extra)
+  a=audit([r1,r2])
+  self.assertEqual(a["accepted"],2)
+  self.assertEqual(a["overall"]["unique_events"],1)
+  self.assertTrue(a["overall"]["event_dependent_selections"])
+  self.assertIsNone(a["overall"]["observed_wilson_95"])
+
+ def test_same_event_player_and_period_are_not_false_duplicates(self):
+  extra=dict(sport="NFL",book="DraftKings",settlement="INCLUDES_OT")
+  rows=[
+   row(market="player_prop:receptions",selection="over",line="5.5",
+       player_id="gsis_1",stat="receptions",period="FG",**extra),
+   row(market="player_prop:receptions",selection="over",line="5.5",
+       player_id="gsis_2",stat="receptions",period="FG",**extra),
+   row(market="player_prop:receptions",selection="over",line="5.5",
+       player_id="gsis_1",stat="receptions",period="1H",**extra),
+  ]
+  a=audit(rows)
+  self.assertEqual(a["accepted"],3)
+  self.assertEqual(a["overall"]["unique_events"],1)
+
+ def test_same_selection_two_books_keep_separate_strata(self):
+  standard=dict(sport="NFL",period="FG",settlement="INCLUDES_OT",line="50.5")
+  rows=[row(market="total",selection="under",book="DraftKings",**standard),
+        row(market="total",selection="under",book="FanDuel",**standard)]
+  a=audit(rows)
+  self.assertEqual(a["accepted"],2)
+  self.assertEqual(len(a["disagreement"]),2)
+  self.assertTrue(all(x["unique_events"]==1 for x in a["disagreement"]))
+
+ def test_exact_market_repeated_later_snapshot_quarantined_all(self):
+  extra=dict(sport="NFL",book="DraftKings",period="FG",
+             settlement="INCLUDES_OT",line="50.5")
+  r1=row(market="total",selection="under",snapshot_utc="2026-11-15T19:00:00Z",**extra)
+  r2=row(market="total",selection="under",snapshot_utc="2026-11-15T20:00:00Z",**extra)
+  a=audit([r1,r2])
+  self.assertEqual(a["accepted"],0)
+  self.assertTrue(all(x["reason"]=="DUPLICATE_DECISION_ALL_SNAPSHOTS_BLOCKED"
+                      for x in a["blocked"]))
+
+ def test_extended_without_full_identity_or_subject_is_blocked(self):
+  base=dict(sport="NFL",book="DraftKings",period="FG",
+            settlement="INCLUDES_OT")
+  for r in [
+   row(market="total",selection="over",**base),
+   row(market="team_total",selection="over",line="22.5",**base),
+   row(market="player_prop:receiving_yards",selection="over",
+       line="45.5",stat="receiving_yards",**base),
+   row(market="total",selection="over",line="nan",**base),
+   row(market="total",selection="over",line="Infinity",**base),
+   row(market="total",selection="over",line="45.5",book="DraftKings"),
+  ]:
+   with self.subTest(r=r):
+    a=audit([r])
+    self.assertEqual(a["accepted"],0)
+    self.assertEqual(len(a["blocked"]),1)
+
+ def test_mixed_legacy_and_exact_identity_quarantines_all(self):
+  original=row(market="total",selection="under")
+  detailed=row(market="total",selection="under",sport="NFL",
+               book="DraftKings",period="FG",settlement="INCLUDES_OT",line="49.5")
+  a=audit([original,detailed])
+  self.assertEqual(a["accepted"],0)
+  self.assertTrue(all(x["reason"]=="MIXED_OR_MALFORMED_DECISION_IDENTITY_ALL_COPIES_BLOCKED"
+                      for x in a["blocked"]))
+
+ def test_incomplete_first_copy_cannot_let_second_copy_count(self):
+  bad=row(market="total",selection="under",sport="NFL",line="50.5",
+          book="DraftKings")  # missing period and settlement
+  good=row(market="total",selection="under",sport="NFL",line="50.5",
+           book="DraftKings",period="FG",settlement="INCLUDES_OT")
+  for group in ([bad,good],[good,bad]):
+   a=audit(group)
+   self.assertEqual(a["accepted"],0)
+   self.assertTrue(all(x["reason"].startswith("MIXED_OR_MALFORMED")
+                       if x["reason"]!="INCOMPLETE_EXTENDED_MARKET_ID:period,settlement"
+                       else True for x in a["blocked"]))
+
+ def test_book_market_period_aliases_are_same_decision(self):
+  a=audit([
+   row(market="moneyline",selection="home",sport="NFL",
+       book="DK",period="FG",settlement="INCLUDES_OT"),
+   row(market="ML",selection="home",sport="NFL",
+       book="DraftKings",period="full_game",settlement="INCLUDES_OT",
+       snapshot_utc="2026-11-15T19:00:00Z"),
+  ])
+  self.assertEqual(a["accepted"],0)
+  self.assertEqual(len(a["blocked"]),2)
+  self.assertTrue(all(x["reason"]=="DUPLICATE_DECISION_ALL_SNAPSHOTS_BLOCKED"
+                      for x in a["blocked"]))
+
+ def test_market_line_format_equivalence_deduplicates(self):
+  standard=dict(sport="NFL",book="DraftKings",period="FG",
+                settlement="INCLUDES_OT",market="total",selection="under")
+  a=audit([row(line="50.50",**standard),row(line="50.5",**standard)])
+  self.assertEqual(a["accepted"],0)
+  self.assertEqual(len(a["blocked"]),2)
+
+ def test_calibration_stratifies_each_line_player_and_book(self):
+  extra=dict(sport="NFL",book="DraftKings",period="FG",settlement="INCLUDES_OT")
+  a=audit([
+   row(market="total",selection="under",line="49.5",**extra),
+   row(market="total",selection="under",line="50.5",**extra),
+   row(market="player_prop:receptions",selection="over",line="5.5",
+       player_id="id_1",stat="receptions",**extra),
+   row(market="player_prop:receptions",selection="over",line="5.5",
+       player_id="id_2",stat="receptions",**extra),
+  ])
+  self.assertEqual(a["accepted"],4)
+  self.assertEqual(len(a["calibration"]),4)
+  self.assertEqual(a["overall"]["unique_events"],1)
+  self.assertEqual(a["blocked_reason_counts"],{})
+
+ def test_same_event_id_different_sports_is_not_same_game(self):
+  first=row(sport="NFL",book="DraftKings",period="FG",
+            settlement="INCLUDES_OT",market="ML")
+  second=row(sport="CBB",book="DraftKings",period="FG",
+             settlement="INCLUDES_OT",market="ML")
+  a=audit([first,second])
+  self.assertEqual(a["accepted"],2)
+  self.assertEqual(a["overall"]["unique_events"],2)
+  self.assertFalse(a["overall"]["event_dependent_selections"])
+
  def test_push(self):self.assertEqual(audit([row(outcome="push")])["accepted"],0)
  def test_naive(self):self.assertEqual(audit([row(snapshot_utc="2026-11-15T20:00:00")])["accepted"],0)
  def test_invalid_probability(self):self.assertEqual(audit([row(model_p="1.2")])["accepted"],0)
