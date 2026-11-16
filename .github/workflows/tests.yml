@@ -21,7 +21,7 @@ jobs:
         run: python make_samples.py && python test_cfb_model.py
       - name: NHL
         working-directory: models/nhl
-        run: python test_sportsedge_nhl.py
+        run: python test_sportsedge_nhl.py && python -m unittest test_nhl_shared_scenarios.py
       - name: CBB
         working-directory: models/cbb
         run: python test_cbb.py
