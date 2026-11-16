@@ -209,6 +209,22 @@ class Metrics(unittest.TestCase):
         self.assertAlmostEqual(stress_haircut([a],.1)["roi"],2.4*.9)
         self.assertAlmostEqual(stress_haircut([a],.0)["roi"],2.4)
 
+    def test_pending_games_do_not_create_fictitious_sample_size(self):
+        rows = [row(bet_id=f"pending-{i}",event_id=f"pending-game-{i}",result="PENDING",
+                    settled_utc="",settlement_source_a="",settlement_source_b="") for i in range(35)]
+        rows.append(row(bet_id="settled",event_id="actual-game",result="LOSS"))
+        report = audit(rows, iterations=100)
+        self.assertEqual(report["by_sport"]["NFL"]["event_count"], 1)
+        self.assertTrue(report["by_sport"]["NFL"]["insufficient_30_events"])
+        self.assertIsNone(report["settled_game_net_units_sample_variance"])
+
+    def test_void_games_do_not_create_fictitious_variance(self):
+        rows = [row(bet_id=f"void-{i}",event_id=f"void-game-{i}",result="VOID") for i in range(35)]
+        rows.append(row(bet_id="settled",event_id="actual-game",result="LOSS"))
+        report = audit(rows, iterations=100)
+        self.assertEqual(report["by_sport"]["NFL"]["event_count"], 1)
+        self.assertIsNone(report["settled_game_net_units_sample_variance"])
+
     def test_version_performance_not_retro(self):
         r=audit([row(model_version="v5"),row(bet_id="two",event_id="other",model_version="v6",result="LOSS")], iterations=100)
         self.assertEqual(r["by_model_version"]["v5"]["performance"]["wins"],1)
