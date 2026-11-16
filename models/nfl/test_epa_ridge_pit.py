@@ -26,6 +26,7 @@ FUTURE = {
 def play(game_id, offense, defense, kind, epa, wp="0.5"):
     return {
         "game_id": game_id,
+        "play_id": f"{game_id}:{offense}:{defense}:{kind}:{epa}",
         "posteam": offense,
         "defteam": defense,
         "pass": "1" if kind == "pass" else "0",
@@ -136,6 +137,20 @@ class EPAPITTests(unittest.TestCase):
         rows = fixture()
         rows[0]["pass"] = "maybe"
         with self.assertRaisesRegex(ValueError, "INVALID_PASS_RUSH_FLAG"):
+            model(rows)
+
+    def test_duplicate_play_id_does_not_inflate_epa(self):
+        rows = fixture()
+        duplicate = dict(rows[0])
+        duplicate["epa"] = "5000"  # contradictory copy, same source play ID
+        rows.append(duplicate)
+        with self.assertRaisesRegex(ValueError, "DUPLICATE_PBP_PLAY_ID"):
+            model(rows)
+
+    def test_missing_play_id_refused(self):
+        rows = fixture()
+        rows[0].pop("play_id")
+        with self.assertRaisesRegex(ValueError, "PBP_PLAY_ID_MISSING"):
             model(rows)
 
     def test_wrong_team_identity_refused(self):
