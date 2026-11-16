@@ -4,6 +4,8 @@ on:
     paths:
       - 'models/nfl/epa_ridge_pit.py'
       - 'models/nfl/score_walkforward_pit.py'
+      - 'models/nfl/feature_snapshot_bridge_pit.py'
+      - 'models/nfl/test_feature_snapshot_bridge_pit.py'
       - 'models/nfl/test_score_walkforward_pit.py'
       - 'models/nfl/SCORE_WALKFORWARD_README.md'
       - '.github/workflows/nfl-score-walkforward.yml'
@@ -20,6 +22,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: PIT score regression suite
-        run: python -m unittest discover -s models/nfl -p 'test_score_walkforward_pit.py' -v
+        run: |
+          python -m unittest discover -s models/nfl -p 'test_score_walkforward_pit.py' -v
+          python -m unittest discover -s models/nfl -p 'test_feature_snapshot_bridge_pit.py' -v
       - name: Compile score conversion research file
-        run: python -m py_compile models/nfl/score_walkforward_pit.py
+        run: python -m py_compile models/nfl/score_walkforward_pit.py models/nfl/feature_snapshot_bridge_pit.py
