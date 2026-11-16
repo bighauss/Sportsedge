@@ -149,4 +149,6 @@ class MarketsTests(unittest.TestCase):
 
 
 if __name__=="__main__":
+    import subprocess,sys
+    subprocess.run([sys.executable,"../../ledger/test_close_snapshot_archive.py"],check=True)
     unittest.main()
