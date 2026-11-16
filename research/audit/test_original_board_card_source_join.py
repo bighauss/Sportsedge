@@ -34,7 +34,7 @@ def card_bytes(lines=None):
         ("CBB Rice +7.5", "+404", "37.3%", "+88.1%"),
         ("CBB 1H Under 74.5", "-125", "60.4%", "+8.7%"),
         ("CBB Rice Over 73.5", "+459", "29.6%", "+65.6%"),
-        ("CBB 1H Rice ML", "+575", "24.1%", "+62.7%"),
+        ("CBB 1H Rice ML", "+575", "24.1%", "+60.3%"),
     ]
     doubted = [
         ("CBB Rice ML", "+1400", "15.9%", "+139.2%"),
@@ -109,6 +109,18 @@ class HistoricalSourcePairingTests(unittest.TestCase):
         self.assertEqual(full["board_market"], "ML")
         self.assertEqual(half["board_market"], "1H_ML")
         self.assertEqual(full["opposing_price_american"], -3200)
+
+    def test_1h_moneyline_conditional_display_requires_push_draws(self):
+        r = run()
+        half = next(x for x in r["matches"] if
+                    x["printed_selection"] == "CBB 1H Rice ML")
+        self.assertIsNone(half["ev_arithmetic_consistent_with_display_rounding"])
+        self.assertEqual(half["ev_math_check"],
+            "PUSH_AWARE_1H_ML_ORIGINAL_WIN_LOSS_DRAWS_REQUIRED")
+        self.assertAlmostEqual(half["approx_implied_push_share_from_display"],
+                               0.037895, places=3)
+        self.assertEqual(r["push_aware_ml_rows_needing_original_draws"], 1)
+        self.assertEqual(r["arithmetic_discrepancies"], 0)
 
     def test_board_or_card_sha_tamper_is_rejected(self):
         for kwargs in ({"expected_board_sha": "0"*64}, {"expected_card_sha": "0"*64}):
