@@ -1,0 +1,1059 @@
+{
+  "schema": "sportsedge-market-release-matrix-v1",
+  "asof_date_ct": "2026-11-15",
+  "policy": "SPORTSEDGE_RISK_2026_11_15_LOCK_V1",
+  "principle": "Each sport/market separately qualifies only when original independent evidence for A-E is reviewed; a single passing sport or family cannot promote another.",
+  "status": "NO_OFFICIAL_MARKETS",
+  "markets": [
+    {
+      "sport": "NFL",
+      "market_family": "FULL_GAME_ML_SPREAD_TOTAL",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NFL",
+      "market_family": "TEAM_TOTALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NFL",
+      "market_family": "PLAYER_PROPS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NFL",
+      "market_family": "PERIODS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NFL",
+      "market_family": "SPECIALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NFL",
+      "market_family": "ALTERNATES",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NFL",
+      "market_family": "SGP_OR_CORRELATED",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CFB",
+      "market_family": "FULL_GAME_ML_SPREAD_TOTAL",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CFB",
+      "market_family": "TEAM_TOTALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CFB",
+      "market_family": "PLAYER_PROPS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CFB",
+      "market_family": "PERIODS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CFB",
+      "market_family": "SPECIALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CFB",
+      "market_family": "ALTERNATES",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CFB",
+      "market_family": "SGP_OR_CORRELATED",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "CBB",
+      "market_family": "FULL_GAME_ML_SPREAD_TOTAL",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "G18_ORIGINAL_496_SIDE_FILE_MISSING"
+      ]
+    },
+    {
+      "sport": "CBB",
+      "market_family": "TEAM_TOTALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "G18_ORIGINAL_496_SIDE_FILE_MISSING"
+      ]
+    },
+    {
+      "sport": "CBB",
+      "market_family": "PLAYER_PROPS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "G18_ORIGINAL_496_SIDE_FILE_MISSING"
+      ]
+    },
+    {
+      "sport": "CBB",
+      "market_family": "PERIODS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "G18_ORIGINAL_496_SIDE_FILE_MISSING"
+      ]
+    },
+    {
+      "sport": "CBB",
+      "market_family": "SPECIALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "G18_ORIGINAL_496_SIDE_FILE_MISSING"
+      ]
+    },
+    {
+      "sport": "CBB",
+      "market_family": "ALTERNATES",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "G18_ORIGINAL_496_SIDE_FILE_MISSING"
+      ]
+    },
+    {
+      "sport": "CBB",
+      "market_family": "SGP_OR_CORRELATED",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "G18_ORIGINAL_496_SIDE_FILE_MISSING"
+      ]
+    },
+    {
+      "sport": "NBA",
+      "market_family": "FULL_GAME_ML_SPREAD_TOTAL",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NBA",
+      "market_family": "TEAM_TOTALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NBA",
+      "market_family": "PLAYER_PROPS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NBA",
+      "market_family": "PERIODS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NBA",
+      "market_family": "SPECIALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NBA",
+      "market_family": "ALTERNATES",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NBA",
+      "market_family": "SGP_OR_CORRELATED",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "MLB",
+      "market_family": "FULL_GAME_ML_SPREAD_TOTAL",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "MLB",
+      "market_family": "TEAM_TOTALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "MLB",
+      "market_family": "PLAYER_PROPS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "MLB",
+      "market_family": "PERIODS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "MLB",
+      "market_family": "SPECIALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "MLB",
+      "market_family": "ALTERNATES",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "MLB",
+      "market_family": "SGP_OR_CORRELATED",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING"
+      ]
+    },
+    {
+      "sport": "NHL",
+      "market_family": "FULL_GAME_ML_SPREAD_TOTAL",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "STANDALONE_KERNEL_INTEGRATION_PENDING"
+      ]
+    },
+    {
+      "sport": "NHL",
+      "market_family": "TEAM_TOTALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "STANDALONE_KERNEL_INTEGRATION_PENDING"
+      ]
+    },
+    {
+      "sport": "NHL",
+      "market_family": "PLAYER_PROPS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "STANDALONE_KERNEL_INTEGRATION_PENDING"
+      ]
+    },
+    {
+      "sport": "NHL",
+      "market_family": "PERIODS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "STANDALONE_KERNEL_INTEGRATION_PENDING"
+      ]
+    },
+    {
+      "sport": "NHL",
+      "market_family": "SPECIALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "STANDALONE_KERNEL_INTEGRATION_PENDING"
+      ]
+    },
+    {
+      "sport": "NHL",
+      "market_family": "ALTERNATES",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "STANDALONE_KERNEL_INTEGRATION_PENDING"
+      ]
+    },
+    {
+      "sport": "NHL",
+      "market_family": "SGP_OR_CORRELATED",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "STANDALONE_KERNEL_INTEGRATION_PENDING"
+      ]
+    },
+    {
+      "sport": "PGA",
+      "market_family": "FULL_GAME_ML_SPREAD_TOTAL",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "DATAGOLF_AUTHORIZATION_PENDING"
+      ]
+    },
+    {
+      "sport": "PGA",
+      "market_family": "TEAM_TOTALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "DATAGOLF_AUTHORIZATION_PENDING"
+      ]
+    },
+    {
+      "sport": "PGA",
+      "market_family": "PLAYER_PROPS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "DATAGOLF_AUTHORIZATION_PENDING"
+      ]
+    },
+    {
+      "sport": "PGA",
+      "market_family": "PERIODS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "DATAGOLF_AUTHORIZATION_PENDING"
+      ]
+    },
+    {
+      "sport": "PGA",
+      "market_family": "SPECIALS",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "DATAGOLF_AUTHORIZATION_PENDING"
+      ]
+    },
+    {
+      "sport": "PGA",
+      "market_family": "ALTERNATES",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "DATAGOLF_AUTHORIZATION_PENDING"
+      ]
+    },
+    {
+      "sport": "PGA",
+      "market_family": "SGP_OR_CORRELATED",
+      "release_state": "PAPER_0U",
+      "gates": {
+        "A": false,
+        "B": false,
+        "C": false,
+        "D": false,
+        "E": false
+      },
+      "approved_stake_u": 0,
+      "official_counted": 0,
+      "reasons": [
+        "A_AUTHENTICATED_BOOK_RECEIPTS_MISSING",
+        "B_ORIGINAL_PIT_INPUTS_NOT_ATTESTED",
+        "C_SPORT_MARKET_FREEZE_NOT_ACCEPTED",
+        "D_REAL_CLV_NOT_VERIFIED",
+        "E_SIGNED_TRUTH_GATE_MISSING",
+        "DATAGOLF_AUTHORIZATION_PENDING"
+      ]
+    }
+  ]
+}
