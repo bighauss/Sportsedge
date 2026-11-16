@@ -1,0 +1,24 @@
+name: NFL EPA point-in-time research unit tests
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/epa_ridge_pit.py'
+      - 'models/nfl/test_epa_ridge_pit.py'
+      - 'models/nfl/README.md'
+      - '.github/workflows/nfl-epa-pit-r1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute independent no-data synthetic PIT and ridge regressions
+        run: python -m unittest discover -s models/nfl -p 'test_epa_ridge_pit.py' -v
+      - name: Compile the research feature builder
+        run: python -m py_compile models/nfl/epa_ridge_pit.py
