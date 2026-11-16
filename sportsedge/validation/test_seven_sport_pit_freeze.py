@@ -30,7 +30,7 @@ class SevenSportFreeze(unittest.TestCase):
         self.root.chmod(0o700)
         config = desc(self.root / "config.json", b'{"fixture":"research"}')
         feature = desc(self.root / "original_feature.json", b'{"original":"synthetic fixture"}')
-        path = ROOT / "models" / "common" / "guard.py"
+        path = ROOT / "models" / "nfl" / "discrete_score_pit.py"
         raw = path.read_bytes()
         model_code = {"path": str(path.relative_to(ROOT)),
                       "sha256": "sha256:" + sha256(raw).hexdigest()}
@@ -64,7 +64,21 @@ class SevenSportFreeze(unittest.TestCase):
         self.assertEqual(len(SPORTS), 7)
         for sport in SPORTS:
             with self.subTest(sport=sport):
-                out = self.analyze(sport=sport)
+                paths = {
+                    "NFL": "models/nfl/discrete_score_pit.py",
+                    "CFB": "models/cfb/sportsedge_cfb_model.py",
+                    "CBB": "models/cbb/sportsedge_cbb_model.py",
+                    "NBA": "models/nba/sportsedge_nba_model.py",
+                    "MLB": "models/mlb/sportsedge_mlb_model.py",
+                    "NHL": "models/nhl/sportsedge_nhl_model.py",
+                    "PGA": "models/pga/tournament_sim.py",
+                }
+                code_path = ROOT / paths[sport]
+                code = {
+                    "path": paths[sport],
+                    "sha256": "sha256:" + sha256(code_path.read_bytes()).hexdigest()
+                }
+                out = self.analyze(sport=sport, model_code=code)
                 self.assertEqual(out["sport"], sport)
                 self.assertEqual(out["approved_stake_u"], 0)
                 self.assertEqual(out["official_counted"], 0)
@@ -114,6 +128,17 @@ class SevenSportFreeze(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "NONEMPTY_BOUNDED_FEATURE"):
             self.analyze(feature_sources=[])
 
+    def test_cross_sport_code_rejected(self):
+        with self.assertRaisesRegex(ValueError, "CROSS_SPORT_MODEL_CODE_FORBIDDEN"):
+            self.analyze(sport="NHL")
+
+    def test_common_generic_code_rejected(self):
+        path = ROOT / "models" / "common" / "guard.py"
+        code = {"path": "models/common/guard.py",
+                "sha256": "sha256:" + sha256(path.read_bytes()).hexdigest()}
+        with self.assertRaisesRegex(ValueError, "MODEL_CODE_MUST_BE_IN_SPORT_DIRECTORY"):
+            self.analyze(model_code=code)
+
     def test_missing_config_file_fails_closed(self):
         cfg = dict(self.req["model_config"], path=str(self.root / "missing.json"))
         with self.assertRaisesRegex(ValueError, "MISSING_REGULAR_SOURCE"):
@@ -121,7 +146,7 @@ class SevenSportFreeze(unittest.TestCase):
 
     def test_model_file_outside_repository_cannot_claim_repo_code(self):
         model = dict(self.req["model_code"], path="../../etc/passwd")
-        with self.assertRaisesRegex(ValueError, "INVALID_MODEL_CODE_PATH"):
+        with self.assertRaisesRegex(ValueError, "MODEL_CODE_MUST_BE_IN_SPORT_DIRECTORY"):
             self.analyze(model_code=model)
 
     def test_training_cutoff_after_registration_rejected(self):

@@ -10,6 +10,8 @@ Create an *actual prospective*, create-once private record tying together:
 - a registered training cutoff, model version, market family/period, event kickoff and evaluation end date;
 - the locked research-policy identifier `SPORTSEDGE_STRICT_V21_V22_20261115_R1`.
 
+The model code must live under the matching `models/<sport>/` directory (for example, a PGA freeze must point to `models/pga/`, never an NFL or shared module). This check binds a sport label to its intended source tree; it does not establish that the model was trained, fitted or calibrated for that sport.
+
 The script compares its local current UTC against the declared freeze (must be within the next five minutes *after* the freeze and still before the event). A historical retrospective row **cannot** be presented as newly frozen. Source/provider clock claims still need independent external attestation.
 
 ## Private request schema
