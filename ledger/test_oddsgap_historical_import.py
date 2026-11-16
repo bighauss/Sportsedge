@@ -109,8 +109,8 @@ class Tests(unittest.TestCase):
         rows[3]["line"]="-3.5"
         out,a=ingest(save(self.root,rows=rows))
         self.assertEqual(len(out),4)
-        # Both spread sides at the same numeric signed line fail side pairing.
-        self.assertGreaterEqual(a["blocked_rows_or_groups_by_reason"]["INCOMPLETE_OR_DUPLICATED_TWO_SIDED_GROUP"],1)
+        # Both spread sides at the same signed line are invalid opposing handicaps.
+        self.assertEqual(a["blocked_rows_or_groups_by_reason"]["OPPOSITE_SPREAD_SIGN_ERROR"],1)
 
     def test_alternative_total_line_is_not_mismatched(self):
         rows=fixture()
