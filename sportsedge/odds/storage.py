@@ -73,7 +73,12 @@ class EvidenceChain:
                 row = json.loads(line.decode("utf-8"),
                                  object_pairs_hook=_unique_json_pairs,
                                  parse_constant=_reject_nonfinite)
-            except (ValueError, UnicodeError) as exc:
+            except ValueError as exc:
+                if str(exc) in ("BROKEN_CHAIN_DUPLICATE_JSON_KEY",
+                                "BROKEN_CHAIN_NONFINITE_NUMBER"):
+                    raise
+                raise ValueError("BROKEN_CHAIN_JSON") from exc
+            except UnicodeError as exc:
                 raise ValueError("BROKEN_CHAIN_JSON") from exc
             if (not isinstance(row, dict)
                 or set(row) != {"seq", "previous_sha256", "payload", "record_sha256"}):
