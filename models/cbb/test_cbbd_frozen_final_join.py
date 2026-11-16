@@ -69,6 +69,31 @@ def finals(*items):
 
 
 class StrictCBBJoinTests(unittest.TestCase):
+    def test_full_stack_existing_bridge_and_cbbd_final_converter(self):
+        """Use the actual prior tools' original byte-based synthetic outputs."""
+        from test_torvik_cbbd_pregame_bridge import fixtures
+        from test_cbbd_prospective_capture import capture, game
+        from torvik_cbbd_pregame_bridge import project_scheduled
+        from cbbd_prospective_capture import finals_from_capture
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            inputs = fixtures(tmp)
+            frozen = project_scheduled(**inputs)
+            self.assertEqual(frozen["projected_rows"], 1)
+            received = capture(root, [game()])
+            result_file = root/"real_module_normalized_finals.json"
+            finals_from_capture(received["raw_path"], received["manifest_path"],
+                                output_path=result_file)
+            ledger, report = reconcile(frozen, json.loads(result_file.read_text()))
+            self.assertEqual(report["matched_rows"], 1)
+            self.assertEqual(report["original_board_projected_rows"], 1)
+            self.assertEqual(report["original_board_input_rows"], 1)
+            self.assertEqual(ledger[0]["prediction"]["home_team_id"], "101")
+            self.assertEqual(ledger[0]["final"]["home_score"], 75)
+            self.assertEqual(ledger[0]["final"]["published_utc"],
+                             received["observed_utc"])
+            self.assertIsNone(ledger[0]["quote"])
+
     def test_complete_score_join_exact_identity_and_evaluator_compatible(self):
         ledger, report = reconcile(board(), finals())
         self.assertEqual(len(ledger), 1)
