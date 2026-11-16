@@ -1,0 +1,1 @@
+Synthetic canary file solely to verify the trusted governance gate blocks a protected PR lacking a manifest. DO NOT MERGE.
