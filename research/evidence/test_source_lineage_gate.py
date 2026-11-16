@@ -74,7 +74,7 @@ class TestLineage(unittest.TestCase):
         for field,value in (
             ("line","50.5"), ("canonical_event_id","OTHER_EVENT"),
             ("canonical_market_key","FG_SPREAD"),
-            ("canonical_selection_id","UNDER"),
+            ("canonical_selection_id","HOME"),
             ("canonical_period","1H"),
             ("crosswalk_source_sha256","d" * 64),
         ):
