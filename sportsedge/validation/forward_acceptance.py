@@ -11,11 +11,26 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 CT = ZoneInfo("America/Chicago")
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def require_private_path(candidate, *, label):
+    """Refuse source and report paths in this public checkout.
+
+    Resolved paths also reject symlinks into the public source tree. This is
+    a privacy boundary, not independent evidence authentication.
+    """
+    resolved = Path(candidate).resolve()
+    if resolved == REPOSITORY_ROOT or REPOSITORY_ROOT in resolved.parents:
+        raise ValueError("PRIVATE_" + label + "_INSIDE_PUBLIC_REPOSITORY")
+    return resolved
+
 SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
 CARD_FIELDS = {"card_id", "generated_utc", "price_rows", "missing_price_rows",
                "stale_quote_rows", "unauthenticated_quote_rows", "guard_bypasses",
@@ -226,18 +241,28 @@ def _unique_json_pairs(pairs):
     return result
 
 def report_file(source, destination):
-    src, dst = Path(source), Path(destination)
-    if src.resolve() == dst.resolve():
+    src = require_private_path(source, label="ACCEPTANCE_INPUT")
+    dst = require_private_path(destination, label="ACCEPTANCE_REPORT")
+    if src == dst:
         raise ValueError("SOURCE_AND_REPORT_MUST_DIFFER")
     raw = src.read_bytes()
-    if len(raw) > 20_000_000:
-        raise ValueError("MANIFEST_TOO_LARGE")
-    manifest = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_pairs)
+    if not raw or len(raw) > 20_000_000:
+        raise ValueError("MANIFEST_EMPTY_OR_TOO_LARGE")
+    manifest = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_pairs,
+                          parse_constant=lambda token: (_ for _ in ()).throw(
+                              ValueError("NONFINITE_MANIFEST_JSON:" + token)))
     report = analyze(manifest)
     report["input_sha256"] = "sha256:" + sha256(raw).hexdigest()
-    with dst.open("x", encoding="utf-8") as f:
-        json.dump(report, f, sort_keys=True, indent=2, allow_nan=False)
-        f.write("\n")
+    # Validate and fully serialize before exclusive file creation: a failed
+    # JSON encoding cannot strand a partial but credible-looking audit file.
+    payload = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False)
+               + "\n").encode("utf-8")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(dst, flags, 0o600)
+    with os.fdopen(fd, "wb") as out:
+        out.write(payload)
+        out.flush()
+        os.fsync(out.fileno())
     return report
 
 def main(argv=None):
