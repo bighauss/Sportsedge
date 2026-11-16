@@ -23,7 +23,7 @@ GOLDEN_CASES = 9
 MAX_MANIFEST_BYTES = 50_000
 SHA = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
-ISSUE = re.compile(r"^https://github\\.com/bighauss/Sportsedge/issues/[1-9][0-9]*$")
+ISSUE = re.compile(r"^https://github\.com/bighauss/Sportsedge/issues/[1-9][0-9]*$")
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 RISK_POLICY = "SPORTSEDGE_STRICT_V21_V22_20261115_R1"
 REQUIRED = frozenset({
@@ -84,7 +84,7 @@ def _sha(value, label):
 
 def _valid_path(value):
     if (type(value) is not str or not value or len(value) > 400 or
-            value.startswith("/") or "\\\\" in value or
+            value.startswith("/") or "\\" in value or
             any(part in ("", ".", "..") for part in value.split("/")) or
             any(ord(c) < 32 or ord(c) > 126 for c in value)):
         raise GovernanceError("INVALID_GIT_PATH")
@@ -143,7 +143,7 @@ def golden_regression(raw):
 
 
 def _finite_usd(raw, name):
-    if type(raw) is not str or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,4})?", raw):
+    if type(raw) is not str or not re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]{1,4})?", raw):
         raise GovernanceError("INVALID_USD_AMOUNT:" + name)
     try:
         value = Decimal(raw)
@@ -283,7 +283,7 @@ def inspect_pr(repo: Path, *, base_commit, head_commit, pr_number):
     paths = _git(repo, ["diff", "--no-renames", "--name-only", "-z",
                          base_commit, head_commit])
     try:
-        changed = [x.decode("utf-8") for x in paths.split(b"\\x00") if x]
+        changed = [x.decode("utf-8") for x in paths.split(b"\x00") if x]
     except UnicodeError as exc:
         raise GovernanceError("NON_UTF8_CHANGED_PATH") from exc
     protected = [p for p in changed if is_protected(p)]
