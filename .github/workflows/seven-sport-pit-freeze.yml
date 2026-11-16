@@ -18,3 +18,5 @@ jobs:
       - run: python -m unittest sportsedge.validation.test_seven_sport_pit_freeze -v
       - run: python -m compileall -q sportsedge/validation/prospective_forecast_receipt.py
       - run: python -m unittest sportsedge.validation.test_prospective_forecast_receipt -v
+      - run: python -m compileall -q sportsedge/validation/firecrawl_espn_injury_intake.py
+      - run: python -m unittest sportsedge.validation.test_firecrawl_espn_injury_intake -v
