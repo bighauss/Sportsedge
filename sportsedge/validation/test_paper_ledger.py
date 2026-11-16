@@ -128,6 +128,23 @@ class PaperLedgerTests(unittest.TestCase):
             conn.execute("UPDATE ledger SET payload='{}' WHERE pick_id=?",(x["pick_id"],))
         with self.assertRaises(Blocked):verify_chain(db)
 
+    def test_placeholder_provider_ids_blocked(self):
+        for key in ("quote_id","provider_event_id","provider_market_id"):
+            self.taken[key]="NOT_CAPTURED"
+            self.save()
+            with self.assertRaisesRegex(Blocked,"provider original"):
+                grade_bundle(self.path)
+            self.taken[key]={
+                "quote_id":"TAKE-001","provider_event_id":"DK-EVT-100",
+                "provider_market_id":"DK-TOTAL-88"}[key]
+
+    def test_close_outside_prestart_ten_minute_window(self):
+        self.save()
+        self.bundle["close"]["captured_at_utc"]="2026-11-16T00:30:00Z"
+        self.path.write_text(json.dumps(self.bundle))
+        with self.assertRaisesRegex(Blocked,"10-minute"):
+            grade_bundle(self.path)
+
     def test_other_book_and_invalid_american_price_block(self):
         self.taken["book"]="OtherBook"
         self.save()
