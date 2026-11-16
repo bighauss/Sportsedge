@@ -1,8 +1,12 @@
 """Synthetic adapter tests, including fail-closed exact team and time joins."""
 from copy import deepcopy
 import unittest
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
-from feature_snapshot_bridge_pit import snapshots
+from feature_snapshot_bridge_pit import snapshots, main
+from score_walkforward_pit import REPO_ROOT
 from score_walkforward_pit import walkforward
 
 
@@ -100,6 +104,20 @@ class ExactEPAFeatureBridgeTests(unittest.TestCase):
         rate["status"] = "PRODUCTION"
         with self.assertRaisesRegex(ValueError, "RATINGS_STATUS_NOT_RESEARCH"):
             snapshots(rate, [event()], ratings_sha256=HASH)
+
+    def test_bridge_cli_refuses_public_source_and_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            private = Path(directory)
+            cases = (
+                (str(REPO_ROOT / "rating_source.json"), str(private / "out.csv")),
+                (str(private / "ratings.json"), str(REPO_ROOT / "models" / "nfl" / "private_features.csv")),
+            )
+            for ratings_path, output in cases:
+                argv = ["feature_snapshot_bridge_pit.py", "--ratings", ratings_path,
+                        "--events", str(private / "events.json"), "--out", output]
+                with patch("sys.argv", argv):
+                    with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                        main()
 
     def test_after_kickoff_freeze_refused(self):
         e = event()

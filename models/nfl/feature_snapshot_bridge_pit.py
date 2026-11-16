@@ -14,7 +14,7 @@ from math import isfinite
 from pathlib import Path
 
 from epa_ridge_pit import utc
-from score_walkforward_pit import FEATURE_COLUMNS
+from score_walkforward_pit import FEATURE_COLUMNS, private_evidence_path
 
 
 EVENT_COLUMNS = frozenset((
@@ -106,14 +106,19 @@ def main():
     parser.add_argument("--events", required=True, help="exact matchup identities JSON list")
     parser.add_argument("--out", required=True, help="new create-only feature CSV")
     args = parser.parse_args()
-    raw = Path(args.ratings).read_bytes()
+    # Never load private source bytes from or write reconstructed features into
+    # this public repository. Resolve symlinks and traversal before any reads.
+    ratings_path = private_evidence_path(args.ratings)
+    events_path = private_evidence_path(args.events)
+    output_path = private_evidence_path(args.out)
+    raw = ratings_path.read_bytes()
     ratings = json.loads(raw)
-    events = json.loads(Path(args.events).read_text(encoding="utf-8"))
+    events = json.loads(events_path.read_text(encoding="utf-8"))
     rows = snapshots(
         ratings, events,
         ratings_sha256="sha256:" + sha256(raw).hexdigest(),
     )
-    with Path(args.out).open("x", newline="", encoding="utf-8") as f:
+    with output_path.open("x", newline="", encoding="utf-8") as f:
         fields = sorted(FEATURE_COLUMNS)
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()

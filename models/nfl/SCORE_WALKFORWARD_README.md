@@ -10,6 +10,8 @@ The output reports projected *research-only* team scores and margins, plus walk-
 
 The supplied snapshots and their timestamps are caller assertions. To claim genuine historical pregame predictions, an independent archive must prove the bytes and source publication time were available before each forecast cutoff. Downloading today and backdating `forecast_asof_utc` is prohibited.
 
+**Private-path enforcement:** Both the EPA snapshot bridge and the score walk-forward CLI reject `--ratings`, `--events`, `--features`, `--results` and `--out` whenever the resolved path is within the public SportsEdge Git checkout. This includes `..` traversal and symlinks resolving into the repo. Place original source and output artifacts in a restricted directory outside the repository; the path check does not itself authenticate source timestamps or guarantee filesystem access controls.
+
 ## Exact-ID EPA snapshot adapter
 
 Use `feature_snapshot_bridge_pit.py` to turn a saved upstream EPA ratings JSON into score-model CSV features without fuzzy team lookup or silently inserted zeros. Provide a JSON **list** of events with `game_id`, `home_team`, `away_team`, `kickoff_utc` and `forecast_asof_utc` using exact IDs from the rating source. The adapter requires the rating source observation, rating calculation and event freeze all to precede kickoff; one rating artifact can populate only games for which all four offensive/defense feature families exist.
