@@ -46,6 +46,24 @@ class ProspectiveArchiveTests(unittest.TestCase):
         self.assertEqual(json.loads((folder/"capture_manifest.json").read_text())["state"],
                          "PAPER_0U_RAW_PUBLIC_SOURCE_CAPTURE")
 
+    def test_future_capture_uses_injected_clock_and_fails_closed(self):
+        def future_capture(asset, folder):
+            m = fake_capture(asset, folder)
+            m["retrieved_at_utc"] = (NOW + timedelta(seconds=1)).isoformat()
+            return m
+        with self.assertRaisesRegex(RuntimeError, "FUTURE_CAPTURE_TIMESTAMP"):
+            self.run_archive(capture=future_capture)
+        manifests = list(self.parent.glob("forward_nfl_*/capture_manifest.json"))
+        self.assertEqual(len(manifests), 1)
+        self.assertEqual(json.loads(manifests[0].read_text())["state"], "BLOCK_INCOMPLETE_PUBLIC_CAPTURE")
+
+    def test_github_provenance_claims_are_not_authentication(self):
+        with patch.dict("os.environ", {"GITHUB_SHA": "abc123", "GITHUB_REF": "refs/heads/main"}):
+            _, m = self.run_archive()
+        self.assertEqual(m["github_sha_claim"], "abc123")
+        self.assertEqual(m["github_ref_claim"], "refs/heads/main")
+        self.assertFalse(m["independent_original_source_authentication"])
+
     def test_no_event_does_not_claim_pregame(self):
         _, manifest = self.run_archive()
         self.assertFalse(manifest["collected_before_declared_event"])

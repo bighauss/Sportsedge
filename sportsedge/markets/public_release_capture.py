@@ -80,7 +80,7 @@ def capture_public_release(asset_id:str, destination:Path | str, *,
         raise ValueError("FUTURE_DATED_PROVIDER_RELEASE")
     receipt,rows=parse_snapshot_bytes(metadata["source_id"],raw,claimed_updated,now)
     dest=Path(destination).resolve()
-    if str(dest).startswith(str(Path.cwd().resolve())+os.sep):
+    if dest == Path.cwd().resolve() or Path.cwd().resolve() in dest.parents:
         raise ValueError("RECEIPT_ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPOSITORY")
     dest.mkdir(mode=0o700,parents=True,exist_ok=True)
     final=dest / (metadata["asset_id"]+"_"+digest.split(":")[1][:16]+".csv.gz")
