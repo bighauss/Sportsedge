@@ -121,6 +121,54 @@ class TestProspectiveCLVExport(unittest.TestCase):
         self.assertEqual(len(rows),4)
         self.assertEqual(a["market_groups_quarantined_by_reason"]["PROVIDER_TIME_LOOKAHEAD"],1)
 
+    def test_original_manifest_rejects_duplicate_critical_keys_at_every_depth(self):
+        # Before this repair, Python json.loads used the LAST duplicate key,
+        # silently changing alleged capture time, upstream endpoint or digest.
+        for field,replacement in (
+            ("captured_utc", "2026-11-16T01:15:00Z"),
+            ("read_only_endpoint", "https://invalid.example/wrong"),
+            ("sport", "CBB"),
+            ("original_raw_sha256", "sha256:" + "b" * 64),
+        ):
+            with self.subTest(field=field):
+                path = evidence(self.root)
+                original = path.read_text()
+                assert original.endswith("}")
+                corrupt = original[:-1] + ', "' + field + '": ' + json.dumps(replacement) + "}"
+                path.write_text(corrupt, encoding="utf-8")
+                with self.assertRaisesRegex(Blocked, "ORIGINAL_MANIFEST_DUPLICATE_OR_INVALID_JSON"):
+                    load_evidence(path)
+        manifest = evidence(self.root)
+        original = json.loads(manifest.read_text())
+        original["extra"] = {"proof": 1}
+        corrupt = json.dumps(original).replace('"proof": 1', '"proof": 1, "proof": 2')
+        manifest.write_text(corrupt, encoding="utf-8")
+        with self.assertRaisesRegex(Blocked, "ORIGINAL_MANIFEST_DUPLICATE_OR_INVALID_JSON"):
+            convert(manifest)
+
+    def test_original_manifest_rejects_nonfinite_and_non_object_payload(self):
+        for bad in ('{"captured_utc": NaN}', '{"captured_utc": Infinity}',
+                    '{"clock": 1e999}', '["not a manifest"]'):
+            with self.subTest(bad=bad):
+                manifest = evidence(self.root)
+                manifest.write_text(bad, encoding="utf-8")
+                reason = ("ORIGINAL_MANIFEST_OBJECT_REQUIRED" if bad.startswith("[")
+                          else "ORIGINAL_MANIFEST_DUPLICATE_OR_INVALID_JSON")
+                with self.assertRaisesRegex(Blocked, reason):
+                    load_evidence(manifest)
+
+    def test_bad_manifest_does_not_create_clv_csv_or_audit(self):
+        path = evidence(self.root)
+        saved = path.read_text(encoding="utf-8")
+        path.write_text(saved[:-1] + ', "captured_utc": "2026-11-16T01:20:00Z"}',
+                        encoding="utf-8")
+        out = self.root/"blocked.csv"
+        with self.assertRaisesRegex(Blocked, "ORIGINAL_MANIFEST_DUPLICATE_OR_INVALID_JSON"):
+            write_export(path, out)
+        self.assertFalse(out.exists())
+        self.assertFalse((self.root/"blocked.csv.audit.json").exists())
+        self.assertTrue((self.root/"original.json").exists())
+
     def test_hash_tamper_refusal(self):
         p=evidence(self.root)
         (self.root/"original.json").write_bytes(b'{"tampered":true}')

@@ -54,7 +54,14 @@ def _private_path(path: Path) -> Path:
 def load_evidence(manifest_path: Path):
     manifest_path = _private_path(manifest_path)
     base = manifest_path.parent
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # Reject last-key-wins tampering with saved source/timestamp/endpoint
+    # metadata. These fields are caller claims, not provider attestations.
+    try:
+        manifest = strict_json(manifest_path.read_bytes())
+    except (UnicodeError, json.JSONDecodeError, ValueError):
+        raise Blocked("ORIGINAL_MANIFEST_DUPLICATE_OR_INVALID_JSON") from None
+    if not isinstance(manifest, dict):
+        raise Blocked("ORIGINAL_MANIFEST_OBJECT_REQUIRED")
     if manifest.get("schema") != "sportsedge-oddsapi-aggregator-raw-v1":
         raise Blocked("UNEXPECTED_ORIGINAL_ARCHIVE_MANIFEST")
     sport = manifest.get("sport")
