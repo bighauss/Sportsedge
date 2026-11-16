@@ -4,6 +4,7 @@ A local hash proves byte consistency only; it cannot prove the provider produced
 the bytes or that their embedded timestamps are authentic.
 """
 import hashlib
+import math
 import re
 from datetime import datetime, timezone
 
@@ -51,7 +52,7 @@ def validate_receipt(receipt, *, decision_utc, event_start_utc,
         raise ValueError("DECISION_NOT_PREGAME")
     if captured > decision:
         raise ValueError("CAPTURE_AFTER_DECISION")
-    if not isinstance(max_age_seconds, (int,float)) or isinstance(max_age_seconds,bool) or max_age_seconds <= 0:
+    if not isinstance(max_age_seconds, (int,float)) or isinstance(max_age_seconds,bool) or not math.isfinite(max_age_seconds) or max_age_seconds <= 0:
         raise ValueError("INVALID_MAX_AGE")
     observed_value = receipt.get("provider_observed_utc")
     if observed_value is None:
