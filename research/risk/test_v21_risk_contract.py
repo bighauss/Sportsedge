@@ -57,8 +57,13 @@ class Contract(unittest.TestCase):
         closes=[{'eligible':True,'comparable':True,'clv':'-.01','sport':'NFL'} for _ in range(49)]
         self.assertEqual(size({},closing_observations=closes)['diagnostic_u'],size({})['diagnostic_u'])
     def test_game_cap(self):
-        l=[{'bet_id':'X','risk_date_ct':'2026-11-15','event_id':'G1','theme':'other','stake_u':'1.90'}]
+        l=[{'bet_id':'X','risk_date_ct':'2026-11-15','event_id':'G1','theme':'other','stake_u':'0.90'}]
         self.assertEqual(size({},ledger=l)['diagnostic_u'],'0.10')
+    def test_locked_one_unit_game_cap(self):
+        z=size({})
+        self.assertLessEqual(float(z['diagnostic_u']), 1.0)
+        ledger=[{'bet_id':'OTHER_SIDE','risk_date_ct':'2026-11-15','event_id':'G1','theme':'another','stake_u':'1.00'}]
+        self.assertEqual(size({}, ledger=ledger)['diagnostic_u'], 0)
     def test_day_cap(self):
         l=[{'bet_id':'X','risk_date_ct':'2026-11-15','event_id':'G2','theme':'other','stake_u':'4.90'}]
         self.assertEqual(size({},ledger=l)['diagnostic_u'],'0.10')
