@@ -81,7 +81,7 @@ class ReconcileTests(unittest.TestCase):
             "sport":"NFL",
             "read_only_endpoint":BASE+SPORTS["NFL"]+"/events/"+ID+"/odds",
             "raw_filename":raw_name,"events_returned":1,
-            "requested_event_id":ID,
+            "requested_event_id":source_id,
             "requested_markets":["h2h","spreads","totals"],
             "requested_books":["draftkings","fanduel"],
             "captured_utc":clock.isoformat(),
