@@ -9,7 +9,7 @@ def report(n=100, blocked=1, matched=70, brier=.18):
     return {"schema":"SPORTSEDGE_OBSERVABILITY_V1",
             "official":False,"stake_u":0,"source_authenticated":False,
             "input_rows":n,"blocked_rows":blocked,"clock_consistent_rows":valid,
-            "metrics":{"n_decided":80,"n_clv_matched":matched,
+            "metrics":{"n_decided":min(80,valid),"n_clv_matched":matched,
                        "n_clv_unmatched":valid-matched,
                        "brier_descriptive_not_forward_certified":brier}}
 
