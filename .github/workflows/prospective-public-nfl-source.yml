@@ -5,6 +5,10 @@ on:
     paths:
       - 'sportsedge/validation/forward_public_nfl_archive.py'
       - 'sportsedge/validation/test_forward_public_nfl_archive.py'
+      - 'sportsedge/markets/nfl_pbp_streaming.py'
+      - 'sportsedge/markets/test_nfl_pbp_streaming.py'
+      - 'sportsedge/markets/public_release_capture.py'
+      - 'docs/evidence/NFL_PUBLIC_PBP_CAPTURE.md'
       - '.github/workflows/prospective-public-nfl-source.yml'
   workflow_dispatch:
     inputs:
@@ -35,7 +39,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Forward public-source contract tests
-        run: python -m unittest sportsedge.validation.test_forward_public_nfl_archive -v
+        run: |
+          python -m unittest sportsedge.validation.test_forward_public_nfl_archive -v
+          python -m unittest sportsedge.markets.test_nfl_pbp_streaming -v
       - name: Capture public nflverse raw release bytes and verified publisher digest
         env:
           EVENT_ID: ${{ inputs.event_id || '' }}
@@ -53,7 +59,7 @@ jobs:
             args+=(--event-id "$EVENT_ID" --event-start-utc "$EVENT_START_UTC")
           fi
           python -m sportsedge.validation.forward_public_nfl_archive "${args[@]}"
-      - name: Retain original public athlete-stat archive and manifest
+      - name: Retain original public PBP and athlete-stat archive and manifest
         if: always()
         uses: actions/upload-artifact@v4
         with:
