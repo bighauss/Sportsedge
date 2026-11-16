@@ -50,14 +50,19 @@ def bucket(x):
     return "20pp+"
 def stats(rows):
     n=len(rows)
-    if not n:return {"n":0,"unique_events":0,"insufficient_unique_events_30":True,"roi":None,"observed_wilson_95":None,"insufficient_n30":True,"brier":None,"market_brier":None,"log_loss":None,"market_log_loss":None,"bias":None,"observed":None,"predicted":None}
+    if not n:return {"n":0,"unique_events":0,"insufficient_unique_events_30":True,"event_dependent_selections":False,"roi_descriptive_only":True,"roi":None,"observed_wilson_95":None,"insufficient_n30":True,"brier":None,"market_brier":None,"log_loss":None,"market_log_loss":None,"bias":None,"observed":None,"predicted":None}
     wins=sum(y for _,_,_,y,_,_ in rows)
     z=1.95996398454; ph=wins/n; den=1+z*z/n
     mid=(ph+z*z/(2*n))/den; rad=z*math.sqrt(ph*(1-ph)/n+z*z/(4*n*n))/den
     events=len({event for *_,event in rows})
+    # Wilson assumes independent Bernoulli observations. Multiple alt lines
+    # from one game violate that assumption: show no misleading CI.
+    wilson=([round(max(0,mid-rad),6),round(min(1,mid+rad),6)]
+            if events==n else None)
     return {"n":n,"unique_events":events,
+        "event_dependent_selections":events<n,
         "insufficient_unique_events_30":events<30,
-        "insufficient_n30":n<30,"observed_wilson_95":[round(max(0,mid-rad),6),round(min(1,mid+rad),6)],"roi":round(sum(profit if y else -1 for _,_,_,y,profit,_ in rows)/n,6),"brier":round(sum((p-y)**2 for _,p,q,y,_,_ in rows)/n,6),
+        "insufficient_n30":n<30,"observed_wilson_95":wilson,"roi_descriptive_only":True,"roi":round(sum(profit if y else -1 for _,_,_,y,profit,_ in rows)/n,6),"brier":round(sum((p-y)**2 for _,p,q,y,_,_ in rows)/n,6),
         "market_brier":round(sum((q-y)**2 for _,p,q,y,_,_ in rows)/n,6),
         "log_loss":round(-sum(y*math.log(p)+(1-y)*math.log1p(-p) for _,p,q,y,_,_ in rows)/n,6),
         "market_log_loss":round(-sum(y*math.log(q)+(1-y)*math.log1p(-q) for _,p,q,y,_,_ in rows)/n,6),
