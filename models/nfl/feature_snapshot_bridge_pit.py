@@ -17,6 +17,26 @@ from epa_ridge_pit import utc
 from score_walkforward_pit import FEATURE_COLUMNS, private_evidence_path
 
 
+def _unique_json_object(pairs):
+    """Fail closed: Python's default JSON decoder silently keeps last duplicates."""
+    obj = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError("DUPLICATE_JSON_KEY:" + key)
+        obj[key] = value
+    return obj
+
+
+def _reject_nonfinite_json_literal(value):
+    raise ValueError("NONFINITE_JSON_LITERAL:" + value)
+
+
+def strict_original_json(payload):
+    """Original input bytes/text; no duplicate keys or NaN/Infinity anywhere."""
+    return json.loads(payload, object_pairs_hook=_unique_json_object,
+                      parse_constant=_reject_nonfinite_json_literal)
+
+
 EVENT_COLUMNS = frozenset((
     "game_id", "home_team", "away_team", "kickoff_utc", "forecast_asof_utc",
 ))
@@ -112,8 +132,8 @@ def main():
     events_path = private_evidence_path(args.events)
     output_path = private_evidence_path(args.out)
     raw = ratings_path.read_bytes()
-    ratings = json.loads(raw)
-    events = json.loads(events_path.read_text(encoding="utf-8"))
+    ratings = strict_original_json(raw)
+    events = strict_original_json(events_path.read_bytes())
     rows = snapshots(
         ratings, events,
         ratings_sha256="sha256:" + sha256(raw).hexdigest(),
