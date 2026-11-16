@@ -16,3 +16,5 @@ jobs:
           python-version: '3.12'
       - run: python -m compileall -q sportsedge/validation/seven_sport_pit_freeze.py
       - run: python -m unittest sportsedge.validation.test_seven_sport_pit_freeze -v
+      - run: python -m compileall -q sportsedge/validation/prospective_forecast_receipt.py
+      - run: python -m unittest sportsedge.validation.test_prospective_forecast_receipt -v
