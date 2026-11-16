@@ -103,6 +103,13 @@ python research/audit/original_board_card_source_join.py \
 python research/audit/test_original_board_card_source_join.py
 ```
 
+**Private evidence boundary:** Both original source paths and the detailed
+output path must be outside the public checkout, including through symlink
+aliases. The audit report contains per-quote odds and probabilities; it is
+created exclusively with `0600` permissions and removed if disk write or
+sync fails. Never attach raw inputs or generated detailed reports to public
+GitHub commits, PRs or CI artifacts.
+
 The JSON output is create-only and includes source row, game, market,
 signed line, both odds, raw one-sided implied probability, exact same-board
 no-vig probability, printed rounded model probability, raw EV and
