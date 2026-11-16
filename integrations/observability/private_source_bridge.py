@@ -56,7 +56,7 @@ def _json(raw):
                           parse_constant=lambda _: (_ for _ in ()).throw(
                               BridgeHold("ORIGINAL_JSON_NONFINITE")))
         _finite(data)
-    except (UnicodeError, json.JSONDecodeError, OverflowError) as exc:
+    except (UnicodeError, json.JSONDecodeError, OverflowError, RecursionError) as exc:
         raise BridgeHold("ORIGINAL_JSON_MALFORMED") from exc
     if type(data) is not dict:
         raise BridgeHold("ORIGINAL_OBJECT_REQUIRED")
@@ -254,7 +254,12 @@ def transform(raw_lines):
                 except BridgeHold:
                     pass
             row, reason = _safe_attempt(attempt)
-        except (BridgeHold, KeyError, TypeError, ValueError, OSError) as exc:
+        except OSError:
+            # Host OS errors can contain the PRIVATE full path or player name;
+            # never copy their raw exception text into a diagnostics report.
+            row = None
+            reason = "PRIVATE_ORIGINAL_IO_FAILURE"
+        except (BridgeHold, KeyError, TypeError, ValueError) as exc:
             row = None
             reason = str(exc).splitlines()[0][:100]
         records.append({"index": i, "identity": key, "decision_id": ident,
