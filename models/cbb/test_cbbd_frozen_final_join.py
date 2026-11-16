@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from cbbd_frozen_final_join import reconcile, run, Hold
+from cbbd_frozen_final_join import reconcile, run, Hold, verify_provider_originals
 from point_in_time_score_walkforward import audit as walkforward_audit
 
 H = "a" * 64
@@ -68,6 +68,16 @@ def finals(*items):
             "row_count": len(records), "rows": records}
 
 
+def originals_from_capture(root):
+    """Create exact-byte CBBD mock response + manifest + derived finals."""
+    from test_cbbd_prospective_capture import capture, game
+    from cbbd_prospective_capture import finals_from_capture
+    cap = capture(root, [game()])
+    report = Path(root)/"actual_derived_finals.json"
+    finals_from_capture(cap["raw_path"], cap["manifest_path"], output_path=report)
+    return cap["raw_path"], cap["manifest_path"], report
+
+
 class StrictCBBJoinTests(unittest.TestCase):
     def test_full_stack_existing_bridge_and_cbbd_final_converter(self):
         """Use the actual prior tools' original byte-based synthetic outputs."""
@@ -85,6 +95,14 @@ class StrictCBBJoinTests(unittest.TestCase):
             finals_from_capture(received["raw_path"], received["manifest_path"],
                                 output_path=result_file)
             ledger, report = reconcile(frozen, json.loads(result_file.read_text()))
+            strict_ledger = root/"strict_join_ledger.json"
+            strict_audit = root/"strict_join_report.json"
+            actual = run(inputs["output_path"], result_file,
+                         provider_raw=received["raw_path"],
+                         provider_manifest=received["manifest_path"],
+                         ledger_path=strict_ledger, audit_path=strict_audit)
+            self.assertEqual(actual["matched_rows"], 1)
+            self.assertEqual(json.loads(strict_ledger.read_text())[0]["final"]["home_score"], 75)
             self.assertEqual(report["matched_rows"], 1)
             self.assertEqual(report["original_board_projected_rows"], 1)
             self.assertEqual(report["original_board_input_rows"], 1)
@@ -233,11 +251,13 @@ class StrictCBBJoinTests(unittest.TestCase):
     def test_create_only_private_two_outputs_with_exact_hash_and_0600(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            board_path, final_path = root/"orig.json", root/"final.json"
+            board_path = root/"orig.json"
             board_path.write_text(json.dumps(board()))
-            final_path.write_text(json.dumps(finals()))
+            provider_raw, provider_manifest, final_path = originals_from_capture(root)
             ledger_path, audit_path = root/"ledger.json", root/"ledger_audit.json"
-            result = run(board_path, final_path, ledger_path=ledger_path, audit_path=audit_path)
+            result = run(board_path, final_path, provider_raw=provider_raw,
+                         provider_manifest=provider_manifest,
+                         ledger_path=ledger_path, audit_path=audit_path)
             self.assertEqual(result["matched_rows"], 1)
             self.assertEqual(ledger_path.stat().st_mode & 0o077, 0)
             self.assertEqual(audit_path.stat().st_mode & 0o077, 0)
@@ -246,32 +266,93 @@ class StrictCBBJoinTests(unittest.TestCase):
                              hashlib.sha256(board_path.read_bytes()).hexdigest())
             self.assertEqual(report["ledger_sha256"], hashlib.sha256(ledger_path.read_bytes()).hexdigest())
             with self.assertRaises(FileExistsError):
-                run(board_path, final_path, ledger_path=ledger_path, audit_path=audit_path)
+                run(board_path, final_path, provider_raw=provider_raw,
+                    provider_manifest=provider_manifest,
+                    ledger_path=ledger_path, audit_path=audit_path)
 
     def test_invalid_json_duplicate_keys_fail_without_creating_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            board_path, final_path = root/"orig.json", root/"final.json"
+            board_path = root/"orig.json"
             board_path.write_text('{"status":1,"status":2}')
-            final_path.write_text(json.dumps(finals()))
+            provider_raw, provider_manifest, final_path = originals_from_capture(root)
             with self.assertRaisesRegex(Hold, "INVALID_OR_DUPLICATE_JSON_SOURCE"):
-                run(board_path, final_path, ledger_path=root/"ledger.json", audit_path=root/"audit.json")
+                run(board_path, final_path, provider_raw=provider_raw,
+                    provider_manifest=provider_manifest,
+                    ledger_path=root/"ledger.json", audit_path=root/"audit.json")
             self.assertFalse((root/"ledger.json").exists())
             self.assertFalse((root/"audit.json").exists())
+
+    def test_cli_fails_without_original_raw_provider_receipts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            with self.assertRaisesRegex(Hold, "ORIGINAL_CBBD_RAW_AND_MANIFEST_REQUIRED"):
+                run(root/"board.json", root/"final.json", provider_raw=None,
+                    provider_manifest=None, ledger_path=root/"new.json",
+                    audit_path=root/"new_audit.json")
+
+    def test_non_object_derived_final_report_and_row_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw, manifest, report_path = originals_from_capture(root)
+            with self.assertRaisesRegex(Hold, "CBBD_DERIVED_FINAL_REPORT_INVALID"):
+                verify_provider_originals([], raw, manifest)
+            derived = json.loads(report_path.read_text())
+            derived["rows"][0] = None
+            with self.assertRaisesRegex(Hold, "CBBD_DERIVED_FINAL_ROW_NOT_OBJECT"):
+                verify_provider_originals(derived, raw, manifest)
+
+    def test_truncated_derived_rows_rejected_even_with_original_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw, manifest, report_path = originals_from_capture(root)
+            derived = json.loads(report_path.read_text())
+            self.assertEqual(len(derived["rows"]), derived["row_count"])
+            derived["rows"].pop()  # Keep forged row_count unchanged
+            with self.assertRaisesRegex(Hold, "CBBD_ORIGINAL_ROW_CENSUS_MISMATCH"):
+                verify_provider_originals(derived, raw, manifest)
+
+    def test_edited_final_score_rejected_against_original_raw(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            raw, manifest, report_path=originals_from_capture(root)
+            derived=json.loads(report_path.read_text())
+            derived["rows"][0]["final"]["home_score"]=99
+            with self.assertRaisesRegex(Hold,"DERIVED_FINAL_SCORE_OR_ID_CHANGED_FROM_SOURCE"):
+                verify_provider_originals(derived, raw, manifest)
+
+    def test_suppressed_valid_loser_blocks_entire_join(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            raw, manifest, report_path=originals_from_capture(root)
+            derived=json.loads(report_path.read_text())
+            derived["rows"][0]["status"]="BLOCKED"
+            derived["rows"][0].pop("final")
+            with self.assertRaisesRegex(Hold,"ORIGINAL_VALID_FINAL_SUPPRESSED"):
+                verify_provider_originals(derived, raw, manifest)
+
+    def test_original_raw_tamper_blocks_join_even_if_derived_looks_valid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            raw, manifest, report_path=originals_from_capture(root)
+            Path(raw).write_bytes(Path(raw).read_bytes()+b" ")
+            with self.assertRaisesRegex(Hold,"CBBD_ORIGINAL_BYTE_HASH_MISMATCH"):
+                verify_provider_originals(json.loads(report_path.read_text()), raw, manifest)
 
     def test_public_checkout_paths_not_accepted(self):
         from cbbd_frozen_final_join import __file__ as module
         with self.assertRaisesRegex(Hold, "PUBLIC_GIT_REPOSITORY"):
-            run(Path(module), Path(module), ledger_path="/tmp/synth-ledger",
+            run(Path(module), Path(module), provider_raw=Path(module),
+                provider_manifest=Path(module), ledger_path="/tmp/synth-ledger",
                 audit_path="/tmp/synth-audit")
 
     def test_report_write_failure_rolls_back_ledger_without_touching_sources(self):
         import cbbd_frozen_final_join as module
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            inp, fin = root/"board.json", root/"finals.json"
+            inp = root/"board.json"
             inp.write_text(json.dumps(board()))
-            fin.write_text(json.dumps(finals()))
+            provider_raw, provider_manifest, fin = originals_from_capture(root)
             original_hash = hashlib.sha256(inp.read_bytes()).hexdigest()
             real_create = module._private_create
             def failing_create(path, data):
@@ -280,7 +361,9 @@ class StrictCBBJoinTests(unittest.TestCase):
                 return real_create(path, data)
             with patch.object(module, "_private_create", side_effect=failing_create):
                 with self.assertRaisesRegex(OSError, "synthetic audit write failure"):
-                    run(inp, fin, ledger_path=root/"ledger.json", audit_path=root/"audit.json")
+                    run(inp, fin, provider_raw=provider_raw,
+                        provider_manifest=provider_manifest,
+                        ledger_path=root/"ledger.json", audit_path=root/"audit.json")
             self.assertFalse((root/"ledger.json").exists())
             self.assertFalse((root/"audit.json").exists())
             self.assertEqual(hashlib.sha256(inp.read_bytes()).hexdigest(), original_hash)
