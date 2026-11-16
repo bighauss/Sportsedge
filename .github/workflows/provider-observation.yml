@@ -59,10 +59,10 @@ jobs:
       - name: Validate manifest before archival
         if: success()
         run: python tools/validate_provider_observation.py provider_observation/manifest.json
+      # A failed source observation or rejected manifest must NEVER be
+      # uploaded under the accepted research artifact name. Redacted failure
+      # reasons remain in job logs, not in a success-looking JSON artifact.
       - name: Upload sanitized manifest
-        # A failed source observation or rejected metadata manifest must NEVER
-        # appear as an accepted research evidence artifact. Failure details
-        # remain in redacted job logs instead of uploading invalid JSON.
         if: success()
         uses: actions/upload-artifact@v4
         with:
