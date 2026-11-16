@@ -8,7 +8,7 @@ Schema version `sportsedge-issue10-structural-v1`, with exact keys `schema`, `ca
 
 **What it measures:**
 - A: most recent consecutive cards with **zero reported** missing/stale/unauthenticated quotes, threshold 100.
-- B: reported PIT package completion among latest 100 cards, threshold 95%.
+- B: reported PIT package completion among latest 100 cards, threshold 95%, **and no price-bearing card in that recent window may report zero PIT packages**. The report includes `reported_zero_pit_cards_last_100` so a single big, complete card cannot hide 99 cards with no claimed input package.
 - C: at least three **reported** preregistered nonleaking chronological cycles.
 - D: 200 distinct, settled, structurally same-market/book pregame close triples.
 - E: 100 most recent cards with **zero reported** risk guard bypass.
