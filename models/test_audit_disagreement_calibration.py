@@ -143,6 +143,31 @@ class Tests(unittest.TestCase):
   self.assertEqual(a["accepted"],0)
   self.assertEqual(len(a["blocked"]),2)
 
+ def test_calibration_stratifies_each_line_player_and_book(self):
+  extra=dict(sport="NFL",book="DraftKings",period="FG",settlement="INCLUDES_OT")
+  a=audit([
+   row(market="total",selection="under",line="49.5",**extra),
+   row(market="total",selection="under",line="50.5",**extra),
+   row(market="player_prop:receptions",selection="over",line="5.5",
+       player_id="id_1",stat="receptions",**extra),
+   row(market="player_prop:receptions",selection="over",line="5.5",
+       player_id="id_2",stat="receptions",**extra),
+  ])
+  self.assertEqual(a["accepted"],4)
+  self.assertEqual(len(a["calibration"]),4)
+  self.assertEqual(a["overall"]["unique_events"],1)
+  self.assertEqual(a["blocked_reason_counts"],{})
+
+ def test_same_event_id_different_sports_is_not_same_game(self):
+  first=row(sport="NFL",book="DraftKings",period="FG",
+            settlement="INCLUDES_OT",market="ML")
+  second=row(sport="CBB",book="DraftKings",period="FG",
+             settlement="INCLUDES_OT",market="ML")
+  a=audit([first,second])
+  self.assertEqual(a["accepted"],2)
+  self.assertEqual(a["overall"]["unique_events"],2)
+  self.assertFalse(a["overall"]["event_dependent_selections"])
+
  def test_push(self):self.assertEqual(audit([row(outcome="push")])["accepted"],0)
  def test_naive(self):self.assertEqual(audit([row(snapshot_utc="2026-11-15T20:00:00")])["accepted"],0)
  def test_invalid_probability(self):self.assertEqual(audit([row(model_p="1.2")])["accepted"],0)
