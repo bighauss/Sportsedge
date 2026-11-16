@@ -31,6 +31,7 @@ from .cli import (
 )
 from .allmarkets_research import SPORTS, PERIODS
 from .bestbook_slate_overlay import apply_bestbook_public_reference
+from .weather_slate_overlay import attach_weather_references, load_triplets
 
 # These sports are schedule/inventory ONLY. The five-sport pricing kernel does
 # not price NHL/PGA markets and must never be invoked for them.
@@ -189,7 +190,7 @@ def _simple_reason(exc):
     return "EVENT_INPUT_CONTRACT_INVALID"
 
 
-def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=None):
+def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=None, weather_triplets=None):
     _exact(manifest, ALLOWED_ROOT, "root")
     if manifest["schema"] != SCHEMA:
         raise ValueError("UNSUPPORTED_SLATE_SCHEMA")
@@ -385,6 +386,10 @@ def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=No
             result,bestbook_report,bestbook_event_map,now_utc=when)
     elif bestbook_event_map is not None:
         raise ValueError("BESTBOOK_PUBLIC_PAGE_REPORT_REQUIRED")
+    # The same no-promotion boundary applies to weather. It is attached
+    # only after every existing price/model/risk decision has finished.
+    if weather_triplets is not None:
+        result=attach_weather_references(result,weather_triplets,now_utc=when)
     return result
 
 
@@ -395,6 +400,9 @@ def main(argv=None):
     parser.add_argument("slate_output",help="private create-only RUN IT result JSON")
     parser.add_argument("--bestbook-page",help="private owner-permitted original public BestBook HTML/text")
     parser.add_argument("--bestbook-event-map",help="private exact page-label to existing event ID map JSON")
+    parser.add_argument("--weather-triplet",nargs=3,action="append",
+                        metavar=("ORIGINAL_REQUEST","RAW_RESPONSE","ORIGINAL_RECEIPT"),
+                        help="private original Open-Meteo request, raw response and receipt; repeat per event")
     opts=parser.parse_args(argv)
     source,dest=Path(opts.slate_input),Path(opts.slate_output)
     if bool(opts.bestbook_page)!=bool(opts.bestbook_event_map):
@@ -431,8 +439,10 @@ def main(argv=None):
         bestbook_map=json.loads(raw_map.decode("utf-8"),
                                 object_pairs_hook=_unique_json_keys,
                                 parse_constant=_deny_nonfinite_json)
+    weather_triplets=load_triplets(opts.weather_triplet) if opts.weather_triplet else None
     result=run_slate(request,bestbook_report=bestbook_report,
-                     bestbook_event_map=bestbook_map)
+                     bestbook_event_map=bestbook_map,
+                     weather_triplets=weather_triplets)
     result["input_sha256"]="sha256:"+sha256(original).hexdigest()
     # Source/output privacy already checked against the resolved repository root.
     payload=(json.dumps(result,indent=2,sort_keys=True,allow_nan=False)+"\n").encode("utf-8")
