@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from quant_capture_preflight import manifest_for_capture, write_create_only, quota_decision
+from quant_capture_preflight import manifest_for_capture, write_create_only, quota_decision, main, REPO_ROOT
 
 H='a'*64
 
@@ -47,6 +47,53 @@ class CapturePreflightTests(unittest.TestCase):
                                         ['2026-11-15T17:50:00Z']*2,
                                         max_hour=2,max_day=4,cache_age_seconds=None)['code'],
                          'HOUR_QUOTA_EXHAUSTED')
+    def test_nonfinite_quota_age_and_noninteger_policy_fail_closed(self):
+        for bad in (float('nan'), float('inf'), float('-inf'), True, -1, '200'):
+            with self.subTest(age=bad), self.assertRaisesRegex(ValueError,'INVALID_CACHE_AGE'):
+                quota_decision('2026-11-15T18:00:00Z',[],max_hour=2,max_day=4,
+                               cache_age_seconds=bad)
+        for changes in ({'max_hour':True}, {'max_day':1.5},
+                        {'min_cache_seconds':float('inf')}):
+            cfg=dict(max_hour=2,max_day=4,cache_age_seconds=None,min_cache_seconds=300)
+            cfg.update(changes)
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError,'INVALID_QUOTA_POLICY'):
+                quota_decision('2026-11-15T18:00:00Z',[],**cfg)
+
+    def test_future_call_log_cannot_hide_behind_cached_response(self):
+        with self.assertRaisesRegex(ValueError,'FUTURE_REQUEST_LOG'):
+            quota_decision('2026-11-15T18:00:00Z',
+                           ['2026-11-15T18:01:00Z'],max_hour=2,max_day=4,
+                           cache_age_seconds=5)
+
+    def test_duplicate_csv_headers_block_entire_snapshot(self):
+        raw=capture()
+        altered=raw.replace(b'market,offered',b'market,market,offered')
+        self.assertNotEqual(raw,altered)
+        with self.assertRaisesRegex(ValueError,'DUPLICATE_CAPTURE_CSV_HEADERS'):
+            manifest_for_capture(altered,asof_utc='2026-11-15T18:00:00Z',
+                                 provider='DK')
+
+    def test_overlong_csv_source_row_cannot_be_silently_truncated(self):
+        raw=capture()
+        altered=raw.rstrip(b'\r\n')+b',FORGED\r\n'
+        with self.assertRaisesRegex(ValueError,'CAPTURE_CSV_EXTRA_FIELDS'):
+            manifest_for_capture(altered,asof_utc='2026-11-15T18:00:00Z',
+                                 provider='DK')
+
+    def test_nonbytes_input_not_silently_parsed(self):
+        with self.assertRaisesRegex(ValueError,'INVALID_SOURCE_BYTES'):
+            manifest_for_capture('bad',asof_utc='2026-11-15T18:00:00Z',provider='DK')
+
+    def test_public_repo_paths_refused_without_creating_a_file(self):
+        bad=REPO_ROOT/'research'/'audit'/'no_private_capture_here.json'
+        with self.assertRaisesRegex(ValueError,'PRIVATE_CAPTURE_PATH_INSIDE_PUBLIC_REPO'):
+            write_create_only(bad,{'status':'PAPER'})
+        with self.assertRaisesRegex(ValueError,'PRIVATE_CAPTURE_PATH_INSIDE_PUBLIC_REPO'):
+            main([str(REPO_ROOT/'research'/'audit'/'fake_private.csv'),
+                  '--asof-utc','2026-11-15T18:00:00Z',
+                  '--provider','DK','--manifest','/tmp/not_a_real_capture_manifest.json'])
+        self.assertFalse(bad.exists())
+
     def test_future_api_call_denied(self):
         with self.assertRaises(ValueError):quota_decision('2026-11-15T18:00:00Z',
              ['2026-11-15T19:00:00Z'],max_hour=2,max_day=4,cache_age_seconds=None)
