@@ -14,7 +14,8 @@ import json
 from math import floor, isfinite
 from pathlib import Path
 
-from score_walkforward_pit import utc
+from score_walkforward_pit import utc, private_evidence_path, create_private_output
+from feature_snapshot_bridge_pit import strict_original_json
 
 HASH_PREFIX = "sha256:"
 FORECAST_KEYS = frozenset({
@@ -240,6 +241,8 @@ def score_distribution(target, history, *, lines=None, min_history=50):
             "exact_total_frequency": _frequency(Counter(totals)),
             "margin_3_frequency": round(margins.count(3) / len(margins), 8),
             "margin_7_frequency": round(margins.count(7) / len(margins), 8),
+            "abs_margin_3_frequency": round(sum(abs(x) == 3 for x in margins) / len(margins), 8),
+            "abs_margin_7_frequency": round(sum(abs(x) == 7 for x in margins) / len(margins), 8),
         }
     for family in MARKET_FAMILIES_WITHOUT_MODEL:
         output["markets"][family] = {
@@ -256,21 +259,30 @@ def main():
     parser.add_argument("--min-history", type=int, default=50)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
-    inputs = [Path(args.target), Path(args.history)]
-    raw_target = json.loads(inputs[0].read_text(encoding="utf-8"))
-    raw_history = json.loads(inputs[1].read_text(encoding="utf-8"))
-    raw_line = json.loads(Path(args.lines).read_text(encoding="utf-8")) if args.lines else None
+    # Validate ALL lexical and symlink-resolved locations before reading any
+    # private source bytes. Only keep SHA of the exact bytes we just decoded:
+    # double-reading each input would permit a hash/data mismatch under race.
+    input_paths = {
+        "target": private_evidence_path(args.target),
+        "history": private_evidence_path(args.history),
+    }
+    if args.lines:
+        input_paths["lines"] = private_evidence_path(args.lines)
+    private_evidence_path(args.out)
+    inputs = {kind: path.read_bytes() for kind, path in input_paths.items()}
+    raw_target = strict_original_json(inputs["target"])
+    raw_history = strict_original_json(inputs["history"])
+    raw_line = strict_original_json(inputs["lines"]) if args.lines else None
     result = score_distribution(raw_target, raw_history,
                                 lines=raw_line, min_history=args.min_history)
     result["local_input_sha256"] = {
-        "target": HASH_PREFIX + sha256(inputs[0].read_bytes()).hexdigest(),
-        "history": HASH_PREFIX + sha256(inputs[1].read_bytes()).hexdigest(),
-        "lines": HASH_PREFIX + sha256(Path(args.lines).read_bytes()).hexdigest()
+        "target": HASH_PREFIX + sha256(inputs["target"]).hexdigest(),
+        "history": HASH_PREFIX + sha256(inputs["history"]).hexdigest(),
+        "lines": HASH_PREFIX + sha256(inputs["lines"]).hexdigest()
                  if args.lines else None,
     }
-    with Path(args.out).open("x", encoding="utf-8") as f:
-        json.dump(result, f, sort_keys=True, indent=2)
-        f.write("\n")
+    payload = (json.dumps(result, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    create_private_output(args.out, payload)
     print(json.dumps({"status": result["status"], "out": args.out,
                       "eligible_residuals": result["census"]["eligible_prior_residual_pairs"],
                       "approved_stake_u": 0}, sort_keys=True))
