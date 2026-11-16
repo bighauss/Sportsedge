@@ -12,7 +12,22 @@ class Tests(unittest.TestCase):
  def test_missing_hash(self):
   a=audit([row(source_sha256="bad")]);self.assertEqual(a["accepted"],0)
  def test_duplicate(self):
-  a=audit([row(),row()]);self.assertEqual(a["accepted"],1);self.assertEqual(len(a["blocked"]),1)
+  a=audit([row(),row()]);self.assertEqual(a["accepted"],0);self.assertEqual(len(a["blocked"]),2)
+ def test_bad_first_duplicate_cannot_poison_grade(self):
+  bad=row(model_p="nan")
+  for rr in ([bad,row()],[row(),bad]):
+   report=audit(rr)
+   self.assertEqual(report["accepted"],0)
+   self.assertEqual(len(report["blocked"]),2)
+   self.assertTrue(all(x["reason"]=="DUPLICATE" for x in report["blocked"]))
+ def test_changed_odds_same_snapshot_all_blocked(self):
+  report=audit([row(odds="+300"),row(odds="-110")])
+  self.assertEqual(report["accepted"],0)
+  self.assertEqual(len(report["blocked"]),2)
+ def test_distinct_selection_identifiers_preserved(self):
+  report=audit([row(),row(selection="away",market_p=".4",outcome="0")])
+  self.assertEqual(report["accepted"],2)
+
  def test_push(self):self.assertEqual(audit([row(outcome="push")])["accepted"],0)
  def test_naive(self):self.assertEqual(audit([row(snapshot_utc="2026-11-15T20:00:00")])["accepted"],0)
  def test_invalid_probability(self):self.assertEqual(audit([row(model_p="1.2")])["accepted"],0)

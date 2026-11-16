@@ -6,20 +6,24 @@ outcome is 1 win / 0 loss; pushes and unsettled rows excluded.
 Market probability must be independently sourced/de-vigged upstream.
 """
 import argparse,csv,datetime as dt,json,math
-from collections import defaultdict
+from collections import Counter, defaultdict
 FIELDS=("event_id","market","selection","model_p","market_p","outcome","snapshot_utc","kickoff_utc","final_utc","model_sha256","source_sha256","odds")
 def utc(s):
     d=dt.datetime.fromisoformat(s.replace("Z","+00:00"))
     if d.tzinfo is None or d.utcoffset()!=dt.timedelta(0): raise ValueError("non-UTC timestamp")
     return d
 def parse(rows):
-    good=[];blocked=[];seen=set()
+    rows=list(rows)
+    # Never select the first among conflicting frozen records. All duplicate
+    # copies are held until source reconciliation, independent of file order.
+    counts=Counter((r.get('event_id'),r.get('market'),r.get('selection'),
+                    r.get('snapshot_utc')) for r in rows)
+    good=[];blocked=[]
     for i,r in enumerate(rows,2):
         try:
             if any(not r.get(k) for k in FIELDS):raise ValueError("MISSING_FIELD")
             k=(r["event_id"],r["market"],r["selection"],r["snapshot_utc"])
-            if k in seen:raise ValueError("DUPLICATE")
-            seen.add(k)
+            if counts[k]>1:raise ValueError("DUPLICATE")
             for h in ("model_sha256","source_sha256"):
                 s=r[h]
                 if len(s)!=64 or any(c not in "0123456789abcdef" for c in s):raise ValueError("INVALID_HASH")

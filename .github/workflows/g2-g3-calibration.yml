@@ -1,0 +1,30 @@
+name: G2-G3 frozen calibration regression tests
+on:
+  pull_request:
+    paths:
+      - 'models/audit_disagreement_calibration.py'
+      - 'models/test_audit_disagreement_calibration.py'
+      - 'models/ledger_grades_to_audit_csv.py'
+      - 'models/test_ledger_grades_to_audit_csv.py'
+      - '.github/workflows/g2-g3-calibration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/audit_disagreement_calibration.py'
+      - 'models/test_audit_disagreement_calibration.py'
+      - 'models/ledger_grades_to_audit_csv.py'
+      - 'models/test_ledger_grades_to_audit_csv.py'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: G2-G3 and grade-ledger converter isolated regressions
+        working-directory: models
+        run: python -m unittest -v test_audit_disagreement_calibration test_ledger_grades_to_audit_csv
