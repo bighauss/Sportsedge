@@ -15,6 +15,7 @@ Private outputs must be kept outside the public GitHub source checkout.
 from __future__ import annotations
 
 from collections import Counter
+import argparse
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -29,6 +30,7 @@ from .cli import (
     _deny_nonfinite_json, MAX_MANIFEST_BYTES
 )
 from .allmarkets_research import SPORTS, PERIODS
+from .bestbook_slate_overlay import apply_bestbook_public_reference
 
 # These sports are schedule/inventory ONLY. The five-sport pricing kernel does
 # not price NHL/PGA markets and must never be invoked for them.
@@ -187,7 +189,7 @@ def _simple_reason(exc):
     return "EVENT_INPUT_CONTRACT_INVALID"
 
 
-def run_slate(manifest, *, now=None):
+def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=None):
     _exact(manifest, ALLOWED_ROOT, "root")
     if manifest["schema"] != SCHEMA:
         raise ValueError("UNSUPPORTED_SLATE_SCHEMA")
@@ -354,7 +356,7 @@ def run_slate(manifest, *, now=None):
                 else "SCHEDULE_ONLY_NO_PRICING_KERNEL" if sport in SCHEDULE_ONLY_SPORTS
                 else "RESEARCH_ONLY_NOT_RELEASE_CLEARED",
         }
-    return {
+    result={
         "schema":SCHEMA,
         "slate_id":slate_id,"slate_date_ct":day.isoformat(),
         "state":"BLOCK_OFFICIAL_RELEASE_RESEARCH_ONLY",
@@ -373,13 +375,30 @@ def run_slate(manifest, *, now=None):
         "approved_stake_u":0, "official_counted":0, "card":None,
         "issue10_release_certified":False,
     }
+    # Keep the public-price comparison OUT of all model/quote/risk input paths.
+    # An explicitly bound homepage reference is for display and missing-data
+    # audit only. Its best-book labels cannot become original DK receipts.
+    if bestbook_report is not None:
+        if bestbook_event_map is None:
+            raise ValueError("BESTBOOK_EVENT_IDENTITY_MAPPING_REQUIRED")
+        result=apply_bestbook_public_reference(
+            result,bestbook_report,bestbook_event_map,now_utc=when)
+    elif bestbook_event_map is not None:
+        raise ValueError("BESTBOOK_PUBLIC_PAGE_REPORT_REQUIRED")
+    return result
 
 
 def main(argv=None):
-    args=sys.argv[1:] if argv is None else argv
-    if len(args)!=2:
-        raise SystemExit("Usage: python -m sportsedge.markets.slate_orchestrator PRIVATE_INPUT.json PRIVATE_OUTPUT.json")
-    source,dest=map(Path,args)
+    argv=sys.argv[1:] if argv is None else argv
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("slate_input",help="private original RUN IT slate JSON")
+    parser.add_argument("slate_output",help="private create-only RUN IT result JSON")
+    parser.add_argument("--bestbook-page",help="private owner-permitted original public BestBook HTML/text")
+    parser.add_argument("--bestbook-event-map",help="private exact page-label to existing event ID map JSON")
+    opts=parser.parse_args(argv)
+    source,dest=Path(opts.slate_input),Path(opts.slate_output)
+    if bool(opts.bestbook_page)!=bool(opts.bestbook_event_map):
+        raise ValueError("BESTBOOK_SOURCE_AND_EXPLICIT_EVENT_MAP_REQUIRED_TOGETHER")
     # The input may contain private quote IDs and source metadata. Do not
     # read a manifest or emit an output inside the public checkout, regardless
     # of the process working directory or symlinked path spelling.
@@ -397,7 +416,23 @@ def main(argv=None):
     request=json.loads(original.decode("utf-8"),
                        object_pairs_hook=_unique_json_keys,
                        parse_constant=_deny_nonfinite_json)
-    result=run_slate(request)
+    bestbook_report=None
+    bestbook_map=None
+    if opts.bestbook_page:
+        # Only read owner-private original source bytes, never a scraped login.
+        # Neither the public quote nor its best-book label is authenticated.
+        from sportsedge.odds.bestbook_public_reference import (
+            _read_source as read_private_public_page,
+            analyze as analyze_bestbook_homepage,
+        )
+        original_bestbook=read_private_public_page(opts.bestbook_page)
+        bestbook_report=analyze_bestbook_homepage(original_bestbook)
+        raw_map=read_private_public_page(opts.bestbook_event_map)
+        bestbook_map=json.loads(raw_map.decode("utf-8"),
+                                object_pairs_hook=_unique_json_keys,
+                                parse_constant=_deny_nonfinite_json)
+    result=run_slate(request,bestbook_report=bestbook_report,
+                     bestbook_event_map=bestbook_map)
     result["input_sha256"]="sha256:"+sha256(original).hexdigest()
     # Source/output privacy already checked against the resolved repository root.
     payload=(json.dumps(result,indent=2,sort_keys=True,allow_nan=False)+"\n").encode("utf-8")
