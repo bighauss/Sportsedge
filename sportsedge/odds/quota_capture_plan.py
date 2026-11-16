@@ -15,7 +15,7 @@ import json
 import math
 from pathlib import Path
 
-from sportsedge.odds.event_discovery import CATALOG_COLUMNS, COLS, clock
+from sportsedge.odds.event_discovery import COLS, clock
 from sportsedge.odds.free_odds_aggregator_intake import (
     BOOKS, EVENT_RE, SPORTS, private_archive_root, strict_json, utc,
 )
@@ -38,6 +38,8 @@ def _original(root: Path, name: str) -> bytes:
     path = root / name
     if path.is_symlink() or not path.is_file():
         raise PlanningBlocked("CATALOG_SOURCE_FILE_UNAVAILABLE")
+    if path.stat().st_size > 10_000_000:
+        raise PlanningBlocked("CATALOG_SOURCE_FILE_OVERSIZE")
     return path.read_bytes()
 
 
