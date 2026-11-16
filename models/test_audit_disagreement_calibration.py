@@ -1,5 +1,11 @@
 import unittest
-from audit_disagreement_calibration import audit
+import csv
+import hashlib
+import json
+import os
+from pathlib import Path
+import tempfile
+from audit_disagreement_calibration import audit, FIELDS, main
 H="a"*64
 def row(**changes):
  r=dict(event_id="e",market="moneyline",selection="home",model_p=".6",market_p=".5",outcome="1",snapshot_utc="2026-11-15T20:00:00Z",kickoff_utc="2026-11-15T21:00:00Z",final_utc="2026-11-16T00:00:00Z",model_sha256=H,source_sha256=H,odds="-110")
@@ -87,4 +93,67 @@ class Tests(unittest.TestCase):
   self.assertGreater(a["overall"]["observed_wilson_95"][1],.5)
  def test_invalid_odds(self):
   self.assertEqual(audit([row(odds="0")])["accepted"],0)
+ def test_private_cli_create_only_source_hash_and_mode(self):
+  with tempfile.TemporaryDirectory() as d:
+   src,out=Path(d)/"original.csv",Path(d)/"report.json"
+   with src.open("w",encoding="utf-8",newline="") as f:
+    w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerow(row())
+   raw=src.read_bytes()
+   self.assertEqual(main([str(src),"--output",str(out)]),0)
+   report=json.loads(out.read_text())
+   self.assertEqual(report["input_sha256"],hashlib.sha256(raw).hexdigest())
+   self.assertFalse(report["input_original_provider_authenticated"])
+   self.assertEqual(report["accepted"],1)
+   self.assertEqual(os.stat(out).st_mode & 0o777,0o600)
+
+ def test_cli_never_overwrites_existing_report(self):
+  with tempfile.TemporaryDirectory() as d:
+   src,out=Path(d)/"original.csv",Path(d)/"report.json"
+   with src.open("w",encoding="utf-8",newline="") as f:
+    w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerow(row())
+   out.write_text("SAVED HISTORICAL REPORT")
+   with self.assertRaises(FileExistsError):
+    main([str(src),"--output",str(out)])
+   self.assertEqual(out.read_text(),"SAVED HISTORICAL REPORT")
+
+ def test_cli_refuses_originals_and_outputs_in_public_repo(self):
+  from audit_disagreement_calibration import REPO_ROOT
+  with tempfile.TemporaryDirectory() as d:
+   src=Path(d)/"original.csv"
+   with src.open("w",encoding="utf-8",newline="") as f:
+    w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerow(row())
+   with self.assertRaisesRegex(ValueError,"INSIDE_PUBLIC_CHECKOUT"):
+    main([str(Path(__file__).resolve()),"--output",str(Path(d)/"out.json")])
+   with self.assertRaisesRegex(ValueError,"INSIDE_PUBLIC_CHECKOUT"):
+    main([str(src),"--output",str(REPO_ROOT/"private_report.json")])
+
+ def test_cli_refuses_duplicate_headers_and_truncated_rows(self):
+  with tempfile.TemporaryDirectory() as d:
+   src,out=Path(d)/"original.csv",Path(d)/"report.json"
+   src.write_text(",".join(FIELDS)+",odds\n"+",".join(row()[f] for f in FIELDS)+",-110\n")
+   with self.assertRaisesRegex(ValueError,"DUPLICATE_CSV_HEADER"):
+    main([str(src),"--output",str(out)])
+   self.assertFalse(out.exists())
+   src.write_text(",".join(FIELDS)+"\n"+",".join(row()[f] for f in FIELDS[:-1])+"\n")
+   with self.assertRaisesRegex(ValueError,"TRUNCATED_OR_OVERLONG_CSV_ROW"):
+    main([str(src),"--output",str(out)])
+   self.assertFalse(out.exists())
+   src.write_text(",".join(FIELDS)+"\n"+",".join(row()[f] for f in FIELDS)+",EXTRA\n")
+   with self.assertRaisesRegex(ValueError,"TRUNCATED_OR_OVERLONG_CSV_ROW"):
+    main([str(src),"--output",str(out)])
+
+ def test_cli_refuses_symlink_source_and_output(self):
+  with tempfile.TemporaryDirectory() as d:
+   src=Path(d)/"original.csv"
+   with src.open("w",encoding="utf-8",newline="") as f:
+    w=csv.DictWriter(f,fieldnames=FIELDS);w.writeheader();w.writerow(row())
+   alias=Path(d)/"alias.csv";alias.symlink_to(src)
+   with self.assertRaisesRegex(ValueError,"UNTRUSTED_SYMLINK"):
+    main([str(alias),"--output",str(Path(d)/"out.json")])
+   report=Path(d)/"report.json";report.write_text("PROTECTED")
+   outalias=Path(d)/"alias.json";outalias.symlink_to(report)
+   with self.assertRaisesRegex(ValueError,"UNTRUSTED_SYMLINK"):
+    main([str(src),"--output",str(outalias)])
+   self.assertEqual(report.read_text(),"PROTECTED")
+
 if __name__=="__main__":unittest.main()
