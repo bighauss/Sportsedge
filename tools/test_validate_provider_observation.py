@@ -32,6 +32,14 @@ class TestProviderObservation(unittest.TestCase):
         d=good()
         d["observations"][0]["observed_at_utc"]="2026-11-16T13:00:00"
         self.assertIn("row_0_timestamp", validate_manifest(d))
+    def test_reject_future_observation_clock(self):
+        d = good()
+        d["observations"][0]["observed_at_utc"] = "2099-01-01T00:00:00+00:00"
+        self.assertIn("row_0_timestamp", validate_manifest(d))
+    def test_reject_noncanonical_timestamp_suffix(self):
+        d = good()
+        d["observations"][0]["observed_at_utc"] = "2026-11-16T13:00:00Zgarbage"
+        self.assertIn("row_0_timestamp", validate_manifest(d))
     def test_reject_missing(self):
         d=good()
         d["observations"].pop()

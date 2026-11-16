@@ -46,9 +46,16 @@ def validate_manifest(document):
             errors.append(f"row_{index}_type")
         try:
             stamp = row["observed_at_utc"]
-            parsed = datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            if not isinstance(stamp, str) or not (
+                stamp.endswith("Z") or stamp.endswith("+00:00")
+            ):
+                raise ValueError("not_canonical_utc")
+            normalized = stamp[:-1] + "+00:00" if stamp.endswith("Z") else stamp
+            parsed = datetime.datetime.fromisoformat(normalized)
             if parsed.tzinfo is None or parsed.utcoffset() != datetime.timedelta(0):
                 raise ValueError("not_utc")
+            if parsed > datetime.datetime.now(datetime.timezone.utc):
+                raise ValueError("future_observation")
         except (KeyError, ValueError, TypeError, AttributeError):
             errors.append(f"row_{index}_timestamp")
     if len(names) != len(EXPECTED) or set(names) != EXPECTED or len(set(names)) != len(names):
