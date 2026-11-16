@@ -39,3 +39,25 @@ checkout is refused. If report creation succeeds but an actual write or sync
 fails, the partially created result from that invocation is deleted (without
 touching the private source). This remains a local integrity precaution rather
 than independent attestation or full transaction-safe storage.
+
+## Numeric remaining-gap reporting (non-certifying)
+
+The sanitized report now includes **reported** remainders for each threshold:
+`A_prices.reported_remaining_to_100`, `C_calibration.reported_remaining_to_3`,
+`D_CLV.reported_remaining_to_200`, `E_guard.reported_remaining_to_100`,
+and `five_days.reported_remaining_to_5`. Gate B additionally reports
+`reported_incomplete_packages_last_100`,
+`reported_packages_short_of_95pct`, and already reports
+`reported_zero_pit_cards_last_100` (the last can independently block
+the structural 95% result). These values are bounded at zero and computed
+from the **manifest supplied to this invocation**, not from any independently
+audited provider database. Missing private evidence MUST NOT be silently
+treated as proof there are zero real-world captures.
+
+The root report deliberately gives
+`counts_provenance="SELF_REPORTED_PRIVATE_MANIFEST_ONLY"` and
+`independently_verified_gate_counts=null`. A null external count means
+**not assessed**, not zero and not certified. Do not retroactively add
+replacement PIT snapshots, closes, cards or cycles to make the remainder
+fields reach zero. A clean structural remainder alone cannot lift PAPER / 0u
+or allow a signed promotion.
