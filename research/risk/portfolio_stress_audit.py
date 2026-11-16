@@ -294,9 +294,12 @@ def group_results(rows, field):
     groups = collections.defaultdict(list)
     for x in rows:
         groups[x[field] or "UNKNOWN"].append(x)
-    return {k: {"performance": status_summary(v), "event_count": len(set((x["sport"], x["event_id"]) for x in v)),
-                "insufficient_30_events": len(set((x["sport"], x["event_id"]) for x in v)) < 30}
-            for k, v in sorted(groups.items())}
+    result = {}
+    for k, v in sorted(groups.items()):
+        independent = len({(x["sport"], x["event_id"]) for x in v if x["net"] is not None and x["risk"] > 0})
+        result[k] = {"performance": status_summary(v), "event_count": independent,
+                     "insufficient_30_events": independent < 30}
+    return result
 
 
 def audit(input_rows, *, iterations=2000):
@@ -328,7 +331,8 @@ def audit(input_rows, *, iterations=2000):
     settled = [x for x in accepted if x["net"] is not None]
     game_returns = collections.defaultdict(float)
     for x in settled:
-        game_returns[(x["sport"],x["event_id"])] += x["net"]
+        if x["risk"] > 0:
+            game_returns[(x["sport"],x["event_id"])] += x["net"]
     variance = statistics.variance(game_returns.values()) if len(game_returns) >= 30 else None
     return {
         "status": "PAPER_STRUCTURAL_RESEARCH_NOT_PROVIDER_AUTHENTICATED",
