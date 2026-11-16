@@ -16,7 +16,7 @@ SCHEMA = "sportsedge-cfb-source-pit-v1"
 SOURCES = ("game", "team_stats", "qb", "weather", "injuries")
 FAMILIES = ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP",
             "PERIOD", "SPECIAL", "ALTERNATE", "SGP")
-IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_:\\-.]{0,95}$")
+IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_:.-]{0,95}$")
 HASH = re.compile(r"^[0-9a-f]{64}$")
 MAX_SOURCE_BYTES = 8_000_000
 MAX_SOURCE_ROWS = 20_000
