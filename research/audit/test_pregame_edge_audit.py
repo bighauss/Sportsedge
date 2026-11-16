@@ -26,13 +26,31 @@ class Validation(unittest.TestCase):
         self.assertEqual(z['status'],'RESEARCH_ONLY_PAPER_0U')
     def test_duplicate_text_variant(self):
         a=row(market='ML',side='HOME');b=row(market='ml',side='home')
-        z=run(a,b);self.assertEqual(z['diagnostic_eligible'],1)
-        self.assertIn('DUPLICATE_CANONICAL_SELECTION',z['flagged'][0]['flags'])
+        z=run(a,b);self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertEqual(len(z['flagged']),2)
+        self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in r['flags'] for r in z['flagged']))
     def test_moneyline_blank_zero_and_alias_dedup(self):
         a=row(market='moneyline',period='full_game',line='')
         b=row(market='ML',period='FG',line='0')
-        z=run(a,b);self.assertEqual(z['diagnostic_eligible'],1)
-        self.assertIn('DUPLICATE_CANONICAL_SELECTION',z['flagged'][0]['flags'])
+        z=run(a,b);self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertEqual(len(z['flagged']),2)
+        self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in r['flags'] for r in z['flagged']))
+    def test_malformed_duplicate_first_cannot_poison_rank(self):
+        good=row()
+        bad=row(p_model='nan', quote_sha256='')
+        for rr in ((bad,good),(good,bad)):
+            z=run(*rr)
+            self.assertEqual(z['diagnostic_eligible'],0)
+            self.assertEqual(len(z['flagged']),2)
+            self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in r['flags'] for r in z['flagged']))
+    def test_cross_book_same_selection_not_two_bets(self):
+        z=run(row(book='DK'),row(book='OTHER',price_american='+180'))
+        self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in r['flags'] for r in z['flagged']))
+    def test_alt_lines_are_distinct_selections(self):
+        z=run(row(market='SPREAD',side='home',line='-5.5'),
+              row(market='SPREAD',side='home',line='-6.5'))
+        self.assertEqual(z['diagnostic_eligible'],2)
     def test_quote_not_pregame(self):
         z=run(row(captured_utc='2026-11-15T17:00:00Z'))
         self.assertIn('QUOTE_NOT_PREGAME',z['flagged'][0]['flags'])
