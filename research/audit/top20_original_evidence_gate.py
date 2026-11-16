@@ -46,9 +46,17 @@ def _unique_pairs(pairs):
 
 
 def _finite_json_float(s):
-    f = float(s)
+    # JSON 1e-999 is nonzero evidence, even if Python float silently
+    # underflows it to 0. An auditor cannot replace its original value.
+    try:
+        exact = Decimal(s)
+        f = float(s)
+    except (InvalidOperation, ValueError, OverflowError) as exc:
+        raise EvidenceError("INVALID_JSON_NUMBER") from exc
     if not math.isfinite(f):
         raise EvidenceError("NONFINITE_JSON_NUMBER")
+    if f == 0 and exact != 0:
+        raise EvidenceError("UNDERFLOW_JSON_NUMBER")
     return f
 
 
@@ -181,6 +189,16 @@ def _settlement(row, final, flags):
         if side not in ("HOME", "AWAY"):
             flags.append("INVALID_SIDE_FOR_MONEYLINE")
             return None
+        # First-half basketball ML can be a 2-way market with a tie/push,
+        # or a 3-way market where HOME/AWAY loses on a tie. Never infer
+        # settlement type from the generic label "1H ML".
+        if period == "1H":
+            tie_rule = _safe(row.get("moneyline_tie_rule")).upper()
+            if tie_rule not in ("TWO_WAY_TIE_PUSH", "THREE_WAY_TIE_LOSS"):
+                flags.append("ORIGINAL_1H_MONEYLINE_TIE_RULE_MISSING")
+                return None
+            if hs == as_ and tie_rule == "THREE_WAY_TIE_LOSS":
+                return "L"
         cmp = hs-as_ if side == "HOME" else as_-hs
     elif market == "SPREAD":
         if side not in ("HOME", "AWAY") or line is None:
@@ -257,6 +275,9 @@ def _validate_claim(row, finals, *, max_quote_age_seconds, disagreement_points):
         flags.append("PROVIDER_EVENT_ID_MISSING")
     if market == "TEAM_TOTAL" and not _key(row.get("team_id")):
         flags.append("TEAM_TOTAL_TEAM_ID_MISSING")
+    if market == "ML" and period == "1H" and _safe(row.get("moneyline_tie_rule")).upper() not in (
+            "TWO_WAY_TIE_PUSH", "THREE_WAY_TIE_LOSS"):
+        flags.append("ORIGINAL_1H_MONEYLINE_TIE_RULE_MISSING")
     if market not in MARKETS and not _key(row.get("player_id")):
         flags.append("UNSUPPORTED_PROP_OR_PLAYER_MAPPING")
     if not _hash_ok(row.get("model_sha256")):
