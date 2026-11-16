@@ -24,6 +24,7 @@ from .projection_bridge import TeamProjection, from_claude_sport, from_nfl_ridge
 from .pit_source_manifest import verify_model_feature_manifest
 from .projection_distribution import DistributionInput,generate_score_scenarios
 from .score_dispersion_fit import fit_score_residuals, private_path, MAX_BYTES as MAX_FIT_BYTES
+from .period_share_fit import fit_period_shares, _private_path as period_private_path, MAX_SIZE as MAX_PERIOD_BYTES
 from .player_forecast_intake import ingest_player_forecast_csv
 from .run_it_research import MarketCandidate,run_research_board
 from .source_ingestion import SOURCES
@@ -90,7 +91,7 @@ def _quote(data:dict|None)->PriceReceipt|None:
 
 def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     _only_keys(payload,{"projection","projection_ref","distribution","dispersion_fit_ref",
-                        "markets","player_file","roster_ids","event_team_ids",
+                        "period_fit_ref","markets","player_file","roster_ids","event_team_ids",
                         "simulation_count","simulation_seed"},"root")
     if ("projection" in payload)==("projection_ref" in payload):
         raise ValueError("EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED")
