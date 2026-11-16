@@ -72,7 +72,9 @@ class DistributionInput:
             raise ValueError("CALIBRATION_STATUS_UNSUPPORTED")
         if not (0.1<=self.sd_margin<=150 and 0.1<=self.sd_total<=150):
             raise ValueError("DISPERSION_WIDTH_OUT_OF_BOUNDS")
-        if len(self.period_shares)!=(9 if self.sport=="MLB" else 4):
+        expected_lengths=((9,) if self.sport=="MLB" else
+                          (2,4) if self.sport=="CBB" else (4,))
+        if len(self.period_shares) not in expected_lengths:
             raise ValueError("PERIOD_SPLITS_MISSING")
         if any(not math.isfinite(x) or not 0<x<1 for x in self.period_shares):
             raise ValueError("INVALID_PERIOD_SHARES")
@@ -185,7 +187,8 @@ def generate_score_scenarios(
         away=total-home
         h_parts=split_int(rng,home,dispersion.period_shares)
         a_parts=split_int(rng,away,dispersion.period_shares)
-        prefix="I" if projection.sport=="MLB" else "Q"
+        prefix=("I" if projection.sport=="MLB" else
+                "H" if projection.sport=="CBB" and len(h_parts)==2 else "Q")
         keys=[prefix+str(i+1) for i in range(len(h_parts))]
         periods={k:(h,a) for k,h,a in zip(keys,h_parts,a_parts)}
         props={}
