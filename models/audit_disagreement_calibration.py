@@ -25,7 +25,21 @@ PLAYER_MARKETS=frozenset(("playerprop","prop","attd","atd","firsttd","td2plus",
                           "firstbasket","homerun","anytimegoal","firstgoal"))
 
 def _market_token(value):
-    return str(value).strip().casefold().replace(" ","").replace("_","").replace("-","")
+    m=str(value).strip().casefold().replace(" ","").replace("_","").replace("-","")
+    return {"moneyline":"ml","spreads":"spread","totals":"total",
+            "teamtotals":"teamtotal"}.get(m,m)
+
+def _book_id(value):
+    v=" ".join(str(value).strip().casefold().split())
+    return {"dk":"draftkings","draft kings":"draftkings",
+            "fd":"fanduel","fan duel":"fanduel"}.get(v,v)
+
+def _period_id(value):
+    v=str(value).strip().casefold().replace(" ","").replace("_","").replace("-","")
+    return {"fullgame":"fg","full":"fg","game":"fg",
+            "firsthalf":"1h","h1":"1h","secondhalf":"2h","h2":"2h",
+            "firstquarter":"1q","q1":"1q","secondquarter":"2q","q2":"2q",
+            "thirdquarter":"3q","q3":"3q","fourthquarter":"4q","q4":"4q"}.get(v,v)
 
 def _line(value):
     raw=str(value if value is not None else "").strip()
@@ -77,8 +91,7 @@ def _identity(row):
     if market in ("teamtotal","teamtotals","tt") and not team:
         raise ValueError("EXTENDED_TEAM_TOTAL_SUBJECT_REQUIRED")
     key=("EXACT_MARKET",row["sport"].strip().upper(),*base,
-         row["book"].strip().casefold(),
-         row["period"].strip().casefold(),
+         _book_id(row["book"]),_period_id(row["period"]),
          row["settlement"].strip().casefold(),line,player,team,stat)
     return base,key,"EXACT_MARKET"
 
@@ -125,8 +138,8 @@ def parse(rows):
             odds=int(r["odds"]); profit=(odds/100 if odds>=100 else 100/abs(odds)) if abs(odds)>=100 else None
             if profit is None or odds==0:raise ValueError("INVALID_ODDS")
             stratum=(r["market"] if mode=="LEGACY_UNATTESTED" else
-                     "|".join((r["sport"].strip().upper(),r["market"],
-                               r["book"].strip().casefold(),r["period"].strip().casefold(),
+                     "|".join((r["sport"].strip().upper(),_market_token(r["market"]),
+                               _book_id(r["book"]),_period_id(r["period"]),
                                r["settlement"].strip().casefold())))
             good.append((stratum,p,q,int(r["outcome"]),profit,r["event_id"]))
         except (ValueError,TypeError,KeyError) as e:blocked.append({"row":i,"reason":str(e)})
