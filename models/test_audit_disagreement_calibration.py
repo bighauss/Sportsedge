@@ -40,6 +40,30 @@ class Tests(unittest.TestCase):
  def test_exact_ten_pp(self):
   from audit_disagreement_calibration import bucket
   self.assertEqual(bucket(.6-.5),"10-20pp")
+ def test_threshold_near_miss_is_not_promoted_by_rounding(self):
+  from audit_disagreement_calibration import bucket
+  self.assertEqual(bucket(.04996),"0-5pp")
+  self.assertEqual(bucket(.09996),"5-10pp")
+  self.assertEqual(bucket(.19996),"10-20pp")
+  self.assertEqual(bucket(.05),"5-10pp")
+  self.assertEqual(bucket(.1),"10-20pp")
+  self.assertEqual(bucket(.2),"20pp+")
+  self.assertEqual(bucket(.6-.5),"10-20pp")
+  self.assertEqual(bucket(-(.6-.5)),"10-20pp")
+ def test_actual_report_near_ten_pp_correct_bucket(self):
+  rr=audit([row(model_p=".59996",market_p=".5")])
+  self.assertEqual(rr["disagreement"][0]["bucket"],"5-10pp")
+ def test_many_alt_lines_one_game_is_not_independent_sample(self):
+  a=audit([row(event_id="same_game",market=f"altline_{i}",
+               selection=f"under_{i}") for i in range(32)])
+  self.assertEqual(a["overall"]["n"],32)
+  self.assertEqual(a["overall"]["unique_events"],1)
+  self.assertFalse(a["overall"]["insufficient_n30"])
+  self.assertTrue(a["overall"]["insufficient_unique_events_30"])
+ def test_distinct_games_versus_distinct_selections(self):
+  a=audit([row(event_id=str(i),selection="home") for i in range(30)])
+  self.assertEqual(a["overall"]["unique_events"],30)
+  self.assertFalse(a["overall"]["insufficient_unique_events_30"])
  def test_roi_and_ci(self):
   a=audit([row()])
   self.assertAlmostEqual(a["overall"]["roi"],100/110,places=6)
