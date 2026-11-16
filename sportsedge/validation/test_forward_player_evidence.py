@@ -14,11 +14,15 @@ from tempfile import TemporaryDirectory
 import csv
 import io
 import json
+import os
+import subprocess
+import sys
 import unittest
 
 from sportsedge.validation.forward_player_evidence import (
     RESEARCH_FREEZE, RESEARCH_GRADE, freeze_player_forecasts,
-    grade_frozen_capture, _write_private_create_only,
+    grade_frozen_capture, _write_private_create_only, main,
+    _trusted_registry_root, _freeze_registry_path, _grade_registry_path,
 )
 from sportsedge.markets.player_forecast_intake import REQUIRED
 
@@ -390,6 +394,142 @@ class ForwardPlayerEvidence(unittest.TestCase):
         from sportsedge.validation.forward_player_evidence import _strict_json
         with self.assertRaisesRegex(ValueError,"DUPLICATE_JSON_KEY"):
             _strict_json(b'{"schema":"x","schema":"y"}')
+
+    def test_cli_one_canonical_event_freeze_across_different_output_names(self):
+        with TemporaryDirectory() as d:
+            root=Path(d)/"shared-registry"
+            root.mkdir(mode=0o700)
+            m,_=inputs(d)
+            req=Path(d)/"freeze-request.json"
+            req.write_text(json.dumps(m))
+            canonical=root/"freeze-2026-w11-GAME1.json"
+            other=Path(d)/"alternate-folder"
+            other.mkdir(mode=0o700)
+            with patch("sportsedge.validation.forward_player_evidence._clock",
+                       return_value=NOW):
+                with self.assertRaisesRegex(ValueError,"NONCANONICAL_FREEZE_OR_GRADE_OUTPUT_REFUSED"):
+                    main(["freeze",str(req),str(other/"also-frozen.json"),
+                          "--registry-root",str(root)])
+                self.assertFalse((other/"also-frozen.json").exists())
+                self.assertEqual(main(["freeze",str(req),str(canonical),
+                                       "--registry-root",str(root)]),0)
+                original=canonical.read_bytes()
+                self.assertEqual(canonical.stat().st_mode & 0o777,0o600)
+                with self.assertRaises(FileExistsError):
+                    main(["freeze",str(req),str(canonical),
+                          "--registry-root",str(root)])
+                with self.assertRaisesRegex(ValueError,"NONCANONICAL_FREEZE_OR_GRADE_OUTPUT_REFUSED"):
+                    main(["freeze",str(req),str(other/"second.json"),
+                          "--registry-root",str(root)])
+            self.assertEqual(canonical.read_bytes(),original)
+
+    def test_cli_grade_only_original_canonical_freeze_once(self):
+        with TemporaryDirectory() as d:
+            root=Path(d)/"shared-registry"
+            root.mkdir(mode=0o700)
+            m,final=inputs(d)
+            freeze_path=root/"freeze-2026-w11-GAME1.json"
+            freeze_request=Path(d)/"freeze-request.json"
+            freeze_request.write_text(json.dumps(m))
+            with patch("sportsedge.validation.forward_player_evidence._clock",
+                       return_value=NOW):
+                main(["freeze",str(freeze_request),str(freeze_path),
+                      "--registry-root",str(root)])
+            capture_sha="sha256:"+sha256(freeze_path.read_bytes()).hexdigest()
+            g=grade_request(d,capture_sha,final)
+            g["frozen_capture_path"]=str(freeze_path)
+            grade_path=root/f"grade-2026-w11-GAME1-{capture_sha[7:]}.json"
+            grade_request_path=Path(d)/"grade-request.json"
+            grade_request_path.write_text(json.dumps(g))
+            with patch("sportsedge.validation.forward_player_evidence._clock",
+                       return_value=AFTER):
+                self.assertEqual(main(["grade",str(grade_request_path),str(grade_path),
+                                       "--registry-root",str(root)]),0)
+                original=grade_path.read_bytes()
+                self.assertEqual(json.loads(original)["graded_rows"],1)
+                self.assertEqual(grade_path.stat().st_mode & 0o777,0o600)
+                with self.assertRaises(FileExistsError):
+                    main(["grade",str(grade_request_path),str(grade_path),
+                          "--registry-root",str(root)])
+                with self.assertRaisesRegex(ValueError,"NONCANONICAL_FREEZE_OR_GRADE_OUTPUT_REFUSED"):
+                    main(["grade",str(grade_request_path),str(Path(d)/"cherrypicked.json"),
+                          "--registry-root",str(root)])
+            self.assertEqual(grade_path.read_bytes(),original)
+
+    def test_grade_duplicate_source_different_name_does_not_bypass_unique_freeze(self):
+        with TemporaryDirectory() as d:
+            root=Path(d)/"shared-registry"
+            root.mkdir(mode=0o700)
+            m,final=inputs(d)
+            frozen=freeze_player_forecasts(m,now=NOW)
+            original=root/"freeze-2026-w11-GAME1.json"
+            sha=_write_private_create_only(original,frozen)
+            alternate=root/"freeze-2026-w11-GAME1-cherrypicked.json"
+            alternate.write_bytes(original.read_bytes())
+            alternate.chmod(0o600)
+            g=grade_request(d,sha,final)
+            g["frozen_capture_path"]=str(alternate)
+            rq=Path(d)/"grade-request.json"
+            rq.write_text(json.dumps(g))
+            with patch("sportsedge.validation.forward_player_evidence._clock",
+                       return_value=AFTER):
+                with self.assertRaisesRegex(ValueError,"GRADE_FROZEN_SOURCE_NOT_IN_CANONICAL_REGISTRY"):
+                    main(["grade",str(rq),str(root/"any.json"),
+                          "--registry-root",str(root)])
+            self.assertFalse((root/"any.json").exists())
+
+    def test_registry_missing_world_readable_and_symlink_roots_refused(self):
+        with TemporaryDirectory() as d:
+            root=Path(d)/"trusted"
+            with self.assertRaisesRegex(ValueError,"TRUSTED_REGISTRY_DIRECTORY_MISSING"):
+                _trusted_registry_root(str(root))
+            root.mkdir(mode=0o700)
+            self.assertEqual(_trusted_registry_root(str(root)),root)
+            root.chmod(0o755)
+            with self.assertRaisesRegex(ValueError,"TRUSTED_REGISTRY_REQUIRES_OWNER_DIRECTORY_0700"):
+                _trusted_registry_root(str(root))
+            root.chmod(0o700)
+            alias=Path(d)/"symlink-root"
+            alias.symlink_to(root,target_is_directory=True)
+            with self.assertRaisesRegex(ValueError,"TRUSTED_REGISTRY_OUTSIDE_PUBLIC_REPO_NO_SYMLINKS"):
+                _trusted_registry_root(str(alias))
+
+    def test_two_independent_processes_exclusive_create_one_physical_freeze(self):
+        # Both workers contend for EXACTLY the same canonical event path,
+        # rather than choosing alternate filenames/directories.
+        with TemporaryDirectory() as d:
+            root=Path(d)/"trusted"
+            root.mkdir(mode=0o700)
+            target=root/"freeze-2026-w11-GAME1.json"
+            script=(
+                "import sys; "
+                "from sportsedge.validation.forward_player_evidence import _write_private_create_only; "
+                "_write_private_create_only(sys.argv[1],"
+                "{'schema':'sportsedge-nfl-player-forward-freeze-v2','state':'PAPER_0U','approved_stake_u':0})"
+            )
+            repo_root=Path(__file__).resolve().parents[2]
+            workers=[subprocess.Popen(
+                        [sys.executable,"-c",script,str(target)],
+                        cwd=str(repo_root),stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+                     for _ in range(2)]
+            ended=[w.communicate(timeout=15) for w in workers]
+            codes=[w.returncode for w in workers]
+            self.assertEqual(sorted(codes),[0,1],ended)
+            self.assertEqual(target.stat().st_mode & 0o777,0o600)
+            self.assertEqual(json.loads(target.read_bytes())["approved_stake_u"],0)
+            self.assertTrue(any(b"FileExistsError" in err for _,err in ended))
+
+    def test_registry_path_identity_stays_stable_on_same_event(self):
+        with TemporaryDirectory() as d:
+            root=Path(d)
+            frozen={"event_id":"GAME1","season":2026,"week":11}
+            self.assertEqual(_freeze_registry_path(root,frozen).name,
+                             "freeze-2026-w11-GAME1.json")
+            self.assertEqual(_grade_registry_path(root,frozen,H).name,
+                             f"grade-2026-w11-GAME1-{H[7:]}.json")
+            with self.assertRaisesRegex(ValueError,"INVALID_STABLE_ID"):
+                _freeze_registry_path(root,dict(frozen,event_id="../fake"))
 
 
 if __name__ == "__main__":

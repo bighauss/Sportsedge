@@ -1,0 +1,27 @@
+name: NFL player forward canonical registry (synthetic only)
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/validation/forward_player_evidence.py'
+      - 'sportsedge/validation/test_forward_player_evidence.py'
+      - '.github/workflows/nfl-forward-canonical-archive.yml'
+      - 'docs/evidence/NFL_FORWARD_CANONICAL_NAMESPACE.md'
+  push:
+    branches: [main]
+    paths:
+      - 'sportsedge/validation/forward_player_evidence.py'
+      - 'sportsedge/validation/test_forward_player_evidence.py'
+      - '.github/workflows/nfl-forward-canonical-archive.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m py_compile sportsedge/validation/forward_player_evidence.py sportsedge/validation/test_forward_player_evidence.py
+      - run: python -m unittest sportsedge.validation.test_forward_player_evidence -v
