@@ -50,6 +50,32 @@ original price/settled game source, not a postgame reconstructed card.
 The script's JSON is **NOT** approved for external publication if it
 contains private market prices or user-specific bets.
 
+## CLI original-source privacy and file integrity
+
+The G2/G3 audit CLI is now fail-closed for `--output`: it refuses input
+and output paths inside the public repository (including symlinks), refuses
+truncated or overlong CSV rows and duplicate original headers, and records
+the **exact original CSV bytes SHA-256** in the output. That SHA records
+local file identity, not upstream provider authentication.
+
+New detailed JSON output is created **once** (never overwritten) using
+exclusive creation permissions `0600`, flushed to disk before reporting
+success, and deleted on a partial write failure. If the destination exists,
+the tool fails without changing it. The user must keep the original CSV and
+report in a private, access-controlled directory outside the public clone.
+
+Example:
+
+```bash
+python models/audit_disagreement_calibration.py \
+  /private/frozen_g2_predictions.csv \
+  --output /private/g2_output_NEW_NAME.json
+```
+
+When `--output` is absent the tool still prints research data on stdout;
+the operator is responsible for not copying private odds/picks into public
+issues, PRs, CI logs or chat.
+
 ## Remaining blockers
 
 Even after the boundary and independent-event correction:
