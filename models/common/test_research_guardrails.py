@@ -12,6 +12,13 @@ class Tests(unittest.TestCase):
             "pts":[("d1",22),("d2",30)],"reb":[("z1",11),("z2",4)]})
     def test_missing_draw_ids_fail(self):
         with self.assertRaises(Blocked):shared_joint_draws({"pts":[22,30],"reb":[11,4]})
+    def test_malformed_metrics_fail_closed(self):
+        r=card_gate({"sport":"nfl","market":"NBA:PRA","pace_adjustment":True,
+                     "independent_books":"2","historical_walkforward_n":"30",
+                     "model_nll":"0.4","baseline_nll":"0.6"})
+        self.assertEqual(r["status"],"PAPER_0U")
+        self.assertIn("COMBO_NOT_JOINTLY_SIMULATED",r["reasons"])
+        self.assertIn("UNVERIFIED_MARKETING_METRICS",r["reasons"])
     def test_paper_only(self):
         r=card_gate({"sport":"NFL","market":"PRA","pace_adjustment":True,
                      "advertised_hit_rate":.91,"advertised_roi":2.44})
