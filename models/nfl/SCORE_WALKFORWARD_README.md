@@ -27,6 +27,8 @@ python -m unittest discover -s models/nfl -p 'test_feature_snapshot_bridge_pit.p
 
 The adapter computes the local rating-artifact SHA256 and writes a *new* CSV. It cannot authenticate claimed archive dates and is **not** an invitation to backdate a present-day rating artifact. Store the artifact and input events with independent observation receipts before kickoff.
 
+The bridge now parses both original ratings JSON and event manifests with **duplicate-key rejection at every nesting level** and rejects non-standard NaN/Infinity literals before generating any features. Python default last-key-wins JSON parsing is not permitted for historical evidence. The source SHA is still only a local byte identity; it does not authenticate the source or its claimed publication timestamp.
+
 ## Exact input schemas
 
 `--features` CSV: exactly one row per real game, captured before that game's kickoff, with **these exact columns and no odds/results**:
