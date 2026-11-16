@@ -94,7 +94,13 @@ def strict_json(raw):
 def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spreads","totals"),
             bookmakers=("draftkings","fanduel"), opener=None):
     if sport not in SPORTS:raise ValueError("SPORT_NOT_ALLOWED")
-    api_key=key or os.environ.get("SPORTSEDGE_ODDS_API_KEY")
+    # The GitHub Actions authorized read-only provider workflow already
+    # supplies ODDS_API_KEY. Accept that as a documented, lower-priority
+    # alias for private capture, but NEVER fall back when an operator
+    # explicitly supplied a key (even an invalid/empty one).
+    api_key = (key if key is not None else
+               (os.environ.get("SPORTSEDGE_ODDS_API_KEY") or
+                os.environ.get("ODDS_API_KEY")))
     if not api_key or not KEY_RE.fullmatch(api_key):
         raise ValueError("USER_API_KEY_MISSING_OR_UNSAFE")
     if event_id is not None and not EVENT_RE.fullmatch(event_id):
