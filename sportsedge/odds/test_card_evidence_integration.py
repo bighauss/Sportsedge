@@ -28,6 +28,27 @@ class TestEvidenceIntegration(unittest.TestCase):
                    return_value={"status": "PAPER_0U_INCOMPLETE", "failures": ["missing"]}):
             reasons = run(completeness_archive={"dummy": 1})["reasons"]
         self.assertIn("COMPLETENESS_INCOMPLETE", reasons)
+    def test_all_unsettled_rows_report_no_scored_forward_evidence(self):
+        # The original forward evaluator permits zero settled outcomes
+        # with PAPER status and null model/book diagnostics.
+        with patch("sportsedge.odds.card_gate.evaluate_forward",
+                   return_value={"status":"PAPER_0U_UNATTESTED_FORWARD_RESEARCH",
+                                 "denominator":20,"scored":0,"unsettled":20,
+                                 "model":None,"book":None}):
+            result=run(forward_freeze={},forward_rows=[{}])
+        self.assertIn("FORWARD_HOLDOUT_NO_SCORED_RESULTS", result["reasons"])
+        self.assertEqual((result["status"],result["approved_stake_u"]),("BLOCK",0))
+
+    def test_scored_research_does_not_become_an_official_card(self):
+        with patch("sportsedge.odds.card_gate.evaluate_forward",
+                   return_value={"status":"PAPER_0U_UNATTESTED_FORWARD_RESEARCH",
+                                 "denominator":20,"scored":20,"unsettled":0,
+                                 "model":{"brier":0.21,"logloss":0.6},
+                                 "book":{"brier":0.22,"logloss":0.61}}):
+            result=run(forward_freeze={},forward_rows=[{}])
+        self.assertNotIn("FORWARD_HOLDOUT_NO_SCORED_RESULTS",result["reasons"])
+        self.assertEqual((result["status"],result["approved_stake_u"]),("BLOCK",0))
+
     def test_valid_research_evidence_never_promotes(self):
         with patch("sportsedge.odds.card_gate.evaluate_completeness",
                    return_value={"status": "PAPER_0U_COMPLIANT_INVENTORY", "failures": []}), patch(
