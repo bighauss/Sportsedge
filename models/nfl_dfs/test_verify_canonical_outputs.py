@@ -65,6 +65,13 @@ class TestReceipt(unittest.TestCase):
         self.assertEqual(result["official_stake_u"], 0)
         self.assertFalse(result["source_authentication_independent"])
 
+    def test_canonical_real_file_paper_receipt(self):
+        root = Path(__file__).resolve().parent
+        r = verify("PIT_CIN_2026-11-15", root)
+        self.assertGreaterEqual(r["players"], 20)
+        self.assertFalse(r["source_authentication_independent"])
+        self.assertEqual(r["official_stake_u"], 0)
+
     def test_path_traversal(self):
         with self.assertRaises(ValueError):
             verify("../TEST", self.root)
