@@ -3,13 +3,16 @@
 One sim -> game lines (ML, spread, total, team totals) and player props
 (pass/rush/rec yards, receptions, pass TDs, anytime TD). DFS and betting
 therefore share identical numbers. Output: fair probabilities + fair American odds.
-Book-price EV comparison: next step (needs captured DK prop prices).
+Book-price EV: when games/<tag>_lines.json exists (captured DK prices with source
+and captured_at_utc), book_ev.py re-prices each line on the same scenarios and adds
+a "book" block (no-vig prob, raw EV, 40/60 blended EV, stars, ranked by EV).
 RESEARCH / PAPER until graded against closing lines.
 
 python models/nfl_dfs/markets.py games/PIT_CIN_2026-11-15.json 20000
 """
 import json, os, statistics, sys
 import showdown_mc as mc
+import book_ev
 
 def american(p):
     """Sampled P=0 or P=1 cannot support a finite fair price: return missing."""
@@ -24,7 +27,7 @@ PROPS = {"pass_yds": lambda s: s["py"], "pass_tds": lambda s: s["ptd"], "rush_yd
          "rec_yds": lambda s: s["rcy"], "receptions": lambda s: s["rec"],
          "anytime_td": lambda s: s["rtd"] + s["rctd"]}
 
-def price(cfg, n, seed=7):
+def price(cfg, n, seed=7, lines=None):
     if type(n) is not int or n < 2:
         raise ValueError("Need at least two Monte Carlo samples")
     if len(cfg["teams"]) != 2:
@@ -108,6 +111,13 @@ def price(cfg, n, seed=7):
     out["inventory"]["note"] = (
         "These markets are distributions, not verified prices or full DK board coverage. "
         "Unmodeled or uncaptured families remain visible. Simulation alone is not a betting edge.")
+    if lines is not None:
+        out["book"] = book_ev.price_lines(cfg, raw, away, home, lines, PROPS)
+        out["book_prices_available"] = True
+        out["market_ev"] = "RESEARCH_UNVALIDATED_SEE_book_BLOCK"
+        out["inventory"]["source_status"] = (
+            "BOOK_PRICES_FROM_LINES_FILE_%s_%s_UNAUTHENTICATED" % (
+                lines["source"], lines["captured_at_utc"]))
     return out
 
 def main():
@@ -115,12 +125,22 @@ def main():
     path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "games", "PIT_CIN_2026-11-15.json")
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 20000
     cfg = json.load(open(path))
-    out = price(cfg, n)
+    lines = None
+    lpath = os.path.join(os.path.dirname(os.path.abspath(path)), f"{cfg['tag']}_lines.json")
+    if os.path.exists(lpath):
+        lines = json.load(open(lpath))
+    out = price(cfg, n, lines=lines)
     od = os.path.join(here, "out"); os.makedirs(od, exist_ok=True)
     json.dump(out, open(os.path.join(od, f"{cfg['tag']}_markets.json"), "w"), indent=1)
     print(json.dumps(out["game"], indent=1))
     for x in sorted(out["props"], key=lambda r: (r["market"], r["team"])):
         print(x)
+    if "book" in out:
+        for r in out["book"]["rows"]:
+            print(r["rank"], r["stars"], r["market"], r["subject"], r["side"], r["line"],
+                  r["price"], "EV raw", r["ev_raw"], "blend", r["ev_blended"])
+        for u in out["book"]["unpriced"]:
+            print("UNPRICED", u["reason"], u["entry"])
 
 if __name__ == "__main__":
     main()
