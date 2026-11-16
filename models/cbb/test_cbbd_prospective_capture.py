@@ -95,7 +95,7 @@ class CbbdCaptureTests(unittest.TestCase):
             self.assertEqual(list(Path(tmp).iterdir()),[])
 
     def test_bad_payload_and_cap_protection(self):
-        with self.assertRaisesRegex(Hold,"NON_JSON"):
+        with self.assertRaisesRegex(Hold,"EXPECTED_GAMES_ARRAY"):
             decoded(b'{"obj":true}')
         with self.assertRaisesRegex(Hold,"NON_JSON"):
             decoded(b'[{"x":1,"x":2}]')
