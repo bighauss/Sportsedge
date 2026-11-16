@@ -1,0 +1,34 @@
+name: Train-only period-share walk-forward evaluation
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/period_share_walkforward.py'
+      - 'sportsedge/markets/test_period_share_walkforward.py'
+      - 'docs/markets/PERIOD_SHARE_WALKFORWARD.md'
+      - '.github/workflows/period-share-walkforward.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/period_share_walkforward.py'
+      - 'sportsedge/markets/test_period_share_walkforward.py'
+      - 'docs/markets/PERIOD_SHARE_WALKFORWARD.md'
+      - '.github/workflows/period-share-walkforward.yml'
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Period share walk-forward, historical source and original RUN IT contracts
+        run: |
+          python -m unittest -v \
+            sportsedge.markets.test_period_share_walkforward \
+            sportsedge.markets.test_period_share_fit \
+            sportsedge.markets.test_score_dispersion_fit \
+            sportsedge.markets.test_scenario_lineage \
+            sportsedge.markets.test_cli
