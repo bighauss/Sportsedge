@@ -149,4 +149,6 @@ class MarketsTests(unittest.TestCase):
 
 
 if __name__=="__main__":
+    from research_ci import run_all_research_tests
+    run_all_research_tests()
     unittest.main()
