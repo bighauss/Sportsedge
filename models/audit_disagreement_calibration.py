@@ -1,11 +1,11 @@
 """G2/G3 frozen prediction audit; research only, never alters picks.
 
 CSV columns: event_id,market,selection,model_p,market_p,outcome,
-snapshot_utc,kickoff_utc,final_utc,model_sha256,source_sha256.
+snapshot_utc,kickoff_utc,final_utc,model_sha256,source_sha256,odds.
 outcome is 1 win / 0 loss; pushes and unsettled rows excluded.
 Market probability must be independently sourced/de-vigged upstream.
 """
-import argparse,csv,datetime as dt,hashlib,json,math
+import argparse,csv,datetime as dt,json,math
 from collections import defaultdict
 FIELDS=("event_id","market","selection","model_p","market_p","outcome","snapshot_utc","kickoff_utc","final_utc","model_sha256","source_sha256","odds")
 def utc(s):
@@ -42,12 +42,12 @@ def stats(rows):
     z=1.95996398454; ph=wins/n; den=1+z*z/n
     mid=(ph+z*z/(2*n))/den; rad=z*math.sqrt(ph*(1-ph)/n+z*z/(4*n*n))/den
     return {"n":n,"insufficient_n30":n<30,"observed_wilson_95":[round(max(0,mid-rad),6),round(min(1,mid+rad),6)],"roi":round(sum(profit if y else -1 for _,_,_,y,profit in rows)/n,6),"brier":round(sum((p-y)**2 for _,p,q,y,_ in rows)/n,6),
-        "market_brier":round(sum((q-y)**2 for _,p,q,y in rows)/n,6),
-        "log_loss":round(-sum(y*math.log(p)+(1-y)*math.log1p(-p) for _,p,q,y in rows)/n,6),
-        "market_log_loss":round(-sum(y*math.log(q)+(1-y)*math.log1p(-q) for _,p,q,y in rows)/n,6),
-        "bias":round(sum(p-y for _,p,q,y in rows)/n,6),
-        "observed":round(sum(y for _,p,q,y in rows)/n,6),
-        "predicted":round(sum(p for _,p,q,y in rows)/n,6)}
+        "market_brier":round(sum((q-y)**2 for _,p,q,y,_ in rows)/n,6),
+        "log_loss":round(-sum(y*math.log(p)+(1-y)*math.log1p(-p) for _,p,q,y,_ in rows)/n,6),
+        "market_log_loss":round(-sum(y*math.log(q)+(1-y)*math.log1p(-q) for _,p,q,y,_ in rows)/n,6),
+        "bias":round(sum(p-y for _,p,q,y,_ in rows)/n,6),
+        "observed":round(sum(y for _,p,q,y,_ in rows)/n,6),
+        "predicted":round(sum(p for _,p,q,y,_ in rows)/n,6)}
 def audit(rows):
     valid,blocked=parse(rows);groups=defaultdict(list);cal=defaultdict(list)
     for row in valid:
