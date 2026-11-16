@@ -38,6 +38,7 @@ def validate(package):
     if not isinstance(rows, list) or len(rows) != 6:
         raise ValueError("SIX_SPLIT_ROWS_REQUIRED")
     seen = set()
+    samples = {}
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("ROW_INVALID")
@@ -65,6 +66,14 @@ def validate(package):
                 raise ValueError("PERCENT_OUT_OF_RANGE:" + metric)
             if metric not in PERCENT and value < 0:
                 raise ValueError("NEGATIVE_METRIC:" + metric)
+        samples[(team,split)]=row["games"]
+    # A last-three or venue record cannot have more completed games than
+    # the same team's full-season record on the identical feature freeze.
+    for team in (package["away_team_id"], package["home_team_id"]):
+        if samples[(team,"last3")] > samples[(team,"season")]:
+            raise ValueError("LAST3_EXCEEDS_SEASON")
+        if samples[(team,"venue")] > samples[(team,"season")]:
+            raise ValueError("VENUE_EXCEEDS_SEASON")
     return {"status": "PAPER_0U_UNAUTHENTICATED_SPLIT_RESEARCH",
             "official_counted": 0, "approved_stake_u": 0,
             "rows_validated": len(rows), "source_authenticated": False,
