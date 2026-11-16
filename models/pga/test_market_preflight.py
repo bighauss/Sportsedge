@@ -31,6 +31,21 @@ class TestPgaPreflight(unittest.TestCase):
     def test_retains_all_blocked(self):
         r=preflight([row(market="fake"),row(odds_american="bad")])
         self.assertEqual(len(r["blocked"]),2)
+    def test_fractional_price_not_truncated(self):
+        for bad in (150.5, True, "150.5", " 150", "nan"):
+            with self.subTest(bad=bad):
+                self.assertIn("INVALID_ODDS", preflight([row(odds_american=bad)])["blocked"][0]["reasons"])
+    def test_duplicate_collision_quarantines_both(self):
+        a=row(odds_american="+2500")
+        b=row(odds_american="+2300")
+        for ordered in ([a,b], [b,a]):
+            result=preflight(ordered)
+            self.assertEqual(len(result["accepted"]),0)
+            self.assertEqual(len(result["blocked"]),2)
+            self.assertTrue(all("DUPLICATE_SNAPSHOT_COLLISION" in x["reasons"] for x in result["blocked"]))
+    def test_distinct_capture_times_remain_separate(self):
+        result=preflight([row(),row(captured_utc="2026-11-15T13:00:00Z")])
+        self.assertEqual(len(result["accepted"]),2)
     def test_missing_and_malformed(self):
         self.assertEqual(len(preflight([None,{},row(captured_utc="2026-11-15T12:00:00")])["blocked"]),3)
 
