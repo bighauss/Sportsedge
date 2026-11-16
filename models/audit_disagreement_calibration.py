@@ -18,7 +18,7 @@ def utc(s):
 # research. Fully identified market rows must be complete and cannot silently
 # mix with legacy copies of the same game/market/selection.
 IDENTITY_FIELDS=("book","period","settlement","line","player_id","team_id","stat")
-MANDATORY_EXTENDED=("book","period","settlement")
+MANDATORY_EXTENDED=("sport","book","period","settlement")
 LINE_MARKETS=frozenset(("spread","spreads","total","totals","teamtotal","teamtotals","tt",
                          "alternatespread","alternatetotal","playerprop","prop"))
 PLAYER_MARKETS=frozenset(("playerprop","prop","attd","atd","firsttd","td2plus",
@@ -50,7 +50,8 @@ def _identity(row):
     for name in ("event_id","market","selection"):
         if not isinstance(row.get(name),str) or not row[name].strip():
             raise ValueError("INCOMPLETE_BASE_SELECTION_ID")
-    base=(row["event_id"].strip(),_market_token(row["market"]),
+    base=(str(row.get("sport") or "").strip().upper(),
+          row["event_id"].strip(),_market_token(row["market"]),
           row["selection"].strip().casefold())
     extended=any(str(row.get(x) or "").strip() for x in IDENTITY_FIELDS)
     if not extended:
@@ -95,7 +96,8 @@ def parse(rows):
             if isinstance(r,dict) and all(isinstance(r.get(f),str) and
                                          r[f].strip() for f in
                                          ("event_id","market","selection")):
-                invalid_bases.add((r["event_id"].strip(),
+                invalid_bases.add((str(r.get("sport") or "").strip().upper(),
+                                   r["event_id"].strip(),
                                    _market_token(r["market"]),
                                    r["selection"].strip().casefold()))
     good=[];blocked=[]
@@ -109,7 +111,8 @@ def parse(rows):
             if (base in invalid_bases or len(bases[base])>1):
                 raise ValueError("MIXED_OR_MALFORMED_DECISION_IDENTITY_ALL_COPIES_BLOCKED")
             if counts[identity]>1:
-                raise ValueError("DUPLICATE_DECISION_ALL_SNAPSHOTS_BLOCKED")
+                raise ValueError("DUPLICATE" if mode=="LEGACY_UNATTESTED" else
+                                 "DUPLICATE_DECISION_ALL_SNAPSHOTS_BLOCKED")
             if any(not r.get(f) for f in FIELDS):raise ValueError("MISSING_FIELD")
             for h in ("model_sha256","source_sha256"):
                 s=r[h]
@@ -121,8 +124,9 @@ def parse(rows):
             odds=int(r["odds"]); profit=(odds/100 if odds>=100 else 100/abs(odds)) if abs(odds)>=100 else None
             if profit is None or odds==0:raise ValueError("INVALID_ODDS")
             stratum=(r["market"] if mode=="LEGACY_UNATTESTED" else
-                     "|".join((r["market"],r["book"].strip(),
-                               r["period"].strip(),r["settlement"].strip())))
+                     "|".join((r["sport"].strip().upper(),r["market"],
+                               r["book"].strip().casefold(),r["period"].strip().casefold(),
+                               r["settlement"].strip().casefold())))
             good.append((stratum,p,q,int(r["outcome"]),profit,r["event_id"]))
         except (ValueError,TypeError,KeyError) as e:blocked.append({"row":i,"reason":str(e)})
     return good,blocked
@@ -166,7 +170,7 @@ def audit(rows):
         groups[(m,bucket(p-q),"model_above" if p>q else "model_below_or_equal")].append(row)
         cal[(m,min(9,int(p*10)))].append(row)
     return {"status":"RESEARCH_ONLY_NOT_VALIDATED_EV","accepted":len(valid),"blocked":blocked,
-        "market_identity_note":"Extended source rows require book, period, settlement and exact line/subject when applicable. Legacy rows are not price-authenticated; repeated decisions across snapshots and mixed identity copies are quarantined.",
+        "market_identity_note":"Extended source rows require sport, book, period, settlement and exact line/subject when applicable. Legacy rows are not price-authenticated; repeated decisions across snapshots and mixed identity copies are quarantined.",
         "overall":stats(valid),
         "disagreement":[{"market":m,"bucket":b,"direction":d,**stats(v)} for (m,b,d),v in sorted(groups.items())],
         "calibration":[{"market":m,"decile":d,**stats(v)} for (m,d),v in sorted(cal.items())],
