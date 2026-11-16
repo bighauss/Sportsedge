@@ -55,11 +55,11 @@ class Tests(unittest.TestCase):
         earlier=q("HISTORY",observed_at_utc="2026-11-16T01:12:00Z",captured_at_utc="2026-11-16T01:12:00Z")
         latest=q("HISTORY",observed_at_utc="2026-11-16T01:18:00Z",captured_at_utc="2026-11-16T01:18:00Z")
         self.assertEqual(compare([q()],[earlier,latest])[0]["close_observed_utc"],latest.observed.isoformat())
-    def test_ambiguous_latest_refuses_choice(self):
+    def test_same_source_tie_with_other_provider_prefers_take_source(self):
         t="2026-11-16T01:18:00Z"
         a=q("HISTORY",observed_at_utc=t,captured_at_utc=t)
         b=q("HISTORY",source="COVERS",source_url="https://www.covers.com/",observed_at_utc=t,captured_at_utc=t)
-        self.assertEqual(compare([q()],[a,b])[0]["status"],"AMBIGUOUS_LAST_CLOSE")
+        self.assertEqual(compare([q()],[a,b])[0]["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
     def test_spread_requires_opposite_signed_line(self):
         with self.assertRaisesRegex(Blocked,"SPREAD_OPPOSITE_SIGN"):
             q(market_kind="SPREAD",selection_id="HOME",opposite_selection_id="AWAY",
@@ -192,6 +192,60 @@ class Tests(unittest.TestCase):
         self.assertEqual(r["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
         self.assertIsNotNone(r["clv_probability_points"])
         self.assertIsNone(r["reference_delta_probability_points"])
+
+    def test_newer_cross_source_does_not_mask_genuine_same_source_close(self):
+        t="2026-11-16T01:14:00Z"
+        same=q("HISTORY",observed_at_utc=t,captured_at_utc=t,
+               price_american="-125",opposite_price_american="+105")
+        newer=q("HISTORY",source="ODDS_GAP",source_url="https://theoddsgap.com/data",
+                observed_at_utc="2026-11-16T01:19:00Z",
+                captured_at_utc="2026-11-17T10:00:00Z",
+                price_american="-135",opposite_price_american="+115")
+        r=compare([q()],[newer,same])[0]
+        self.assertEqual(r["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+        self.assertEqual(r["closing_source"],"BESTBOOK")
+        self.assertEqual(r["close_observed_utc"],same.observed.isoformat())
+        self.assertGreater(float(r["clv_probability_points"]),0)
+        self.assertIsNone(r["reference_delta_probability_points"])
+
+    def test_latest_same_source_bad_receipt_is_not_cherry_picked(self):
+        t="2026-11-16T01:14:00Z"
+        valid=q("HISTORY",observed_at_utc=t,captured_at_utc=t)
+        late=q("HISTORY",observed_at_utc="2026-11-16T01:18:00Z",
+               captured_at_utc="2026-11-17T10:00:00Z")
+        result=compare([q()],[valid,late])[0]
+        self.assertEqual(result["status"],"RETROSPECTIVE_HISTORY_UNVERIFIED")
+        self.assertIsNone(result["clv_probability_points"])
+
+    def test_two_same_source_close_records_at_latest_are_ambiguous(self):
+        t="2026-11-16T01:18:00Z"
+        one=q("HISTORY",observed_at_utc=t,captured_at_utc=t)
+        two=q("HISTORY",observed_at_utc=t,captured_at_utc=t,
+              price_american="-125",opposite_price_american="+105")
+        result=compare([q()],[one,two])[0]
+        self.assertEqual(result["status"],"AMBIGUOUS_LAST_CLOSE")
+        self.assertIsNone(result["clv_probability_points"])
+
+    def test_no_same_source_falls_back_to_last_reference_only(self):
+        earlier=q("HISTORY",source="ACTION_NETWORK",source_url="https://www.actionnetwork.com/",
+                  observed_at_utc="2026-11-16T01:12:00Z",
+                  captured_at_utc="2026-11-16T01:12:00Z")
+        later=q("HISTORY",source="COVERS",source_url="https://www.covers.com/",
+                observed_at_utc="2026-11-16T01:18:00Z",
+                captured_at_utc="2026-11-16T01:18:00Z")
+        result=compare([q()],[later,earlier])[0]
+        self.assertEqual(result["status"],"CROSS_SOURCE_REFERENCE_ONLY")
+        self.assertEqual(result["closing_source"],"COVERS")
+        self.assertIsNone(result["clv_probability_points"])
+
+    def test_no_same_source_tied_latest_reference_stays_ambiguous(self):
+        t="2026-11-16T01:18:00Z"
+        a=q("HISTORY",source="ACTION_NETWORK",source_url="https://www.actionnetwork.com/",
+            observed_at_utc=t,captured_at_utc=t)
+        b=q("HISTORY",source="COVERS",source_url="https://www.covers.com/",
+            observed_at_utc=t,captured_at_utc=t)
+        result=compare([q()],[a,b])[0]
+        self.assertEqual(result["status"],"AMBIGUOUS_LAST_CLOSE")
 
 if __name__ == "__main__":
     unittest.main()
