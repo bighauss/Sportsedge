@@ -81,7 +81,32 @@ class GateTests(unittest.TestCase):
     def test_future_quote_duplicate(self):
         a=quote(observed_at_utc=ts(T+timedelta(seconds=1)))
         self.assertIn("QUOTE_FROM_FUTURE",run([a])["rows"][0]["reasons"])
-        self.assertIn("DUPLICATE_QUOTE_ID",run([quote(),quote()])["rows"][1]["reasons"])
+        self.assertTrue(all(
+            "DUPLICATE_QUOTE_ID" in row["reasons"]
+            for row in run([quote(),quote()])["rows"]))
+    def test_all_copies_quarantined_independent_of_row_order(self):
+        a=quote(quote_id="reused",odds_american=-108)
+        b=quote(quote_id="reused",odds_american=-125)
+        for raw in ([a,b],[b,a]):
+            out=run(raw)["rows"]
+            self.assertEqual(len(out),2)
+            self.assertTrue(all(
+                "DUPLICATE_QUOTE_ID" in item["reasons"]
+                and "DUPLICATE_QUOTE_CANNOT_ESTABLISH_TWO_SIDED_PAIR" in item["reasons"]
+                for item in out))
+            self.assertTrue(all(item["approved_stake_u"]==0 for item in out))
+
+    def test_unique_opposite_never_pairs_with_quarantined_duplicate(self):
+        over1=quote(quote_id="q1",odds_american=-108)
+        over2=quote(quote_id="q1",odds_american=-130)
+        under=quote(quote_id="q2",side="UNDER",odds_american=-112)
+        for raw in ([over1,over2,under],[under,over2,over1]):
+            out=run(raw)["rows"]
+            self.assertEqual(len(out),3)
+            self.assertEqual(sum("DUPLICATE_QUOTE_ID" in x["reasons"] for x in out),2)
+            unique=next(x for x in out if x["quote_id"]=="q2")
+            self.assertIn("NO_MATCHED_TWO_SIDED_QUOTE",unique["reasons"])
+
     def test_bad_odds_hash_and_threshold(self):
         for changed in (dict(odds_american=-99),dict(source_sha256="not-a-hash"),
                         dict(kind="PLAYER_PROP_XPLUS",side="YES",line="20.5"),
