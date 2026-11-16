@@ -251,12 +251,73 @@ class FiveSportSlateContract(unittest.TestCase):
                 main([str(src),str(out)])
 
     def test_unregistered_sport_or_bad_date_is_block(self):
-        f=fixture();f["sports"].append("NHL")
+        f=fixture();f["sports"].append("F1")
         with self.assertRaisesRegex(ValueError,"INVALID_REQUESTED_SPORTS"):
             run_slate(f)
         f=fixture();f["slate_date_ct"]="2026-13-01"
         with self.assertRaisesRegex(ValueError,"INVALID_SLATE_DATE"):
             run_slate(f)
+
+    def test_nhl_and_pga_scheduled_events_are_visible_nonpricing_blocks(self):
+        f=fixture()
+        f["sports"].extend(("NHL","PGA"))
+        kickoff=f["expected_events"][0]["start_utc"]
+        f["expected_events"].extend((
+            {"sport":"NHL","event_id":"NHL-ONE","start_utc":kickoff},
+            {"sport":"PGA","event_id":"PGA-TOUR-ONE","start_utc":kickoff},
+        ))
+        result=run_slate(f)
+        self.assertEqual(result["counts"]["expected"],4)
+        self.assertEqual(result["counts"]["schedule_only_unpriced_events"],2)
+        self.assertEqual(result["research_pricing_sports"],["CBB","CFB","MLB","NBA","NFL"])
+        self.assertEqual(result["schedule_only_sports"],["NHL","PGA"])
+        self.assertEqual(result["sport_coverage"]["NHL"]["status"],
+                         "SCHEDULE_ONLY_NO_PRICING_KERNEL")
+        self.assertEqual(result["sport_coverage"]["PGA"]["research_processed_games"],0)
+        for sport in ("NHL","PGA"):
+            event=next(x for x in result["events"] if x["sport"]==sport)
+            self.assertEqual(event["status"],"BLOCK")
+            self.assertIn("NO_SUPPORTED_NHL_OR_PGA_PRICING_KERNEL",event["reasons"])
+            self.assertEqual(event["research_priced"],0)
+            self.assertEqual(event["approved_stake_u"],0)
+            self.assertIsNone(event["card"])
+            self.assertTrue(event["families"])
+            self.assertTrue(all(
+                family["status"]=="NO_SUPPORTED_PRICING_ADAPTER"
+                and family["submitted_research_candidates"]==0
+                for family in event["families"].values()))
+        self.assertIn("GOALIE_SAVES",next(x for x in result["events"]
+                                            if x["sport"]=="NHL")["families"])
+        self.assertIn("FIRST_ROUND_LEADER",next(x for x in result["events"]
+                                            if x["sport"]=="PGA")["families"])
+
+    def test_unpriced_sports_cannot_be_accidentally_sent_to_five_sport_kernel(self):
+        f=fixture()
+        f["sports"].append("NHL")
+        f["expected_events"].append({
+            "sport":"NHL","event_id":"NHL-ONE",
+            "start_utc":f["expected_events"][0]["start_utc"]})
+        f["event_inputs"].append({
+            "sport":"NHL","event_id":"NHL-ONE",
+            "manifest":deepcopy(f["event_inputs"][0]["manifest"])})
+        with self.assertRaisesRegex(ValueError,
+                                     "SCHEDULE_ONLY_SPORT_HAS_NO_VALIDATED_PRICER"):
+            run_slate(f)
+
+    def test_slate_cli_source_and_output_cannot_live_inside_public_repository(self):
+        repo=Path(__file__).resolve().parents[2]
+        with TemporaryDirectory() as d:
+            source=Path(d)/"private_input.json"
+            source.write_text(json.dumps(fixture()))
+            bad=repo/"some_private_output_never_create.json"
+            with self.assertRaisesRegex(ValueError,
+                                         "RESEARCH_SLATE_OUTPUT_MUST_BE_PRIVATE"):
+                main([str(source),str(bad)])
+            with self.assertRaisesRegex(ValueError,
+                                         "RESEARCH_SLATE_INPUT_MUST_BE_PRIVATE"):
+                main([str(repo/"hidden_input_never_create.json"),
+                      str(Path(d)/"output.json")])
+            self.assertFalse(bad.exists())
 
     def test_extra_unapproved_secret_field_is_not_accepted(self):
         f=fixture();f["api_key"]="secret"
