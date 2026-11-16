@@ -96,6 +96,36 @@ def load_catalog(private_manifest: Path):
         result.append((row, kickoff))
     if sum(r["capture_state"] == "UPCOMING_PREGAME" for r,_ in result) != meta.get("upcoming_pregame_events"):
         raise PlanningBlocked("EVENT_CATALOG_PREGAME_COUNT_MISMATCH")
+    # A SHA-matched original plus a SHA-matched catalog is not sufficient:
+    # one of them could have been rewritten and its manifest SHA updated.
+    # Bind every catalog row to a provider event in the exact archived JSON.
+    try:
+        source_events = strict_json(raw)
+    except (ValueError, UnicodeError, json.JSONDecodeError):
+        raise PlanningBlocked("EVENT_ORIGINAL_JSON_INVALID") from None
+    if not isinstance(source_events, list) or len(source_events) != len(result):
+        raise PlanningBlocked("EVENT_RAW_CATALOG_CENSUS_DISAGREEMENT")
+    canonical = {}
+    for source_event in source_events:
+        if not isinstance(source_event, dict):
+            raise PlanningBlocked("EVENT_ORIGINAL_IDENTITY_INVALID")
+        event_id = source_event.get("id")
+        home, away = source_event.get("home_team"), source_event.get("away_team")
+        if (not isinstance(event_id, str) or not EVENT_RE.fullmatch(event_id) or
+            event_id in canonical or source_event.get("sport_key") != SPORTS[meta["sport"]] or
+            not isinstance(home, str) or not home.strip() or
+            not isinstance(away, str) or not away.strip() or home.strip() == away.strip()):
+            raise PlanningBlocked("EVENT_ORIGINAL_IDENTITY_INVALID")
+        try:
+            start = utc(source_event.get("commence_time")).isoformat()
+        except ValueError:
+            raise PlanningBlocked("EVENT_ORIGINAL_KICKOFF_INVALID") from None
+        canonical[event_id] = (home.strip(), away.strip(), start)
+    catalog_identity = {row["source_event_id"]:
+                        (row["home_team"], row["away_team"], kickoff.isoformat())
+                        for row, kickoff in result}
+    if canonical != catalog_identity:
+        raise PlanningBlocked("EVENT_RAW_TO_CATALOG_IDENTITY_DRIFT")
     return meta, result, created
 
 
