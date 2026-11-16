@@ -15,26 +15,29 @@ remains **PAPER / 0u**.
 | CFB | Q1–Q4, **regulation only**, no modeled OT | YES, observed quarters |
 | NBA | Q1–Q4, **regulation only**, no modeled OT | YES, observed quarters |
 | MLB | I1–I9, **regulation only**, no modeled extra innings | YES, observed innings; include zero-home-runs in unplayed bottom-ninth as score 0 |
-| CBB men | Actual game uses **two 20-minute halves**, unlike the simulator's four synthetic Q slots | **BLOCK**; cannot train or certify four fictional quarter shares from H1/H2 |
+| CBB men | Actual game uses **two 20-minute halves**, H1/H2 | YES, observed official H1/H2 halves; never invent 1Q–4Q markets |
 
-For CBB, the legacy score simulator still takes **manually supplied uncalibrated
-four-bin shares**. This new adapter does NOT improve them, and they must not
-be treated as validated first-half/first-quarter forecasts. A separate
-men's-CBB H1/H2 settlement/simulator conversion is necessary.
+The model now supports **native two-half CBB scenarios** when a prior
+H1/H2 source passes the research-only fitter. First-half/second-half
+settlement uses actual H1/H2 keys; first-quarter/second-quarter markets
+are explicitly rejected for NCAA men's CBB. For backwards compatibility,
+four synthetic CBB bins are still accepted only in the **legacy uncalibrated
+research path**. They are NOT actual game quarters; do not use them as proof
+of first-half calibration or as a substitute for H1/H2 originals.
 
 ## Input (private, exact source key contract)
 
 `period_share_fit.py` reads one JSON object per line; every row is retained.
 Required fields and their interpretation:
 
-- `sport` is **NFL/CFB/NBA/MLB**; `event_id` is stable and unique;
+- `sport` is **NFL/CFB/CBB/NBA/MLB**; `event_id` is stable and unique;
 - `game_start_utc`, `final_published_utc`, `final_captured_utc`
   must be explicit UTC Z timestamps in that order and final capture must
   precede the **fit cutoff**;
 - `source_original_sha256` is a claimed hash of the original final score
   source (not independently authenticated);
 - `settlement_scope` is exactly `REGULATION_ONLY`;
-- `periods` contains every Q1–Q4 or I1–I9 key, each an array of
+- `periods` contains Q1–Q4, H1/H2 (men's CBB), or I1–I9, each an array of
   **[home points, away points]** (integer, nonnegative). No `OT`,
   `EXTRA` or imputed missing periods;
 - `regulation_home`, `regulation_away` are exact summed *regulation*
