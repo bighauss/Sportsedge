@@ -138,9 +138,26 @@ class TestResearchBaseline(unittest.TestCase):
         rows = research_board([good, late, good, {"game": None}])
         self.assertEqual(len(rows), 4)
         self.assertEqual([r["status"] for r in rows],
-                         ["PAPER_NON_COUNTED_UNCALIBRATED", "BLOCKED", "BLOCKED", "BLOCKED"])
+                         ["BLOCKED", "BLOCKED", "BLOCKED", "BLOCKED"])
+        self.assertIn("DUPLICATE_GAME_ID", rows[0]["reason"])
         self.assertIn("DUPLICATE_GAME_ID", rows[2]["reason"])
         self.assertEqual([r["input_index"] for r in rows], list(range(4)))
+
+    def test_duplicate_order_independent_and_retains_denominator(self):
+        first = setup()
+        second = setup()
+        second["home"]["adj_o"] = 140  # contradictory same-event forecast
+        third = setup()
+        third["game"]["game_id"] = "D1:3"
+        for board in ([first, second, third], [third, second, first]):
+            result = research_board(board)
+            self.assertEqual(len(result), 3)
+            for r in result:
+                if r["game_id"] == "D1:1":
+                    self.assertEqual(r["status"], "BLOCKED")
+                    self.assertIn("DUPLICATE_GAME_ID", r["reason"])
+                else:
+                    self.assertEqual(r["status"], "PAPER_NON_COUNTED_UNCALIBRATED")
 
     def test_no_wager_claim_even_with_complete_clock_evidence(self):
         r = self.run_one()
