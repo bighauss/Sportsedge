@@ -60,10 +60,15 @@ class Tests(unittest.TestCase):
   self.assertEqual(a["overall"]["unique_events"],1)
   self.assertFalse(a["overall"]["insufficient_n30"])
   self.assertTrue(a["overall"]["insufficient_unique_events_30"])
+  self.assertTrue(a["overall"]["event_dependent_selections"])
+  self.assertIsNone(a["overall"]["observed_wilson_95"])
+  self.assertTrue(a["overall"]["roi_descriptive_only"])
  def test_distinct_games_versus_distinct_selections(self):
   a=audit([row(event_id=str(i),selection="home") for i in range(30)])
   self.assertEqual(a["overall"]["unique_events"],30)
   self.assertFalse(a["overall"]["insufficient_unique_events_30"])
+  self.assertFalse(a["overall"]["event_dependent_selections"])
+  self.assertEqual(len(a["overall"]["observed_wilson_95"]),2)
  def test_roi_and_ci(self):
   a=audit([row()])
   self.assertAlmostEqual(a["overall"]["roi"],100/110,places=6)
