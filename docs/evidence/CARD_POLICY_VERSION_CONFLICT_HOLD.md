@@ -1,34 +1,32 @@
-# Gate E: conflicting adopted v2.2 and strict-v2.1 card policy — HOLD
+# Gate E: historical v2.2 no-game-cap addendum superseded by later 2u stricter owner instruction
 
-**2026-11-15 CT — source-integrity engineering note; PAPER / 0u, NOT release approval.**
+**As of November 15, 2026 Central — PAPER / 0u; no market certification or wager permission.**
 
-## Confirmed conflicting original instructions
+## Preserve both original instructions in chronological order
 
-1. The user-owner's privately saved November 15 ~19:15 CT [RUN IT v2.2 adopted handoff](https://drive.google.com/file/d/1TAgJXaXTo-4M-MJxWWoOp0rPw5mNdmeM/view) says the game is a **correlation cluster, NOT a per-game unit cap**. It retains 5u/day and 3u/theme, adds the conditional ratings-half shrink, >12 percentage-point model-market gap hold and +200 dog moneyline 0.25u diagnostic cap until 50 real CLV-grade observations.
-2. Public repo [`RISK_POLICY.md`](../../RISK_POLICY.md) records a competing **stricter-of-v2.1/v2.2** instruction, retaining the **2u per-event** aggregate cap. Existing `research/risk/strict_v21_v22.py` uses the old cap in its v2.1 base and advertises `SPORTSEDGE_STRICT_V21_V22_20261115_R1`. The policy archive must not silently rewrite historical decisions. The separate newly merged `research/risk/v22_policy_guard.py` is a **PAPER-only preview**, explicitly **not connected to actual card/ledger risk**.
+1. At approximately 19:15 CT on November 15, the owner adopted the [RUN IT v2.2 addendum](https://drive.google.com/file/d/1TAgJXaXTo-4M-MJxWWoOp0rPw5mNdmeM/view). It proposed the game as a correlation cluster **without a per-game cap**, kept 5u/day and 3u/theme, added the missing-ratings half shrink, >12-percentage-point probability gap hold, and provisional +200 dog ML 0.25u cap.
+2. **Later**, the owner explicitly directed: **"Adopt the stricter of v2.1 / v2.2 per-game risk cap and freeze it; no silent changes."** The documented v2.1 cap is **2u/event**, compared with v2.2's unlimited game cap. Accordingly, the **selected current policy is `SPORTSEDGE_STRICT_V21_V22_20261115_R1`, 2u/event**. There is no original owner authorization to invent a **1u/event** cap; that would require its own explicit later amendment. See [`RISK_POLICY.md`](../../RISK_POLICY.md).
+3. Original v2.2 addendum text remains immutable historical context. The selected strict overlay includes additive rules from v2.2 but **does not** silently import the superseded no-cap clause. Past original decisions keep their original policy version and stakes; no retrospective repricing.
 
-These are inconsistent normative decisions for new v2.2 cards. A green synthetic test on either standalone rule file does NOT establish Gate E conformance. Until the owner’s final, explicit version precedence is reliably documented and a separately reviewed end-to-end revision is accepted, choose **HOLD / 0u**, not a guessed 2u or unlimited exposure. No production staking has been authorized.
+## Actual active card gate after this correction
 
-## Live fail-closed behavior after this repair
+`sportsedge/odds/card_gate.py::gate_candidate` records the candidate's declared `rules_version`, the **selected** and **executing** `SPORTSEDGE_STRICT_V21_V22_20261115_R1`, and the **historical** `RUN_IT_V2_2_ADOPTED_20261115` preflight version. A missing, older no-cap, unrecognized, or fictitious policy is explicitly reason-coded `SELECTED_STRICT_POLICY_VERSION_MISSING_OR_MISMATCHED`. The historical addendum's model/market gap preflight still runs for diagnostic transparency, but provider/model/quote verification booleans are forcibly false—no caller's self-attestation satisfies authenticity.
 
-The sole `sportsedge/odds/card_gate.py::gate_candidate` path now:
+- Every reason-coded original decision includes `SELECTED_POLICY`, `EXECUTED_POLICY`, and `HISTORICAL_V22_ADDENDUM` identities, including in the **private tamper-evident** `EvidenceChain`. This records local provenance, not an external signed policy acceptance.
+- The selected strict **2u per-event** cap, 5u/day and 3u/theme are still research exposure ceilings. The old 1u proposal is NOT a legitimate alternative to apply without a new signed owner instruction.
+- `GATE_E_STRICT_CARD_LEDGER_NOT_CERTIFIED` is always reported because original sportsbook sources, lineup/source chronology, complete cross-market card bookkeeping, genuine CLV and independent external sign-off have not been verified. A self-reported PASS or mocked PAPER from *both* diagnostics **cannot** bypass it.
+- Current card result **always remains `BLOCK`, `card=null`, `official_counted=0`, `approved_stake_u=0`, `gate_e_v22_connected=false`**. `risk_policy_conflict` flags a missing/mismatched candidate policy ID, not a claim that the owner has not resolved the per-game cap. Correctly declared strict ID is still BLOCK because Gate E and Gates A–D are open.
 
-- Continues to run the established strict v2.1/v2.2 research diagnostic without altering its historic 2u behavior.
-- Also evaluates adopted v2.2 as an **unverified** preflight. Every caller-supplied `source_receipt_verified`, `independent_model_verified`, `model_freeze_verified`, or `independent_quote_chain_verified` claim is forced to false, regardless of the input; it is not an authentication engine.
-- Records **selected** `RUN_IT_V2_2_ADOPTED_20261115`, **executed** `SPORTSEDGE_STRICT_V21_V22_20261115_R1` and the caller's original declared `rules_version` separately. Missing/wrong version is explicitly flagged. Raw/effective probability gaps are labeled **unattested** and are not actionable model conclusions.
-- Adds `GATE_E_V22_CARD_LEDGER_NOT_CONNECTED` and `EXECUTING_STRICT_GAME_2U_CAP_CONFLICTS_WITH_SELECTED_V22` to original decision reason codes, which are also persisted in the private tamper-evident `EvidenceChain` without modifying its on-disk schema.
-- **Always returns `status=BLOCK`, `card=null`, `official_counted=0`, `approved_stake_u=0`, `risk_policy_conflict=true`, `gate_e_v22_connected=false`**, including when both diagnostic functions are forged to return PAPER. Never infer permission from self-reported evidence.
+## Remaining integration and evidence before any official market
 
-## Requirements for a real Gate E implementation
+Wire the selected strict policy and additive v2.2 risk adjustments end-to-end into the real candidate/card/ledger pipeline with independent source/price/lineup evidence and complete offered/not-captured/block inventory. Enforce same-day Chicago 5u, per-theme 3u, **per-event aggregate 2u**, original-price push-aware probability/EV, duplicate selection IDs, T-90 locks, +200 dog CLV evidence, and risk-version snapshots on every original decision. Separately preregister and grade all original forward outcomes and blocked rows. Never mutate frozen v5 or original historical predictions to improve a backtest.
 
-First establish a single latest owner-approved policy ID and precisely resolve the 2u per-game conflict with the existing strict policy record. Then create a separate isolated PR to wire that selected policy to the actual card generator, total 5u/day and 3u/theme correlation-aware ledgers, original quoted decision/observed clocks, missing-half and wide-gap rule order, low-confidence sizing, long-dog 50-original-CLV proof, T-90 lineup lock, all-market census, push-aware settlement, original decision-hash history, and signed per-market release review.
+Software checks do not establish bookmaker quote authenticity. [Issue #10](https://github.com/bighauss/Sportsedge/issues/10) still requires independent original DraftKings+distinct sportsbook source receipts, PIT lineup/feature provenance, three registered forward calibration cycles, 100 consecutive real-slate compliant cards, 200 genuinely matched settled CLV comparisons, five full days, and independent signed per-market owner promotion. No automatic betting.
 
-Even a correct end-to-end Gate E implementation is **not** proof of Gates A–D: genuine original independent DK+second book provider receipts, contemporaneously available features, 3 preregistered calibration cycles, 100 consecutive real-slate compliant cards, 200 matched settled CLV and independent explicit owner promotion are still missing. All uncertified markets remain PAPER/0u, no automatic wagers.
-
-## Deterministic synthetic regression
+## Offline tests
 
 ```sh
 python -m unittest sportsedge.odds.test_issue10_offline -v
 ```
 
-The tests cover original source/selection mismatches, v2.2 declared/unknown/missing rules, both policy diagnostics forged to PAPER, externally unverified v2.2 probability-gap calculations and the private decision-chain conflict record. CI tests software behavior only. No original prediction, sportsbook quote, frozen v5 model, old wager ledger, provider key, or historical result has been changed.
+Synthetic tests verify stricter 2u ID precedence, missing/older/fabricated policy versions, source-flag sanitization, a policy decision remaining BLOCK even if diagnostic output is mocked to PAPER, and selected/executed/older-addendum labels retained in a private original decision hash chain. They do not prove provider source clocks or profitable EV.
