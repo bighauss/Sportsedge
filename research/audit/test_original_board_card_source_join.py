@@ -2,9 +2,12 @@
 import csv
 from hashlib import sha256
 import io
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from original_board_card_source_join import audit, AuditBlocked
+from original_board_card_source_join import audit, AuditBlocked, main, REPO_ROOT
 
 
 def board_bytes(data):
@@ -68,6 +71,22 @@ def run(b=None, c=None, **overrides):
     )
     config.update(overrides)
     return audit(b, c, **config)
+
+
+def cli_args(root):
+    b, c = source_board(), card_bytes()
+    board = root / "original_board.csv"
+    card = root / "original_card.md"
+    board.write_bytes(b)
+    card.write_bytes(c)
+    args = [str(board), str(card),
+            "--board-sha256", sha256(b).hexdigest(),
+            "--card-sha256", sha256(c).hexdigest(),
+            "--board-saved-utc", "2026-11-10T02:17:44.831Z",
+            "--card-saved-utc", "2026-11-10T02:22:24.393Z",
+            "--earliest-game-start-utc", "2026-11-10T03:00:00Z",
+            "--expected-board-rows", "7"]
+    return args
 
 
 class HistoricalSourcePairingTests(unittest.TestCase):
@@ -179,6 +198,46 @@ class HistoricalSourcePairingTests(unittest.TestCase):
         result = run(c=raw)
         self.assertEqual(result["arithmetic_discrepancies"], 1)
         self.assertEqual(result["model_doubted"], 3)
+
+    def test_cli_refuses_public_originals_and_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = cli_args(root)
+            unsafe_report = REPO_ROOT / "research" / "audit" / "do_not_publish_odds.json"
+            with self.assertRaisesRegex(AuditBlocked, "PRIVATE_REPORT_INSIDE_PUBLIC_REPOSITORY"):
+                main(args + ["--out", str(unsafe_report)])
+            self.assertFalse(unsafe_report.exists())
+            # Existing Python file is not a real original board; privacy must
+            # reject it before any attempt to decode or inspect its contents.
+            public_source = REPO_ROOT / "research" / "audit" / "original_board_card_source_join.py"
+            unsafe_args = [str(public_source)] + args[1:]
+            with self.assertRaisesRegex(AuditBlocked, "PRIVATE_BOARD_INSIDE_PUBLIC_REPOSITORY"):
+                main(unsafe_args + ["--out", str(root / "audit.json")])
+            self.assertFalse((root / "audit.json").exists())
+
+    def test_cli_private_report_has_restrictive_mode_and_no_overwrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = cli_args(root)
+            report = root / "original_audit.json"
+            self.assertEqual(main(args + ["--out", str(report)]), 0)
+            self.assertEqual(report.stat().st_mode & 0o777, 0o600)
+            with self.assertRaises(FileExistsError):
+                main(args + ["--out", str(report)])
+
+    def test_cli_failed_sync_deletes_partial_report_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = cli_args(root)
+            report = root / "original_audit.json"
+            board = root / "original_board.csv"
+            original = board.read_bytes()
+            with patch("original_board_card_source_join.os.fsync",
+                       side_effect=OSError("injected forensic sync failure")):
+                with self.assertRaisesRegex(OSError, "injected forensic sync failure"):
+                    main(args + ["--out", str(report)])
+            self.assertFalse(report.exists())
+            self.assertEqual(board.read_bytes(), original)
 
     def test_source_sport_and_csv_header_rejected(self):
         raw = source_board().replace(b"CBB,", b"CFB,")
