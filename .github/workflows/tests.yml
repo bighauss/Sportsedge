@@ -33,4 +33,4 @@ jobs:
         run: python test_cbb.py
       - name: NFL DFS (Showdown and point-in-time replay)
         working-directory: models/nfl_dfs
-        run: python test_showdown_mc.py && python test_public_nfl_gamelogs.py && python test_item4.py && python test_weekly_game_inputs.py && python test_markets.py
+        run: python test_showdown_mc.py && python test_public_nfl_gamelogs.py && python test_item4.py && python test_weekly_game_inputs.py && python test_markets.py && python test_reconcile_official_roster.py
