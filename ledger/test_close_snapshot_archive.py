@@ -38,6 +38,13 @@ class Tests(unittest.TestCase):
             with self.assertRaisesRegex(Blocked,"DUPLICATE"):append(path,r)
             path.write_text(path.read_text().replace("49.5","48.5"))
             with self.assertRaisesRegex(Blocked,"HASH"):verify_chain(path)
+    def test_missing_provider_id_remains_paper(self):
+        raw,m=fixture()
+        raw=raw.replace(b"NOT_CAPTURED",b"")
+        m["source_sha256"]=hashlib.sha256(raw).hexdigest()
+        r=make_records(raw,m)
+        self.assertEqual(r[0]["provider_quote_id"],"NOT_CAPTURED")
+        self.assertEqual(r[0]["evidence_state"],"PAPER_SOURCE_CLAIM_ONLY")
     def test_take_can_be_earlier(self):
         raw,m=fixture("TAKE");m["captured_at_utc"]="2026-11-15T15:00:00Z"
         self.assertIsNone(make_records(raw,m)[0]["close_window_seconds"])
