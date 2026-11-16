@@ -124,7 +124,12 @@ class GovernanceTests(unittest.TestCase):
             "RISK_POLICY.md", "models/nfl/run_it_model.py",
             "research/freezes/code_pins.json", "research/risk/strict_v21_v22.py",
             "sportsedge/odds/card_gate.py", ".github/workflows/release.yml",
-            "sportsedge_v5.py", "AGENTS.md", "CLAUDE.md",
+            "sportsedge_v5.py", "engine/sportsedge_v5.py",
+            "sportsedge/markets/allmarkets_research.py",
+            "sportsedge/markets/projection_distribution.py",
+            "sportsedge/validation/forward_acceptance.py",
+            "research/edge/forward_holdout_contract.py",
+            "AGENTS.md", "CLAUDE.md",
             "tools/agent_change_governance.py",
             "research/ai_governance/golden_agent_safety_v1.json",
         ):

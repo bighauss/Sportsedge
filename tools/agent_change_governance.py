@@ -95,12 +95,14 @@ def is_protected(path):
     path = _valid_path(path)
     return (path in {
         "RISK_POLICY.md", "CLAUDE.md", "AGENTS.md",
-        "sportsedge_v5.py", "tools/agent_change_governance.py",
+        "sportsedge_v5.py", "engine/sportsedge_v5.py",
+        "tools/agent_change_governance.py",
         "tools/test_agent_change_governance.py",
     } or path.startswith((
         "models/", "research/risk/", "research/freezes/",
-        "sportsedge/odds/", ".github/workflows/",
-        "research/ai_governance/",
+        "sportsedge/odds/", "sportsedge/markets/",
+        "sportsedge/validation/", "research/edge/",
+        ".github/workflows/", "research/ai_governance/",
     )))
 
 
