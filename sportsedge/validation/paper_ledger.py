@@ -74,8 +74,11 @@ def price_decimal(odds):
 def novig_pair(q):
     if q.get("book")!="DraftKings":
         raise Blocked("DK-only taken/close market price required")
+    placeholders={"NOT_CAPTURED","UNKNOWN","UNVERIFIED","N/A","NONE","NULL","MISSING"}
     for k in ("quote_id","provider_event_id","provider_market_id"):
-        if not isinstance(q.get(k),str) or not q[k]:
+        value=q.get(k)
+        if (not isinstance(value,str) or not value.strip()
+            or value.strip().upper().replace(" ","_") in placeholders):
             raise Blocked("Missing provider original selection IDs")
     try:
         m=Market(**q["market"])
@@ -109,6 +112,8 @@ def grade_bundle(bundle_path):
     if close_spec is not None:
         close,cclock,chash=source(root,close_spec,kickoff,"pregame")
         cm,p_close=novig_pair(close)
+        if not 0<(kickoff-cclock).total_seconds()<=600:
+            raise Blocked("Closing quote not inside 10-minute pregame window")
         if (cm.identity()!=m.identity() or
             close["provider_event_id"]!=taken["provider_event_id"] or
             close["provider_market_id"]!=taken["provider_market_id"] or
