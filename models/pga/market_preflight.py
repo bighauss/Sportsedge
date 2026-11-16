@@ -22,6 +22,8 @@ def utc(s):
 
 def preflight(rows):
     """Retain every row and reason. Does NOT authenticate claimed clocks or hashes."""
+    # Materialize once: duplicate quarantine must also work for one-pass iterators.
+    rows = list(rows)
     accepted, blocked = [], []
     keys = [tuple(str(row.get(k, "")) for k in
                   ("event_id", "player_id", "market", "round", "side",
