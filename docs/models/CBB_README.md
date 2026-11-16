@@ -39,3 +39,14 @@ The Nov 2026 games are in the **2027** barttorvik season (season = year the seas
 
 ## Limitations
 Untested weights; no backtest. Matchup-leg coefficients are hand-set. Normal-distribution pricing; no correlation pricing for stacks. barttorvik column names/URLs should be verified on first real export. Player prop SDs are rough fractions of the mean.
+
+## Optional Hoop-Explorer intelligence (not a prediction input)
+For permission-based player CSV/JSON exports, RAPM/usage similarity, explicit
+roster-role profiles, and five-player lineup WOWY with transparent *SportsEdge*
+shrinkage (not the provider's padding algorithm), see
+[the Hoop-Explorer companion guide](CBB_HOOP_EXPLORER_RESEARCH.md).
+
+This lane is **read-only and PAPER / 0u**; it does not change this CBB
+model, betting prices, injuries, forecasts or card. It requires genuine
+source-as-of evidence, stable player IDs and an authorized export. No
+automatic API/MCP or BYOK key is configured.
