@@ -32,3 +32,10 @@ These are **local data-integrity controls**, not provider attestation,
 independent immutable storage, or a secure replacement for access controls.
 No report can certify an OFFICIAL bet or lift Issue #10 without external
 source verification and distinct owner-signed approval.
+
+An additional defensive check examines both the **lexical** path inside the
+public checkout and its resolved symlink destination; either entering the
+checkout is refused. If report creation succeeds but an actual write or sync
+fails, the partially created result from that invocation is deleted (without
+touching the private source). This remains a local integrity precaution rather
+than independent attestation or full transaction-safe storage.
