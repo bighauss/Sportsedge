@@ -1,0 +1,44 @@
+{
+ "captured": "2026-11-15 18:21-18:26 CT, DraftKings Sportsbook web screenshots supplied by Isaac (server time on each capture); kickoff 7:20 PM CT",
+ "game": {
+  "ml": {"PIT": 160, "CIN": -192},
+  "spread_home": 3.5, "spread_odds": {"PIT": -110, "CIN": -110},
+  "total": 49.5, "total_odds": [-105, -115],
+  "team_total": {"CIN": {"line": 26.5, "odds": [-120, -105]}, "PIT": {"line": 22.5, "odds": [-120, -110]}},
+  "team_tds": {"CIN": {"line": 2.5, "odds": [-210, 160]}, "PIT": {"line": 2.5, "odds": [-105, -125]}}
+ },
+ "props_ou": [
+  ["Joe Burrow", "pass_yds", 294.5, -111, -113], ["Aaron Rodgers", "pass_yds", 239.5, -111, -113],
+  ["Joe Burrow", "pass_tds", 2.5, 155, -199], ["Aaron Rodgers", "pass_tds", 1.5, -105, -121],
+  ["Aaron Rodgers", "ints", 0.5, -114, -112], ["Joe Burrow", "ints", 0.5, -115, -110],
+  ["Joe Burrow", "pass_rush_yds", 305.5, -113, -113], ["Aaron Rodgers", "pass_rush_yds", 243.5, -112, -114],
+  ["Joe Burrow", "completions", 27.5, -103, -124], ["Aaron Rodgers", "completions", 21.5, -109, -117],
+  ["Ja'Marr Chase", "rec_yds", 91.5, -111, -113], ["Tee Higgins", "rec_yds", 76.5, -113, -111],
+  ["DK Metcalf", "rec_yds", 56.5, -112, -112], ["Germie Bernard", "rec_yds", 50.5, -111, -113],
+  ["Darnell Washington", "rec_yds", 30.5, -113, -111], ["Pat Freiermuth", "rec_yds", 26.5, -113, -111],
+  ["Chase Brown", "rec_yds", 24.5, -117, -107], ["Jaylen Warren", "rec_yds", 23.5, -114, -110],
+  ["Mike Gesicki", "rec_yds", 23.5, -112, -112], ["Dohnte Meyers", "rec_yds", 20.5, -116, -108],
+  ["Rico Dowdle", "rec_yds", 13.5, -115, -109], ["Drew Sample", "rec_yds", 5.5, -109, -115],
+  ["Samaje Perine", "rec_yds", 4.5, -118, -107],
+  ["Ja'Marr Chase", "receptions", 7.5, -124, -103], ["Tee Higgins", "receptions", 5.5, 101, -129],
+  ["Germie Bernard", "receptions", 4.5, -135, 106], ["DK Metcalf", "receptions", 4.5, 108, -138],
+  ["Chase Brown", "receptions", 4.5, 110, -141], ["Jaylen Warren", "receptions", 2.5, -160, 125],
+  ["Pat Freiermuth", "receptions", 2.5, -158, 124], ["Darnell Washington", "receptions", 2.5, -110, -116],
+  ["Dohnte Meyers", "receptions", 2.5, 108, -138], ["Rico Dowdle", "receptions", 2.5, 114, -145],
+  ["Mike Gesicki", "receptions", 2.5, 121, -154], ["Samaje Perine", "receptions", 1.5, 178, -230],
+  ["Drew Sample", "receptions", 0.5, -225, 174],
+  ["Jaylen Warren", "rush_yds", 65.5, -112, -112], ["Chase Brown", "rush_yds", 44.5, -112, -112],
+  ["Rico Dowdle", "rush_yds", 29.5, -108, -116], ["Samaje Perine", "rush_yds", 18.5, -109, -115],
+  ["Joe Burrow", "rush_yds", 7.5, -110, -114], ["Aaron Rodgers", "rush_yds", 0.5, -101, -124],
+  ["Jaylen Warren", "rush_rec_yds", 93.5, -115, -111], ["Chase Brown", "rush_rec_yds", 73.5, -115, -111],
+  ["Rico Dowdle", "rush_rec_yds", 47.5, -111, -114], ["Samaje Perine", "rush_rec_yds", 25.5, -117, -109]
+ ],
+ "anytime_td": {
+  "Ja'Marr Chase": -120, "Chase Brown": -105, "Jaylen Warren": 105, "Tee Higgins": 115, "Rico Dowdle": 180,
+  "DK Metcalf": 205, "Darnell Washington": 225, "Mike Gesicki": 250, "Pat Freiermuth": 265, "Samaje Perine": 275,
+  "Germie Bernard": 300, "Joe Burrow": 475, "Dohnte Meyers": 475, "Drew Sample": 950, "Jack Endries": 1000,
+  "Brandon Smith": 1400, "Aaron Rodgers": 1400, "Ben Skowronek": 1700, "Mitch Tinsley": 2200, "Colbie Young": 2500,
+  "Travis Homer": 3500, "Lew Nichols": 4000, "Tahj Brooks": 5500
+ },
+ "not_modeled": ["1Q / 1H / each-quarter / first-drive markets (sim has no quarter split)", "pass attempts, rush attempts, longest play", "kicker FG/PAT/kicking points props", "defensive sacks/tackles/assists/INT props", "first TD / 2+ TD / combined / exacta TD markets", "alt spread/total ladders (same sim, lower information than the main line)", "most-X leader and race-to-X markets"]
+}
