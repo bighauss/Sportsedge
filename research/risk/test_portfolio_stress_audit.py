@@ -94,6 +94,10 @@ class Validation(unittest.TestCase):
         out=audit([a,b],iterations=100)
         self.assertEqual(out["accepted"],2)
 
+    def test_paper_flat_rejects_nonflat_risk_weighting(self):
+        self.assert_blocked(row(stake_units="2",stake_basis="PAPER_FLAT"),
+                            "PAPER_FLAT_REQUIRES_ONE_UNIT")
+
     def test_invalid_unit_size(self):
         self.assert_blocked(row(stake_units="nan"),"INVALID_STAKE_UNITS")
 
@@ -107,15 +111,15 @@ class Validation(unittest.TestCase):
 
 class Metrics(unittest.TestCase):
     def test_original_prices_and_fractional_stakes(self):
-        w=valid_row(row(stake_units="2",commission_rate=".05"))
-        l=valid_row(row(bet_id="2",result="LOSS",stake_units="3"))
+        w=valid_row(row(stake_units="2",commission_rate=".05",stake_basis="EXECUTED_CLAIM"))
+        l=valid_row(row(bet_id="2",result="LOSS",stake_units="3",stake_basis="EXECUTED_CLAIM"))
         p=status_summary([w,l])
         self.assertAlmostEqual(p["net_units"],2*2.4*.95-3)
         self.assertAlmostEqual(p["roi"],(2*2.4*.95-3)/5)
 
     def test_push_counts_risk_void_does_not(self):
-        p=valid_row(row(result="PUSH",stake_units="2"))
-        v=valid_row(row(bet_id="2",result="VOID",stake_units="4"))
+        p=valid_row(row(result="PUSH",stake_units="2",stake_basis="EXECUTED_CLAIM"))
+        v=valid_row(row(bet_id="2",result="VOID",stake_units="4",stake_basis="EXECUTED_CLAIM"))
         s=status_summary([p,v])
         self.assertEqual(s["risked_units"],2)
         self.assertEqual(s["roi"],0)
@@ -204,6 +208,22 @@ class Metrics(unittest.TestCase):
         a=valid_row(row(result="WIN"))
         self.assertAlmostEqual(stress_haircut([a],.1)["roi"],2.4*.9)
         self.assertAlmostEqual(stress_haircut([a],.0)["roi"],2.4)
+
+    def test_pending_games_do_not_create_fictitious_sample_size(self):
+        rows = [row(bet_id=f"pending-{i}",event_id=f"pending-game-{i}",result="PENDING",
+                    settled_utc="",settlement_source_a="",settlement_source_b="") for i in range(35)]
+        rows.append(row(bet_id="settled",event_id="actual-game",result="LOSS"))
+        report = audit(rows, iterations=100)
+        self.assertEqual(report["by_sport"]["NFL"]["event_count"], 1)
+        self.assertTrue(report["by_sport"]["NFL"]["insufficient_30_events"])
+        self.assertIsNone(report["settled_game_net_units_sample_variance"])
+
+    def test_void_games_do_not_create_fictitious_variance(self):
+        rows = [row(bet_id=f"void-{i}",event_id=f"void-game-{i}",result="VOID") for i in range(35)]
+        rows.append(row(bet_id="settled",event_id="actual-game",result="LOSS"))
+        report = audit(rows, iterations=100)
+        self.assertEqual(report["by_sport"]["NFL"]["event_count"], 1)
+        self.assertIsNone(report["settled_game_net_units_sample_variance"])
 
     def test_version_performance_not_retro(self):
         r=audit([row(model_version="v5"),row(bet_id="two",event_id="other",model_version="v6",result="LOSS")], iterations=100)
