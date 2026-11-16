@@ -18,6 +18,7 @@ RESEARCH_SUITES = (
     "models/nba/test_minutes_candidate.py",
     "models/nba/test_anchor_evaluator.py",
     "models/common/test_research_guardrails.py",
+    "sportsedge/validation/test_paper_ledger.py",
 )
 
 
@@ -28,7 +29,12 @@ def run_all_research_tests() -> None:
         if not path.is_file():
             raise RuntimeError("Missing mandatory research test: " + relative)
         print("RESEARCH CI: " + relative, flush=True)
-        subprocess.run([sys.executable, str(path)], cwd=str(path.parent), check=True)
+        if relative.startswith("sportsedge/validation/"):
+            subprocess.run([sys.executable, "-m", "unittest", "-v",
+                            "sportsedge.validation.test_paper_ledger"],
+                           cwd=str(root), check=True)
+        else:
+            subprocess.run([sys.executable, str(path)], cwd=str(path.parent), check=True)
 
 
 if __name__ == "__main__":
