@@ -1,0 +1,39 @@
+name: Whole-repository release readiness (research-only)
+on:
+  pull_request:
+    paths:
+      - 'tools/whole_repo_release_audit.py'
+      - 'tools/test_whole_repo_release_audit.py'
+      - 'docs/certification/WHOLE_REPO_ASSESSMENT_2026-11-16.md'
+      - '.github/workflows/whole-repo-release-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/whole_repo_release_audit.py'
+      - 'tools/test_whole_repo_release_audit.py'
+      - 'docs/certification/WHOLE_REPO_ASSESSMENT_2026-11-16.md'
+      - '.github/workflows/whole-repo-release-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test policy drift, invalid gate claims, pinned-code tampering and no-certification
+        run: python -m unittest tools.test_whole_repo_release_audit -v
+      - name: Audit current checked-in original matrix and frozen code identity
+        run: |
+          python -m tools.whole_repo_release_audit --asof-date-ct 2026-11-16 > /tmp/sportsedge_certification_status.json
+          python -c 'import json; d=json.load(open("/tmp/sportsedge_certification_status.json")); assert d["release_verdict"]=="NOT_CERTIFIED"; assert d["production_certified"] is False; assert d["approved_stake_u"]==0; assert len(d["gates"])==5; print("Certification correctly WITHHELD; all five external A-E gates OPEN")'
+      - name: Verify original pinned seven-sport baseline and zero release
+        run: |
+          python research/freezes/verify_code_freezes.py
+          python -m sportsedge.validation.daily_safety_sweep
+      - name: Do not persist private provider data
+        run: echo 'No provider requests, raw receipts, odds tokens, official cards, or external attestation were used.'
