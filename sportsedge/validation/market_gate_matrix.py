@@ -16,9 +16,10 @@ from pathlib import Path
 import re
 
 from sportsedge.validation.forward_acceptance import analyze, require_private_path
+from research.risk.strict_v21_v22 import POLICY_VERSION as LOCKED_POLICY_VERSION
 
 SCHEMA = "sportsedge-seven-sport-market-gates-v1"
-POLICY = "RUN_IT_V2_1_MANDATORY_RESTORATION_20261115"
+POLICY = LOCKED_POLICY_VERSION
 SPORTS = frozenset(("NFL", "CFB", "CBB", "NBA", "MLB", "NHL", "PGA"))
 FAMILIES = frozenset(("ML", "SPREAD", "TOTAL", "TEAM_TOTAL",
                        "PLAYER_PROP", "PERIOD", "ALTERNATE", "SPECIAL",
