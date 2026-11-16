@@ -179,7 +179,13 @@ def archive_csv(*, source_path, private_dir, kind, season, clock=None):
                 "publication_basis": "LOCAL_FILE_OBSERVATION_NOT_PUBLISHER_ATTESTATION",
                 "status": "RESEARCH_ONLY_PAPER_0U"}
     _private_create(original, raw)
-    _private_create(receipt, (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode("utf-8"))
+    try:
+        _private_create(receipt, (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode("utf-8"))
+    except BaseException:
+        # A raw CSV without the matching receipt must never be mistaken for
+        # an accepted snapshot. Original was exclusively created here.
+        original.unlink(missing_ok=True)
+        raise
     return {"raw_path": str(original), "manifest_path": str(receipt),
             "sha256": digest, "rows": len(records),
             "observed_utc": when, "status": manifest["status"]}
