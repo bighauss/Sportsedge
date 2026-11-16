@@ -14,6 +14,7 @@ import math
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean, median
+from fractions import Fraction
 
 SPORTS = frozenset(('NFL', 'CFB', 'CBB', 'NBA', 'MLB', 'NHL'))
 REQUIRED = ('sport', 'event_id', 'period', 'market', 'side', 'price_american',
@@ -44,22 +45,91 @@ def american(odds: str | int) -> tuple[float, float]:
     return decimal, 1.0 / decimal
 
 
-def devig_two_way(odds_a: str | int, odds_b: str | int) -> dict:
+
+def odds_in_format(odds: str | int | float, fmt: str) -> tuple[float, float]:
+    """Explicit odds-format conversion; no auto-detection or format guessing."""
+    f = fmt.strip().casefold()
+    if f == 'american':
+        return american(odds)
+    if f == 'decimal':
+        value = float(odds)
+        if not math.isfinite(value) or value <= 1 or value > 1e7:
+            raise ValueError('INVALID_DECIMAL_ODDS')
+        return value, 1.0/value
+    if f == 'fractional':
+        try:
+            value = Fraction(str(odds).strip())
+        except (ValueError, ZeroDivisionError) as exc:
+            raise ValueError('INVALID_FRACTIONAL_ODDS') from exc
+        if value <= 0 or float(value) > 1e7:
+            raise ValueError('INVALID_FRACTIONAL_ODDS')
+        decimal = float(value) + 1.0
+        return decimal, 1.0/decimal
+    raise ValueError('UNKNOWN_ODDS_FORMAT')
+
+
+def settlement_ev(probabilities: dict[str, float], odds: str | int | float,
+                  *, odds_format: str = 'american', fee_on_profit: float = 0.0) -> float:
+    """W/L/P/HW/HL expected return per $1, for explicitly supported settlements.
+
+    Half wins and losses are paid/charged at half stake. This is NOT an
+    implementation of all sport-specific dead-heat or void book policies.
+    """
+    if not math.isfinite(fee_on_profit) or not 0 <= fee_on_profit <= 1:
+        raise ValueError('INVALID_FEE')
+    if not probabilities or set(probabilities)-{'W','L','P','HW','HL'}:
+        raise ValueError('UNSUPPORTED_SETTLEMENT_OUTCOME')
+    vals = list(probabilities.values())
+    if any(not isinstance(v,(int,float)) or isinstance(v,bool) or
+           not math.isfinite(v) or v < 0 for v in vals):
+        raise ValueError('INVALID_SETTLEMENT_PROBABILITY')
+    if abs(sum(vals)-1) > 1e-8:
+        raise ValueError('SETTLEMENT_PROBABILITIES_NOT_NORMALIZED')
+    profit = (odds_in_format(odds,odds_format)[0]-1.0)*(1.0-fee_on_profit)
+    payout = {'W': profit,'L': -1.0,'P': 0.0,'HW': profit/2,'HL': -0.5}
+    return sum(probabilities.get(key,0.0)*value for key,value in payout.items())
+
+
+def quarter_line_probabilities(draws: list[float], line: float, side: str) -> dict:
+    """Derive quarter-line W/L/P/HW/HL via two half-stake components.
+
+    For example Over 2.25 = half Over 2.0 + half Over 2.5.
+    Requires genuine projected samples; never manufactures a distribution.
+    """
+    if (not draws or side.casefold() not in ('over','under') or
+            not math.isfinite(line) or any(not math.isfinite(x) for x in draws)):
+        raise ValueError('INVALID_QUARTER_LINE_INPUT')
+    if round(line*4) != line*4 or round(line*4) % 2 != 1:
+        raise ValueError('NOT_QUARTER_LINE')
+    low = math.floor(line*2)/2
+    high = low + 0.5
+    outcomes = {'W': 0,'L': 0,'P': 0,'HW': 0,'HL': 0}
+    for draw in draws:
+        one = (1 if draw > low else 0 if draw == low else -1) if side.casefold() == 'over' else (-1 if draw > low else 0 if draw == low else 1)
+        two = (1 if draw > high else 0 if draw == high else -1) if side.casefold() == 'over' else (-1 if draw > high else 0 if draw == high else 1)
+        score = one+two
+        outcome = {2:'W',1:'HW',0:'P',-1:'HL',-2:'L'}[score]
+        outcomes[outcome]+=1
+    return {key:value/len(draws) for key,value in outcomes.items()}
+
+
+def devig_two_way(odds_a: str | int, odds_b: str | int, *,
+                  format_a: str = 'american', format_b: str = 'american') -> dict:
     """Proportional no-vig estimate for a matched two-way market only."""
-    a = american(odds_a)[1]
-    b = american(odds_b)[1]
+    a = odds_in_format(odds_a, format_a)[1]
+    b = odds_in_format(odds_b, format_b)[1]
     return {'overround': a + b - 1.0,
             'no_vig_a': a / (a + b), 'no_vig_b': b / (a + b)}
 
 
-def ev_per_dollar(p_win: float, p_push: float, odds: str | int,
-                  *, fee_on_profit: float = 0.0) -> float:
+def ev_per_dollar(p_win: float, p_push: float, odds: str | int | float,
+                  *, fee_on_profit: float = 0.0, odds_format: str = 'american') -> float:
     """P(win)*net_profit - P(loss), flat $1 risk; returned fees only on wins."""
     if (not all(math.isfinite(v) for v in (p_win, p_push, fee_on_profit))
             or min(p_win, p_push, fee_on_profit) < 0
             or p_win + p_push > 1 + 1e-12 or fee_on_profit > 1):
         raise ValueError('INVALID_PROBABILITIES_OR_FEE')
-    profit = (american(odds)[0] - 1.0) * (1.0 - fee_on_profit)
+    profit = (odds_in_format(odds, odds_format)[0] - 1.0) * (1.0 - fee_on_profit)
     return p_win * profit - (1.0 - p_win - p_push)
 
 
@@ -127,6 +197,8 @@ def audit_rows(raw_rows: list[dict]) -> dict:
     """Every original input row is retained; every transformation is logged."""
     issues, corrections, cleaned, seen = [], [], [], set()
     id_to_names, name_to_ids = defaultdict(set), defaultdict(set)
+    event_start, event_teams = defaultdict(set), defaultdict(set)
+    stat_values = defaultdict(list)
     def issue(number, code, field=''):
         issues.append({'row': number, 'code': code, 'field': field})
     for number, original in enumerate(raw_rows, 2):
@@ -193,10 +265,42 @@ def audit_rows(raw_rows: list[dict]) -> dict:
         if key in seen:
             issue(number, 'DUPLICATE_QUOTE_IDENTITY')
         seen.add(key)
+        if row.get('event_id') and row.get('sport') and 'game_start_utc' in times:
+            eid = (row['sport'], row['event_id'])
+            event_start[eid].add(times['game_start_utc'].isoformat())
+            if row.get('home_id') and row.get('away_id'):
+                event_teams[eid].add((row['home_id'],row['away_id']))
+        for field in ('actual_stat','projected_mean','projected_minutes','played_minutes'):
+            if row.get(field) in (None,''):
+                continue
+            try:
+                val = float(row[field])
+                if not math.isfinite(val):
+                    raise ValueError
+                if field in ('projected_minutes','played_minutes') and val < 0:
+                    issue(number,'NEGATIVE_PLAYING_TIME',field)
+                stat_values[(row.get('sport'),row.get('market'),field)].append((number,val))
+            except (TypeError,ValueError):
+                issue(number,'NONFINITE_OR_INVALID_STAT',field)
         pid, name = row.get('player_id', ''), row.get('player', '')
         if pid and name:
             id_to_names[pid].add(name.casefold())
             name_to_ids[name.casefold()].add(pid)
+    for event, dates in event_start.items():
+        if len(dates)>1:
+            issue(0,'EVENT_ID_KICKOFF_CONFLICT:'+':'.join(event))
+    for event, teams in event_teams.items():
+        if len(teams)>1:
+            issue(0,'EVENT_ID_TEAM_MAPPING_CONFLICT:'+':'.join(event))
+    for (sport,market,field), pairs in stat_values.items():
+        if len(pairs)<20:
+            continue
+        center=median(v for _,v in pairs)
+        mad=median(abs(v-center) for _,v in pairs)
+        if mad>0:
+            for rownum,value in pairs:
+                if abs(value-center)>10*mad:
+                    issue(rownum,'ROBUST_STAT_OUTLIER_REVIEW',field)
     for key, names in id_to_names.items():
         if len(names) > 1:
             issue(0, 'PLAYER_ID_NAME_CONFLICT:' + key)

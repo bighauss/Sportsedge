@@ -6,8 +6,9 @@
 
 - `research/audit/quant_foundation.py`: original-row-preserving CSV inspection, row-level corrections and unresolved issues, empirical lag-only prop baseline with supplied opportunity inputs, American odds/no-vig/push-aware EV, create-only flat-unit paper ledger.
 - `research/audit/quant_evidence.py`: pregame frozen-prediction **replay**, qualifications census, per-market P/L and Brier/log loss, 5-point probability calibration, matched upstream no-vig baseline only when paired receipt fields supplied, Wilson intervals, deterministic **event-clustered** ROI intervals, original-odds drawdown, exact opposite-side/line/book/time **no-vig arithmetic** checks, duplicate canonical-bet prevention, bias slices, paired frozen-feature ablation and all-inventory market refusal reason display.
+- `research/audit/quant_walkforward_baseline.py`: no-lookahead release-aware **naive binary baseline** (Beta(1,1) posterior win rate), segments exact markets/lines and scores future forecasts, includes pushes/invalid rows in census; never refits v5.
 - `research/audit/quant_capture_preflight.py`: offline create-only manifest of existing private input bytes; row-level pre-kickoff and identity checks, SHA256, source labeling; **never** asserts a hash authenticates a sportsbook. Includes in-memory quota/cache decision policy for admins, not a live network collector.
-- `.github/workflows/quant-eightpack.yml`: no-network Python 3.11 CI for module compilation and 29 synthetic tests (checked locally before PR).
+- `.github/workflows/quant-eightpack.yml`: no-network Python 3.11 CI for module compilation and 41 synthetic tests (checked locally before PR).
 - Original architecture/variable hypothesis and source guide: `docs/audits/SPORTSEDGE_EIGHT_PROMPTS_README.md`.
 
 ## Usage with private files
@@ -26,6 +27,8 @@ python research/audit/quant_evidence.py ablation /private/frozen_baseline_vs_can
   --report /private/feature_ablation.json
 python research/audit/quant_evidence.py census /private/all_market_inventory.csv \
   --report /private/market_status.json
+python research/audit/quant_walkforward_baseline.py /private/released_binary_outcomes.csv \
+  --min-prior 30 --report /private/release_aware_baseline.json
 python research/audit/quant_capture_preflight.py /private/board_capture.csv \
   --asof-utc '2026-11-15T20:00:00Z' --provider 'source-label' \
   --manifest /private/create_only_capture_manifest.json
@@ -48,3 +51,9 @@ For `replay`, each qualified row must also contain `fitted_until_utc` earlier th
 - Tests may only establish deterministic *software arithmetic and fail-closed behavior*. Review exact CI head, unchanged v5 hash, source/license checks and file diffs before merge.
 - Forward acceptance is a separate decision per sport/market on preregistered unseen data. Count **unique events**; grouped confidence intervals and minimum 30-event flags cannot replace preregistration.
 - A fully live service requires privately configured provider permissions, durable rate-limit/circuit-breaker state, true PIT capture and adversarial preflight. No code here claims completion of these external gates.
+
+## Follow-up hardening: typed odds and robust data quality
+
+`odds_in_format(value, format)` now accepts explicit `american`, `decimal` and `fractional` forms; `ev_per_dollar(..., odds_format=...)` keeps backward-compatible American default. `settlement_ev` accepts W/L/P/HW/HL distributions, while `quarter_line_probabilities` uses real empirical draws split across the two half-stakes. No auto-detection or bookmaker-specific settlement assumptions. Original-row-preserving quality reports now flag robust statistical outliers, inconsistent event kickoff dates and inconsistent team mappings. Their presence does not silently remove records.
+
+`quant_walkforward_baseline.py` is a genuine as-of **naive benchmark fit** (sequential past outcome rate), *not* retraining of any sport-specific SportsEdge model and *not* proof of authentic release metadata. Preserve release receipts and comparisons on untouched future games.
