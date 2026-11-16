@@ -1,0 +1,33 @@
+name: Train-only regulation period splits (offline)
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/period_share_fit.py'
+      - 'sportsedge/markets/test_period_share_fit.py'
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/cli.py'
+      - 'docs/markets/TRAIN_ONLY_PERIOD_SHARES.md'
+      - '.github/workflows/period-share-fit.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/period_share_fit.py'
+      - 'sportsedge/markets/test_period_share_fit.py'
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/cli.py'
+      - 'docs/markets/TRAIN_ONLY_PERIOD_SHARES.md'
+      - '.github/workflows/period-share-fit.yml'
+  workflow_dispatch:
+jobs:
+  research-fit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail-closed historical period shares and RUN IT edge regression
+        run: |
+          python -m unittest -v sportsedge.markets.test_period_share_fit sportsedge.markets.test_score_dispersion_fit sportsedge.markets.test_scenario_lineage sportsedge.markets.test_edge_discovery sportsedge.markets.test_cli sportsedge.markets.test_run_it_research
