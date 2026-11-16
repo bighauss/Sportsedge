@@ -149,7 +149,7 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
             parsed.append(None)
             errors.append("INVALID_JSONL_OR_DUPLICATE_FIELD")
     seen = Counter(
-        (row.get("sport"), row.get("event_id"))
+        (row.get("sport"), row.get("event_id").strip().casefold())
         for row in parsed if isinstance(row, dict) and
         isinstance(row.get("event_id"), str) and row.get("event_id").strip()
     )
@@ -163,7 +163,9 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
         if error is None:
             if not isinstance(row, dict):
                 error = "TRAINING_ROW_NOT_OBJECT"
-            elif seen.get((row.get("sport"), row.get("event_id")), 0) > 1:
+            elif seen.get((row.get("sport"),
+                            row.get("event_id").strip().casefold()
+                            if isinstance(row.get("event_id"), str) else None), 0) > 1:
                 error = "DUPLICATE_EVENT_ALL_COPIES_QUARANTINED"
             else:
                 try:
