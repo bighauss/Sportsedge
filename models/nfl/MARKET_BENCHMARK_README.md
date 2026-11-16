@@ -18,7 +18,9 @@
 One JSON array of records, one per candidate outcome/line/book/time. Each record has exactly these fields:
 
 ```text
-sport,game_id,home_id,away_id,market,selection,book,
+sport,game_id,home_id,away_id,market,selection,book,period,
+provider_event_id,provider_market_id,provider_outcome_id,
+provider_opposite_outcome_id,quote_receipt_id,
 home_spread_or_total_line,american_taken,american_opposite,
 model_p_win,model_p_push,model_p_loss,
 model_sha256,model_forecast_sha256,provider_quote_sha256,
@@ -26,6 +28,8 @@ kickoff_utc,model_features_observed_utc,model_asof_utc,
 quote_observed_utc,quote_captured_utc,decision_utc,
 final_utc,result_available_utc,final_home,final_away,tie_settlement
 ```
+
+Period is explicitly `FG` only. Provider event, market, taken-outcome, opposite-outcome and quote receipt IDs are required, nonempty and the two provider outcome IDs must be distinct. These are caller assertions until independently matched to original provider records. No 1H/1Q/prop result can enter this scorer under an FG label.
 
 Markets: `MONEYLINE_2WAY`, `SPREAD`, `TOTAL`, `HOME_TEAM_TOTAL`, `AWAY_TEAM_TOTAL`. Moneyline uses `selection=HOME|AWAY`, `line=null` and `tie_settlement=TIE_PUSH`. Signed home spread uses `selection=HOME|AWAY` and `tie_settlement=PUSH_ON_EXACT_LINE`. Totals use `selection=OVER|UNDER`, positive posted line and `tie_settlement=PUSH_ON_EXACT_LINE`. Only original American odds integers with absolute magnitude ≥100 are valid (except -100). All SHA256 fields are `sha256:` plus 64 lowercase hex chars; hashes **alone are not independent provenance**. Scores are actual nonnegative integer finals, and official result availability must follow final.
 
