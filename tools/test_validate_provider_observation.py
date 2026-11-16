@@ -16,6 +16,16 @@ def good():
 class TestProviderObservation(unittest.TestCase):
     def test_valid_research_only(self):
         self.assertEqual(validate_manifest(good()), [])
+    def test_reject_boolean_schema_version(self):
+        d = good()
+        d["schema_version"] = True  # True == 1 in Python
+        self.assertIn("schema_version", validate_manifest(d))
+
+    def test_reject_float_http_status(self):
+        d = good()
+        d["observations"][0]["http_status"] = 200.0
+        self.assertIn("row_0_http", validate_manifest(d))
+
     def test_duplicate_source(self):
         d=good()
         d["observations"][1]["source"]=d["observations"][0]["source"]
