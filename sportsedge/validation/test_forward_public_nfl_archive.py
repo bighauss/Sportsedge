@@ -9,6 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sportsedge.validation.forward_public_nfl_archive import prospective_archive, utc, ALLOWED
+from sportsedge.markets.public_release_capture import (
+    REPOSITORY_ROOT, require_private_archive_path, capture_public_release,
+)
 
 NOW = datetime(2026, 11, 15, 22, 0, tzinfo=timezone.utc)
 
@@ -34,6 +37,28 @@ class ProspectiveArchiveTests(unittest.TestCase):
     def run_archive(self, **kw):
         return prospective_archive(self.parent, assets=kw.pop("assets", ("NFL_WEEKLY_2026",)),
                                    capture=kw.pop("capture", fake_capture), now_utc=kw.pop("now_utc", NOW), **kw)
+
+    def test_archive_repo_root_containment_does_not_depend_on_cwd(self):
+        # A nested runner CWD must not make sibling public repo folders appear private.
+        for target in (REPOSITORY_ROOT, REPOSITORY_ROOT / "archived_sources",
+                       REPOSITORY_ROOT / "models" / "private"):
+            with self.subTest(target=str(target)):
+                with patch("pathlib.Path.cwd", return_value=Path(self.temp.name)):
+                    with self.assertRaisesRegex(ValueError, "OUTSIDE_PUBLIC_REPOSITORY"):
+                        require_private_archive_path(target)
+                    with self.assertRaisesRegex(ValueError, "OUTSIDE_PUBLIC_REPOSITORY"):
+                        self.run_archive_with_parent(target)
+
+    def run_archive_with_parent(self, parent):
+        return prospective_archive(parent, assets=("NFL_WEEKLY_2026",),
+                                   capture=fake_capture, now_utc=NOW)
+
+    def test_invalid_public_destination_rejected_before_provider_access(self):
+        def must_not_call(*args, **kwargs):
+            raise AssertionError("network call must not be attempted")
+        with self.assertRaisesRegex(ValueError, "OUTSIDE_PUBLIC_REPOSITORY"):
+            capture_public_release("NFL_WEEKLY_2026", REPOSITORY_ROOT / "private",
+                                   opener=must_not_call)
 
     def test_pregame_capture_keeps_original_bytes_and_research_only(self):
         folder, manifest = self.run_archive(event_id="LAC_BAL_20261116",
