@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -26,6 +27,23 @@ CLOSE_FIELDS = {"bet_id", "event_start_utc", "open_observed_utc", "taken_observe
 CYCLE_FIELDS = {"cycle_id", "registered_utc", "window_start_utc", "window_end_utc",
                 "leakage_findings", "report_sha256"}
 ROOT_FIELDS = {"schema", "cards", "clv_triples", "calibration_cycles"}
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _private_path(value, label):
+    """Refuse raw evidence and reports inside public checkout, including aliases.
+
+    Check both the lexical absolute path and its symlink-resolved destination:
+    one path may live in the repository while the other points elsewhere.
+    """
+    lexical = Path(os.path.abspath(value))
+    resolved = lexical.resolve()
+    if (lexical == REPO_ROOT or REPO_ROOT in lexical.parents or
+            resolved == REPO_ROOT or REPO_ROOT in resolved.parents):
+        raise ValueError("PRIVATE_EVIDENCE_PATH_REQUIRED:" + label)
+    return resolved
+
 
 def _keys(obj, allowed, label):
     if not isinstance(obj, dict) or set(obj) != allowed:
@@ -226,18 +244,28 @@ def _unique_json_pairs(pairs):
     return result
 
 def report_file(source, destination):
-    src, dst = Path(source), Path(destination)
-    if src.resolve() == dst.resolve():
+    src = _private_path(source, "manifest")
+    dst = _private_path(destination, "report")
+    if src == dst:
         raise ValueError("SOURCE_AND_REPORT_MUST_DIFFER")
+    if not src.is_file():
+        raise ValueError("ORIGINAL_EVIDENCE_FILE_REQUIRED")
+    if src.stat().st_size > 20_000_000:
+        raise ValueError("MANIFEST_TOO_LARGE")
     raw = src.read_bytes()
     if len(raw) > 20_000_000:
         raise ValueError("MANIFEST_TOO_LARGE")
     manifest = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_pairs)
     report = analyze(manifest)
     report["input_sha256"] = "sha256:" + sha256(raw).hexdigest()
-    with dst.open("x", encoding="utf-8") as f:
-        json.dump(report, f, sort_keys=True, indent=2, allow_nan=False)
-        f.write("\n")
+    # Create-only 0600; no world-readable audit of restricted sources.
+    payload = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(dst, flags, 0o600)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(payload)
+        fh.flush()
+        os.fsync(fh.fileno())
     return report
 
 def main(argv=None):
