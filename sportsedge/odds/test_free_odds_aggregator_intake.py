@@ -4,9 +4,10 @@ import tempfile
 import unittest
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
+from unittest.mock import patch
 from urllib.error import HTTPError
 
-from sportsedge.odds.free_odds_aggregator_intake import capture, strict_json, SPORTS
+from sportsedge.odds.free_odds_aggregator_intake import capture, strict_json, SPORTS, REPOSITORY_ROOT, private_archive_root, _RejectRedirect
 
 KEY='TEST_FREE_TIER_API_KEY_123456789'
 EVENT='0123456789abcdef0123456789abcdef'
@@ -77,6 +78,55 @@ class OddsAPIIntakeTests(unittest.TestCase):
         e=event(sport='basketball_ncaab')
         out=self.run_capture([e],sport='CBB')
         self.assertEqual(out['sport'],'CBB')
+
+    def test_private_destination_rejected_before_network_outside_cwd(self):
+        called=[]
+        with tempfile.TemporaryDirectory() as d:
+            bad=REPOSITORY_ROOT/"sportsedge"/"odds"/"do_not_write"
+            with patch("pathlib.Path.cwd",return_value=Path(d)):
+                with self.assertRaisesRegex(ValueError,"RAW_ODDS_ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPO"):
+                    capture("NFL",bad,key=KEY,opener=lambda *a,**k:called.append(True))
+            self.assertFalse(bad.exists())
+        self.assertEqual(called,[])
+
+    def test_symlink_into_public_checkout_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            alias=Path(d)/"repo_alias"
+            try:alias.symlink_to(REPOSITORY_ROOT,target_is_directory=True)
+            except (OSError,NotImplementedError):self.skipTest("symlinks unavailable")
+            with self.assertRaisesRegex(ValueError,"RAW_ODDS_ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPO"):
+                private_archive_root(alias/"sportsedge"/"odds"/"private")
+
+    def test_redirect_never_receives_api_key(self):
+        def redirected(req,timeout):
+            class Fake(Response):
+                def geturl(self):return "https://untrusted.example/redirect"
+            return Fake(json.dumps([event()]).encode())
+        with self.assertRaisesRegex(ValueError,"AGGREGATOR_REDIRECT_REFUSED") as ctx:
+            self.run_capture(opener=redirected)
+        self.assertNotIn(KEY,str(ctx.exception))
+        self.assertFalse(self.root.exists())
+        with self.assertRaisesRegex(ValueError,"AGGREGATOR_REDIRECT_REFUSED"):
+            _RejectRedirect().redirect_request(None,None,302,"Moved",{},"https://untrusted.example/")
+
+    def test_default_open_uses_redirect_protected_transport(self):
+        def fake(req,timeout):
+            return Response(json.dumps([event()]).encode())
+        with patch("sportsedge.odds.free_odds_aggregator_intake._secure_open",
+                   side_effect=fake) as secure:
+            out=self.run_capture(opener=None)
+        self.assertEqual(secure.call_count,1)
+        self.assertFalse(out["original_source_chain_certified"])
+
+    def test_nonfinite_json_numbers_block_without_archival_write(self):
+        for data in (b'[NaN]',b'[Infinity]',b'[1e999]',b'[-1e999]'):
+            with self.subTest(data=data),self.assertRaisesRegex(ValueError,"NONFINITE_PROVIDER_JSON_NUMBER"):
+                strict_json(data)
+        e=event()
+        e["bookmakers"][0]["markets"][0]["outcomes"][0]["point"]=float("nan")
+        with self.assertRaisesRegex(ValueError,"NONFINITE_PROVIDER_JSON_NUMBER"):
+            self.run_capture([e])
+        self.assertFalse(self.root.exists())
 
     def test_invalid_market_name_rejected(self):
         with self.assertRaises(ValueError):
