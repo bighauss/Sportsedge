@@ -123,6 +123,26 @@ class Tests(unittest.TestCase):
                        if x["reason"]!="INCOMPLETE_EXTENDED_MARKET_ID:period,settlement"
                        else True for x in a["blocked"]))
 
+ def test_book_market_period_aliases_are_same_decision(self):
+  a=audit([
+   row(market="moneyline",selection="home",sport="NFL",
+       book="DK",period="FG",settlement="INCLUDES_OT"),
+   row(market="ML",selection="home",sport="NFL",
+       book="DraftKings",period="full_game",settlement="INCLUDES_OT",
+       snapshot_utc="2026-11-15T19:00:00Z"),
+  ])
+  self.assertEqual(a["accepted"],0)
+  self.assertEqual(len(a["blocked"]),2)
+  self.assertTrue(all(x["reason"]=="DUPLICATE_DECISION_ALL_SNAPSHOTS_BLOCKED"
+                      for x in a["blocked"]))
+
+ def test_market_line_format_equivalence_deduplicates(self):
+  standard=dict(sport="NFL",book="DraftKings",period="FG",
+                settlement="INCLUDES_OT",market="total",selection="under")
+  a=audit([row(line="50.50",**standard),row(line="50.5",**standard)])
+  self.assertEqual(a["accepted"],0)
+  self.assertEqual(len(a["blocked"]),2)
+
  def test_push(self):self.assertEqual(audit([row(outcome="push")])["accepted"],0)
  def test_naive(self):self.assertEqual(audit([row(snapshot_utc="2026-11-15T20:00:00")])["accepted"],0)
  def test_invalid_probability(self):self.assertEqual(audit([row(model_p="1.2")])["accepted"],0)
