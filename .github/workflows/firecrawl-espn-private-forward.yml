@@ -1,0 +1,91 @@
+name: Firecrawl ESPN prospective encrypted research capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      team:
+        description: 'Verified NFL team abbreviation (e.g. CHI)'
+        required: true
+        type: string
+      event_id:
+        description: 'Verified canonical game/event ID (not a made-up ID)'
+        required: true
+        type: string
+      event_start_utc:
+        description: 'Verified kickoff UTC (e.g. YYYY-MM-DDTHH:MM:SSZ)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firecrawl-espn-capture-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  source-capture:
+    # NEVER expose API key to pull-request jobs or untrusted branches.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIRECRAWL_API_KEY: ${{ secrets.SPORTSEDGE_FIRECRAWL_API_KEY }}
+      SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+      SPORTSEDGE_TEAM: ${{ inputs.team }}
+      SPORTSEDGE_EVENT_ID: ${{ inputs.event_id }}
+      SPORTSEDGE_EVENT_START_UTC: ${{ inputs.event_start_utc }}
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail closed if explicit owner secrets are absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${FIRECRAWL_API_KEY:-}" || -z "${SPORTSEDGE_ARCHIVE_FERNET_KEY:-}" ]]; then
+            echo "::error::BLOCK_SOURCE_AUTH: configure SPORTSEDGE_FIRECRAWL_API_KEY and SPORTSEDGE_ARCHIVE_FERNET_KEY in repository Actions secrets (never paste them into chat, source code or workflow inputs)"
+            exit 2
+          fi
+      - name: Install pinned authenticated encryption package
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Offline source-contract and encrypted-archive regression tests
+        run: |
+          python -m unittest sportsedge.validation.test_firecrawl_espn_injury_intake -v
+          python -m unittest sportsedge.validation.test_firecrawl_espn_forward_archive -v
+      - name: One bounded authenticated Firecrawl Alexandria request
+        shell: bash
+        env:
+          PRIVATE_ROOT: ${{ runner.temp }}/sportsedge-private-firecrawl
+          EXPORT_ROOT: ${{ runner.temp }}/sportsedge-encrypted-firecrawl
+        run: |
+          set -euo pipefail
+          umask 077
+          install -d -m 0700 "$PRIVATE_ROOT" "$EXPORT_ROOT"
+          python -m sportsedge.validation.firecrawl_espn_forward_archive \
+            --private-dir "$PRIVATE_ROOT" \
+            --artifact-dir "$EXPORT_ROOT" \
+            --team "$SPORTSEDGE_TEAM" \
+            --event-id "$SPORTSEDGE_EVENT_ID" \
+            --event-start-utc "$SPORTSEDGE_EVENT_START_UTC" \
+            --run-id "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: Retain only AES+HMAC-encrypted original source and sanitized receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: firecrawl-espn-private-pit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/sportsedge-encrypted-firecrawl/*.fernet
+            ${{ runner.temp }}/sportsedge-encrypted-firecrawl/*.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Destroy runner scratch and upload staging
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "${RUNNER_TEMP}/sportsedge-private-firecrawl" \
+                   "${RUNNER_TEMP}/sportsedge-encrypted-firecrawl"
