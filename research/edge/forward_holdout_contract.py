@@ -19,16 +19,27 @@ def evaluate(freeze, rows):
     seen=set(); scored=[]; missing=0
     for r in rows:
         if not isinstance(r,dict): raise Hold("ROW_INVALID")
-        key=tuple(r.get(k) for k in ("event_id","market_id","period","selection","line"))
-        if any(x is None or isinstance(x,(list,dict)) or x=="" for x in key) or key in seen: raise Hold("DUPLICATE_OR_MISSING_IDENTITY")
+        vals=[]
+        for field in ("event_id","market_id","period","selection","line"):
+            value=r.get(field)
+            if (isinstance(value,bool) or not isinstance(value,(str,int,float))
+                    or not str(value).strip()
+                    or (isinstance(value,float) and not math.isfinite(value))):
+                raise Hold("DUPLICATE_OR_MISSING_IDENTITY")
+            vals.append((type(value).__name__,str(value)))
+        key=tuple(vals)
+        if key in seen: raise Hold("DUPLICATE_OR_MISSING_IDENTITY")
         seen.add(key)
         if utc(r.get("feature_available_utc"))>utc(r.get("freeze_utc")) or not (registered<=utc(r.get("freeze_utc"))<utc(r.get("event_start_utc"))): raise Hold("LOOKAHEAD_OR_NOT_PREREGISTERED")
         if r.get("model_sha256")!=h: raise Hold("MODEL_CHANGED")
-        if r.get("outcome") is None: missing+=1; continue
-        if type(r["outcome"]) is not int or r["outcome"] not in (0,1): raise Hold("OUTCOME_INVALID")
+        # Validate forecasts on EVERY preregistered row, including those
+        # without a settled outcome; otherwise the unsettled denominator can
+        # hide missing/NaN book/model probabilities.
         for name in ("model_p","book_p"):
             p=r.get(name)
             if type(p) not in (float,int) or not math.isfinite(p) or not 0<p<1: raise Hold("PROBABILITY_INVALID")
+        if r.get("outcome") is None: missing+=1; continue
+        if type(r["outcome"]) is not int or r["outcome"] not in (0,1): raise Hold("OUTCOME_INVALID")
         scored.append(r)
     def metrics(k):
         if not scored:return None
