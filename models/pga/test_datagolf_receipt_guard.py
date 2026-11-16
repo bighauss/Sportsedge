@@ -30,6 +30,10 @@ class TestReceipt(unittest.TestCase):
             check(receipt(provider_observed_utc=None))
     def test_unobserved_research_only(self):
         self.assertEqual(check(receipt(provider_observed_utc=None),require_observed=False)["status"],"PAPER_0U_NO_OBSERVATION")
+    def test_invalid_age_policy_even_without_observation(self):
+        for age in (0, -1, True, "300", float("nan")):
+            with self.subTest(age=age), self.assertRaisesRegex(ValueError, "INVALID_MAX_AGE"):
+                check(receipt(provider_observed_utc=None), require_observed=False, max_age_seconds=age)
     def test_future_observation(self):
         with self.assertRaisesRegex(ValueError,"OBSERVED_AFTER_CAPTURE"):
             check(receipt(provider_observed_utc="2026-11-15T19:00:01Z"))
