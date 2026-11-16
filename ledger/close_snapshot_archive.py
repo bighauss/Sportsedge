@@ -51,7 +51,8 @@ def make_records(source_bytes,meta):
         if key in seen:raise Blocked("DUPLICATE_SAME_MARKET_LINE")
         seen.add(key)
         # Row's provider ID is a claim, not provider-authenticated metadata.
-        row={f:r[f].strip() for f in FIELDS}
+        row={f:(r.get(f) or "").strip() for f in FIELDS}
+        row["provider_quote_id"]=row["provider_quote_id"] or "NOT_CAPTURED"
         row["price_american"]=american
         row["source_sha256"]=digest
         row["captured_at_utc"]=meta["captured_at_utc"]
