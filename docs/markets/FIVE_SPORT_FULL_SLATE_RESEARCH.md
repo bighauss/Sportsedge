@@ -71,6 +71,34 @@ required frozen source-file PIT manifest, rather than a manually entered
 uncalibrated mean. Real odds need original raw bytes and exact DK quote
 identities, not guessed lines. Missing such inputs → BLOCK / 0u.
 
+## Seven-sport schedule visibility (five-sport pricing engine unchanged)
+
+The request's `sports` list may now include **NHL** and **PGA** in addition to
+the five pricing-kernel sports NFL, CFB, CBB, NBA and MLB. Their scheduled
+events MUST appear as `BLOCK` with
+`NO_SUPPORTED_NHL_OR_PGA_PRICING_KERNEL`, and every listed research market
+family carries `NO_SUPPORTED_PRICING_ADAPTER`. This is an explicit
+**schedule/inventory-only** lane. It neither consumes unregistered NHL/PGA
+price/model manifests nor assumes a bookmaker actually offers those markets.
+Supplying a purported NHL/PGA priced event through the five-sport manifest
+raises `SCHEDULE_ONLY_SPORT_HAS_NO_VALIDATED_PRICER`.
+
+The report retains its legacy `five_sports` key for existing consumers and
+adds `sport_coverage`, `schedule_only_sports`, and
+`research_pricing_sports`. The `schedule_only_unpriced_events` counter
+shows the unsupported scheduled event count without treating it as a
+priced/processed slate. A future authenticated NHL/PGA pricing adapter must
+be reviewed separately before any research pricing is accepted.
+
+For a future card, all seven sports require an **independent, complete
+upstream schedule capture**. A supplied expected-events list alone is not
+proof that all contests or markets were actually offered; a missing event
+cannot be discovered from an incomplete caller-supplied schedule.
+
+The CLI rejects input *and* output paths inside the public repository by
+checking the resolved repository root, not whichever nested working
+directory launched it. Private sportsbook offers must never be committed.
+
 ## Behavior and market inventory
 
 - Uses an externally supplied **expected schedule registry**, including
