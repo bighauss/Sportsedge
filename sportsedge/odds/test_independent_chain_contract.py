@@ -20,6 +20,22 @@ class IndependentChainTests(unittest.TestCase):
     def test_same_aggregator_two_logos(self):
         a,b=pair();b["upstream_chain_id"]=a["upstream_chain_id"]
         with self.assertRaisesRegex(ChainHold,"SHARED_UPSTREAM_CHAIN"):run(a,b)
+    def test_shared_transport_even_with_different_upstream_labels(self):
+        a,b=pair()
+        b["transport_id"]=a["transport_id"]
+        with self.assertRaisesRegex(ChainHold,"SHARED_TRANSPORT"):
+            run(a,b)
+
+    def test_case_whitespace_cannot_disguise_shared_source(self):
+        for key,reason in (("bookmaker_id","SAME_BOOKMAKER"),
+                           ("upstream_chain_id","SHARED_UPSTREAM_CHAIN"),
+                           ("transport_id","SHARED_TRANSPORT")):
+            with self.subTest(key=key):
+                a,b=pair()
+                b[key]="  "+a[key].upper()+"  "
+                with self.assertRaisesRegex(ChainHold,reason):
+                    run(a,b)
+
     def test_same_book_different_logo(self):
         a,b=pair();b["bookmaker_id"]="DK"
         with self.assertRaisesRegex(ChainHold,"SAME_BOOKMAKER"):run(a,b)
