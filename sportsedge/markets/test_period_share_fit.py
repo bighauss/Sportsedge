@@ -214,7 +214,10 @@ class PeriodShareTests(unittest.TestCase):
             records as score_records, encode as encode_scores,
         )
         period_raw=encode(self.rows)
-        score_raw=encode_scores(score_records(self.now-timedelta(days=35)))
+        score_rows=score_records(self.now-timedelta(days=35))
+        for row in score_rows:
+            row["sport"]="NFL"
+        score_raw=encode_scores(score_rows)
         with tempfile.TemporaryDirectory() as d:
             period=Path(d)/"periods.jsonl"
             score=Path(d)/"scores.jsonl"
