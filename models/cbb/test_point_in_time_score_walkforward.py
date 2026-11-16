@@ -2,12 +2,15 @@
 import copy
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from point_in_time_score_walkforward import (
-    ROOT, _no_duplicate_keys, _private, audit
+    ROOT, _no_duplicate_keys, _private, _require_private_source,
+    _exclusive_private_write, audit, main
 )
 
 H = "a" * 64
@@ -192,6 +195,76 @@ class CBBWalkforwardTests(unittest.TestCase):
     def test_duplicate_json_keys_rejected(self):
         with self.assertRaisesRegex(ValueError,"DUPLICATE_JSON_KEY"):
             json.loads('{"a":1,"a":2}',object_pairs_hook=_no_duplicate_keys)
+
+
+    def test_cli_private_end_to_end_no_quiet_default_umask_leak(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            source = root/"frozen.json"
+            source.write_text(json.dumps([make()]))
+            source.chmod(0o600)
+            output = root/"restricted"/"new_report.json"
+            self.assertEqual(main([str(source), "--report", str(output)]), 0)
+            self.assertTrue(output.exists())
+            self.assertEqual(output.stat().st_mode & 0o077, 0)
+            self.assertEqual(output.parent.stat().st_mode & 0o077, 0)
+            report = json.loads(output.read_text())
+            self.assertEqual(report["input_rows"], 1)
+            self.assertEqual(report["stake_u"], 0)
+            self.assertFalse(report["official"])
+            self.assertEqual(report["source_sha256"],
+                             __import__("hashlib").sha256(source.read_bytes()).hexdigest())
+
+    def test_world_readable_input_rejected_without_a_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            source = root/"exposed.json"
+            source.write_text(json.dumps([make()]))
+            source.chmod(0o644)
+            output = root/"new_report.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_SOURCE_FILE_MODE"):
+                main([str(source), "--report", str(output)])
+            self.assertFalse(output.exists())
+
+    def test_world_readable_report_directory_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            source = root/"original.json"
+            source.write_text(json.dumps([make()]))
+            source.chmod(0o600)
+            output_directory = root/"world_readable"
+            output_directory.mkdir(mode=0o755)
+            output_directory.chmod(0o755)
+            target = output_directory/"new_report.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_OUTPUT_DIRECTORY_MODE"):
+                main([str(source), "--report", str(target)])
+            self.assertFalse(target.exists())
+
+    def test_symlinked_private_path_into_public_checkout_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            alias = Path(d)/"public_alias"
+            alias.symlink_to(ROOT,target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "PRIVATE_SOURCE_AND_REPORT"):
+                _private(alias/"models"/"cbb"/"whatever.json")
+            with self.assertRaisesRegex(ValueError, "PRIVATE_SOURCE_AND_REPORT"):
+                _private(ROOT/"models"/"cbb"/"relative_lexical_alias.json")
+
+    def test_fsync_failure_removes_partial_private_output(self):
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d)/"new_report.json"
+            with patch("point_in_time_score_walkforward.os.fsync",
+                       side_effect=OSError("synthetic storage failure")):
+                with self.assertRaisesRegex(OSError, "synthetic storage failure"):
+                    _exclusive_private_write(target,b"partial bytes")
+            self.assertFalse(target.exists())
+
+    def test_exclusive_output_never_overwrites_prior_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            target=Path(d)/"new_report.json"
+            _exclusive_private_write(target,b"original")
+            with self.assertRaises(FileExistsError):
+                _exclusive_private_write(target,b"replacement")
+            self.assertEqual(target.read_bytes(),b"original")
 
     def test_output_must_be_private_even_nested_cwd(self):
         with self.assertRaisesRegex(ValueError,"PRIVATE_SOURCE_AND_REPORT"):
