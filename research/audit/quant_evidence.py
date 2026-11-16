@@ -14,11 +14,12 @@ import hashlib
 import json
 import math
 import random
+from decimal import Decimal, InvalidOperation
 from collections import defaultdict
 from pathlib import Path
 from statistics import mean
 
-from quant_foundation import SPORTS, american, when
+from quant_foundation import SPORTS, american, when, devig_two_way
 
 HEX = frozenset('0123456789abcdef')
 VALID_OUTCOMES = frozenset(('W', 'L', 'P'))
@@ -36,15 +37,22 @@ def _valid_probability(value: object, name: str) -> float:
 
 
 def _asof_check(row: dict) -> None:
-    required = ('sport', 'event_id', 'market', 'side', 'model_asof_utc',
-                'captured_utc', 'game_start_utc', 'feature_available_utc',
-                'source_published_utc', 'model_sha256', 'quote_sha256',
-                'price_american', 'qualification_rule_sha256', 'qualified')
+    required = ('sport', 'event_id', 'market', 'period', 'side', 'book',
+                'model_asof_utc', 'captured_utc', 'game_start_utc',
+                'feature_available_utc', 'source_published_utc',
+                'fitted_until_utc', 'settled_utc',
+                'model_sha256', 'quote_sha256', 'price_american',
+                'qualification_rule_sha256', 'qualified')
     missing = [key for key in required if not str(row.get(key, '')).strip()]
     if missing:
         raise ValueError('MISSING_REQUIRED:' + ','.join(missing))
     if row['sport'] not in SPORTS or not row['event_id']:
         raise ValueError('INVALID_SPORT_EVENT')
+    market_lower = str(row['market']).casefold()
+    if (any(word in market_lower for word in
+            ('spread', 'total', 'yard', 'point', 'shot', 'save', 'rebound', 'assist', 'alt'))
+            and row.get('line') in ('', None)):
+        raise ValueError('MARKET_LINE_MISSING')
     if any(not digest_ok(row.get(f)) for f in
            ('model_sha256', 'quote_sha256', 'qualification_rule_sha256')):
         raise ValueError('INVALID_DIGEST_FORMAT')
@@ -54,12 +62,10 @@ def _asof_check(row: dict) -> None:
         raise ValueError('POST_KICKOFF_PREDICTION_OR_PRICE')
     if when(row['feature_available_utc']) > freeze or when(row['source_published_utc']) > freeze:
         raise ValueError('PIT_FEATURE_NOT_RELEASED')
-    if row.get('fitted_until_utc'):
-        if when(row['fitted_until_utc']) >= freeze:
-            raise ValueError('TRAINING_NOT_EARLIER_THAN_FORECAST')
-    if row.get('settled_utc'):
-        if when(row['settled_utc']) <= start:
-            raise ValueError('IMPOSSIBLE_SETTLEMENT_TIME')
+    if when(row['fitted_until_utc']) >= freeze:
+        raise ValueError('TRAINING_NOT_EARLIER_THAN_FORECAST')
+    if when(row['settled_utc']) <= start:
+        raise ValueError('IMPOSSIBLE_SETTLEMENT_TIME')
     american(row['price_american'])
     if str(row.get('qualified')).lower() not in ('0', '1', 'true', 'false'):
         raise ValueError('UNLOCKED_SELECTION_STATUS')
@@ -68,6 +74,65 @@ def _asof_check(row: dict) -> None:
     if not row.get('book'):
         raise ValueError('UNBOUND_BOOK')
 
+
+
+def _canonical_line(line: object) -> str:
+    if line is None or str(line).strip() == '':
+        return ''
+    try:
+        return format(Decimal(str(line).strip()).normalize(), 'f')
+    except InvalidOperation as exc:
+        raise ValueError('INVALID_MARKET_LINE') from exc
+
+
+def _market_id(market: str) -> str:
+    s = market.casefold().replace(' ', '').replace('_', '').replace('-', '')
+    return {'moneyline':'ml', 'moneylinefullgame':'ml', 'totals':'total',
+            'spreads':'spread'}.get(s, s)
+
+
+def _selection_fingerprint(row: dict) -> tuple:
+    return (row['sport'], row['event_id'], when(row['game_start_utc']).isoformat(),
+            row['book'].strip().casefold(), str(row['period']).strip().casefold(),
+            _market_id(str(row['market'])), str(row['side']).strip().casefold(),
+            _canonical_line(row.get('line')), str(row.get('player_id', '')).strip(),
+            when(row['captured_utc']).isoformat())
+
+
+def _validate_market_pair(row: dict) -> float:
+    required = ('paired_quote_sha256', 'paired_captured_utc', 'paired_event_id',
+                'paired_book', 'paired_period', 'paired_market', 'paired_side',
+                'paired_line', 'paired_price_american')
+    if any(k not in row for k in required):
+        raise ValueError('MARKET_BASELINE_PAIR_NOT_ATTESTED')
+    if not digest_ok(row['paired_quote_sha256']):
+        raise ValueError('MARKET_BASELINE_PAIR_NOT_ATTESTED')
+    if (row['paired_event_id'] != row['event_id'] or
+        row['paired_book'].strip().casefold() != row['book'].strip().casefold() or
+        row['paired_period'].strip().casefold() != row['period'].strip().casefold() or
+        _market_id(row['paired_market']) != _market_id(row['market'])):
+        raise ValueError('MISMATCHED_MARKET_PAIR_IDENTITY')
+    opposite = {'over': 'under', 'under': 'over', 'home':'away', 'away':'home',
+                'yes':'no', 'no':'yes'}
+    side = str(row['side']).strip().casefold()
+    if side not in opposite or row['paired_side'].strip().casefold() != opposite[side]:
+        raise ValueError('MISMATCHED_OPPOSING_SIDE')
+    orig = _canonical_line(row.get('line'))
+    pair = _canonical_line(row.get('paired_line'))
+    if _market_id(row['market']) in ('spread','puckline','runline','rl'):
+        if not orig or not pair or Decimal(orig) + Decimal(pair) != 0:
+            raise ValueError('MISMATCHED_SPREAD_LINE')
+    elif orig != pair:
+        raise ValueError('MISMATCHED_MARKET_PAIR_LINE')
+    paired_time = when(row['paired_captured_utc'])
+    captured_time = when(row['captured_utc'])
+    if paired_time >= when(row['game_start_utc']) or abs((paired_time - captured_time).total_seconds()) > 300:
+        raise ValueError('STALE_OR_LATE_OPPOSING_QUOTE')
+    supplied = _valid_probability(row['market_p_no_vig'], 'market_probability')
+    computed = devig_two_way(row['price_american'],row['paired_price_american'])['no_vig_a']
+    if abs(supplied - computed) > 1e-6:
+        raise ValueError('NO_VIG_BASELINE_MATH_MISMATCH')
+    return computed
 
 def _wilson(wins: int, total: int) -> list[float] | None:
     if total == 0:
@@ -142,6 +207,8 @@ def replay(rows: list[dict]) -> dict:
     accepted = []
     unqualified = 0
     all_ids = set()
+    fingerprints = set()
+    mirror_checks: dict[tuple, set[str]] = defaultdict(set)
     for n, row in enumerate(rows, 2):
         try:
             _asof_check(row)
@@ -151,6 +218,9 @@ def replay(rows: list[dict]) -> dict:
             selection_id = row.get('selection_id', '')
             if not selection_id or selection_id in all_ids:
                 raise ValueError('MISSING_OR_DUPLICATE_SELECTION_ID')
+            fingerprint = _selection_fingerprint(row)
+            if fingerprint in fingerprints:
+                raise ValueError('DUPLICATE_CANONICAL_QUALIFIED_BET')
             if row.get('outcome') not in VALID_OUTCOMES:
                 raise ValueError('NOT_SETTLED_WIN_LOSS_PUSH')
             if not row.get('result_source'):
@@ -158,15 +228,15 @@ def replay(rows: list[dict]) -> dict:
             p = _valid_probability(row.get('p_model'), 'model_probability')
             q = None
             if row.get('market_p_no_vig') not in (None, ''):
-                q = _valid_probability(row['market_p_no_vig'], 'market_probability')
-                if not row.get('paired_quote_sha256') or not digest_ok(row['paired_quote_sha256']):
-                    raise ValueError('MARKET_BASELINE_PAIR_NOT_ATTESTED')
-                if not row.get('paired_captured_utc') or when(row['paired_captured_utc']) >= when(row['game_start_utc']):
-                    raise ValueError('LATE_OR_MISSING_PAIRED_MARKET')
+                q = _validate_market_pair(row)
             outcome = row['outcome']
             profit = american(row['price_american'])[0] - 1
             unit = {'W': profit, 'L': -1.0, 'P': 0.0}[outcome]
             all_ids.add(selection_id)
+            fingerprints.add(fingerprint)
+            mirror_key = (fingerprint[0],fingerprint[1],fingerprint[2],fingerprint[3],
+                          fingerprint[4],fingerprint[5],fingerprint[7],fingerprint[8],fingerprint[9])
+            mirror_checks[mirror_key].add(fingerprint[6])
             accepted.append({'event_id': row['event_id'], 'sport': row['sport'],
                              'market': row['market'], 'side': row['side'],
                              'selection_id': selection_id, 'game_start_utc': when(row['game_start_utc']),
@@ -193,6 +263,11 @@ def replay(rows: list[dict]) -> dict:
         'status': 'REPLAY_PAPER_0U_NOT_EXECUTION_AUTHENTICATED',
         'input_rows': len(rows), 'unqualified': unqualified,
         'rejected_qualified_or_invalid': rejected, 'eligible': len(accepted),
+        'possible_opposite_side_selection_groups': sum(
+            ('over' in sides and 'under' in sides) or
+            ('home' in sides and 'away' in sides) or
+            ('yes' in sides and 'no' in sides)
+            for sides in mirror_checks.values()),
         'overall': _summary(accepted),
         'max_drawdown_units': round(max_drawdown, 6),
         'by_market': [{'sport': sport, 'market': market, **_summary(group)}

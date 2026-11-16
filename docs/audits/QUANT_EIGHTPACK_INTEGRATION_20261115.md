@@ -5,9 +5,9 @@
 ## Concrete deliverables
 
 - `research/audit/quant_foundation.py`: original-row-preserving CSV inspection, row-level corrections and unresolved issues, empirical lag-only prop baseline with supplied opportunity inputs, American odds/no-vig/push-aware EV, create-only flat-unit paper ledger.
-- `research/audit/quant_evidence.py`: pregame frozen-prediction **replay**, qualifications census, per-market P/L and Brier/log loss, 5-point probability calibration, matched upstream no-vig baseline only when paired receipt fields supplied, Wilson intervals, deterministic **event-clustered** ROI intervals, original-odds drawdown, bias slices, paired frozen-feature ablation and all-inventory market refusal reason display.
+- `research/audit/quant_evidence.py`: pregame frozen-prediction **replay**, qualifications census, per-market P/L and Brier/log loss, 5-point probability calibration, matched upstream no-vig baseline only when paired receipt fields supplied, Wilson intervals, deterministic **event-clustered** ROI intervals, original-odds drawdown, exact opposite-side/line/book/time **no-vig arithmetic** checks, duplicate canonical-bet prevention, bias slices, paired frozen-feature ablation and all-inventory market refusal reason display.
 - `research/audit/quant_capture_preflight.py`: offline create-only manifest of existing private input bytes; row-level pre-kickoff and identity checks, SHA256, source labeling; **never** asserts a hash authenticates a sportsbook. Includes in-memory quota/cache decision policy for admins, not a live network collector.
-- `.github/workflows/quant-eightpack.yml`: no-network Python 3.11 CI for module compilation and 25 synthetic tests (checked locally before PR).
+- `.github/workflows/quant-eightpack.yml`: no-network Python 3.11 CI for module compilation and 29 synthetic tests (checked locally before PR).
 - Original architecture/variable hypothesis and source guide: `docs/audits/SPORTSEDGE_EIGHT_PROMPTS_README.md`.
 
 ## Usage with private files
@@ -33,7 +33,7 @@ python research/audit/quant_capture_preflight.py /private/board_capture.csv \
 python -m unittest discover -s research/audit -p 'test_quant_*.py' -v
 ```
 
-Every `--report`, `--cleaned` and `--manifest` is **create-only**. Do not run on public/private Drive files by pretending GitHub has those bytes. Preserve hashes and original source files. No live bettor execution or public refresh endpoints exist here.
+For `replay`, each qualified row must also contain `fitted_until_utc` earlier than `model_asof_utc` and `settled_utc` after kickoff. Market baseline rows additionally require opposing book odds, matching event/period/line/opposite side and a quote within five minutes. Every `--report`, `--cleaned` and `--manifest` is **create-only**. Do not run on public/private Drive files by pretending GitHub has those bytes. Preserve hashes and original source files. No live bettor execution or public refresh endpoints exist here.
 
 ## Important evidence distinctions
 

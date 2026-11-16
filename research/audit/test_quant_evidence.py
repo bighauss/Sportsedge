@@ -10,13 +10,16 @@ BASE=dict(sport='CBB',event_id='E1',period='FG',market='spread',side='home',
     game_start_utc='2026-11-15T20:00:00Z',
     feature_available_utc='2026-11-15T11:00:00Z',source_published_utc='2026-11-15T11:00:00Z',
     model_sha256=H,quote_sha256=H,qualification_rule_sha256=H,qualified='1',
-    selection_id='B1',outcome='W',result_source='official_final:receipt')
+    selection_id='B1',outcome='W',result_source='official_final:receipt',
+    fitted_until_utc='2026-11-14T22:00:00Z',settled_utc='2026-11-15T23:00:00Z')
 
 
 class QuantEvidenceTests(unittest.TestCase):
     def test_replay_roi_and_baseline(self):
-        r1=dict(BASE,market_p_no_vig='.52',paired_quote_sha256=H,
-                paired_captured_utc='2026-11-15T12:05:00Z')
+        r1=dict(BASE,market_p_no_vig='.5',paired_quote_sha256=H,paired_price_american='-110',
+                paired_captured_utc='2026-11-15T12:05:00Z',paired_event_id='E1',
+                paired_book='DK',paired_period='FG',paired_market='spread',
+                paired_side='away',paired_line='3.5')
         r2=dict(BASE,event_id='E2',selection_id='B2',outcome='L',price_american='+150')
         r3=dict(BASE,event_id='E3',selection_id='B3',outcome='P')
         out=replay([r1,r2,r3])
@@ -35,6 +38,30 @@ class QuantEvidenceTests(unittest.TestCase):
         out=replay([dict(BASE),dict(BASE,event_id='E2')])
         self.assertEqual(out['eligible'],1)
         self.assertEqual(len(out['rejected_qualified_or_invalid']),1)
+    def test_canonical_duplicate_under_different_id_denied(self):
+        same=dict(BASE,selection_id='B2',market='Spreads',side='HOME',line='-3.50')
+        out=replay([dict(BASE),same])
+        self.assertEqual(out['eligible'],1)
+        self.assertEqual(out['rejected_qualified_or_invalid'][0]['reason'],'DUPLICATE_CANONICAL_QUALIFIED_BET')
+    def test_pair_line_or_side_mismatch_denied(self):
+        pair=dict(BASE,market_p_no_vig='.5',paired_quote_sha256=H,paired_price_american='-110',
+            paired_captured_utc=BASE['captured_utc'],paired_event_id='E1',paired_book='DK',
+            paired_period='FG',paired_market='spread',paired_side='away',paired_line='-3.5')
+        out=replay([pair])
+        self.assertEqual(out['eligible'],0)
+        self.assertEqual(out['rejected_qualified_or_invalid'][0]['reason'],'MISMATCHED_SPREAD_LINE')
+    def test_market_baseline_math_mismatch(self):
+        row=dict(BASE,market_p_no_vig='.90',paired_quote_sha256=H,
+                 paired_captured_utc=BASE['captured_utc'],paired_price_american='-110',
+                 paired_event_id='E1',paired_book='DK',paired_period='FG',
+                 paired_market='spread',paired_side='away',paired_line='3.5')
+        out=replay([row])
+        self.assertEqual(out['eligible'],0)
+        self.assertEqual(out['rejected_qualified_or_invalid'][0]['reason'], 'NO_VIG_BASELINE_MATH_MISMATCH')
+    def test_missing_fitted_until_denied(self):
+        out=replay([dict(BASE,fitted_until_utc='')])
+        self.assertEqual(out['eligible'],0)
+        self.assertIn('fitted_until_utc',out['rejected_qualified_or_invalid'][0]['reason'])
     def test_pushes_not_in_calibration(self):
         out=replay([dict(BASE,outcome='P')])
         self.assertEqual(out['eligible'],1)
