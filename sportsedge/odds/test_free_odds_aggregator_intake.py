@@ -70,6 +70,33 @@ class OddsAPIIntakeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'USER_API_KEY_MISSING_OR_UNSAFE'):
             self.run_capture(key='')
 
+    def test_connected_odds_api_secret_alias_for_private_capture(self):
+        # GitHub's authorized provider smoke run uses ODDS_API_KEY while
+        # the private capture CLI historically used SPORTSEDGE_ODDS_API_KEY.
+        # No real HTTP or billed provider API call occurs in this test.
+        with patch.dict("os.environ",{"ODDS_API_KEY":KEY},clear=True):
+            out=capture("NFL",self.root,opener=opener_for([event()]))
+        self.assertEqual(out["state"],"PAPER_0U_AGGREGATOR_NOT_UPSTREAM_BOOK_AUTHENTICATED")
+        self.assertEqual(out["approved_stake_u"],0)
+        self.assertEqual(out["official_counted"],0)
+        self.assertNotIn(KEY,(self.root/out["raw_filename"]).read_text())
+
+    def test_legacy_secret_name_takes_precedence_over_alias(self):
+        with patch.dict("os.environ",{
+            "SPORTSEDGE_ODDS_API_KEY":KEY,
+            "ODDS_API_KEY":"INVALID_SECONDARY_KEY_FROM_DIFFERENT_ACCOUNT"
+        },clear=True):
+            out=capture("NFL",self.root,opener=opener_for([event()]))
+        self.assertEqual(out["outcomes_returned"],4)
+        self.assertFalse(out["original_source_chain_certified"])
+
+    def test_explicit_empty_key_never_falls_back_and_spends_credits(self):
+        called=[]
+        with patch.dict("os.environ",{"ODDS_API_KEY":KEY},clear=True):
+            with self.assertRaisesRegex(ValueError,"USER_API_KEY_MISSING_OR_UNSAFE"):
+                capture("NFL",self.root,key="",opener=lambda *args,**kw:called.append(True))
+        self.assertFalse(called)
+
     def test_event_mismatch_blocks(self):
         with self.assertRaisesRegex(ValueError,'EVENT_ID_RESPONSE_MISMATCH'):
             self.run_capture(event_id='b'*32)
