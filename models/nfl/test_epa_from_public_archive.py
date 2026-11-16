@@ -156,8 +156,10 @@ class ArchivedPBPBridgeTests(unittest.TestCase):
             build(arch,sha)
 
     def test_raw_pbp_source_count_must_match_captured_manifest(self):
-        arch,sha,_=build_zip(modify_meta=lambda m:m["asset_receipts"][0].update(
-            source_rows=999))
+        arch,sha,_=build_zip(
+            modify_meta=lambda m:m["asset_receipts"][0].update(source_rows=999),
+            modify_sidecar=lambda s:s.update(rows=999),
+        )
         with self.assertRaisesRegex(ValueError,"SOURCE_PBP_RECORD_CENSUS_CHANGED"):
             build(arch,sha)
 
