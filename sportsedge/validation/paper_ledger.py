@@ -19,8 +19,11 @@ from decimal import Decimal, InvalidOperation
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import sqlite3
+import stat
+from urllib.parse import quote
 from types import SimpleNamespace
 
 from sportsedge.markets.allmarkets_research import Market, Outcome, ScoreEvent, settle
@@ -28,6 +31,56 @@ from sportsedge.markets.allmarkets_research import Market, Outcome, ScoreEvent, 
 
 class Blocked(ValueError):
     pass
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MAX_EVIDENCE_BYTES = 5_000_000
+
+
+def private_file(path, label, *, required=True):
+    """Guard both lexical and resolved paths, including all symlinked parents.
+
+    The directory must be owner-private. A 0600 file is mandatory for existing
+    evidence/SQLite. Never place private wagers, IDs or finals in public GitHub.
+    """
+    if not isinstance(path, (str, os.PathLike)):
+        raise Blocked("Invalid private path: " + label)
+    lexical = Path(os.path.abspath(os.fspath(path)))
+    resolved = lexical.resolve()
+    if (lexical == REPO_ROOT or REPO_ROOT in lexical.parents
+            or resolved == REPO_ROOT or REPO_ROOT in resolved.parents):
+        raise Blocked("Public repository path refused: " + label)
+    if any(part.is_symlink() for part in (lexical, *lexical.parents)):
+        raise Blocked("Symlinked private path refused: " + label)
+    if not resolved.parent.is_dir() or stat.S_IMODE(resolved.parent.stat().st_mode) & 0o077:
+        raise Blocked("Private parent directory 0700 required: " + label)
+    if required:
+        if not resolved.is_file() or stat.S_IMODE(resolved.stat().st_mode) & 0o077:
+            raise Blocked("Owner-only 0600 file required: " + label)
+    elif resolved.exists() and (not resolved.is_file()
+                               or stat.S_IMODE(resolved.stat().st_mode) & 0o077):
+        raise Blocked("Existing private file must be owner-only: " + label)
+    return resolved
+
+
+def strict_json(raw):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise Blocked("Duplicate original JSON field")
+            result[key] = value
+        return result
+
+    def reject_nonfinite(value):
+        raise Blocked("Nonfinite original JSON number")
+    try:
+        return json.loads(raw, object_pairs_hook=unique,
+                          parse_constant=reject_nonfinite)
+    except Blocked:
+        raise
+    except (ValueError, UnicodeError) as exc:
+        raise Blocked("Corrupt or ambiguous original JSON evidence") from exc
 
 
 def time_utc(raw):
@@ -44,11 +97,19 @@ def source(root, cfg, cutoff, direction):
     if not isinstance(cfg,dict) or not all(k in cfg for k in
            ("path","sha256","captured_at_utc")):
         raise Blocked("Original evidence path/hash/capture missing")
-    path=(root/cfg["path"]).resolve()
-    if not path.is_relative_to(root.resolve()) or not path.is_file():
+    relative=cfg["path"]
+    if (not isinstance(relative, str) or not relative or
+            Path(relative).is_absolute() or
+            any(part in ("", ".", "..") for part in relative.split("/")) or
+            "\\" in relative):
+        raise Blocked("Original source path must be private and relative")
+    path=private_file(root/relative, "ORIGINAL_SOURCE")
+    if not path.is_relative_to(root.resolve()):
         raise Blocked("Source path must be within private manifest folder")
+    if not 0 < path.stat().st_size <= MAX_EVIDENCE_BYTES:
+        raise Blocked("Original evidence size invalid")
     raw=path.read_bytes()
-    if len(raw)>5_000_000:
+    if not 0 < len(raw) <= MAX_EVIDENCE_BYTES:
         raise Blocked("Original evidence unusually large")
     digest=hashlib.sha256(raw).hexdigest()
     if digest!=cfg["sha256"] or len(cfg["sha256"])!=64:
@@ -58,10 +119,7 @@ def source(root, cfg, cutoff, direction):
         raise Blocked("Pregame quote captured at/after kickoff")
     if direction=="postgame" and not clock>cutoff:
         raise Blocked("Postgame final captured before kickoff")
-    try:
-        return json.loads(raw.decode("utf-8")),clock,digest
-    except (ValueError,UnicodeError) as ex:
-        raise Blocked("Corrupt original JSON evidence") from ex
+    return strict_json(raw.decode("utf-8")),clock,digest
 
 
 def price_decimal(odds):
@@ -97,9 +155,13 @@ def novig_pair(q):
 
 
 def grade_bundle(bundle_path):
-    bundle_path=Path(bundle_path).resolve()
+    bundle_path=private_file(bundle_path, "BUNDLE")
+    if not 0 < bundle_path.stat().st_size <= MAX_EVIDENCE_BYTES:
+        raise Blocked("Bundle evidence size invalid")
     root=bundle_path.parent
-    b=json.loads(bundle_path.read_text(encoding="utf-8"))
+    b=strict_json(bundle_path.read_text(encoding="utf-8"))
+    if not isinstance(b, dict):
+        raise Blocked("Bundle JSON object required")
     if not isinstance(b.get("pick_id"),str) or not b["pick_id"] or len(b["pick_id"])>128:
         raise Blocked("Missing/oversized selection ID")
     kickoff=time_utc(b["kickoff_utc"])
@@ -167,8 +229,20 @@ def append_ledger(db_path, result):
     A local SHA256 hash chain detects accidental rewrites, not tamper-proof
     WORM storage or externally signed attestations.
     """
-    db_path=Path(db_path).resolve()
-    db_path.parent.mkdir(parents=True,exist_ok=True)
+    db_path=private_file(db_path, "LEDGER", required=False)
+    if not db_path.exists():
+        # sqlite3.connect() creates files using the process umask (often
+        # world-readable 0644). Create exclusively as 0600 before opening.
+        flags=os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd=os.open(db_path, flags, 0o600)
+        except FileExistsError:
+            # Another agent may have created it. Validate permissions before
+            # SQLite opens it; never overwrite or chmod an unknown file.
+            private_file(db_path, "LEDGER")
+        else:
+            os.close(fd)
+    private_file(db_path, "LEDGER")
     if not isinstance(result.get("selection_identity"), list) or not result["selection_identity"]:
         raise Blocked("Exact canonical market identity required")
     stable=json.dumps(result,sort_keys=True,separators=(",",":"),ensure_ascii=False)
@@ -210,7 +284,10 @@ def append_ledger(db_path, result):
 
 
 def verify_chain(db_path):
-    with sqlite3.connect(db_path) as db:
+    # Read-only URI also prevents silently creating a nonexistent ledger.
+    db_path=private_file(db_path, "LEDGER")
+    uri="file:" + quote(str(db_path), safe="/") + "?mode=ro"
+    with sqlite3.connect(uri, uri=True) as db:
         rows=db.execute("SELECT pick_id,payload,prev_sha,record_sha FROM ledger ORDER BY seq").fetchall()
     previous="0"*64
     for pid,payload,prev,rec in rows:
