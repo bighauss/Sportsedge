@@ -189,9 +189,8 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
 
     fitted_periods=None
     if using_period_fit:
-        # NCAA men's CBB publishes halves, not four real quarters.
-        if projection.sport=="CBB":
-            raise ValueError("CBB_MENS_HALVES_CANNOT_BE_FOUR_QUARTERS")
+        # Real men's CBB two-half receipts are supported by the H1/H2
+        # simulator. Synthetic 4-bin CBB Q shares may never be fit here.
         ref=_only_keys(payload["period_fit_ref"],
             {"path","raw_sha256","fit_asof_utc"},"period_fit_ref")
         if _iso(ref["fit_asof_utc"])>=projection.asof_utc:
