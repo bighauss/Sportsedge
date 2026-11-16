@@ -14,7 +14,7 @@ def validate_manifest(document):
     errors = []
     if not isinstance(document, dict):
         return ["manifest_not_object"]
-    if document.get("schema_version") != 1:
+    if type(document.get("schema_version")) is not int or document["schema_version"] != 1:
         errors.append("schema_version")
     if document.get("gate_a") != "OPEN" or document.get("market_state") != "PAPER/0u":
         errors.append("unsafe_market_state")
@@ -36,7 +36,7 @@ def validate_manifest(document):
             errors.append(f"row_{index}_unknown_source")
         if row.get("status") != "observed" or row.get("research_only") is not True:
             errors.append(f"row_{index}_not_observed")
-        if row.get("http_status") != 200:
+        if type(row.get("http_status")) is not int or row["http_status"] != 200:
             errors.append(f"row_{index}_http")
         if not isinstance(row.get("byte_count"), int) or isinstance(row.get("byte_count"), bool) or not 0 < row["byte_count"] <= 2000000:
             errors.append(f"row_{index}_bytes")
