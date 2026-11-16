@@ -6,12 +6,39 @@ Local SHA chain is NOT a third-party timestamp or immutable proof.
 """
 from __future__ import annotations
 import argparse,csv,datetime as dt,hashlib,io,json,math
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 FIELDS=("book","event_id","market_key","selection","line","price_american",
         "provider_event_id","provider_market_id","provider_quote_id")
 
 class Blocked(ValueError): pass
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def private_path(path, reason="PRIVATE_EVIDENCE_MUST_BE_OUTSIDE_PUBLIC_REPO"):
+    """Reject repository paths regardless of CWD, including resolved symlinks."""
+    target = Path(path).resolve()
+    if target == REPO_ROOT or REPO_ROOT in target.parents:
+        raise Blocked(reason)
+    return target
+
+
+def line_identity(value):
+    """Collapse purely numeric formatting, never alter original source rows."""
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    try:
+        parsed = Decimal(raw)
+    except InvalidOperation:
+        # For qualitative markets the line field may be nonnumeric.
+        return raw.casefold()
+    if not parsed.is_finite():
+        raise Blocked("INVALID_NUMERIC_MARKET_LINE")
+    return "0" if parsed == 0 else str(parsed.normalize())
+
 
 def utc(s):
     try: x=dt.datetime.fromisoformat(s.replace("Z","+00:00"))
@@ -34,20 +61,32 @@ def make_records(source_bytes,meta):
     lag=(kick-cap).total_seconds()
     if kind=="CLOSE" and not 0<lag<=600:
         raise Blocked("NOT_WITHIN_10_MIN_CLOSE_WINDOW")
-    if "observed_at_utc" in meta and not utc(meta["observed_at_utc"])<kick:
-        raise Blocked("PROVIDER_CLOCK_NOT_PREGAME")
+    if "observed_at_utc" in meta:
+        observed = utc(meta["observed_at_utc"])
+        if observed >= kick:
+            raise Blocked("PROVIDER_CLOCK_NOT_PREGAME")
+        if observed > cap:
+            raise Blocked("PROVIDER_CLOCK_AFTER_LOCAL_CAPTURE")
     try:reader=csv.DictReader(io.StringIO(source_bytes.decode("utf-8-sig")))
     except UnicodeDecodeError as e:raise Blocked("NON_UTF8_SOURCE") from e
-    if not set(FIELDS).issubset(reader.fieldnames or ()):raise Blocked("MISSING_QUOTE_FIELDS")
+    fields = reader.fieldnames or ()
+    if len(fields) != len(set(fields)):
+        raise Blocked("DUPLICATE_CSV_HEADER")
+    if not set(FIELDS).issubset(fields):
+        raise Blocked("MISSING_QUOTE_FIELDS")
     rows=[];seen=set()
     for i,r in enumerate(reader,2):
+        if None in r or any(k not in FIELDS for k in r):
+            raise Blocked(f"MALFORMED_CSV_ROW_{i}")
         if any(r.get(f) is None or not r.get(f).strip() for f in FIELDS[:-1]):
             raise Blocked(f"MISSING_QUOTE_FIELD_ROW_{i}")
         if r["event_id"]!=meta.get("event_id"):raise Blocked("EVENT_MISMATCH")
         try:american=int(r["price_american"])
         except ValueError as e:raise Blocked("INVALID_AMERICAN_ODDS") from e
         if abs(american)<100 or abs(american)>100000:raise Blocked("INVALID_AMERICAN_ODDS")
-        key=(r["book"],r["event_id"],r["market_key"],r["selection"],r["line"])
+        key=(r["book"].strip().casefold(),r["event_id"].strip(),
+             r["market_key"].strip().casefold(),r["selection"].strip().casefold(),
+             line_identity(r["line"]))
         if key in seen:raise Blocked("DUPLICATE_SAME_MARKET_LINE")
         seen.add(key)
         # Row's provider ID is a claim, not provider-authenticated metadata.
@@ -83,7 +122,7 @@ def verify_chain(path):
 
 def append(path,records):
     # Single-writer private local use only; use external locking for concurrency.
-    path=Path(path)
+    path=private_path(path, "PRIVATE_LEDGER_MUST_BE_OUTSIDE_PUBLIC_REPO")
     prior=verify_chain(path)
     existing={e["quote"]["id"] for e in prior}
     if len({r["id"] for r in records})!=len(records) or any(r["id"] in existing for r in records):
@@ -103,7 +142,8 @@ def append(path,records):
             "last_local_hash":prev,"warning":"Local hash chain is not third-party signed or immutable."}
 
 def from_manifest(path):
-    path=Path(path).resolve();meta=json.loads(path.read_text(encoding="utf-8"))
+    path=private_path(path, "PRIVATE_MANIFEST_MUST_BE_OUTSIDE_PUBLIC_REPO")
+    meta=json.loads(path.read_text(encoding="utf-8"))
     rel=Path(meta["source_path"]);p=(path.parent/rel).resolve()
     if rel.is_absolute() or not p.is_relative_to(path.parent) or not p.is_file():
         raise Blocked("SOURCE_PATH_ESCAPE")
