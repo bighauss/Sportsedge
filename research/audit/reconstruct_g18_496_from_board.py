@@ -104,7 +104,7 @@ def reconstruct(board_bytes: bytes, *, strict_nov9=True):
     if strict_nov9 and (sum(census.values()) != 248 or dict(census) != EXPECTED or len(derived) != 496):
         raise ReconstructionError("ORIGINAL_NOV9_248_496_CENSUS_MISMATCH")
     s = io.StringIO(newline="")
-    writer = csv.writer(s, lineterminator="\\n")
+    writer = csv.writer(s, lineterminator="\n")
     writer.writerow(("game", "pick", "price"))
     writer.writerows(derived)
     csv_bytes = s.getvalue().encode("utf-8")
