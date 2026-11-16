@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
+from sportsedge.validation import forward_acceptance as acceptance_module
 from sportsedge.validation.forward_acceptance import analyze, report_file
 
 UTC=timezone.utc
@@ -237,6 +239,39 @@ class AuditContract(unittest.TestCase):
                 self.assertEqual(stat.S_IMODE(dest.stat().st_mode), 0o600)
             with self.assertRaises(FileExistsError):
                 report_file(src, dest)
+
+    def test_public_checkout_symlink_outward_still_refused(self):
+        # Synthetic public checkout avoids modifying the real checkout.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_repo = root / "public_repo"
+            private = root / "private"
+            fake_repo.mkdir()
+            private.mkdir()
+            alias = fake_repo / "alias_to_private"
+            try:
+                alias.symlink_to(private, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+            with patch.object(acceptance_module, "REPOSITORY_ROOT", fake_repo):
+                with self.assertRaisesRegex(ValueError,
+                                            "PRIVATE_ACCEPTANCE_INPUT_INSIDE_PUBLIC_REPOSITORY"):
+                    acceptance_module.require_private_path(
+                        alias / "source.json", label="ACCEPTANCE_INPUT")
+
+    def test_failed_sync_rolls_back_only_new_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "original.json"
+            destination = root / "report.json"
+            source.write_text(json.dumps(fixture(0, 0, 0)))
+            original = source.read_bytes()
+            with patch("sportsedge.validation.forward_acceptance.os.fsync",
+                       side_effect=OSError("simulated failed sync")):
+                with self.assertRaisesRegex(OSError, "simulated failed sync"):
+                    report_file(source, destination)
+            self.assertFalse(destination.exists())
+            self.assertEqual(source.read_bytes(), original)
 
     def test_duplicate_manifest_json_key_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
