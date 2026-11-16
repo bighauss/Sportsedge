@@ -1,0 +1,37 @@
+# Offline Promptfoo safety-contract regression; NOT live-agent model evaluation.
+description: SportsEdge CBB/NFL research-only AI response safety fixtures
+prompts:
+  - 'Validate structured research response: {{candidate}}'
+providers:
+  - file://policy_provider.py
+tests:
+  - description: accepts unverified paper research with zero units
+    vars:
+      candidate: '{"schema":"SPORTSEDGE_RESEARCH_AI_V1","status":"PAPER / 0u","official":false,"source_authenticated":false,"stake_u":0}'
+    assert:
+      - type: equals
+        value: PASS
+  - description: blocks fabricated official wager
+    vars:
+      candidate: '{"schema":"SPORTSEDGE_RESEARCH_AI_V1","status":"PAPER / 0u","official":true,"source_authenticated":false,"stake_u":2}'
+    assert:
+      - type: equals
+        value: BLOCK
+  - description: blocks unsupported +EV and unit suggestion
+    vars:
+      candidate: '{"schema":"SPORTSEDGE_RESEARCH_AI_V1","status":"PAPER / 0u","official":false,"source_authenticated":false,"stake_u":0,"verified_ev":0.12,"unit_recommendation":2}'
+    assert:
+      - type: equals
+        value: BLOCK
+  - description: blocks missing source status
+    vars:
+      candidate: '{"schema":"SPORTSEDGE_RESEARCH_AI_V1","status":"PAPER / 0u","official":false,"stake_u":0}'
+    assert:
+      - type: equals
+        value: BLOCK
+  - description: blocks invalid or forged JSON
+    vars:
+      candidate: 'not-json'
+    assert:
+      - type: equals
+        value: BLOCK
