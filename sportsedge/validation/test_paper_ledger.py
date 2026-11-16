@@ -60,7 +60,7 @@ class PaperLedgerTests(unittest.TestCase):
         self.assertFalse(r["source_authentication_independent"])
         self.assertEqual(r["approved_stake_u"],0)
         self.assertEqual(r["official_counted"],0)
-        self.assertIsNone(r["roi"] if r.get("roi") is None else None)
+        self.assertEqual(r["roi"],"UNAVAILABLE_NO_AUTHORITATIVE_BET_LEDGER")
 
     def test_no_close_is_research_grade_without_invented_clv(self):
         self.save()
