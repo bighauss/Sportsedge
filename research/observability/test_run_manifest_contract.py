@@ -49,6 +49,14 @@ class ManifestContractTests(unittest.TestCase):
     def test_nonfinite_json_rejected(self):
         b=json.dumps(fixture()).encode().replace(b'"seed": 7',b'"seed": NaN')
         with self.assertRaises(Hold):verify(b,RAW)
+    def test_json_exponent_overflow_in_nested_unknown_field_rejected(self):
+        m=fixture()
+        raw=json.dumps(m).replace(
+            '"seed": 7', '"seed": 7, "future_metadata": {"unused_stat": 1e999}', 1
+        ).encode()
+        with self.assertRaisesRegex(Hold,"NONFINITE_JSON"):
+            verify(raw, RAW)
+
     def test_missing_provider(self):
         m=fixture();m["sources"][0]["provider"]=""
         with self.assertRaisesRegex(Hold,"SOURCE_PROVIDER_MISSING"):run(m)
