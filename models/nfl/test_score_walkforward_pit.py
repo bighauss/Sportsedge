@@ -1,12 +1,14 @@
 """Synthetic PIT score-conversion regressions: no odds, no promoted picks."""
 from datetime import datetime, timedelta, timezone
 import copy
+import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from score_walkforward_pit import walkforward, private_evidence_path, REPO_ROOT, main
+from score_walkforward_pit import walkforward, private_evidence_path, create_private_output, REPO_ROOT, main
 
 
 def iso(dt):
@@ -182,6 +184,62 @@ class PointInTimeScoreWalkforwardTests(unittest.TestCase):
             alias.symlink_to(REPO_ROOT, target_is_directory=True)
             with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
                 private_evidence_path(alias / "models" / "nfl" / "private.csv")
+
+    def test_repo_local_symlink_outward_is_not_a_private_evidence_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake_checkout = root / "public_checkout"
+            protected = root / "restricted"
+            fake_checkout.mkdir()
+            protected.mkdir()
+            alias = fake_checkout / "outward"
+            alias.symlink_to(protected, target_is_directory=True)
+            with patch("score_walkforward_pit.REPO_ROOT", fake_checkout):
+                with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                    private_evidence_path(alias / "source.json")
+                with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                    create_private_output(alias / "new.json", b"private")
+            self.assertFalse((protected / "new.json").exists())
+
+    def test_private_output_0600_exclusive_and_no_partial_on_fsync_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "results.json"
+            self.assertEqual(create_private_output(output, b'{"status":"PAPER"}'), output.resolve())
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(output.read_bytes(), b'{"status":"PAPER"}')
+            with self.assertRaises(FileExistsError):
+                create_private_output(output, b"replacement")
+            self.assertEqual(output.read_bytes(), b'{"status":"PAPER"}')
+            interrupted = root / "interrupted.json"
+            with patch("score_walkforward_pit.os.fsync", side_effect=OSError("injected fsync failure")):
+                with self.assertRaisesRegex(OSError, "injected fsync failure"):
+                    create_private_output(interrupted, b"incomplete")
+            self.assertFalse(interrupted.exists())
+
+    def test_score_cli_success_writes_private_0600_json(self):
+        rows, scores = fixtures()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            features = root / "features.csv"
+            results = root / "results.csv"
+            output = root / "walkforward.json"
+            for target, records in ((features, rows), (results, scores)):
+                with target.open("w", encoding="utf-8", newline="") as fh:
+                    writer = csv.DictWriter(fh, fieldnames=records[0].keys())
+                    writer.writeheader()
+                    writer.writerows(records)
+            argv = ["score_walkforward_pit.py", "--features", str(features),
+                    "--results", str(results), "--out", str(output)]
+            with patch("sys.argv", argv):
+                main()
+            report = json.loads(output.read_text())
+            self.assertEqual(report["approved_stake_u"], 0)
+            self.assertEqual(report["status"], "PAPER_HOLD_0U")
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            with patch("sys.argv", argv), self.assertRaises(FileExistsError):
+                main()
+            self.assertEqual(report, json.loads(output.read_text()))
 
     def test_score_cli_refuses_public_repo_input_and_output_before_read(self):
         with tempfile.TemporaryDirectory() as directory:
