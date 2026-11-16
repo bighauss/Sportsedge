@@ -1,0 +1,62 @@
+name: Coding-agent PR quality scorecard (public metadata)
+
+on:
+  pull_request:
+    paths:
+      - 'research/observability/agent_pr_scorecard.py'
+      - 'research/observability/test_agent_pr_scorecard.py'
+      - '.github/workflows/agent-pr-quality-scorecard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/observability/agent_pr_scorecard.py'
+      - 'research/observability/test_agent_pr_scorecard.py'
+      - '.github/workflows/agent-pr-quality-scorecard.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 14 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Offline scorecard cohort, CI and causality-contract tests
+        run: python -m unittest -v research.observability.test_agent_pr_scorecard
+
+  scorecard:
+    if: github.event_name != 'pull_request'
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect read-only public repository PR and CI statistics
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python research/observability/agent_pr_scorecard.py \
+            --output-prefix "${{ runner.temp }}/sportsedge_agent_pr_scorecard"
+          cat "${{ runner.temp }}/sportsedge_agent_pr_scorecard.md" >> "${GITHUB_STEP_SUMMARY}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sportsedge-public-agent-pr-scorecard
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/sportsedge_agent_pr_scorecard.json
+            ${{ runner.temp }}/sportsedge_agent_pr_scorecard.md
