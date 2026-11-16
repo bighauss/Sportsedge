@@ -15,12 +15,26 @@ from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 import io
 import json
+import os
 from pathlib import Path
 import re
 
 
 class AuditBlocked(ValueError):
     pass
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def private_path(value, label):
+    """Refuse private original boards/cards and detailed reports in public Git."""
+    lexical = Path(os.path.abspath(value))
+    resolved = lexical.resolve()
+    if (lexical == REPO_ROOT or REPO_ROOT in lexical.parents
+            or resolved == REPO_ROOT or REPO_ROOT in resolved.parents):
+        raise AuditBlocked("PRIVATE_" + label + "_INSIDE_PUBLIC_REPOSITORY")
+    return resolved
 
 
 HASH = re.compile(r"[a-f0-9]{64}\Z")
@@ -331,18 +345,34 @@ def main(argv=None):
     p.add_argument("--expected-board-rows", type=int)
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args(argv)
+    source_board = private_path(args.original_board, "BOARD")
+    source_card = private_path(args.printed_card, "CARD")
+    target = private_path(args.out, "REPORT")
+    if target in (source_board, source_card):
+        raise AuditBlocked("REPORT_CANNOT_OVERWRITE_ORIGINAL_INPUT")
     report = audit(
-        args.original_board.read_bytes(), args.printed_card.read_bytes(),
+        source_board.read_bytes(), source_card.read_bytes(),
         expected_board_sha=args.board_sha256, expected_card_sha=args.card_sha256,
         original_board_saved_utc=args.board_saved_utc,
         printed_card_saved_utc=args.card_saved_utc,
         earliest_game_start_utc=args.earliest_game_start_utc,
         expected_board_rows=args.expected_board_rows
     )
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open("x", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, sort_keys=True)
-        f.write("\n")
+    # The report contains original per-offer quotes. Never create it in
+    # public checkout or with world-readable default umask permissions.
+    payload = (json.dumps(report, indent=2, sort_keys=True, allow_nan=False)
+               + "\n").encode("utf-8")
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(target, flags, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
     print(f"PAPER_0U: {report['unique_source_matches']}/{report['card_rows']} "
           f"exact pretip FILE joins; no authenticated sportsbook quotes")
     return 0
