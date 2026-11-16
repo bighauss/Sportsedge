@@ -10,7 +10,7 @@ class Blocked(ValueError):pass
 COMBOS={"PRA","RUSH_PLUS_RECEIVE","PASS_PLUS_RUSH","COMBO"}
 
 def forbid_unvalidated_nfl_pace(*,sport,pace_adjustment):
-    if sport=="NFL" and pace_adjustment:
+    if str(sport).upper()=="NFL" and pace_adjustment:
         raise Blocked("NFL_PACE_ADJUSTMENT_DISABLED_UNTIL_PROSPECTIVE_VALIDATION")
     return True
 
@@ -40,17 +40,27 @@ def shared_joint_draws(by_stat):
 def card_gate(record):
     """Never certify an official bet; show why a proposal remains 0u."""
     reasons=[]
-    if record.get("sport")=="NFL" and record.get("pace_adjustment"):
+    if str(record.get("sport","")).upper()=="NFL" and record.get("pace_adjustment"):
         reasons.append("UNVALIDATED_PACE")
-    if record.get("market") in COMBOS and not record.get("shared_draw_provenance"):
+    if str(record.get("market","")).split(":")[-1].upper() in COMBOS and not record.get("shared_draw_provenance"):
         reasons.append("COMBO_NOT_JOINTLY_SIMULATED")
     if not record.get("pregame_source_verified"):reasons.append("PREGAME_SOURCE_UNVERIFIED")
-    if not record.get("independent_books",0)>=2:reasons.append("INDEPENDENT_FAIR_BASELINE_MISSING")
+    def safe_number(v):
+        return float(v) if isinstance(v,(int,float)) and not isinstance(v,bool) and math.isfinite(v) else None
+    books=safe_number(record.get("independent_books"))
+    forward=safe_number(record.get("historical_walkforward_n"))
+    model=safe_number(record.get("model_nll"))
+    baseline=safe_number(record.get("baseline_nll"))
+    hit=safe_number(record.get("advertised_hit_rate"))
+    roi=safe_number(record.get("advertised_roi"))
+    if books is None or books<2:reasons.append("INDEPENDENT_FAIR_BASELINE_MISSING")
     if not record.get("original_close_saved"):reasons.append("CLOSING_PRICE_MISSING")
-    if not record.get("historical_walkforward_n",0)>=30:reasons.append("INSUFFICIENT_FORWARD_SAMPLE")
-    if record.get("model_nll",float("inf"))>=record.get("baseline_nll",-1.):
+    if forward is None or forward<30:reasons.append("INSUFFICIENT_FORWARD_SAMPLE")
+    if model is None or baseline is None or model>=baseline:
         reasons.append("MODEL_NOT_BETTER_THAN_BASELINE")
-    if record.get("advertised_hit_rate",0)>.65 or record.get("advertised_roi",0)>1:
+    if hit is None or roi is None:
+        reasons.append("UNVERIFIED_MARKETING_METRICS")
+    elif hit>.65 or roi>1:
         reasons.append("EXTRAORDINARY_PERFORMANCE_CLAIM_AUDIT")
     return {"status":"PAPER_0U","reasons":reasons or ["FINAL_INDEPENDENT_ADMISSION_NOT_IMPLEMENTED"],
             "official":False,"stake_u":0}
