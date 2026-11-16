@@ -1,0 +1,33 @@
+name: Original-final-available score walk-forward research
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/chronological_calibration.py'
+      - 'sportsedge/markets/test_chronological_calibration.py'
+      - 'docs/markets/SCORE_WALKFORWARD_RESULT_AVAILABILITY.md'
+      - '.github/workflows/score-walkforward-original-final.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/chronological_calibration.py'
+      - 'sportsedge/markets/test_chronological_calibration.py'
+      - 'docs/markets/SCORE_WALKFORWARD_RESULT_AVAILABILITY.md'
+      - '.github/workflows/score-walkforward-original-final.yml'
+  workflow_dispatch:
+jobs:
+  redteam:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pre-cutoff original final capture, scoring cohorts, historical regression
+        run: |
+          python -m unittest -v \
+            sportsedge.markets.test_chronological_calibration \
+            sportsedge.markets.test_score_dispersion_fit \
+            sportsedge.markets.test_period_share_walkforward \
+            sportsedge.markets.test_edge_discovery
