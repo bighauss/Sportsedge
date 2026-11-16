@@ -17,6 +17,17 @@ from pathlib import Path
 
 from epa_ridge_pit import solve, utc
 
+# Restrict research inputs/results to outside the PUBLIC GitHub checkout.
+# Resolving the path also detects symlinks and ../ traversal into the repo.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def private_evidence_path(path):
+    resolved = Path(path).expanduser().resolve()
+    if resolved == REPO_ROOT or REPO_ROOT in resolved.parents:
+        raise ValueError("PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO")
+    return resolved
+
 FEATURE_COLUMNS = frozenset((
     "game_id", "home_team", "away_team", "kickoff_utc",
     "forecast_asof_utc", "source_observed_utc", "epa_ratings_sha256",
@@ -261,7 +272,10 @@ def main():
     parser.add_argument("--min-train-games", type=int, default=32)
     parser.add_argument("--ridge", type=float, default=25.0)
     args = parser.parse_args()
-    feature_path, result_path = Path(args.features), Path(args.results)
+    # Check EVERY input and output before opening a file or computing scores.
+    feature_path = private_evidence_path(args.features)
+    result_path = private_evidence_path(args.results)
+    output_path = private_evidence_path(args.out)
     score = walkforward(
         _read_csv(feature_path, FEATURE_COLUMNS),
         _read_csv(result_path, RESULT_COLUMNS),
@@ -271,7 +285,7 @@ def main():
         "features": "sha256:" + sha256(feature_path.read_bytes()).hexdigest(),
         "results": "sha256:" + sha256(result_path.read_bytes()).hexdigest(),
     }
-    with Path(args.out).open("x", encoding="utf-8") as fh:
+    with output_path.open("x", encoding="utf-8") as fh:
         json.dump(score, fh, indent=2, sort_keys=True)
         fh.write("\n")
     print(json.dumps({
