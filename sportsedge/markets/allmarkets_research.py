@@ -113,6 +113,8 @@ class Market:
             raise ValueError("FIRST_BASKET_REQUIRES_BASKETBALL")
         if self.sport == "MLB" and self.period in ("1Q","2Q","3Q","4Q","1H","2H"):
             raise ValueError("PERIOD_NOT_SUPPORTED_BY_SPORT")
+        if self.sport == "CBB" and self.period in ("1Q","2Q","3Q","4Q"):
+            raise ValueError("CBB_MENS_QUARTER_MARKET_UNSUPPORTED")
         if self.sport != "MLB" and self.period in ("F5","1IN"):
             raise ValueError("PERIOD_NOT_SUPPORTED_BY_SPORT")
         if self.kind in ("SPREAD", "ML"):
@@ -169,7 +171,8 @@ class ScoreEvent:
 
 @dataclass(frozen=True)
 class Outcome:
-    # Key: Q1..Q4, OT for football/basketball; I1..I9, EXTRA for MLB.
+    # Key: Q1..Q4, OT for football/NBA; H1/H2 for real CBB halves;
+    # I1..I9, EXTRA for MLB. Legacy CBB Q bins remain uncalibrated only.
     periods: dict[str, tuple[int, int]]    # always home, away
     player_stats: dict[str, dict[str, int]] = field(default_factory=dict)
     events: tuple[ScoreEvent, ...] = ()
@@ -281,7 +284,20 @@ def _period_score(o: Outcome, sport: str, period: str, settlement: str) -> tuple
     unmodeled overtime. This is a model-scenario completeness check,
     NOT an attestation of a sportsbook's posted settlement rules.
     """
-    if period == "FG":
+    if sport=="CBB" and ("H1" in o.periods or "H2" in o.periods):
+        # Exactly two official men's NCAA halves, never infer four quarters
+        # from half-by-half data or mix synthetic Q and actual H keys.
+        if set(o.periods)-{"H1","H2","OT"} or not {"H1","H2"}.issubset(o.periods):
+            raise ValueError("CBB_HALF_PERIODS_INVALID")
+        if period=="FG":
+            keys=("H1","H2")
+        elif period=="1H":
+            keys=("H1",)
+        elif period=="2H":
+            keys=("H2",)
+        else:
+            raise ValueError("CBB_MENS_QUARTER_MARKET_UNSUPPORTED")
+    elif period == "FG":
         keys=(tuple("I"+str(i) for i in range(1,10)) if sport=="MLB"
               else ("Q1","Q2","Q3","Q4"))
     else:
