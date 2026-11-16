@@ -1,9 +1,12 @@
 """Synthetic PIT score-conversion regressions: no odds, no promoted picks."""
 from datetime import datetime, timedelta, timezone
 import copy
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from score_walkforward_pit import walkforward
+from score_walkforward_pit import walkforward, private_evidence_path, REPO_ROOT, main
 
 
 def iso(dt):
@@ -167,6 +170,33 @@ class PointInTimeScoreWalkforwardTests(unittest.TestCase):
         self.assertEqual(len(result["predictions"]), 12)
         self.assertIsNone(result["score_metrics"]["model_score_mae"])
         self.assertTrue(all(p["approved_stake_u"] == 0 for p in result["predictions"]))
+
+    def test_private_research_path_guards_repo_and_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            external = Path(directory)
+            self.assertEqual(private_evidence_path(external / "safe.csv"),
+                             (external / "safe.csv").resolve())
+            with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                private_evidence_path(REPO_ROOT / "models" / "nfl" / "private.csv")
+            alias = external / "repo_link"
+            alias.symlink_to(REPO_ROOT, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                private_evidence_path(alias / "models" / "nfl" / "private.csv")
+
+    def test_score_cli_refuses_public_repo_input_and_output_before_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            private = Path(directory)
+            cases = (
+                (str(REPO_ROOT / "data.csv"), str(private / "out.csv")),
+                (str(private / "data.csv"), str(REPO_ROOT / "models" / "nfl" / "new_scores.json")),
+            )
+            for feature, output in cases:
+                with self.subTest(feature=feature, output=output):
+                    argv = ["score_walkforward_pit.py", "--features", feature,
+                            "--results", str(private / "results.csv"), "--out", output]
+                    with patch("sys.argv", argv):
+                        with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+                            main()
 
     def test_training_parameter_must_be_safe(self):
         rows, outcomes = fixtures()
