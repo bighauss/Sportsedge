@@ -1,0 +1,18 @@
+name: Manual paper source archive (synthetic CI)
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  offline-manual-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile sportsedge/odds/manual_paper_archive.py sportsedge/odds/test_manual_paper_archive.py
+      - run: python sportsedge/odds/test_manual_paper_archive.py -v
