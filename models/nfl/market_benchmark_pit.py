@@ -193,6 +193,7 @@ def _validate(raw, *, freshness_seconds):
         "selection": selection,
         "line": line,
         "decision_utc": decision.isoformat(),
+        "quote_captured_utc": quote_saved.isoformat(),
         "outcome": outcome,
         "profit_one_hypothetical_unit": profit,
         "model_conditional_win": model_conditional_p,
@@ -300,11 +301,38 @@ def evaluate_market_rows(rows, *, freshness_seconds=300):
                 row["decision_utc"])
 
     counts = Counter(same_selection_key(row) for row in qualified)
-    accepted = []
+    deduplicated = []
     for row in qualified:
         if counts[same_selection_key(row)] > 1:
             rejected.append({"source_row": row["source_row"],
                              "reason": "DUPLICATE_SAME_MARKET_OUTCOME_PRICE_ALL_COPIES"})
+        else:
+            deduplicated.append(row)
+
+    # A two-sided quoted BOOK BOARD is not evidence of two independently
+    # selected/executed wagers. If both opposing selections occur at the same
+    # original market, line, book, capture and decision, withhold BOTH from
+    # paper ROI and Brier. Do not aggregate different alt lines or captures.
+    def paired_board_key(row):
+        return (row["game_id"].strip(), row["period"], row["market"],
+                " ".join(row["book"].casefold().split()),
+                row["provider_event_id"].strip(), row["provider_market_id"].strip(),
+                row["line"], row["decision_utc"], row["quote_captured_utc"])
+
+    mirror_sets = defaultdict(set)
+    for row in deduplicated:
+        mirror_sets[paired_board_key(row)].add(row["selection"])
+    mirror_keys = {
+        key for key, sides in mirror_sets.items()
+        if ({"HOME", "AWAY"} <= sides or {"OVER", "UNDER"} <= sides)
+    }
+    accepted = []
+    mirrored_rows = 0
+    for row in deduplicated:
+        if paired_board_key(row) in mirror_keys:
+            rejected.append({"source_row": row["source_row"],
+                             "reason": "MIRRORED_SAME_TIME_BOARD_SIDES_NOT_QUALIFIED_BETS"})
+            mirrored_rows += 1
         else:
             accepted.append(row)
     rejected.sort(key=lambda item: item["source_row"])
@@ -331,6 +359,8 @@ def evaluate_market_rows(rows, *, freshness_seconds=300):
         "quote_freshness_limit_seconds": freshness_seconds,
         "input_rows": len(rows),
         "accepted_research_rows": len(accepted),
+        "mirror_quarantined_rows": mirrored_rows,
+        "mirrored_board_groups": len(mirror_keys),
         "rejected_rows": rejected,
         "rejection_reasons": dict(sorted(Counter(
             r["reason"] for r in rejected).items())),
@@ -338,6 +368,7 @@ def evaluate_market_rows(rows, *, freshness_seconds=300):
         "market_evaluations": by_market,
         "notes": [
             "HYPOTHETICAL_1U_EACH_NOT_A_PORTFOLIO_OR_BETTING_LEDGER",
+            "SAME_TIME_MIRRORED_BOARD_SIDES_QUARANTINED",
             "SELF_ASSERTED_PROVIDER_RECEIPTS_NO_INDEPENDENT_AUTHENTICATION",
             "NOT_CLV_WITHOUT_INDEPENDENT_MATCHED_CLOSING_QUOTES",
             "CONFIDENCE_INTERVALS_BOOTSTRAP_CLUSTER_BY_GAME",
