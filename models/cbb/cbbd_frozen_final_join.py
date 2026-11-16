@@ -13,7 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from cbbd_prospective_capture import Hold, _unique_pairs, _bad_constant, utc
+from cbbd_prospective_capture import Hold, _unique_pairs, _bad_constant, utc, decoded, BASE
 from torvik_cbbd_pregame_bridge import safe_path, _private_directory, _private_create
 from point_in_time_score_walkforward import (
     Blocked, _hash, _parse_prediction, _parse_final
@@ -193,10 +193,90 @@ def _load(path):
     return obj, hashlib.sha256(raw).hexdigest()
 
 
-def run(board_path, final_path, *, ledger_path, audit_path):
-    src_paths = [safe_path(board_path), safe_path(final_path)]
+def verify_provider_originals(finals, provider_raw, provider_manifest):
+    """Verify normalized finals against original provider response BYTES.
+
+    This establishes local byte-to-derived-row agreement only. The provider
+    identity and first-publication time still need independent attestation.
+    """
+    raw = safe_path(provider_raw).read_bytes()
+    man, _ = _load(provider_manifest)
+    if not isinstance(man, dict) or man.get("format") != "CBBD_GAMES_CAPTURE_V1" or \
+       man.get("provider") != "collegebasketballdata" or \
+       man.get("documented_endpoint") != BASE or \
+       man.get("credential_persisted") is not False:
+        raise Hold("CBBD_PROVIDER_MANIFEST_INVALID")
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != man.get("source_sha256") or \
+       len(raw) != man.get("source_bytes") or \
+       digest != finals.get("source_sha256"):
+        raise Hold("CBBD_ORIGINAL_BYTE_HASH_MISMATCH")
+    provider_rows = decoded(raw)
+    if len(provider_rows) != man.get("returned_rows") or \
+       len(provider_rows) != finals.get("row_count"):
+        raise Hold("CBBD_ORIGINAL_ROW_CENSUS_MISMATCH")
+    observed = man.get("local_observed_utc")
+    if observed != finals.get("local_observed_utc"):
+        raise Hold("CBBD_FIRST_LOCAL_OBSERVATION_MISMATCH")
+    observed_dt = utc(observed, "provider.observed")
+    duplicates = Counter(
+        r.get("id") for r in provider_rows
+        if isinstance(r, dict) and type(r.get("id")) is int and r["id"] > 0
+    )
+    for i, (raw_game, normalized) in enumerate(zip(provider_rows, finals["rows"])):
+        if not isinstance(raw_game, dict):
+            if normalized.get("status") == FINAL_ROW_STATUS:
+                raise Hold("CBBD_NON_OBJECT_SOURCE_CANNOT_BE_FINAL")
+            continue
+        event_id = raw_game.get("id")
+        if type(event_id) is int and event_id > 0 and \
+           normalized.get("game_id") != str(event_id):
+            raise Hold("CBBD_SOURCE_GAME_ID_CHANGED")
+        season = raw_game.get("season")
+        hid, aid = raw_game.get("homeTeamId"), raw_game.get("awayTeamId")
+        home_score, away_score = raw_game.get("homePoints"), raw_game.get("awayPoints")
+        try:
+            tip = utc(raw_game.get("startDate"), "provider.startDate")
+        except Hold:
+            tip = None
+        eligible = (
+            type(event_id) is int and event_id > 0 and
+            type(season) is int and season == man.get("season") and
+            type(hid) is int and hid > 0 and type(aid) is int and aid > 0 and hid != aid and
+            tip is not None and tip < observed_dt and
+            raw_game.get("startTimeTbd") is False and
+            raw_game.get("status") == "final" and
+            type(home_score) is int and 0 <= home_score <= 250 and
+            type(away_score) is int and 0 <= away_score <= 250 and
+            home_score != away_score
+        )
+        if normalized.get("status") == FINAL_ROW_STATUS:
+            if not eligible or duplicates[event_id] > 1:
+                raise Hold("DERIVED_FINAL_NOT_SUPPORTED_BY_ORIGINAL_BYTES")
+            f = normalized.get("final")
+            if not isinstance(f, dict) or (
+                f.get("game_id") != str(event_id) or
+                f.get("season") != season or
+                f.get("home_team_id") != str(hid) or
+                f.get("away_team_id") != str(aid) or
+                f.get("home_score") != home_score or
+                f.get("away_score") != away_score or
+                f.get("status") != "FINAL" or
+                f.get("period") != "FG_INCL_OT"
+            ):
+                raise Hold("DERIVED_FINAL_SCORE_OR_ID_CHANGED_FROM_SOURCE")
+        elif eligible and duplicates[event_id] == 1:
+            raise Hold("ORIGINAL_VALID_FINAL_SUPPRESSED_IN_DERIVED_REPORT")
+    return digest
+
+
+def run(board_path, final_path, *, provider_raw, provider_manifest, ledger_path, audit_path):
+    if provider_raw is None or provider_manifest is None:
+        raise Hold("ORIGINAL_CBBD_RAW_AND_MANIFEST_REQUIRED")
+    src_paths = [safe_path(board_path), safe_path(final_path),
+                 safe_path(provider_raw), safe_path(provider_manifest)]
     out_paths = [safe_path(ledger_path), safe_path(audit_path)]
-    if len(set(src_paths + out_paths)) != 4:
+    if len(set(src_paths + out_paths)) != 6:
         raise Hold("SOURCE_OR_OUTPUT_PATH_COLLISION")
     if any(x.exists() for x in out_paths):
         raise FileExistsError("CREATE_ONLY_OUTPUT_EXISTS")
@@ -207,9 +287,11 @@ def run(board_path, final_path, *, ledger_path, audit_path):
     _private_directory(out_paths[0].parent)
     b, bsha = _load(src_paths[0])
     f, fsha = _load(src_paths[1])
+    original_provider_sha = verify_provider_originals(f, src_paths[2], src_paths[3])
     ledger, report = reconcile(b, f)
     report["original_frozen_board_file_sha256"] = bsha
     report["original_final_receipt_file_sha256"] = fsha
+    report["original_provider_raw_file_sha256"] = original_provider_sha
     ledger_bytes = (json.dumps(ledger, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
     report["ledger_sha256"] = hashlib.sha256(ledger_bytes).hexdigest()
     report_bytes = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
@@ -228,10 +310,14 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--frozen-board", required=True)
     p.add_argument("--finals", required=True)
+    p.add_argument("--provider-raw", required=True)
+    p.add_argument("--provider-manifest", required=True)
     p.add_argument("--ledger", required=True)
     p.add_argument("--audit", required=True)
     args = p.parse_args(argv)
     print(json.dumps(run(args.frozen_board, args.finals,
+                         provider_raw=args.provider_raw,
+                         provider_manifest=args.provider_manifest,
                          ledger_path=args.ledger, audit_path=args.audit),
                      sort_keys=True))
     return 0
