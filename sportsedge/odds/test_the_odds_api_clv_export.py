@@ -6,6 +6,8 @@ import hashlib
 import json
 import tempfile
 import unittest
+import os
+from unittest.mock import patch
 from pathlib import Path
 
 from sportsedge.odds.free_odds_aggregator_intake import SPORTS
@@ -166,6 +168,119 @@ class TestProspectiveCLVExport(unittest.TestCase):
         rows,a=convert(p)
         self.assertEqual(rows,[])
         self.assertEqual(a["state"],"BLOCK_NO_VALID_TWO_SIDED_QUOTES")
+
+    def test_duplicate_provider_market_all_copies_quarantined(self):
+        event=e()
+        event["bookmakers"][0]["markets"].append(
+            json.loads(json.dumps(event["bookmakers"][0]["markets"][0])))
+        rows,audit=convert(evidence(self.root,payload=[event]))
+        self.assertEqual(len(rows),4)
+        self.assertEqual(audit["market_groups_quarantined_by_reason"][
+            "DUPLICATE_CANONICAL_MARKET_ALL_COPIES_QUARANTINED"],2)
+        self.assertFalse(any(r["market_kind"]=="MONEYLINE" for r in rows))
+
+    def test_conflicting_duplicate_price_all_copies_quarantined(self):
+        event=e()
+        changed=json.loads(json.dumps(event["bookmakers"][0]["markets"][0]))
+        changed["outcomes"][0]["price"]=-155
+        event["bookmakers"][0]["markets"].append(changed)
+        rows,audit=convert(evidence(self.root,payload=[event]))
+        self.assertEqual(len(rows),4)
+        self.assertFalse(any(r["market_kind"]=="MONEYLINE" for r in rows))
+        self.assertEqual(audit["market_groups_quarantined_by_reason"][
+            "DUPLICATE_CANONICAL_MARKET_ALL_COPIES_QUARANTINED"],2)
+
+    def test_different_snapshot_times_preserved_without_false_duplicate(self):
+        event=e()
+        changed=json.loads(json.dumps(event["bookmakers"][0]["markets"][0]))
+        changed["last_update"]="2026-11-15T19:59:30Z"
+        event["bookmakers"][0]["markets"].append(changed)
+        rows,audit=convert(evidence(self.root,payload=[event]))
+        self.assertEqual(len(rows),8)
+        self.assertNotIn("DUPLICATE_CANONICAL_MARKET_ALL_COPIES_QUARANTINED",
+                         audit["market_groups_quarantined_by_reason"])
+
+    def test_failed_audit_creation_rolls_back_own_normalized_csv(self):
+        from sportsedge.odds import the_odds_api_clv_export as module
+        manifest=evidence(self.root)
+        out=self.root/"paper.csv"
+        original_write=module._write_private
+        def failing(path,content):
+            if str(path).endswith(".audit.json"):
+                raise OSError("injected audit-sidecar failure")
+            return original_write(path,content)
+        with patch.object(module,"_write_private",side_effect=failing):
+            with self.assertRaisesRegex(OSError,"injected audit-sidecar failure"):
+                write_export(manifest,out)
+        self.assertFalse(out.exists())
+        self.assertFalse((self.root/"paper.csv.audit.json").exists())
+        self.assertTrue((self.root/"original.json").exists())
+
+    def test_fsync_failure_rolls_back_own_partial_csv(self):
+        from sportsedge.odds import the_odds_api_clv_export as module
+        manifest=evidence(self.root)
+        out=self.root/"fsync.csv"
+        with patch.object(module.os,"fsync",side_effect=OSError("injected fsync failure")):
+            with self.assertRaisesRegex(OSError,"injected fsync failure"):
+                write_export(manifest,out)
+        self.assertFalse(out.exists())
+        self.assertFalse((self.root/"fsync.csv.audit.json").exists())
+
+    def test_symlink_target_output_refused_without_creating_target(self):
+        manifest=evidence(self.root)
+        target=self.root/"absent-target.csv"
+        link=self.root/"out.csv"
+        link.symlink_to(target)
+        with self.assertRaisesRegex(Blocked,"OUTPUT_SYMLINK_REFUSED"):
+            write_export(manifest,link)
+        self.assertFalse(target.exists())
+        self.assertTrue(link.is_symlink())
+
+    def test_private_original_manifest_in_public_checkout_refused(self):
+        from sportsedge.odds import the_odds_api_clv_export as module
+        checkout=self.root/"fake-public-checkout"
+        checkout.mkdir()
+        manifest=evidence(checkout)
+        with patch.object(module,"REPO_ROOT",checkout):
+            with self.assertRaisesRegex(Blocked,"ODDS_SOURCE_OR_OUTPUT_IN_PUBLIC_REPO"):
+                convert(manifest)
+
+    def test_lexical_public_symlink_to_private_source_refused(self):
+        from sportsedge.odds import the_odds_api_clv_export as module
+        checkout=self.root/"fake-public-checkout"
+        checkout.mkdir()
+        private=self.root/"restricted"
+        private.mkdir()
+        manifest=evidence(private)
+        link=checkout/"private-link"
+        link.symlink_to(private,target_is_directory=True)
+        with patch.object(module,"REPO_ROOT",checkout):
+            with self.assertRaisesRegex(Blocked,"ODDS_SOURCE_OR_OUTPUT_IN_PUBLIC_REPO"):
+                convert(link/manifest.name)
+
+    def test_lexical_public_symlink_to_private_output_refused(self):
+        from sportsedge.odds import the_odds_api_clv_export as module
+        checkout=self.root/"fake-public-checkout"
+        checkout.mkdir()
+        private=self.root/"restricted"
+        private.mkdir()
+        manifest=evidence(private)
+        link=checkout/"private-link"
+        link.symlink_to(private,target_is_directory=True)
+        with patch.object(module,"REPO_ROOT",checkout):
+            with self.assertRaisesRegex(Blocked,"ODDS_SOURCE_OR_OUTPUT_IN_PUBLIC_REPO"):
+                write_export(manifest,link/"out.csv")
+        self.assertFalse((private/"out.csv").exists())
+
+    def test_existing_audit_file_is_never_overwritten(self):
+        manifest=evidence(self.root)
+        out=self.root/"no-overwrite.csv"
+        audit=self.root/"no-overwrite.csv.audit.json"
+        audit.write_text("prior evidence",encoding="utf-8")
+        with self.assertRaisesRegex(Blocked,"AUDIT_OUTPUT_ALREADY_EXISTS"):
+            write_export(manifest,out)
+        self.assertFalse(out.exists())
+        self.assertEqual(audit.read_text(),"prior evidence")
 
 if __name__ == "__main__":
     unittest.main()
