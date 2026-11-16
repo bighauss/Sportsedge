@@ -179,13 +179,19 @@ def capture(*, private_dir, artifact_dir, team, event_id, event_start_utc,
     raw = fetch_original(team=team, key=api_key, request_id=request_id,
                          opener=opener)
     original = _write_private(paths[0], raw)
-    # UTC now checked AFTER retrieval; a replayed source timestamp must never
-    # be substituted for the actual local observation clock.
-    observed_now = datetime.now(UTC) if opener is urlopen else now
-    receipt = archive(original, paths[1], team=team, event_id=event_id,
-                      event_start_utc=event_start_utc, now_utc=observed_now)
-    cipher = _bundle(raw, receipt, fernet=fernet)
-    encrypted = _write_private(paths[2], cipher)
+    try:
+        # UTC now checked AFTER retrieval; a replayed source timestamp must
+        # never be substituted for the actual local observation clock.
+        observed_now = datetime.now(UTC) if opener is urlopen else now
+        receipt = archive(original, paths[1], team=team, event_id=event_id,
+                          event_start_utc=event_start_utc, now_utc=observed_now)
+        cipher = _bundle(raw, receipt, fernet=fernet)
+        encrypted = _write_private(paths[2], cipher)
+    finally:
+        # Only encrypted raw evidence may persist, even on failure. Full
+        # GitHub Actions runner scratch is also removed in its cleanup step.
+        original.unlink(missing_ok=True)
+        paths[1].unlink(missing_ok=True)
     status = {
         "schema": SUMMARY_SCHEMA,
         "state": receipt["state"],
