@@ -1,0 +1,40 @@
+name: Risk lock + seven sport research gates
+on:
+  pull_request:
+    paths:
+      - 'RISK_POLICY.md'
+      - 'research/risk/**'
+      - 'research/freezes/**'
+      - 'sportsedge/odds/completeness_gate.py'
+      - 'sportsedge/odds/test_completeness_gate.py'
+      - 'sportsedge/validation/daily_safety_sweep.py'
+      - 'sportsedge/validation/test_daily_safety_sweep.py'
+      - 'docs/evidence/FREEZE_AND_GRADE_PACKAGE_20261115.md'
+      - '.github/workflows/risk-lock-research.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Risk diagnostics
+        run: python research/risk/test_v21_risk_contract.py
+      - name: Seven code pin verification
+        run: python research/freezes/verify_code_freezes.py
+      - name: Code freeze adversarial tests
+        run: python -m unittest discover -s research/freezes -p 'test_*.py' -v
+      - name: Core + offered odds inventory tests
+        run: python -m unittest sportsedge.odds.test_completeness_gate -v
+      - name: Daily release safety sweep tests
+        run: python -m unittest sportsedge.validation.test_daily_safety_sweep -v
+      - name: Check release matrix
+        run: python -m sportsedge.validation.daily_safety_sweep
