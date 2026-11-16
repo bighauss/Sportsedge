@@ -1,0 +1,28 @@
+name: CBB frozen-score walk-forward audit
+on:
+  push:
+    paths:
+      - "models/cbb/point_in_time_score_walkforward.py"
+      - "models/cbb/test_point_in_time_score_walkforward.py"
+      - ".github/workflows/cbb-score-walkforward.yml"
+  pull_request:
+    paths:
+      - "models/cbb/point_in_time_score_walkforward.py"
+      - "models/cbb/test_point_in_time_score_walkforward.py"
+      - ".github/workflows/cbb-score-walkforward.yml"
+permissions:
+  contents: read
+jobs:
+  cbb-score-audit-synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile CBB score-audit code
+        run: python -m compileall -q models/cbb/point_in_time_score_walkforward.py models/cbb/test_point_in_time_score_walkforward.py
+      - name: Run release-lag, duplicate and pregame-market regressions
+        working-directory: models/cbb
+        run: python -m unittest -v test_point_in_time_score_walkforward.py
