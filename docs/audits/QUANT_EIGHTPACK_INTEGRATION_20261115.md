@@ -57,3 +57,19 @@ For `replay`, each qualified row must also contain `fitted_until_utc` earlier th
 `odds_in_format(value, format)` now accepts explicit `american`, `decimal` and `fractional` forms; `ev_per_dollar(..., odds_format=...)` keeps backward-compatible American default. `settlement_ev` accepts W/L/P/HW/HL distributions, while `quarter_line_probabilities` uses real empirical draws split across the two half-stakes. No auto-detection or bookmaker-specific settlement assumptions. Original-row-preserving quality reports now flag robust statistical outliers, inconsistent event kickoff dates and inconsistent team mappings. Their presence does not silently remove records.
 
 `quant_walkforward_baseline.py` is a genuine as-of **naive benchmark fit** (sequential past outcome rate), *not* retraining of any sport-specific SportsEdge model and *not* proof of authentic release metadata. Preserve release receipts and comparisons on untouched future games.
+
+## Quota and local-capture defensive preflight
+
+The capture preflight is **offline only**: it does not call any odds API or
+provide a durable scheduler. It now rejects nonfinite, negative, boolean or
+nonnumeric cache ages and noninteger request limits. All claimed historical
+request timestamps are checked even when the decision uses a cached response;
+an invalid future request log cannot hide behind `USE_CACHE`. A real scheduler
+still needs externally persisted rate counters.
+
+Capture CSVs reject duplicate column headers and overlong rows before
+constructing a research inventory. They must be genuine existing byte sources,
+not strings, with a bounded size. Source CSV and create-only result manifests
+must resolve outside the public GitHub repository, including nested-CWD or
+symlinked paths. These checks prevent accidental private evidence disclosure,
+but are NOT third-party authentication of sportsbook offers or timestamps.
