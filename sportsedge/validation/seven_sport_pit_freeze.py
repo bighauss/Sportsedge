@@ -114,6 +114,8 @@ def _artifact(item, label, *, public_code=False, sport=None):
         if not isinstance(rawpath, str) or rawpath.startswith("/") or "\\" in rawpath:
             raise ValueError("REPO_RELATIVE_CODE_PATH_REQUIRED")
         expected_prefix = "models/" + str(sport).lower() + "/"
+        if rawpath.startswith("models/common/"):
+            raise ValueError("MODEL_CODE_MUST_BE_IN_SPORT_DIRECTORY")
         if rawpath.startswith("models/") and not rawpath.startswith(expected_prefix):
             raise ValueError("CROSS_SPORT_MODEL_CODE_FORBIDDEN")
         if not rawpath.startswith(expected_prefix):
