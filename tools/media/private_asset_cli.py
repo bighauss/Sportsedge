@@ -79,6 +79,9 @@ def evaluate(asset, receipt, now_utc):
             parse_constant=lambda _: (_ for _ in ()).throw(
                 MediaHold("RECEIPT_JSON_NONFINITE")))
         _finite(r)
+    except MediaHold:
+        # Retain specific safe fail-closed reason without exposing a raw key.
+        raise
     except (ValueError, UnicodeError, RecursionError, OverflowError) as exc:
         raise MediaHold("RECEIPT_JSON_INVALID") from exc
     if not isinstance(r, dict):
