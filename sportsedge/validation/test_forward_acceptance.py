@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 from sportsedge.validation.forward_acceptance import analyze, report_file, REPO_ROOT
 
 UTC=timezone.utc
@@ -224,6 +225,19 @@ class AuditContract(unittest.TestCase):
             self.assertEqual(out.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(FileExistsError):
                 report_file(src, out)
+
+    def test_partial_report_deleted_after_sync_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src, out = root / "raw.json", root / "audit.json"
+            src.write_text(json.dumps(fixture(0, 0, 0)))
+            original = src.read_bytes()
+            with patch("sportsedge.validation.forward_acceptance.os.fsync",
+                       side_effect=OSError("simulated incomplete audit")):
+                with self.assertRaisesRegex(OSError, "simulated incomplete"):
+                    report_file(src, out)
+            self.assertFalse(out.exists())
+            self.assertEqual(src.read_bytes(), original)
 
     def test_duplicate_manifest_json_key_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
