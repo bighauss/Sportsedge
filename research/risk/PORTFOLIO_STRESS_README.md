@@ -22,11 +22,9 @@ Optional: `player_id,quarterback_id,theme_id,commission_rate`.
 - All timestamps must include a UTC offset; `selected_day_ct` is derived using the **America/Chicago** timezone, including daylight saving transitions.
 - `market_key` MUST be the exact canonical *sport / event date / participants / period / market / selection / line / player identity*. These semantics require an independent upstream identity check; this script only compares keys, not provider catalog identities. Alternate lines are not arbitrarily collapsed into one market.
 - `universe_complete_claim=TRUE`, `evaluation_split=OOS`, original pregame rule/model times, quote observed/captured before the selection/kickoff, non-stale original American prices, and SHA256-formatted IDs are required. Claims are not proof of genuinely complete prospective selection logs.
-- `stake_basis=PAPER_FLAT` or `EXECUTED_CLAIM`, both explicitly NOT externally authenticated. Multiple stake bases in the same file are **never pooled** into one ROI/variance/bootstrapped return; performance is reported separately by basis.
+- `stake_basis=PAPER_FLAT` requires exactly 1u per historical selection; `EXECUTED_CLAIM` accepts the original positive risked units. Both are explicitly NOT externally authenticated. Multiple stake bases in the same file are **never pooled** into one ROI/variance/bootstrapped return; performance is reported separately by basis.
 - `result=WIN|LOSS|PUSH|VOID|PENDING`. Settled results need two distinct *claimed* settlement source IDs, and a final timestamp after kickoff. Those IDs are not authenticated merely because their strings differ. No `LIKELY WIN`, inferred player stats, missing finals, or altered bets are silently accepted.
 - Returns use original recorded odds with fixed units risked; winner-only commission is optional and applied to winning profit. `PUSH` is a zero-return selection that counts in the risked-units denominator; `VOID` is zero return and does **not** count in that denominator; `PENDING` stays in the population and is excluded from realized returns until settled.
-
-Provider event IDs may repeat between sports. Game clustering and exposure use the namespaced identity `(sport, event_id)`; report keys use `SPORT:event_id`, never a bare provider ID.
 
 ## Output interpretation
 
