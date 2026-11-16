@@ -144,6 +144,47 @@ class TorvikCbddBridgeTests(unittest.TestCase):
             self.assertEqual(list(directory.iterdir()), [])
             self.assertEqual(source.read_bytes(), original_bytes)
 
+    def test_local_manifest_duplicate_keys_and_nonfinite_values_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kw=fixtures(tmp)
+            manifest=Path(kw["ratings_manifest"])
+            original=manifest.read_text()
+            self.assertIn('"season": 2027',original)
+            manifest.write_text(original.replace('"season": 2027', '"season": 2027, "season": 2027'))
+            with self.assertRaisesRegex(Hold,"DUPLICATE_JSON_KEY"):
+                project_scheduled(**kw)
+            manifest.write_text(original.replace('"rows": 300', '"rows": NaN'))
+            with self.assertRaisesRegex(Hold,"NONFINITE_JSON"):
+                project_scheduled(**kw)
+
+    def test_schedule_manifest_nested_duplicate_keys_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kw=fixtures(tmp)
+            manifest=Path(kw["schedule_manifest"])
+            obj=json.loads(manifest.read_text())
+            # Duplicating source digest must not allow accepting later key.
+            original=manifest.read_text()
+            digest=obj["source_sha256"]
+            manifest.write_text(original.replace(
+                '"source_sha256": "'+digest+'"',
+                '"source_sha256": "'+digest+'", "source_sha256": "'+digest+'"'
+            ))
+            with self.assertRaisesRegex(Hold,"DUPLICATE_JSON_KEY"):
+                project_scheduled(**kw)
+
+    def test_truncated_crosswalk_csv_blocks_instead_of_attribute_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/"truncated.csv"
+            source.write_text(
+                "cbbd_id,cbbd_team_name,torvik_team\n"
+                "101,Synthetic Home\n"
+            )
+            with self.assertRaisesRegex(Hold,"TRUNCATED_CSV_REQUIRED_CELL_MISSING"):
+                archive_csv(source_path=source, private_dir=Path(tmp)/"private",
+                            kind="CBBD_ID_CROSSWALK", season=2027,
+                            clock=lambda:DATA_TIME)
+            self.assertFalse((Path(tmp)/"private").exists())
+
     def test_full_prospective_projection_is_score_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             kw=fixtures(tmp)
