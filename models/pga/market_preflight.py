@@ -1,5 +1,6 @@
 """PGA point-in-time market row admission (research only, never a price model)."""
-from datetime import datetime, timezone
+from datetime import datetime
+from collections import Counter
 import math
 
 MARKETS = {"outright", "top5", "top10", "top20", "make_cut", "miss_cut",
@@ -22,8 +23,15 @@ def utc(s):
 def preflight(rows):
     """Retain every row and reason. Does NOT authenticate claimed clocks or hashes."""
     accepted, blocked = [], []
+    keys = [tuple(str(row.get(k, "")) for k in
+                  ("event_id", "player_id", "market", "round", "side",
+                   "line", "source", "captured_utc")) if isinstance(row, dict)
+            else None for row in rows]
+    collisions = Counter(k for k in keys if k is not None)
     for idx, row in enumerate(rows):
         reasons = []
+        if collisions.get(keys[idx], 0) > 1:
+            reasons.append("DUPLICATE_SNAPSHOT_COLLISION")
         if not isinstance(row, dict):
             blocked.append({"index": idx, "reasons": ["NOT_A_ROW"]})
             continue
@@ -44,7 +52,13 @@ def preflight(rows):
         except (ValueError, KeyError, TypeError, OverflowError):
             reasons.append("INVALID_CLOCK")
         try:
-            odds = int(row["odds_american"])
+            raw_odds = row["odds_american"]
+            if isinstance(raw_odds, bool) or not isinstance(raw_odds, (str, int)):
+                raise ValueError("NOT_INTEGER")
+            if isinstance(raw_odds, str):
+                if raw_odds.strip() != raw_odds or not raw_odds.lstrip("+-").isascii() or not raw_odds.lstrip("+-").isdecimal():
+                    raise ValueError("BAD_PRICE_FORMAT")
+            odds = int(raw_odds)
             if odds == 0 or -100 < odds < 100 or not -100000 <= odds <= 100000:
                 reasons.append("INVALID_ODDS")
         except (ValueError, TypeError, KeyError, OverflowError):
