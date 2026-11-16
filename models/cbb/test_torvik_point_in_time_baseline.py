@@ -130,6 +130,23 @@ class TestResearchBaseline(unittest.TestCase):
             self.run_one(max_age_hours=2)
         self.assertGreater(self.run_one(max_age_hours=12)["total"], 0)
 
+    def test_numeric_string_max_age_is_normalized_before_comparison(self):
+        # _num accepts finite numeric strings: do not raise TypeError inside
+        # _evidence or silently skip the capture freshness restriction.
+        self.assertGreater(self.run_one(max_age_hours="12")["total"], 0)
+        with self.assertRaisesRegex(Blocked, "STALE_CAPTURE"):
+            self.run_one(max_age_hours="2")
+
+    def test_whitespace_game_id_collisions_are_all_quarantined(self):
+        original = setup()
+        alias = copy.deepcopy(original)
+        alias["game"]["game_id"] = "  D1:1  "
+        for attempted in ((original, alias), (alias, original)):
+            decisions = research_board(attempted)
+            self.assertEqual(len(decisions), 2)
+            self.assertTrue(all(x["status"] == "BLOCKED" for x in decisions))
+            self.assertTrue(all("DUPLICATE_GAME_ID" in x["reason"] for x in decisions))
+
     def test_board_preserves_blocked_and_duplicate_rows(self):
         good = setup()
         late = setup()
