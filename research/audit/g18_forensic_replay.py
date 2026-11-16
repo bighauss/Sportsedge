@@ -146,6 +146,8 @@ def replay(picks_bytes: bytes, finals_bytes: bytes, *, expected_picks_sha256: st
     try:
         text = picks_bytes.decode('utf-8-sig')
         finals = json.loads(finals_bytes.decode('utf-8'), object_pairs_hook=_reject_duplicate_json_keys)
+    except InvalidRecord:
+        raise
     except (UnicodeError, ValueError) as e:
         raise InvalidRecord('CORRUPT_SOURCE_FORMAT') from e
     if not isinstance(finals, dict):
