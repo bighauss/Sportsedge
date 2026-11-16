@@ -246,6 +246,61 @@ class NFLPITMarketBenchmarkTests(unittest.TestCase):
                     with patch("sys.argv",args),self.assertRaisesRegex(ValueError,"PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
                         main()
 
+    def test_opposing_spread_board_sides_both_withheld_from_roi_and_brier(self):
+        original=row(market="SPREAD",selection="HOME",line=-2.5)
+        other=deepcopy(original)
+        other["selection"]="AWAY"
+        other["provider_outcome_id"]="dk_outcome_AWAY_0"
+        other["provider_opposite_outcome_id"]="dk_outcome_HOME_0"
+        # Same original market/line/capture/decision; no bet execution IDs.
+        for attempted in ([original,other],[other,original]):
+            out=evaluate_market_rows(attempted)
+            self.assertEqual(out["input_rows"],2)
+            self.assertEqual(out["accepted_research_rows"],0)
+            self.assertEqual(out["mirror_quarantined_rows"],2)
+            self.assertEqual(out["mirrored_board_groups"],1)
+            self.assertEqual([x["source_row"] for x in out["rejected_rows"]],[1,2])
+            self.assertTrue(all("MIRRORED_SAME_TIME_BOARD_SIDES_NOT_QUALIFIED_BETS"
+                                in x["reason"] for x in out["rejected_rows"]))
+            self.assertEqual(out["market_evaluations"]["SPREAD"]["status"],"NOT_CAPTURED")
+
+    def test_opposing_over_under_same_instant_quarantined(self):
+        for market in ("TOTAL","HOME_TEAM_TOTAL","AWAY_TEAM_TOTAL"):
+            with self.subTest(market=market):
+                over=row(market=market,selection="OVER",line=43.5)
+                under=deepcopy(over)
+                under["selection"]="UNDER"
+                under["provider_outcome_id"]="dk_outcome_UNDER_0"
+                under["provider_opposite_outcome_id"]="dk_outcome_OVER_0"
+                outcome=evaluate_market_rows([over,under])
+                self.assertEqual(outcome["accepted_research_rows"],0)
+                self.assertEqual(outcome["mirror_quarantined_rows"],2)
+                self.assertEqual(outcome["market_evaluations"][market]["status"],"NOT_CAPTURED")
+
+    def test_distinct_lines_and_different_capture_instants_not_mirrored(self):
+        first=row(market="TOTAL",selection="OVER",line=44.5)
+        alt=deepcopy(first)
+        alt["selection"]="UNDER"
+        alt["provider_outcome_id"]="dk_outcome_UNDER_0"
+        alt["provider_opposite_outcome_id"]="dk_outcome_OVER_0"
+        alt["home_spread_or_total_line"]=45.5
+        self.assertEqual(evaluate_market_rows([first,alt])["accepted_research_rows"],2)
+        later=deepcopy(first)
+        later["selection"]="UNDER"
+        later["provider_outcome_id"]="dk_outcome_UNDER_0"
+        later["provider_opposite_outcome_id"]="dk_outcome_OVER_0"
+        later["quote_captured_utc"]=iso(datetime(2026,11,15,20,0,tzinfo=timezone.utc))
+        # Original capture was kickoff-61m (19:59), decision kickoff-60m (20:00).
+        self.assertEqual(evaluate_market_rows([first,later])["accepted_research_rows"],2)
+
+    def test_simultaneous_opposites_different_provider_market_do_not_conflate(self):
+        home=row(market="SPREAD",selection="HOME",line=-2.5)
+        away=deepcopy(home)
+        away["selection"]="AWAY"
+        away["provider_outcome_id"]="dk_outcome_AWAY_0"
+        away["provider_market_id"]="different_original_market"
+        self.assertEqual(evaluate_market_rows([home,away])["accepted_research_rows"],2)
+
     def test_thirty_distinct_events_cluster_ci_reported(self):
         rows=[]
         for i in range(40):
