@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from sportsedge.validation.paper_ledger import (
-    Blocked, grade_bundle, append_ledger, verify_chain)
+    Blocked, REPO_ROOT, grade_bundle, append_ledger, verify_chain)
 
 
 class PaperLedgerTests(unittest.TestCase):
@@ -42,6 +42,7 @@ class PaperLedgerTests(unittest.TestCase):
         p=self.root/name
         raw=json.dumps(data,sort_keys=True).encode("utf-8")
         p.write_bytes(raw)
+        p.chmod(0o600)
         return {"path":name,"sha256":hashlib.sha256(raw).hexdigest(),
                 "captured_at_utc":when}
 
@@ -51,6 +52,7 @@ class PaperLedgerTests(unittest.TestCase):
         self.bundle["final"]=self.write("final.json",self.final,"2026-11-16T05:00:00Z")
         self.path=self.root/"bundle.json"
         self.path.write_text(json.dumps(self.bundle))
+        self.path.chmod(0o600)
 
     def test_grade_novig_clv_and_private_research(self):
         r=grade_bundle(self.path)
@@ -175,6 +177,94 @@ class PaperLedgerTests(unittest.TestCase):
         self.taken["price_american"]=-99
         self.save()
         with self.assertRaises(Blocked):grade_bundle(self.path)
+
+
+    def test_sqlite_is_created_owner_only_and_verify_never_creates_missing(self):
+        x=grade_bundle(self.path)
+        db=self.root/"owner_only.sqlite"
+        with self.assertRaises(Blocked):
+            verify_chain(db)
+        self.assertFalse(db.exists())
+        self.assertEqual(append_ledger(db,x)["status"],"APPENDED_PAPER")
+        self.assertEqual(db.stat().st_mode & 0o777,0o600)
+        self.assertEqual(verify_chain(db),1)
+
+    def test_insecure_existing_database_refused(self):
+        x=grade_bundle(self.path)
+        db=self.root/"public_readable.sqlite"
+        append_ledger(db,x)
+        db.chmod(0o644)
+        with self.assertRaisesRegex(Blocked,"owner-only"):
+            append_ledger(db,x)
+        with self.assertRaisesRegex(Blocked,"0600"):
+            verify_chain(db)
+
+    def test_public_repo_destinations_refused_without_creating_files(self):
+        x=grade_bundle(self.path)
+        db=REPO_ROOT/"NEVER_WRITE_PRIVATE_LEDGER.sqlite"
+        with self.assertRaisesRegex(Blocked,"Public repository"):
+            append_ledger(db,x)
+        with self.assertRaisesRegex(Blocked,"Public repository"):
+            verify_chain(db)
+        with self.assertRaisesRegex(Blocked,"Public repository"):
+            grade_bundle(REPO_ROOT/"NEVER_READ_PUBLIC_BUNDLE.json")
+        self.assertFalse(db.exists())
+
+    def test_public_readable_bundle_or_source_refused(self):
+        self.path.chmod(0o644)
+        with self.assertRaisesRegex(Blocked,"0600"):
+            grade_bundle(self.path)
+        self.path.chmod(0o600)
+        (self.root/"take.json").chmod(0o644)
+        with self.assertRaisesRegex(Blocked,"0600"):
+            grade_bundle(self.path)
+
+    def test_symlink_bundle_source_and_database_refused(self):
+        alias=self.root/"bundle_alias.json"
+        alias.symlink_to(self.path)
+        with self.assertRaisesRegex(Blocked,"Symlinked"):
+            grade_bundle(alias)
+        source_alias=self.root/"take_alias.json"
+        source_alias.symlink_to(self.root/"take.json")
+        self.bundle["taken"]["path"]="take_alias.json"
+        self.path.write_text(json.dumps(self.bundle))
+        with self.assertRaisesRegex(Blocked,"Symlinked"):
+            grade_bundle(self.path)
+        self.bundle["taken"]["path"]="take.json"
+        self.path.write_text(json.dumps(self.bundle))
+        db=self.root/"ledger_alias.sqlite"
+        db.symlink_to(self.path)
+        with self.assertRaisesRegex(Blocked,"Symlinked"):
+            append_ledger(db,grade_bundle(self.path))
+
+    def test_duplicate_and_nonfinite_original_json_rejected_even_if_hash_matches(self):
+        raw=b'{"book":"DraftKings","book":"DraftKings"}'
+        (self.root/"take.json").write_bytes(raw)
+        self.bundle["taken"]["sha256"]=hashlib.sha256(raw).hexdigest()
+        self.path.write_text(json.dumps(self.bundle))
+        with self.assertRaisesRegex(Blocked,"Duplicate original JSON field"):
+            grade_bundle(self.path)
+        raw=b'{"price_american":NaN}'
+        (self.root/"take.json").write_bytes(raw)
+        self.bundle["taken"]["sha256"]=hashlib.sha256(raw).hexdigest()
+        self.path.write_text(json.dumps(self.bundle))
+        with self.assertRaisesRegex(Blocked,"Nonfinite original JSON number"):
+            grade_bundle(self.path)
+
+    def test_source_parent_escape_and_absolute_paths_refused(self):
+        for path in ("../secret.json", "/tmp/secret.json", "./take.json"):
+            with self.subTest(path=path):
+                self.bundle["taken"]["path"]=path
+                self.path.write_text(json.dumps(self.bundle))
+                with self.assertRaisesRegex(Blocked,"relative"):
+                    grade_bundle(self.path)
+
+    def test_private_directory_permission_required(self):
+        self.root.chmod(0o755)
+        self.addCleanup(lambda: self.root.chmod(0o700) if self.root.exists() else None)
+        with self.assertRaisesRegex(Blocked,"0700"):
+            grade_bundle(self.path)
+
 
 
 if __name__=="__main__":
