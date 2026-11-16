@@ -43,10 +43,41 @@ def iso(dt):
 
 
 def safe_path(path):
-    out = Path(path).expanduser().resolve()
-    if out == ROOT or ROOT in out.parents:
-        raise Hold("PUBLIC_GIT_REPOSITORY_IS_NOT_PRIVATE_STORAGE")
-    return out
+    """Reject both lexical checkout paths and symlinked checkout aliases."""
+    lexical = Path(os.path.abspath(os.path.expanduser(str(path))))
+    resolved = lexical.resolve()
+    for p in (lexical, resolved):
+        if p == ROOT or ROOT in p.parents:
+            raise Hold("PUBLIC_GIT_REPOSITORY_IS_NOT_PRIVATE_STORAGE")
+    return resolved
+
+
+def _private_directory(path):
+    directory = safe_path(path)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if directory.stat().st_mode & 0o077:
+        raise Hold("PRIVATE_DIRECTORY_PERMISSIONS_TOO_BROAD")
+    return directory
+
+
+def _private_create(path, raw):
+    target = safe_path(path)
+    created = False
+    try:
+        fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        created = True
+        with os.fdopen(fd, "wb") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(raw)
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        if created:
+            try:
+                target.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def _unique_pairs(pairs):
@@ -120,9 +151,8 @@ def capture_games(*, season, start_utc, end_utc, private_dir,
     secret = key if key is not None else os.getenv("CBBD_API_KEY")
     if not isinstance(secret, str) or not secret.strip() or "\n" in secret or "\r" in secret:
         raise Hold("NO_AUTHORIZED_CBBD_API_KEY_NO_NETWORK")
-    directory = safe_path(private_dir)
-    if directory.exists() and not directory.is_dir():
-        raise Hold("DESTINATION_NOT_DIRECTORY")
+    # Refuse an exposed destination BEFORE making an authenticated HTTP request.
+    directory = _private_directory(private_dir)
     params = urlencode({"season": season, "startDateRange": iso(start),
                         "endDateRange": iso(end)})
     url = BASE + "?" + params
@@ -138,7 +168,6 @@ def capture_games(*, season, start_utc, end_utc, private_dir,
         raise Hold("CAPTURE_CLOCK_NOT_UTC")
     received = iso(now)
     digest = hashlib.sha256(raw).hexdigest()
-    directory.mkdir(parents=True, exist_ok=True)
     stem = "cbbd_games_" + str(season) + "_" + now.strftime("%Y%m%dT%H%M%S%fZ")
     original = directory / (stem + ".raw.json")
     manifest_path = directory / (stem + ".manifest.json")
@@ -158,13 +187,8 @@ def capture_games(*, season, start_utc, end_utc, private_dir,
     }
     # If a process dies between two create-only writes an orphan is kept for
     # recovery rather than overwriting or silently deleting original bytes.
-    with original.open("xb") as f:
-        f.write(raw)
-        f.flush()
-        os.fsync(f.fileno())
-    with manifest_path.open("x", encoding="utf-8") as f:
-        json.dump(manifest, f, sort_keys=True, indent=2)
-        f.write("\n")
+    _private_create(original, raw)
+    _private_create(manifest_path, (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode("utf-8"))
     return {"raw_path": str(original), "manifest_path": str(manifest_path),
             "sha256": digest, "rows": len(rows), "observed_utc": received,
             "status": "LOCAL_OBSERVATION_UNVERIFIED_PRE_PUBLICATION"}
@@ -181,6 +205,7 @@ def finals_from_capture(raw_path, manifest_path, *, output_path):
                                             (raw_path, manifest_path, output_path))
     if output_path in (raw_path, manifest_path):
         raise Hold("SOURCE_OUTPUT_COLLISION")
+    _private_directory(output_path.parent)
     raw = raw_path.read_bytes()
     man = json.loads(manifest_path.read_text("utf-8"),
                      object_pairs_hook=_unique_pairs, parse_constant=_bad_constant)
@@ -264,9 +289,7 @@ def finals_from_capture(raw_path, manifest_path, *, output_path):
             "NO_OFFICIAL_BETTING_OR_SOURCE_AUTHENTICATION_FROM_THIS_ADAPTER",
         ],
     }
-    with output_path.open("x", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, sort_keys=True, allow_nan=False)
-        f.write("\n")
+    _private_create(output_path, (json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8"))
     return {"report_path": str(output_path), "rows": len(results),
             "finals": sum(x["status"] == "FINAL_RECEIPT_LOCAL_CAPTURE_UNAUTHENTICATED" for x in results),
             "status": report["status"]}
