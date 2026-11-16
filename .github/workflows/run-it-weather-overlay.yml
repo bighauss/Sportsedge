@@ -1,0 +1,21 @@
+name: RUN IT weather-source overlay (offline original-byte tests)
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  run-it-weather:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile sportsedge/markets/weather_slate_overlay.py sportsedge/markets/test_weather_slate_overlay.py sportsedge/markets/slate_orchestrator.py
+      - run: python -m unittest sportsedge.data.test_open_meteo_pit -v
+      - run: python -m unittest sportsedge.markets.test_weather_slate_overlay -v
+      - run: python -m unittest sportsedge.markets.test_slate_orchestrator -v
+      - run: python -m unittest sportsedge.markets.test_bestbook_slate_overlay -v
