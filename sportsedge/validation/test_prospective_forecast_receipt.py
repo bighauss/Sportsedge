@@ -249,7 +249,7 @@ class ForecastReceiptTests(unittest.TestCase):
         before=path.read_bytes()
         self.forecast["predictions"][0]["model_probability"]="0.61"
         self.save()
-        with self.assertRaisesRegex(FileExistsError,"OUTPUT_MUST_BE_NEW"):
+        with self.assertRaisesRegex(ValueError,"OUTPUT_MUST_BE_NEW"):
             record_files(self.freeze_path,self.forecast_path,
                          registry_root=self.registry,actual_now=NOW)
         with self.assertRaisesRegex(ValueError,"NONCANONICAL_FORECAST_RECEIPT_PATH"):
