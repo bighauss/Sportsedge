@@ -1,0 +1,73 @@
+name: Trusted coding-agent high-risk change contract
+
+on:
+  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  push:
+    branches: [main]
+    paths:
+      - 'tools/agent_change_governance.py'
+      - 'tools/test_agent_change_governance.py'
+      - 'research/ai_governance/golden_agent_safety_v1.json'
+      - '.github/workflows/agent-high-risk-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-tests:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test deterministic manifest validation, synthetic golden fixture, and non-certification
+        run: |
+          python -m compileall -q tools/agent_change_governance.py
+          python -m unittest tools.test_agent_change_governance -v
+      - name: Verify pinned golden SHA and refusal of official betting claims
+        run: |
+          python -c 'from pathlib import Path; from tools.agent_change_governance import golden_regression; g=golden_regression(Path("research/ai_governance/golden_agent_safety_v1.json").read_bytes()); assert g["cases"]==9 and g["failed"]==0 and g["approved_stake_u"]==0; print("Golden synthetic agent-safety regression PASS; not a model validation")'
+
+  trusted-high-risk-manifest:
+    # CRITICAL: pull_request_target executes this workflow and Python from
+    # BASE branch, never executes PR-head code, and supplies no secrets.
+    # The untrusted PR manifest is read only as JSON via git show HEAD:path.
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout trusted base SHA (never checkout PR head)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch untrusted commit objects only and enforce precise head identity
+        shell: bash
+        env:
+          PR_NUM: ${{ github.event.pull_request.number }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git -c protocol.file.allow=never fetch --no-tags origin "refs/pull/${PR_NUM}/head"
+          actual="$(git rev-parse FETCH_HEAD)"
+          if [[ "$actual" != "$EXPECTED_HEAD" ]]; then
+            echo "::error::PR head advanced during fetch; rerun on current head"
+            exit 2
+          fi
+      - name: Require manifest for protected models, frozen baselines, risk or workflows
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          python -m tools.agent_change_governance \
+            --repo . --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --pr-number "$PR_NUM"
