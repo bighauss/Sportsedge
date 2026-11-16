@@ -23,6 +23,20 @@ python -m sportsedge.odds.free_odds_aggregator_intake NFL /private/sportsedge-or
 
 **Release limitation:** A key proves authentication to an **aggregator**, not to DraftKings and FanDuel independently. The Odds API can report different upstream book names but cannot alone prove two original authenticated sportsbook source chains as required by Issue #10 Gate A. No line is credited as independent +EV or CLV without separate trusted-book/source original receipts. No player/stat forecasts, real distributions, historical odds, WORM timestamps, future CLV or calibration are supplied by this adapter. It always emits PAPER / 0u, never places wagers or certifies release; protected frozen v5 remains unchanged.
 
+## Discover real event IDs without spending odds credits
+
+The official provider documentation describes `GET /v4/sports/{sport}/events` as **no odds quota cost**: https://the-odds-api.com/liveapi/guides/v4/ . It returns provider-native event ID, teams, and start time, but **no sportsbook prices**. To obtain actual IDs without guessing or consuming odds requests, run locally after securely installing your own API key:
+
+```sh
+python -m sportsedge.odds.event_discovery NFL /private/sportsedge-original-odds
+python -m sportsedge.odds.event_discovery CBB /private/sportsedge-original-odds
+# Also supports CFB, NBA, MLB, NHL. The default preview is capped at 25 events.
+```
+
+This creates three **private, create-only, 0600** files per call: untouched provider `.json` response, original-byte SHA256 `.manifest.json`, and an event `.catalog.csv`. The catalog includes each real provider ID, away/home names, claimed kickoff in UTC, local capture timestamp, whether kickoff has already begun, and a **suggested** T−5-minute CLOSE capture clock. Suggested times are planning metadata only: **nothing is scheduled, connected or guaranteed available** until the owner explicitly runs the subsequent captures in a user-authorized runtime. Future changes to kickoff times require fresh discovery; don't reuse stale start times.
+
+Use one actual `source_event_id` from that catalog in the two-phase capture commands below. No team-name matching or invented IDs; do not put the API key on the command line, in a GitHub Action, in a commit, or in a public issue. A documented zero-cost endpoint still requires the user's own provider API key; a site listing events does not authenticate upstream book odds or establish a wager.
+
 ## One-command capture + normalization (private runtime)
 
 On a machine you control, after you have legally provisioned the provider API key in the environment, capture a genuine provider event ID at TAKE time and once again within ten minutes before kickoff at CLOSE time. These commands **do not run on ChatGPT's servers, GitHub Actions, or in the background**: you or an authorized local task scheduler must invoke them at the actual clock times.
@@ -70,4 +84,4 @@ PGA **Majors outrights** are addressed by a separate provider-specific path, not
 
 The provider's documented free tier has **500 credits/month**, current odds only. Its historical odds endpoint is paid; this source cannot retroactively fill pre-kickoff prices that were never saved. Budget polling frequency to the rate and credit allowance shown by the genuine provider response. Never store API keys in code, chat, CI, GitHub or manifests.
 
-**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle -v` (synthetic only).
+**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle sportsedge.odds.test_event_discovery -v` (synthetic only).
