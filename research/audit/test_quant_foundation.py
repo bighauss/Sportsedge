@@ -11,7 +11,9 @@ BASE=dict(sport='NFL',event_id='E1',period='FG',market='TOTAL',side='over',
           model_sha256=H,feature_available_utc='2026-11-15T16:00:00-06:00',
           source_published_utc='2026-11-15T16:00:00-06:00',
           book='DK',qualified='1',selection_id='S1',qualification_rule_sha256=H,
-          outcome='W',result_source='finals:sha256:example')
+          outcome='W',result_source='finals:sha256:example',
+          fitted_until_utc='2026-11-14T12:00:00Z',
+          settled_utc='2026-11-16T02:00:00Z')
 class TestFoundation(unittest.TestCase):
     def test_odds(self):
         self.assertAlmostEqual(american(-110)[0],1.90909090909)
@@ -46,9 +48,32 @@ class TestFoundation(unittest.TestCase):
         rs=[dict(BASE),dict(BASE,selection_id='S2',side='under',outcome='L'),
             dict(BASE,selection_id='S3',qualified='0',outcome='L')]
         r=paper_ledger(rs)
-        self.assertEqual(r['qualified_graded_n'],2)
-        self.assertAlmostEqual(r['net_units'],-.0909090909)
-        self.assertEqual(r['losses'],1)
+        self.assertEqual(r['qualified_graded_n'],0)
+        self.assertEqual(r['net_units'],0)
+        self.assertIsNone(r['roi_flat_1u'])
+        self.assertEqual(r['mirror_quarantined_rows'],2)
+        self.assertEqual(r['unqualified_n'],1)
+
+    def test_legacy_paper_ledger_duplicate_snapshots_quarantined(self):
+        a=dict(BASE)
+        b=dict(BASE,selection_id='S2',captured_utc='2026-11-15T17:45:00-06:00',
+               price_american='+130')
+        r=paper_ledger([a,b])
+        self.assertEqual(r['qualified_graded_n'],0)
+        self.assertEqual(r['total_quarantined_rows'],2)
+
+    def test_strict_ledger_requires_training_and_settlement_clocks(self):
+        r=paper_ledger([dict(BASE,fitted_until_utc='')])
+        self.assertEqual(r['qualified_graded_n'],0)
+        self.assertTrue(any('fitted_until_utc' in x['code'] for x in r['unverifiable']))
+
+    def test_ledger_retains_one_unambiguous_win(self):
+        r=paper_ledger([dict(BASE)])
+        self.assertEqual(r['qualified_graded_n'],1)
+        self.assertEqual(r['wins'],1)
+        self.assertEqual(r['losses'],0)
+        self.assertAlmostEqual(r['net_units'],100/110,places=6)
+        self.assertAlmostEqual(r['roi_flat_1u'],100/110,places=6)
     def test_odd_type_and_missing_line_never_crash(self):
         r=audit_rows([dict(BASE,price_american=-110,line='')])
         self.assertEqual(r['retained_rows'],1)

@@ -315,69 +315,41 @@ def audit_rows(raw_rows: list[dict]) -> dict:
 
 
 def paper_ledger(rows: list[dict]) -> dict:
-    """Only explicitly qualified and completely graded entries count in ROI."""
-    issues, eligible, seen = [], [], set()
-    for i, row in enumerate(rows, 2):
-        qualified = str(row.get('qualified', '')).strip().lower()
-        if qualified not in ('1', 'true', '0', 'false'):
-            issues.append({'row': i, 'code': 'QUALIFICATION_UNKNOWN'}); continue
-        if qualified in ('0', 'false'):
-            continue
-        key = str(row.get('selection_id', '')).strip()
-        if not key or key in seen:
-            issues.append({'row': i, 'code': 'SELECTION_ID_MISSING_OR_DUPLICATED'}); continue
-        seen.add(key)
-        if not row.get('qualification_rule_sha256'):
-            issues.append({'row': i, 'code': 'UNFROZEN_QUALIFICATION_RULE'}); continue
-        try:
-            freeze, start, captured = (when(row[f]) for f in
-                                    ('model_asof_utc', 'game_start_utc', 'captured_utc'))
-            if freeze >= start or captured >= start:
-                raise ValueError('NOT_PREGAME')
-            american(row['price_american'])
-            for digest_field in ('quote_sha256', 'model_sha256', 'qualification_rule_sha256'):
-                digest = str(row.get(digest_field, ''))
-                if len(digest) != 64 or any(c not in '0123456789abcdefABCDEF' for c in digest):
-                    raise ValueError('INVALID_' + digest_field.upper())
-            for source_field in ('feature_available_utc', 'source_published_utc'):
-                if when(row[source_field]) > freeze:
-                    raise ValueError('FUTURE_' + source_field.upper())
-            if row.get('sport') not in SPORTS or not row.get('event_id') or not row.get('book'):
-                raise ValueError('UNBOUND_EVENT_OR_BOOK')
-            if 'prop' in str(row.get('market', '')).lower() and not row.get('player_id'):
-                raise ValueError('UNBOUND_PROP_PLAYER')
-            if row.get('outcome') not in ('W', 'L', 'P'):
-                raise ValueError('RESULT_UNVERIFIABLE')
-            if not row.get('result_source'):
-                raise ValueError('MISSING_RESULT_PROVENANCE')
-            unit = {'W': american(row['price_american'])[0] - 1,
-                    'L': -1.0, 'P': 0.0}[row['outcome']]
-            eligible.append({'id': key, 'sport': row.get('sport', ''),
-                             'market': row.get('market', ''), 'unit': unit,
-                             'outcome': row['outcome'], 'start': start})
-        except (KeyError, ValueError, TypeError) as exc:
-            issues.append({'row': i, 'code': 'EXCLUDED_NOT_VERIFIED:' + str(exc)})
-    eligible.sort(key=lambda x: (x['start'], x['id']))
-    balance = peak = drawdown = 0.0
-    by_market = defaultdict(lambda: {'n': 0, 'units': 0.0})
-    for item in eligible:
-        balance += item['unit']
-        peak = max(peak, balance)
-        drawdown = max(drawdown, peak - balance)
-        agg = by_market[(item['sport'], item['market'])]
-        agg['n'] += 1
-        agg['units'] += item['unit']
-    n = len(eligible)
-    wins = sum(x['outcome'] == 'W' for x in eligible)
-    losses = sum(x['outcome'] == 'L' for x in eligible)
-    return {'status': 'PAPER_RESEARCH_NOT_CERTIFIED', 'qualified_graded_n': n,
-            'wins': wins, 'losses': losses, 'pushes': n-wins-losses,
-            'win_rate_decided': wins/(wins+losses) if wins+losses else None,
-            'net_units': balance, 'roi_flat_1u': balance/n if n else None,
-            'max_drawdown_units': drawdown,
-            'by_market': [{'sport': s, 'market': m, **v,
-                           'roi': v['units']/v['n']} for (s, m), v in sorted(by_market.items())],
-            'unverifiable': issues}
+    """Use the same STRICT frozen-decision replay as the other paper CLI.
+
+    Do not maintain a permissive second accounting path: mirrored sides,
+    duplicate selections and source/clock failures must all fail closed.
+    This is a structural research report, never a verified wager ledger.
+    """
+    from quant_evidence import replay  # Lazy import avoids module import cycles.
+
+    report = replay(rows)
+    overall = report['overall']
+    return {
+        'status': 'PAPER_RESEARCH_NOT_CERTIFIED',
+        'qualified_graded_n': report['eligible'],
+        'wins': overall['wins'], 'losses': overall['losses'],
+        'pushes': overall['pushes'],
+        'win_rate_decided': overall['win_rate'],
+        'net_units': overall['net_units'], 'roi_flat_1u': overall['roi'],
+        'max_drawdown_units': report['max_drawdown_units'],
+        'by_market': [
+            {'sport': item['sport'], 'market': item['market'],
+             'n': item['n'], 'units': item['net_units'], 'roi': item['roi']}
+            for item in report['by_market']
+        ],
+        'unverifiable': [
+            {'row': item['row'], 'code': item['reason'],
+             'selection_id': item.get('selection_id')}
+            for item in report['rejected_qualified_or_invalid']
+        ],
+        'unqualified_n': report['unqualified'],
+        'mirror_quarantined_rows': report['mirror_quarantined_rows'],
+        'duplicate_decision_groups': report['duplicate_decision_groups'],
+        'total_quarantined_rows': report['total_quarantined_rows'],
+        'accounting_contract': report['status'],
+        'warning': 'Identical conservative decision admission as quant_evidence.replay; no certified historical ROI or source authentication.',
+    }
 
 
 def main(argv=None):
