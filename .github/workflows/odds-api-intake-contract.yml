@@ -5,6 +5,9 @@ on:
     paths:
       - 'sportsedge/odds/free_odds_aggregator_intake.py'
       - 'sportsedge/odds/test_free_odds_aggregator_intake.py'
+      - 'sportsedge/odds/the_odds_api_clv_export.py'
+      - 'sportsedge/odds/test_the_odds_api_clv_export.py'
+      - 'ledger/historical_clv_bridge.py'
       - '.github/workflows/odds-api-intake-contract.yml'
   push:
     branches: [main]
@@ -25,4 +28,4 @@ jobs:
         with:
           python-version: '3.11'
       - name: Run synthetic provider identity, key redaction, and no-live-bet tests
-        run: python -m unittest sportsedge.odds.test_free_odds_aggregator_intake -v
+        run: python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export -v
