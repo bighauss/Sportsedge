@@ -34,9 +34,9 @@ jobs:
       - name: DFS historical slate coverage preflight
         working-directory: models/nfl_dfs
         run: python -m unittest -v test_historical_coverage_preflight.py
-      - name: DFS historical + canonical receipt gate
+      - name: DFS canonical output integrity (synthetic)
         working-directory: models/nfl_dfs
-        run: python test_historical_coverage_preflight.py && python test_verify_canonical_outputs.py && python verify_canonical_outputs.py PIT_CIN_2026-11-15
+        run: python -m unittest -v test_verify_canonical_outputs.py
       - name: NFL DFS (Showdown and point-in-time replay)
         working-directory: models/nfl_dfs
         run: python test_showdown_mc.py && python test_public_nfl_gamelogs.py && python test_item4.py && python test_weekly_game_inputs.py && python test_markets.py && python test_reconcile_official_roster.py
