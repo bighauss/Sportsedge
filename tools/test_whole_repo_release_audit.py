@@ -78,6 +78,19 @@ class WholeRepoCertificateTests(unittest.TestCase):
                   asof_date_ct="2026-11-16")
         self.assertIn("RELEASE_MATRIX_UNSAFE_OR_INCOMPLETE", x["blockers"])
 
+    def test_malformed_unhashable_market_identity_does_not_crash_audit(self):
+        # The standalone daily sweep can encounter list/dict where a valid
+        # sport/family should be; still return a reason-coded BLOCK verdict.
+        for name, value in (("sport", []), ("market_family", {})):
+            with self.subTest(name=name):
+                matrix = deepcopy(self.original)
+                matrix["markets"][0][name] = value
+                x = audit(REPO, matrix=matrix, freeze=self.freeze,
+                          asof_date_ct="2026-11-16")
+                self.assertIn("RELEASE_MATRIX_UNSAFE_OR_INCOMPLETE", x["blockers"])
+                self.assertEqual(x["market_safety_audit_status"], "BLOCK")
+                self.assertFalse(x["production_certified"])
+
     def test_modified_code_baseline_reported_as_code_integrity_fail(self):
         f = deepcopy(self.freeze)
         f["frozen_engine"]["git_blob_sha1"] = "0"*40
