@@ -111,6 +111,15 @@ class WholeRepoCertificateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "NONFINITE_JSON"):
             parse_unique_json(b'{"gain":NaN}')
 
+    def test_overflowing_json_number_cannot_enter_audit(self):
+        # Python's json.loads accepts syntactically valid 1e999 as infinity
+        # unless parse_float is guarded, even with parse_constant blocked.
+        for payload in (b'{"stake":1e999}', b'{"stake":-1e999}',
+                        b'{"stake":1e-999}', b'{"stake":1e9999}'):
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(ValueError, "NONFINITE_JSON|UNDERFLOW_JSON"):
+                    parse_unique_json(payload)
+
     def test_policy_date_asof_never_retroactively_updates_file(self):
         before=(REPO / MATRIX_PATH).read_bytes()
         audit(REPO, matrix=self.original, freeze=self.freeze,
