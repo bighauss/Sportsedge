@@ -54,7 +54,7 @@ class Tests(unittest.TestCase):
 
     def test_overlong_csv_row_rejected_not_truncated(self):
         raw,m=fixture()
-        altered=raw.rstrip(b"\\n")+b",INJECTED\\n"
+        altered=raw.rstrip(b"\n")+b",INJECTED\n"
         m["source_sha256"]=hashlib.sha256(altered).hexdigest()
         with self.assertRaisesRegex(Blocked,"MALFORMED_CSV_ROW"):
             make_records(altered,m)
@@ -64,7 +64,7 @@ class Tests(unittest.TestCase):
         lines=raw.decode().splitlines()
         changed=lines[1].replace(",49.5,",",+049.500,")
         self.assertNotEqual(changed,lines[1])
-        altered=("\\n".join([lines[0],lines[1],changed])+"\\n").encode()
+        altered=("\n".join([lines[0],lines[1],changed])+"\n").encode()
         m["source_sha256"]=hashlib.sha256(altered).hexdigest()
         with self.assertRaisesRegex(Blocked,"DUPLICATE_SAME_MARKET_LINE"):
             make_records(altered,m)
@@ -73,7 +73,7 @@ class Tests(unittest.TestCase):
         raw,m=fixture()
         lines=raw.decode().splitlines()
         extra=lines[1].replace(",49.5,",",50.5,")
-        altered=("\\n".join([lines[0],lines[1],extra])+"\\n").encode()
+        altered=("\n".join([lines[0],lines[1],extra])+"\n").encode()
         m["source_sha256"]=hashlib.sha256(altered).hexdigest()
         rows=make_records(altered,m)
         self.assertEqual(len(rows),2)
