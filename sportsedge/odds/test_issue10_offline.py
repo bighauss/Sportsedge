@@ -361,11 +361,60 @@ class TestExportAndStorage(unittest.TestCase):
             store=EvidenceChain(temp)
             report=gate_candidate({"bet_id":"bet-1","source_receipt_verified":True},
                      dual,pit,primary,D,secondary=secondary,chain=store)
-            self.assertEqual(report["status"], "PAPER_0U")
+            self.assertEqual(report["status"], "BLOCK")
+            self.assertIn("V21_POLICY_BLOCKED", report["reasons"])
+            self.assertTrue(any(x.startswith("V21:MISSING:") for x in report["reasons"]))
             self.assertIsNone(report["card"])
             self.assertEqual(report["approved_stake_u"],0)
             self.assertFalse(report["source_externally_authenticated"])
             self.assertEqual(store.verify()[0],1)
+
+    def test_pit_and_dual_structurally_good_still_block_failed_v21(self):
+        primary = quote()
+        secondary = quote("FD", "FanDuel", "FanDuel")
+        dual = evaluate_dual_source(primary, secondary, D, market_mapping_verified=True)
+        feature = FeatureSnapshot("starting_qb", "team-feed",
+                                  D-timedelta(minutes=4), HASH, "QB1")
+        pit = PITBinding((feature,), frozenset({"starting_qb"}),
+                         D-timedelta(minutes=2))
+        candidate = {
+            "bet_id":"risk-1", "event_id":"NFL-2026-001", "theme":"NFL_SPREAD",
+            "risk_date_ct":"2026-11-15", "market":"SPREAD", "sport":"NFL",
+            "price_american":-110, "p_model":0.57, "p_market_novig":0.52,
+            "bankroll":1000, "dollars_per_u":10, "confidence":"HIGH",
+            "captured_utc":(D-timedelta(minutes=1)).isoformat(),
+            "game_start_utc":START.isoformat(),
+            "book":"DK", "quote_is_fresh":True,
+            "source_receipt_verified":True, "independent_model_verified":True,
+        }
+        outcome = gate_candidate(candidate, dual, pit, primary, D, secondary=secondary)
+        self.assertEqual(outcome["status"], "BLOCK")
+        self.assertIn("V21_POLICY_BLOCKED", outcome["reasons"])
+        self.assertIn("V21:SOURCE_RECEIPT_NOT_VERIFIED", outcome["reasons"])
+        self.assertIn("V21:MODEL_SOURCE_UNVERIFIED", outcome["reasons"])
+        self.assertEqual(outcome["approved_stake_u"], 0)
+        self.assertIsNone(outcome["card"])
+
+    def test_v21_status_block_cannot_be_ignored_even_without_flags(self):
+        from unittest.mock import patch
+        primary = quote()
+        secondary = quote("FD", "FanDuel", "FanDuel")
+        dual = evaluate_dual_source(primary, secondary, D, market_mapping_verified=True)
+        pit = PITBinding((), frozenset(), D-timedelta(minutes=2))
+        with patch("sportsedge.odds.card_gate.diagnostic",
+                   return_value={"status":"BLOCK", "flags":[]}):
+            outcome = gate_candidate({"bet_id":"risk-2"}, dual, pit,
+                                     primary, D, secondary=secondary)
+        self.assertEqual(outcome["status"], "BLOCK")
+        self.assertIn("V21_POLICY_BLOCKED", outcome["reasons"])
+
+    def test_missing_primary_still_blocks_even_if_dual_object_fabricated(self):
+        from sportsedge.odds.evidence import DualSourceDecision
+        fabricated = DualSourceDecision("RESEARCH_ONLY", (), "id", "id2", None)
+        pit = PITBinding((), frozenset(), D-timedelta(minutes=2))
+        outcome = gate_candidate({"bet_id":"risk-3"}, fabricated, pit, None, D)
+        self.assertEqual(outcome["status"], "BLOCK")
+        self.assertIn("PRIMARY_RECEIPT_MISSING", outcome["reasons"])
 
     def test_card_gate_rejects_missing_pit(self):
         primary=quote(); secondary=quote("FD","FanDuel","FanDuel")
