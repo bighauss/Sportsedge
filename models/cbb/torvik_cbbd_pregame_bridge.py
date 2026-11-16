@@ -7,6 +7,7 @@ NO prices, model fitting, or production betting admission.
 from __future__ import annotations
 
 from collections import Counter
+import argparse
 import csv
 from datetime import datetime, timezone, timedelta, date
 import hashlib
@@ -324,3 +325,40 @@ def project_scheduled(*, schedule_raw, schedule_manifest,
         json.dump(report, f, sort_keys=True, indent=2, allow_nan=False)
         f.write("\n")
     return report
+
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__)
+    subs = p.add_subparsers(dest="action", required=True)
+    arc = subs.add_parser("archive-csv")
+    arc.add_argument("--source", required=True)
+    arc.add_argument("--private-dir", required=True)
+    arc.add_argument("--kind", required=True, choices=tuple(KINDS))
+    arc.add_argument("--season", required=True, type=int)
+    gen = subs.add_parser("project")
+    for name in ("schedule_raw", "schedule_manifest",
+                 "ratings_raw", "ratings_manifest",
+                 "map_raw", "map_manifest",
+                 "hca_raw", "hca_manifest", "output_path"):
+        gen.add_argument("--" + name.replace("_", "-"), required=True)
+    gen.add_argument("--max-source-age-hours", type=float, default=24)
+    args = p.parse_args(argv)
+    if args.action == "archive-csv":
+        result = archive_csv(source_path=args.source, private_dir=args.private_dir,
+                             kind=args.kind, season=args.season)
+    else:
+        result = project_scheduled(
+            **{name: getattr(args, name) for name in (
+                "schedule_raw","schedule_manifest","ratings_raw","ratings_manifest",
+                "map_raw","map_manifest","hca_raw","hca_manifest","output_path")},
+            max_source_age_hours=args.max_source_age_hours)
+        result = {"status": result["status"], "input_rows": result["input_rows"],
+                  "projected_rows": result["projected_rows"],
+                  "output_path": str(safe_path(args.output_path))}
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
