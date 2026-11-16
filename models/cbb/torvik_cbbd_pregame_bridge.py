@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 
 from cbbd_prospective_capture import (
-    iso, utc, decoded, Hold
+    iso, utc, decoded, Hold, _unique_pairs, _bad_constant
 )
 from torvik_point_in_time_baseline import project, Blocked
 
@@ -86,6 +86,8 @@ def _csv_rows(raw, kind):
         raise Hold("INVALID_SOURCE_CSV") from exc
     if not rows or any(None in r for r in rows):
         raise Hold("EMPTY_CSV_OR_TOO_MANY_FIELDS")
+    if any(any(row.get(field) is None for field in KINDS[kind]) for row in rows):
+        raise Hold("TRUNCATED_CSV_REQUIRED_CELL_MISSING")
     return rows
 
 
@@ -191,10 +193,25 @@ def archive_csv(*, source_path, private_dir, kind, season, clock=None):
             "observed_utc": when, "status": manifest["status"]}
 
 
+def _strict_manifest(path):
+    """Reject duplicate JSON keys at ALL levels, NaN/Infinity and non-objects."""
+    try:
+        manifest = json.loads(safe_path(path).read_text("utf-8"),
+                              object_pairs_hook=_unique_pairs,
+                              parse_constant=_bad_constant)
+    except (ValueError, UnicodeError) as exc:
+        if isinstance(exc, Hold):
+            raise
+        raise Hold("INVALID_MANIFEST_JSON") from exc
+    if not isinstance(manifest, dict):
+        raise Hold("MANIFEST_MUST_BE_OBJECT")
+    return manifest
+
+
 def _read_local(raw_path, receipt_path, kind, season):
     rawp, recp = safe_path(raw_path), safe_path(receipt_path)
     raw = rawp.read_bytes()
-    manifest = json.loads(recp.read_text("utf-8"))
+    manifest = _strict_manifest(recp)
     if manifest.get("format") != "CBB_LOCAL_CSV_RECEIPT_V1" or \
        manifest.get("kind") != kind or manifest.get("season") != season:
         raise Hold("CSV_MANIFEST_IDENTITY_MISMATCH")
@@ -267,8 +284,7 @@ def project_scheduled(*, schedule_raw, schedule_manifest,
        not math.isfinite(max_source_age_hours) or not 0 < max_source_age_hours <= 168:
         raise Hold("INVALID_MAX_SOURCE_AGE")
     import cbbd_prospective_capture as cbbd
-    sr, sm = safe_path(schedule_raw).read_bytes(), \
-             json.loads(safe_path(schedule_manifest).read_text("utf-8"))
+    sr, sm = safe_path(schedule_raw).read_bytes(), _strict_manifest(schedule_manifest)
     if sm.get("format") != "CBBD_GAMES_CAPTURE_V1" or \
        sm.get("documented_endpoint") != cbbd.BASE or \
        sm.get("source_sha256") != hashlib.sha256(sr).hexdigest() or \
