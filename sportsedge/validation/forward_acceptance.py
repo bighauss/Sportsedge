@@ -192,6 +192,10 @@ def analyze(manifest):
         consecutive_guards += 1
     total_pit = sum(row["pit_total"] for _, row, _, _ in latest)
     complete_pit = sum(row["pit_complete"] for _, row, _, _ in latest)
+    # A price-bearing card with zero declared PIT packages is not evidence
+    # that its event/market inputs were actually checked. Without this guard,
+    # one large complete card can make 99 empty-package cards look 100% PIT.
+    zero_pit_cards = sum(row["pit_total"] == 0 for _, row, _, _ in latest)
     ratio = complete_pit / total_pit if total_pit else 0.0
     # Latest self-reported daily streak, accounting for EVERY run on each day.
     # It still does not verify completeness against a true real-slate schedule.
@@ -201,8 +205,10 @@ def analyze(manifest):
                      "structural_threshold_met": consecutive_clean >= 100},
         "B_PIT": {"minimum_fraction": 0.95, "reported_total_packages_last_100": total_pit,
                   "reported_complete_packages_last_100": complete_pit,
+                  "reported_zero_pit_cards_last_100": zero_pit_cards,
                   "reported_fraction": ratio,
-                  "structural_threshold_met": total_pit > 0 and ratio >= 0.95},
+                  "structural_threshold_met": total_pit > 0 and ratio >= 0.95
+                      and zero_pit_cards == 0},
         "C_calibration": {"minimum_cycles": 3, "reported_cycles": cycles,
                           "reported_clean_registered_cycles": clean_cycles,
                           "reported_latest_clean_cycle_streak": latest_clean_cycles,
