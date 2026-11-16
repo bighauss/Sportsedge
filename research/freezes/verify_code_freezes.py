@@ -16,7 +16,7 @@ class FreezeViolation(ValueError):
 
 
 def git_blob_digest(body: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(body)).encode("ascii") + b"\\0" + body).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(body)).encode("ascii") + b"\0" + body).hexdigest()
 
 
 def unique_pairs(pairs):
