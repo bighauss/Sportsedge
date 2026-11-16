@@ -10,6 +10,9 @@ jobs:
           python-version: "3.12"
       - name: Syntax check (stdlib)
         run: python -m compileall -q models sportsedge
+      - name: Research observability and AI policy guards (stdlib, offline)
+        working-directory: integrations/observability
+        run: python -m unittest -v test_quality_gate.py test_optional_sinks.py test_promptfoo_policy.py
       - name: Shared model-market probability guard regression
         working-directory: models/common
         run: python -m unittest -v test_guard_probability_safety.py
