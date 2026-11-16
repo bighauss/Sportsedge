@@ -23,3 +23,4 @@ jobs:
       - run: python -m compileall -q sportsedge/validation
       - run: python -m unittest sportsedge.validation.test_forward_acceptance -v
       - run: python -m unittest sportsedge.validation.test_forward_player_evidence -v
+      - run: python -m unittest sportsedge.validation.test_market_gate_matrix -v
