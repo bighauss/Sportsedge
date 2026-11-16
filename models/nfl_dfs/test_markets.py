@@ -149,4 +149,7 @@ class MarketsTests(unittest.TestCase):
 
 
 if __name__=="__main__":
+    import subprocess,sys
+    subprocess.run([sys.executable,"../test_audit_disagreement_calibration.py"],check=True)
+    subprocess.run([sys.executable,"../test_ledger_grades_to_audit_csv.py"],check=True)
     unittest.main()
