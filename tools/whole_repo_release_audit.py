@@ -101,7 +101,16 @@ def audit(repo: Path, *, matrix: dict, freeze: dict,
         elif parsed_matrix_date < asof:
             blockers.append("MATRIX_ASOF_NOT_CURRENT")
 
-    release = inspect_matrix(matrix)
+    try:
+        release = inspect_matrix(matrix)
+    except (TypeError, ValueError, KeyError) as exc:
+        # The older standalone daily sweep can raise on unexpected unhashable
+        # market identities. A whole-repo certification report must record a
+        # fail-closed reason rather than lose the audit to a traceback.
+        release = {
+            "status": "BLOCK",
+            "issues": ["MALFORMED_MARKET_MATRIX:" + type(exc).__name__],
+        }
     if release.get("status") != "PAPER_0U_SAFE_MATRIX" or release.get("issues"):
         blockers.append("RELEASE_MATRIX_UNSAFE_OR_INCOMPLETE")
 
