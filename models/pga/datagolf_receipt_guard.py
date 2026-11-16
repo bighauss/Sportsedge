@@ -51,6 +51,8 @@ def validate_receipt(receipt, *, decision_utc, event_start_utc,
         raise ValueError("DECISION_NOT_PREGAME")
     if captured > decision:
         raise ValueError("CAPTURE_AFTER_DECISION")
+    if not isinstance(max_age_seconds, (int,float)) or isinstance(max_age_seconds,bool) or max_age_seconds <= 0:
+        raise ValueError("INVALID_MAX_AGE")
     observed_value = receipt.get("provider_observed_utc")
     if observed_value is None:
         if require_observed:
@@ -59,8 +61,6 @@ def validate_receipt(receipt, *, decision_utc, event_start_utc,
     observed = utc(observed_value)
     if observed > captured:
         raise ValueError("OBSERVED_AFTER_CAPTURE")
-    if not isinstance(max_age_seconds, (int,float)) or isinstance(max_age_seconds,bool) or max_age_seconds <= 0:
-        raise ValueError("INVALID_MAX_AGE")
     if (decision - observed).total_seconds() > max_age_seconds:
         raise ValueError("STALE_SOURCE")
     return {"status":"PAPER_0U_UNAUTHENTICATED","digest":digest,
