@@ -1,0 +1,18 @@
+name: seven-sport prospective PIT freeze (synthetic)
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  freeze-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m compileall -q sportsedge/validation/seven_sport_pit_freeze.py
+      - run: python -m unittest sportsedge.validation.test_seven_sport_pit_freeze -v
