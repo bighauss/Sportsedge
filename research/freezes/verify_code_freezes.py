@@ -57,7 +57,8 @@ def verify(manifest: dict, repo: Path) -> dict:
         record = sports[sport]
         if not isinstance(record, dict) or record.get("status") not in (
             "CODE_BASELINE_LOCKED_RESEARCH", "CODE_BASELINE_LOCKED_UNCALIBRATED",
-            "CODE_PINNED_ORIGINAL_496_MISSING"):
+            "CODE_PINNED_ORIGINAL_496_MISSING", "PREFREEZE_CODE_PIN_ONLY_G18_ORIGINAL_MISSING",
+            "PREFREEZE_CODE_PIN_ONLY_PIT_DATA_MISSING", "PREFREEZE_CODE_PIN_ONLY_NEEDS_KERNEL_INTEGRATION"):
             raise FreezeViolation("FREEZE_STATE_INVALID:" + sport)
         sources = record.get("sources")
         if not isinstance(sources, dict) or not sources:
