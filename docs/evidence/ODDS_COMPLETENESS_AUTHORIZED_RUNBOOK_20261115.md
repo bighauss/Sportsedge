@@ -41,3 +41,24 @@ Supported reasons: `NOT_OFFERED`, `NOT_CAPTURED`, `NO_AUTHORIZED_ACCESS`, `NO_PR
 Owner/operator must establish a **documented, authorized** DK export/API path and a separately collected second-book path with permitted retention. Do not put passwords/tokens in chat, Git, issues or generated reports. Add real provider adapters **only** after capturing permitted sample original responses in private storage and verifying actual schemas and upstream source rights.
 
 No non-synthetic source retrieval, credentials, sportsbook prices, private decision ledger or true 2026 historical snapshot is introduced by this PR.
+
+## R2: absent core slots and exact outcome identity
+
+An authorized source may fail to inventory an entire DK main-market side. Such a missing side is **not** an offered quote, and an operator must not make up a `provider_market_id`, a `line`, or a `price` to fill the inventory. The event may now optionally declare `core_absences`: an array of exact six-way core slots with no invented market ID:
+
+```json
+{
+  "book": "DK",
+  "family": "TOTAL",
+  "period": "FG",
+  "side": "UNDER",
+  "reason": "NO_AUTHORIZED_ACCESS",
+  "noted_at_utc": "2026-11-16T21:00:01Z"
+}
+```
+
+An absent DK core slot without this entry remains `CORE_SIDE_MISSING_WITHOUT_EXCLUSION`. Each absence must be recorded before the actual event start with a valid reason; duplicates, contradictory offered inventory, and post-start reconstruction fail. **`NOT_OFFERED` is prohibited for an unverifiable absent slot**, because this offline checker cannot authenticate a real bookmaker's complete offer catalogue. When any absent core slots have been explicitly recorded, the audit state is `PAPER_0U_DECLARED_CORE_GAPS`; this is a transparency result, not complete quote coverage. `gate_a_authenticated=false` and approved units remain zero.
+
+Offered player-stat entries must bind exact `player_id` and `stat`, and team totals must bind `team_id`. `settlement`, player, team and stat all participate in uniqueness; sharing the same upstream market ID/price/line does **not** collapse two different players into one market. Quote freshness uses provider `original_observed_utc` versus local `captured_utc`, with a conservative 300-second maximum lag; an older original quote must not become fresh merely because it was downloaded now. All of these timestamp and identity fields are still local claims until original upstream receipts are independently authenticated.
+
+Only the explicit private-source inspection, quote and exclusion ledger can tell what is *accounted for*; this checker must never be described as a live DK connection or as providing Gate A certification.
