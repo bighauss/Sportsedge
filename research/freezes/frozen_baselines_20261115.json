@@ -1,8 +1,8 @@
 {
   "schema": "sportsedge-research-code-freezes-v1",
-  "baseline_commit": "d9399409a86d63346b7fe0597c415fd406fd97fe",
+  "baseline_commit": "29c85365e27665f16ba378cf2c7fc9c81f5754c1",
   "recorded_ct": "2026-11-15",
-  "policy_id": "SPORTSEDGE_RISK_2026_11_15_LOCK_V1",
+  "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
   "release": "PAPER_0U",
   "official_counted": 0,
   "hash_type": "git_blob_sha1_content_address_not_authentication",
@@ -71,16 +71,20 @@
   },
   "risk_contract": {
     "path": "research/risk/v21_risk_contract.py",
-    "git_blob_sha1": "1ac864e5036edc644b87a513c74d186e3c64e587",
+    "git_blob_sha1": "f9758c771e1f4f482c5cad889c1883b5626ce9ae",
     "limits": {
       "daily_u": 5,
-      "game_u": 1,
+      "game_u": 2,
       "theme_u": 3,
       "quarter_kelly": 0.25,
       "initial_min_u": 0.25,
       "initial_max_u": 1.5,
       "model_blend": 0.3,
       "market_blend": 0.7
-    }
-  }
+    },
+    "overlay_path": "research/risk/strict_v21_v22.py",
+    "overlay_git_blob_sha1": "03a0931ae6f5428ce912f4158d8acbfc21",
+    "note": "Actual v2.2 addendum proposes NO per-game unit cap; v2.1 2u/game is stricter. Overlay additionally blocks >12-point model/market gaps and caps dog ML >=+200 at 0.25u. All diagnostic-only PAPER."
+  },
+  "initial_inspected_commit": "d9399409a86d63346b7fe0597c415fd406fd97fe"
 }
