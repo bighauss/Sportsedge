@@ -14,14 +14,55 @@ import hashlib
 import io
 import json
 import math
+import os
 from pathlib import Path
 
 from cbbd_prospective_capture import (
-    safe_path, iso, utc, decoded, Hold
+    iso, utc, decoded, Hold
 )
 from torvik_point_in_time_baseline import project, Blocked
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def safe_path(path):
+    """Refuse lexical OR symlink-resolved paths inside public checkout."""
+    lexical = Path(os.path.abspath(os.path.expanduser(str(path))))
+    resolved = lexical.resolve()
+    for p in (lexical, resolved):
+        if p == ROOT or ROOT in p.parents:
+            raise Hold("PUBLIC_GIT_REPOSITORY_IS_NOT_PRIVATE_STORAGE")
+    return resolved
+
+
+def _private_directory(path):
+    directory = safe_path(path)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if directory.stat().st_mode & 0o077:
+        raise Hold("PRIVATE_DIRECTORY_PERMISSIONS_TOO_BROAD")
+    return directory
+
+
+def _private_create(path, data):
+    path = safe_path(path)
+    created = False
+    try:
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        created = True
+        with os.fdopen(fd, "wb") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        if created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        raise
+
+
 KINDS = {
     "TORVIK_RATINGS": {"team", "adj_o", "adj_d", "adj_tempo"},
     "CBBD_ID_CROSSWALK": {"cbbd_id", "cbbd_team_name", "torvik_team"},
@@ -130,19 +171,15 @@ def archive_csv(*, source_path, private_dir, kind, season, clock=None):
     receipt = destination / (stem + ".manifest.json")
     if original.exists() or receipt.exists():
         raise FileExistsError("ARCHIVE_ALREADY_EXISTS")
-    destination.mkdir(parents=True, exist_ok=True)
+    _private_directory(destination)
     manifest = {"format": "CBB_LOCAL_CSV_RECEIPT_V1", "kind": kind,
                 "season": season, "source_sha256": digest,
                 "source_bytes": len(raw), "rows": len(records),
                 "local_observed_utc": when,
                 "publication_basis": "LOCAL_FILE_OBSERVATION_NOT_PUBLISHER_ATTESTATION",
                 "status": "RESEARCH_ONLY_PAPER_0U"}
-    with original.open("xb") as f:
-        f.write(raw)
-        f.flush()
-    with receipt.open("x", encoding="utf-8") as f:
-        json.dump(manifest, f, sort_keys=True, indent=2)
-        f.write("\n")
+    _private_create(original, raw)
+    _private_create(receipt, (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode("utf-8"))
     return {"raw_path": str(original), "manifest_path": str(receipt),
             "sha256": digest, "rows": len(records),
             "observed_utc": when, "status": manifest["status"]}
@@ -331,9 +368,8 @@ def project_scheduled(*, schedule_raw, schedule_manifest,
                 "NO_ODDS_CALIBRATION_WIN_PROBABILITY_OR_STAKES",
                 "LATE_OR_MISSING_PROVIDERS_BLOCK_INSTEAD_OF_RECONSTRUCTING_HISTORY",
               ]}
-    with target.open("x", encoding="utf-8") as f:
-        json.dump(report, f, sort_keys=True, indent=2, allow_nan=False)
-        f.write("\n")
+    _private_directory(target.parent)
+    _private_create(target, (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8"))
     return report
 
 
