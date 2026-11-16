@@ -1,0 +1,33 @@
+name: Projection-to-research-edge contract (offline)
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/edge_discovery.py'
+      - 'sportsedge/markets/test_edge_discovery.py'
+      - 'sportsedge/markets/run_it_research.py'
+      - 'sportsedge/markets/test_run_it_research.py'
+      - 'docs/markets/PROJECTION_TO_EDGE_DISCOVERY.md'
+      - '.github/workflows/projection-edge-research.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/edge_discovery.py'
+      - 'sportsedge/markets/test_edge_discovery.py'
+      - 'sportsedge/markets/run_it_research.py'
+      - 'sportsedge/markets/test_run_it_research.py'
+      - 'docs/markets/PROJECTION_TO_EDGE_DISCOVERY.md'
+      - '.github/workflows/projection-edge-research.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Research signals, every market gate and full slate (synthetic only)
+        run: |
+          python -m unittest -v             sportsedge.markets.test_edge_discovery             sportsedge.markets.test_run_it_research             sportsedge.markets.test_allmarkets_research             sportsedge.markets.test_cli             sportsedge.markets.test_slate_orchestrator
