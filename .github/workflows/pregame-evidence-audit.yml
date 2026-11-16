@@ -18,3 +18,5 @@ jobs:
         run: python -m compileall -q research/audit
       - name: Run 13 pregame evidence regression tests
         run: python research/audit/test_pregame_edge_audit.py
+      - name: Cross-sport feature chronology and leakage regressions
+        run: python research/audit/test_feature_chronology_preflight.py
