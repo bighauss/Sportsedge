@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 import re
 
-from sportsedge.markets.public_release_capture import ASSETS, capture_public_release
+from sportsedge.markets.public_release_capture import ASSETS, capture_public_release, require_private_archive_path
 
 ALLOWED = ("NFL_WEEKLY_2026", "NFL_NGS_PASS", "NFL_NGS_RUSH", "NFL_NGS_RECEIVE")
 EVENT_ID_RE = re.compile(r"[a-zA-Z0-9_.:-]{1,96}\Z")
@@ -50,10 +50,7 @@ def prospective_archive(private_parent, *, assets=ALLOWED, event_id=None,
     start = utc(event_start_utc) if event_start_utc is not None else None
     if run_id is not None and not RUN_RE.fullmatch(run_id):
         raise ValueError("INVALID_RUN_ID")
-    parent = Path(private_parent).resolve()
-    cwd = Path.cwd().resolve()
-    if parent == cwd or cwd in parent.parents:
-        raise ValueError("ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPOSITORY")
+    parent = require_private_archive_path(private_parent)
     parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     slug = now.strftime("%Y%m%dT%H%M%S%fZ") + ("_" + run_id if run_id else "")
     dest = parent / ("forward_nfl_" + slug)

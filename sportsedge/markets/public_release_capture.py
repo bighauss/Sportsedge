@@ -20,6 +20,20 @@ import sys
 from .source_ingestion import parse_snapshot_bytes
 
 REPO="nflverse/nflverse-data"
+REPOSITORY_ROOT=Path(__file__).resolve().parents[2]
+
+
+def require_private_archive_path(destination):
+    """Reject every path inside the repository, independently of process CWD.
+
+    This is a local filesystem guard, not cryptographic evidence of a
+    privately hosted or immutable archive. Resolving paths catches symlinks.
+    """
+    resolved=Path(destination).resolve()
+    if resolved==REPOSITORY_ROOT or REPOSITORY_ROOT in resolved.parents:
+        raise ValueError("RECEIPT_ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPOSITORY")
+    return resolved
+
 ASSETS={
     "NFL_WEEKLY_2026":("stats_player","stats_player_week_2026.csv.gz","NFLVERSE_WEEKLY"),
     "NFL_PBP_2026":("pbp","play_by_play_2026.csv.gz","NFLVERSE_PBP"),
@@ -60,6 +74,8 @@ def get_release_asset_info(asset_id: str, opener=urlopen) -> dict:
 def capture_public_release(asset_id:str, destination:Path | str, *,
                            max_download_bytes:int=95_000_000,
                            opener=urlopen) -> dict:
+    # Validate destination BEFORE any outbound provider call or source write.
+    dest=require_private_archive_path(destination)
     metadata=get_release_asset_info(asset_id,opener=opener)
     with opener(Request(metadata["url"],headers={
                 "User-Agent":"SportsEdge-Research-SourceAudit"}),timeout=60) as response:
@@ -79,9 +95,6 @@ def capture_public_release(asset_id:str, destination:Path | str, *,
     if claimed_updated>now:
         raise ValueError("FUTURE_DATED_PROVIDER_RELEASE")
     receipt,rows=parse_snapshot_bytes(metadata["source_id"],raw,claimed_updated,now)
-    dest=Path(destination).resolve()
-    if dest == Path.cwd().resolve() or Path.cwd().resolve() in dest.parents:
-        raise ValueError("RECEIPT_ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPOSITORY")
     dest.mkdir(mode=0o700,parents=True,exist_ok=True)
     final=dest / (metadata["asset_id"]+"_"+digest.split(":")[1][:16]+".csv.gz")
     flags=os.O_CREAT|os.O_EXCL|os.O_WRONLY|getattr(os,"O_NOFOLLOW",0)
