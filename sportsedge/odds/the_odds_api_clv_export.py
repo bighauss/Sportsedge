@@ -4,6 +4,13 @@ No network, no vendor scraping, no credentials, no wagering. The CSV supplies
 PAPER source observations only: upstream bookmaker quotes are NOT independently
 authenticated. Supports exact FG two-sided h2h/spreads/totals; all other
 market families are quarantined, never mapped to invented settlement IDs.
+
+Original provider JSON + SHA manifest must live outside the public checkout.
+Conflicting/duplicated source market groups are quarantined ALL-COPY, never
+first-wins. CSV and .audit.json are private, exclusive-create 0600 outputs:
+a failed write removes only files actually created by that invocation, and
+never deletes previously existing originals. No user wager is inferred from
+a price-board TAKE snapshot.
 """
 from __future__ import annotations
 
@@ -33,8 +40,19 @@ SUPPORT = {"h2h": "MONEYLINE", "spreads": "SPREAD", "totals": "TOTAL"}
 MAPPING_VERSION = "the-odds-api-v4-native-event-market-v1"
 
 
+def _private_path(path: Path) -> Path:
+    # Checking only .resolve() lets a public checkout symlink mask its lexical
+    # location; both the supplied name and resolved target must be private.
+    lexical = Path(os.path.abspath(os.fspath(path)))
+    resolved = lexical.resolve()
+    if any(p == REPO_ROOT or REPO_ROOT in p.parents
+           for p in (lexical, resolved)):
+        raise Blocked("ODDS_SOURCE_OR_OUTPUT_IN_PUBLIC_REPO")
+    return resolved
+
+
 def load_evidence(manifest_path: Path):
-    manifest_path = Path(manifest_path).resolve()
+    manifest_path = _private_path(manifest_path)
     base = manifest_path.parent
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema") != "sportsedge-oddsapi-aggregator-raw-v1":
@@ -52,7 +70,7 @@ def load_evidence(manifest_path: Path):
     if (not isinstance(raw_name, str) or not raw_name or
             raw_name != Path(raw_name).name or raw_name in (".", "..")):
         raise Blocked("ORIGINAL_RAW_PATH_INVALID")
-    raw_path = (base / raw_name).resolve()
+    raw_path = _private_path(base / raw_name)
     if not raw_path.is_relative_to(base) or not raw_path.is_file():
         raise Blocked("ORIGINAL_RAW_MISSING_OR_PATH_ESCAPE")
     raw = raw_path.read_bytes()
@@ -121,7 +139,11 @@ def convert(manifest_path: Path, phase: str = "TAKE"):
     manifest, events, captured, digest = load_evidence(manifest_path)
     counts = Counter()
     rows = []
-    dedupe = set()
+    # Buffer all valid market groups. First-wins dedupe is selection bias:
+    # a later duplicate or conflicting quote must quarantine *all* copies.
+    buffered = []
+    seen_groups = set()
+    duplicate_groups = set()
     source_url = manifest["read_only_endpoint"]
     for ev in events:
         if (ev.get("sport_key") != SPORTS[manifest["sport"]] or
@@ -196,16 +218,21 @@ def convert(manifest_path: Path, phase: str = "TAKE"):
                         }
                         parse_quote(row, phase)
                         dedupe_key = (ev["id"], label, kind, side, lines[side], observed)
-                        if dedupe_key in dedupe:
-                            raise Blocked("DUPLICATE_CANONICAL_QUOTE")
                         prepared.append((dedupe_key, row))
                 except Blocked as exc:
                     counts[str(exc)] += 1
                     continue
-                for key,row in prepared:
-                    dedupe.add(key)
-                    rows.append(row)
-                counts["ACCEPTED_TWO_SIDED_MARKET"] += 1
+                group_key = frozenset(key for key, _ in prepared)
+                if group_key in seen_groups:
+                    duplicate_groups.add(group_key)
+                seen_groups.add(group_key)
+                buffered.append((group_key, [row for _, row in prepared]))
+    for group_key, market_rows in buffered:
+        if group_key in duplicate_groups:
+            counts["DUPLICATE_CANONICAL_MARKET_ALL_COPIES_QUARANTINED"] += 1
+            continue
+        rows.extend(market_rows)
+        counts["ACCEPTED_TWO_SIDED_MARKET"] += 1
     return rows, {
         "schema": "sportsedge-oddsapi-to-clv-archive-v1",
         "state": "PAPER_0U_SOURCE_RELAY_NOT_BOOK_AUTHENTICATED" if rows else "BLOCK_NO_VALID_TWO_SIDED_QUOTES",
@@ -225,16 +252,35 @@ def convert(manifest_path: Path, phase: str = "TAKE"):
     }
 
 
-def _write_private(path: Path, content: bytes):
-    path = path.resolve()
-    if path == REPO_ROOT or REPO_ROOT in path.parents:
-        raise Blocked("PRIVATE_EXPORT_MUST_BE_OUTSIDE_PUBLIC_REPO")
+def _remove_owned(path: Path, identity: tuple[int, int]) -> None:
+    """Never unlink a pre-existing or concurrently replaced evidence file."""
+    try:
+        current = os.stat(path, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) == identity:
+            os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+def _write_private(path: Path, content: bytes) -> tuple[Path, tuple[int, int]]:
+    path = Path(path)
+    if path.is_symlink():
+        raise Blocked("OUTPUT_SYMLINK_REFUSED")
+    path = _private_path(path)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    with os.fdopen(os.open(path, flags, 0o600), "wb") as f:
-        f.write(content)
-        f.flush()
-        os.fsync(f.fileno())
+    descriptor = os.open(path, flags, 0o600)
+    created = os.fstat(descriptor)
+    identity = (created.st_dev, created.st_ino)
+    try:
+        with os.fdopen(descriptor, "wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        _remove_owned(path, identity)
+        raise
+    return path, identity
 
 
 def write_export(manifest: Path, output: Path, phase: str = "TAKE"):
@@ -254,8 +300,15 @@ def write_export(manifest: Path, output: Path, phase: str = "TAKE"):
     writer.writerows(rows)
     encoded = buf.getvalue().encode("utf-8")
     info["normalized_csv_sha256"] = "sha256:" + sha256(encoded).hexdigest()
-    _write_private(output, encoded)
-    _write_private(audit, (json.dumps(info, sort_keys=True, indent=2) + "\n").encode("utf-8"))
+    created = []
+    try:
+        created.append(_write_private(output, encoded))
+        created.append(_write_private(
+            audit, (json.dumps(info, sort_keys=True, indent=2) + "\n").encode("utf-8")))
+    except BaseException:
+        for path, identity in reversed(created):
+            _remove_owned(path, identity)
+        raise
     return info
 
 
