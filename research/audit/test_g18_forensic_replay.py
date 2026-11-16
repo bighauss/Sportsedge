@@ -5,9 +5,11 @@ import io
 import json
 import tempfile
 import unittest
+import stat
+from unittest.mock import patch
 from pathlib import Path
 
-from g18_forensic_replay import parse_selection, grade_one, replay, main, InvalidRecord
+from g18_forensic_replay import parse_selection, grade_one, replay, main, InvalidRecord, REPO_ROOT, _private_path
 
 GAME = 'Mississippi Valley @ Washington'
 FINAL = {'away': 64, 'home': 77, 'away_1h': 33, 'home_1h': 43,
@@ -132,9 +134,48 @@ class G18Tests(unittest.TestCase):
             finals.write_text(json.dumps({GAME:FINAL}))
             self.assertEqual(main([str(picks),str(finals),'--report',str(out)]),0)
             self.assertEqual(json.loads(out.read_text())['counts']['grade_flips'],1)
+            self.assertEqual(stat.S_IMODE(out.stat().st_mode),0o600)
             with self.assertRaises(FileExistsError):
                 main([str(picks),str(finals),'--report',str(out)])
+
+    def test_private_public_repo_source_and_output_refused(self):
+        with self.assertRaisesRegex(InvalidRecord,'INSIDE_PUBLIC_REPO'):
+            _private_path(REPO_ROOT/'private_picks.csv')
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            picks=root/'picks.csv'; finals=root/'finals.json'
+            picks.write_bytes(csv_bytes(['Washington Under 82.5']))
+            finals.write_text(json.dumps({GAME:FINAL}))
+            with self.assertRaisesRegex(InvalidRecord,'INSIDE_PUBLIC_REPO'):
+                main([str(picks),str(finals),'--report',str(REPO_ROOT/'private_report.json')])
+            self.assertFalse((REPO_ROOT/'private_report.json').exists())
+
+    def test_symlink_public_and_private_aliases_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            (root/'alias').symlink_to(REPO_ROOT,target_is_directory=True)
+            with self.assertRaisesRegex(InvalidRecord,'INSIDE_PUBLIC_REPO'):
+                _private_path(root/'alias'/'picks.csv')
+            (root/'alias').unlink()
+            (root/'private').mkdir()
+            (root/'alias').symlink_to(root/'private',target_is_directory=True)
+            with self.assertRaisesRegex(InvalidRecord,'SYMLINK'):
+                _private_path(root/'alias'/'picks.csv')
+
+    def test_fsync_failure_rolls_back_partial_grade_not_source(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            picks=root/'picks.csv'; finals=root/'finals.json'; out=root/'report.json'
+            picks.write_bytes(csv_bytes(['Washington Under 82.5']))
+            finals.write_text(json.dumps({GAME:FINAL}))
+            original=picks.read_bytes()
+            with patch('g18_forensic_replay.os.fsync',side_effect=OSError('injected fsync error')):
+                with self.assertRaisesRegex(OSError,'injected fsync error'):
+                    main([str(picks),str(finals),'--report',str(out)])
+            self.assertFalse(out.exists())
+            self.assertEqual(picks.read_bytes(),original)
 
 
 if __name__ == '__main__':
     unittest.main()
+

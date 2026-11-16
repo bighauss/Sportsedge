@@ -18,6 +18,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import re
 from collections import Counter
 from decimal import Decimal, InvalidOperation
@@ -26,6 +27,40 @@ from pathlib import Path
 
 class InvalidRecord(ValueError):
     pass
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _private_path(value: str | Path) -> Path:
+    """Never place original picks/finals or per-selection grades in public Git."""
+    lexical = Path(os.path.abspath(os.fspath(value)))
+    resolved = lexical.resolve()
+    for path in (lexical, resolved):
+        if path == REPO_ROOT or REPO_ROOT in path.parents:
+            raise InvalidRecord('PRIVATE_G18_ORIGINAL_OR_REPORT_INSIDE_PUBLIC_REPO')
+    if lexical.is_symlink() or any(p.is_symlink() for p in lexical.parents):
+        raise InvalidRecord('G18_SYMLINK_ORIGINAL_OR_REPORT_REFUSED')
+    return lexical
+
+
+def _write_private_report(path: Path, report: dict) -> None:
+    body = (json.dumps(report, indent=2, sort_keys=True, allow_nan=False)
+            + '\n').encode('utf-8')
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os,'O_NOFOLLOW',0)
+    fd = os.open(path, flags, 0o600)
+    try:
+        with os.fdopen(fd,'wb') as f:
+            fd = -1
+            f.write(body)
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    finally:
+        if fd >= 0:
+            os.close(fd)
 
 
 def _reject_duplicate_json_keys(pairs):
@@ -216,12 +251,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument('--expected-finals-sha256')
     p.add_argument('--report', type=Path, required=True)
     args = p.parse_args(argv)
-    report = replay(args.original_picks_csv.read_bytes(), args.finals_json.read_bytes(),
+    picks = _private_path(args.original_picks_csv)
+    finals = _private_path(args.finals_json)
+    target = _private_path(args.report)
+    report = replay(picks.read_bytes(), finals.read_bytes(),
                     expected_picks_sha256=args.expected_picks_sha256,
                     expected_finals_sha256=args.expected_finals_sha256)
-    with args.report.open('x', encoding='utf-8') as handle:
-        json.dump(report, handle, indent=2, sort_keys=True)
-        handle.write('\n')
+    _write_private_report(target, report)
     print(f"G18 RESEARCH: {report['counts'].get('total_rows', 0)} priced rows, "
           f"{report['counts'].get('grade_flips', 0)} possible grading flips; PAPER/0u")
     return 0
