@@ -13,6 +13,9 @@ jobs:
       - name: Shared model-market probability guard regression
         working-directory: models/common
         run: python -m unittest -v test_guard_probability_safety.py
+      - name: PGA point-in-time market preflight
+        working-directory: models/pga
+        run: python -m unittest -v test_market_preflight.py
       - name: MLB
         working-directory: models/mlb
         run: python make_samples.py && python test_sportsedge_mlb_model.py
