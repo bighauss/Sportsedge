@@ -30,7 +30,7 @@ jobs:
         run: python test_sportsedge_nhl.py && python test_nhl_shared_scenarios.py
       - name: CBB
         working-directory: models/cbb
-        run: python test_cbb.py && python test_cbb_shared_possessions.py
+        run: python test_cbb.py && python test_cbb_shared_possessions.py && python -m unittest -v test_torvik_point_in_time_baseline.py
       - name: DFS historical slate coverage preflight
         working-directory: models/nfl_dfs
         run: python -m unittest -v test_historical_coverage_preflight.py
