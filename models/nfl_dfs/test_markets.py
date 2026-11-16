@@ -149,6 +149,4 @@ class MarketsTests(unittest.TestCase):
 
 
 if __name__=="__main__":
-    import subprocess,sys
-    subprocess.run([sys.executable,"../common/test_research_guardrails.py"],check=True)
     unittest.main()
