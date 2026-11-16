@@ -4,11 +4,11 @@
 
 ## What is actually implemented
 
-- Play-level nflverse fields: `game_id,posteam,defteam,pass,rush,epa,wp`. nflreadpy returns **Polars**, not pandas; use `.write_csv()` from a selected Polars frame.
+- Play-level nflverse fields: `game_id,play_id,posteam,defteam,pass,rush,epa,wp`. nflreadpy returns **Polars**, not pandas; use `.write_csv()` from a selected Polars frame.
 - For each eligible pass/rush play, estimate EPA = intercept + offense-team effect + defense-allowed-team effect, with L2 ridge on team effects. Higher defensive effect means that team **allows more EPA**. Features use exponential recency weighting; 21-day half-life and ridge=30 are **unvalidated research defaults**, not SportsEdge approved weights.
 - No default garbage-time filter. Run a 10–90% WP **ablation** with `--wp-filter`, and retain only if a preregistered chronological comparison improves out-of-sample metrics. Filtering WP is not universally best.
 - Explicit manifest of each source game's kickoff, final and postgame data availability timestamps; pre-forecast-only selection, and audit of future rows excluded. The entire data snapshot's observed timestamp must be on/before forecast time.
-- A missing game manifest, contradictory timestamps, bad team identity, unparseable unit, or too little history raises a clear error. Exclusions for future games, missing EPA, unavailable offense, non-scrimmage plays, and optional WP filter are counted.
+- A missing game manifest, duplicate/missing `play_id` within a game, contradictory timestamps, bad team identity, unparseable unit, or too little history raises a clear error. Exclusions for future games, missing EPA, unavailable offense, non-scrimmage plays, and optional WP filter are counted.
 - Output: two opponent-adjusted EPA-per-play features, audit census and hashes of the **local** input bytes; **no projection, odds, EV, approval or staking**.
 
 ## Free-data preparation
@@ -17,7 +17,7 @@
 import nflreadpy as nfl
 
 pbp = nfl.load_pbp([2026])  # Polars dataframe
-pbp.select(["game_id", "posteam", "defteam", "pass", "rush", "epa", "wp"]).write_csv(
+pbp.select(["game_id", "play_id", "posteam", "defteam", "pass", "rush", "epa", "wp"]).write_csv(
     "/private/nfl_pbp_2026.csv"
 )
 ```
