@@ -1,0 +1,24 @@
+name: Gate A source-lineage research synthetic tests
+on:
+  pull_request:
+    paths:
+      - 'research/evidence/source_lineage_gate.py'
+      - 'research/evidence/test_source_lineage_gate.py'
+      - '.github/workflows/gate-a-source-lineage.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/evidence/source_lineage_gate.py'
+      - 'research/evidence/test_source_lineage_gate.py'
+permissions:
+  contents: read
+jobs:
+  source-lineage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s research/evidence -p 'test_source_lineage_gate.py' -v
