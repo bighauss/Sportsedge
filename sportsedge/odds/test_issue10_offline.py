@@ -1,17 +1,19 @@
 """Synthetic offline contracts only. Never connect to a sportsbook or place wagers."""
 import dataclasses
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from sportsedge.odds.adapters import bestbook_export_available, capture_authorized_export
 from sportsedge.odds.evidence import (
     CLVTriple, FeatureSnapshot, MarketKey, PITBinding, QuoteReceipt,
     evaluate_dual_source, hash_payload,
 )
-from sportsedge.odds.storage import EvidenceChain
+from sportsedge.odds.storage import EvidenceChain, REPOSITORY_ROOT
 from sportsedge.odds.card_gate import gate_candidate
 
 UTC = timezone.utc
@@ -342,6 +344,65 @@ class TestExportAndStorage(unittest.TestCase):
             path = Path(temp) / "research_decisions.jsonl"
             path.write_bytes(path.read_bytes().replace(b'PAPER_0U',b'PAPER_XU'))
             with self.assertRaisesRegex(ValueError, "BROKEN_CHAIN_DIGEST"):
+                chain.verify()
+
+    def test_chain_never_creates_private_evidence_inside_public_repo(self):
+        forbidden = REPOSITORY_ROOT / "sportsedge" / "odds" / "do_not_create_chain"
+        with tempfile.TemporaryDirectory() as work:
+            with patch("pathlib.Path.cwd", return_value=Path(work)):
+                with self.assertRaisesRegex(ValueError,"RESEARCH_LOG_MUST_BE_PRIVATE_OUTSIDE_PUBLIC_REPO"):
+                    EvidenceChain(forbidden)
+        self.assertFalse(forbidden.exists())
+
+    def test_chain_rejects_both_directions_of_public_path_symlinks(self):
+        with tempfile.TemporaryDirectory() as work:
+            root=Path(work)
+            fake_repo=root/"public_repo"
+            private=root/"restricted"
+            fake_repo.mkdir()
+            private.mkdir()
+            lexical_public=fake_repo/"private_link"
+            symlink_to_public=private/"public_link"
+            try:
+                lexical_public.symlink_to(private,target_is_directory=True)
+                symlink_to_public.symlink_to(fake_repo,target_is_directory=True)
+            except (OSError,NotImplementedError):
+                self.skipTest("symlink creation unavailable")
+            with patch("sportsedge.odds.storage.REPOSITORY_ROOT",fake_repo):
+                for dest in (lexical_public,symlink_to_public):
+                    with self.subTest(dest=dest),self.assertRaisesRegex(
+                            ValueError,"RESEARCH_LOG_MUST_BE_PRIVATE_OUTSIDE_PUBLIC_REPO"):
+                        EvidenceChain(dest)
+
+    def test_chain_refuses_world_readable_existing_file(self):
+        if os.name!="posix":
+            self.skipTest("POSIX mode semantics")
+        with tempfile.TemporaryDirectory() as work:
+            chain=EvidenceChain(work)
+            payload={"decision_id":"bet1","asof_utc":D.isoformat(),
+                     "state":"PAPER_0U","approved_stake_u":0,"official_counted":0}
+            chain.append(payload)
+            original=chain.path.read_bytes()
+            chain.path.chmod(0o644)
+            with self.assertRaisesRegex(ValueError,"RESEARCH_LOG_FILE_PERMISSIONS_TOO_OPEN"):
+                chain.verify()
+            with self.assertRaisesRegex(ValueError,"RESEARCH_LOG_FILE_PERMISSIONS_TOO_OPEN"):
+                chain.append({**payload,"decision_id":"bet2"})
+            self.assertEqual(chain.path.read_bytes(),original)
+            chain.path.chmod(0o600)
+            self.assertEqual(chain.verify()[0],1)
+
+    def test_duplicate_json_key_chain_is_refused_before_hash_check(self):
+        with tempfile.TemporaryDirectory() as work:
+            chain=EvidenceChain(work)
+            chain.append({"decision_id":"bet1","asof_utc":D.isoformat(),
+                          "state":"PAPER_0U","approved_stake_u":0,"official_counted":0})
+            original=chain.path.read_bytes()
+            self.assertIn(b'"decision_id":"bet1"',original)
+            chain.path.write_bytes(original.replace(
+                b'"decision_id":"bet1"',
+                b'"decision_id":"bet1","decision_id":"different"'))
+            with self.assertRaisesRegex(ValueError,"BROKEN_CHAIN_DUPLICATE_JSON_KEY"):
                 chain.verify()
 
     def test_chain_denies_unknown_sensitive_fields(self):
