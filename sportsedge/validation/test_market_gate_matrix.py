@@ -10,6 +10,7 @@ import unittest
 from sportsedge.validation.market_gate_matrix import (
     POLICY, SCHEMA, SPORTS, assess, report_file
 )
+from research.risk.strict_v21_v22 import POLICY_VERSION as LOCKED_POLICY_VERSION
 
 
 def blank():
@@ -123,11 +124,19 @@ class MarketGateMatrixTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     assess(manifest)
 
-    def test_v22_not_silently_adopted(self):
-        manifest = blank()
-        manifest["rules_version"] = "RUN_IT_V2_2"
-        with self.assertRaisesRegex(ValueError, "UNAPPROVED_RISK_POLICY_VERSION"):
-            assess(manifest)
+    def test_matrix_uses_exact_locked_policy_version(self):
+        self.assertEqual(POLICY, LOCKED_POLICY_VERSION)
+        self.assertEqual(POLICY, "SPORTSEDGE_STRICT_V21_V22_20261115_R1")
+        self.assertEqual(assess(blank())["rules_version"], POLICY)
+
+    def test_old_and_unapproved_policy_versions_refused(self):
+        for version in ("RUN_IT_V2_2", "RUN_IT_V2_1_MANDATORY_RESTORATION_20261115",
+                        "RUN_IT_V2_2_ADOPTED_20261115", "", None):
+            with self.subTest(version=version):
+                manifest = blank()
+                manifest["rules_version"] = version
+                with self.assertRaisesRegex(ValueError, "UNAPPROVED_RISK_POLICY_VERSION"):
+                    assess(manifest)
 
     def test_nested_bad_evidence_rejected(self):
         manifest = blank()
