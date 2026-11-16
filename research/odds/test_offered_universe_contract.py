@@ -26,6 +26,13 @@ class Tests(unittest.TestCase):
     def test_exclusion_without_reason(self):
         r=rows();r[1].pop("exclusion_reason")
         with self.assertRaisesRegex(UniverseHold,"EXCLUSION_REASON"):run(r=r)
+    def test_nonstring_status_is_fail_closed_not_typeerror(self):
+        for bad in ([], {}, ["OFFERED"], 0, None, True):
+            with self.subTest(bad=bad):
+                r=rows();r[0]["status"]=bad
+                with self.assertRaisesRegex(UniverseHold,"UNCLASSIFIED_OFFER"):
+                    run(r=r)
+
     def test_unclassified(self):
         r=rows();r[1]["status"]="UNKNOWN"
         with self.assertRaisesRegex(UniverseHold,"UNCLASSIFIED"):run(r=r)
