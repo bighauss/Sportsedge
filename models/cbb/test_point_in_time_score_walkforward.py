@@ -14,7 +14,7 @@ H = "a" * 64
 
 
 def make(i=0, season=2026, *, quote=True):
-    start = datetime(2025, 11, 1, 20, tzinfo=timezone.utc) + timedelta(days=i)
+    start = datetime(season-1, 11, 1, 20, tzinfo=timezone.utc) + timedelta(days=i)
     fmt = lambda date: date.strftime("%Y-%m-%dT%H:%M:%SZ")
     freeze = start-timedelta(hours=4)
     game_id = f"SYNTH-{season}-{i}"
@@ -35,7 +35,7 @@ def make(i=0, season=2026, *, quote=True):
             "sha256":H, "status":"FINAL", "period":"FG_INCL_OT",
             "published_utc":fmt(start+timedelta(hours=3)),
             "captured_utc":fmt(start+timedelta(hours=4)),
-            "home_score":73+i%7, "away_score":69+i%5
+            "home_score":73+i%7, "away_score":65+i%5
         }
     }
     if quote:
@@ -71,11 +71,18 @@ class CBBWalkforwardTests(unittest.TestCase):
     def test_only_published_finals_enter_prior_pool(self):
         rows=slate()
         rows[29]["final"]["published_utc"]=rows[31]["final"]["published_utc"]
+        rows[29]["final"]["captured_utc"]=rows[31]["final"]["captured_utc"]
         result=audit(rows,min_prior=30)
         tested=[r for r in result["rows"] if r.get("evaluation_status")=="WALK_FORWARD_SCORED_PAPER_0U"]
         self.assertEqual(len(tested),1)
         self.assertEqual(tested[0]["game_id"],"SYNTH-2026-31")
         self.assertEqual(tested[0]["train_n"],30)
+
+
+    def test_season_end_year_matches_tip(self):
+        rows=[make()]
+        rows[0]["prediction"]["season"]=2027
+        self.assertIn("SEASON_END_YEAR_DOES_NOT_MATCH",audit(rows)["rows"][0]["reason"])
 
     def test_future_source_is_blocked(self):
         rows=slate()
