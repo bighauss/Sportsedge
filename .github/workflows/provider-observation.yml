@@ -1,0 +1,65 @@
+name: Authorized provider data observation (research only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
+    steps:
+      - name: Capture sanitized provider observations
+        shell: python
+        run: |
+          import os, json, hashlib, datetime, urllib.request, urllib.error, sys
+          now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+          providers = [
+            ("cfbd_games_2026_w1", "https://api.collegefootballdata.com/games?year=2026&week=1", {"Authorization":"Bearer "+os.environ.get("CFBD_API_KEY","")}, "CFBD_API_KEY"),
+            ("odds_nfl_events", "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/events?apiKey="+os.environ.get("ODDS_API_KEY",""), {}, "ODDS_API_KEY"),
+            ("apisports_football_status", "https://v3.football.api-sports.io/status", {"x-apisports-key":os.environ.get("API_SPORTS_KEY","")}, "API_SPORTS_KEY"),
+          ]
+          observations = []
+          failed = False
+          for source,url,headers,key in providers:
+            record = {"source":source,"observed_at_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"status":"blocked","research_only":True}
+            if not os.environ.get(key):
+              record["reason"]="missing_secret"
+              failed=True
+            else:
+              try:
+                req=urllib.request.Request(url,headers={**headers,"Accept":"application/json","User-Agent":"SportsEdge-research-observer/1.0"})
+                with urllib.request.urlopen(req,timeout=20) as response:
+                  data=response.read(2000001)
+                  if len(data)>2000000:
+                    raise ValueError("payload_over_limit")
+                  parsed=json.loads(data)
+                  if source.startswith("apisports") and isinstance(parsed,dict) and parsed.get("errors"):
+                    raise ValueError("provider_errors")
+                  if not isinstance(parsed,(list,dict)):
+                    raise ValueError("unexpected_top_level")
+                  record.update(status="observed",http_status=response.status,sha256=hashlib.sha256(data).hexdigest(),byte_count=len(data),top_level_type=type(parsed).__name__,row_count=len(parsed) if isinstance(parsed,list) else None)
+              except urllib.error.HTTPError as e:
+                record["reason"]="http_"+str(e.code)
+                failed=True
+              except Exception as e:
+                record["reason"]=type(e).__name__
+                failed=True
+            observations.append(record)
+            print(source+": "+record["status"]+" ("+record.get("reason","metadata_only")+")")
+          os.makedirs("provider_observation",exist_ok=True)
+          with open("provider_observation/manifest.json","w") as out:
+            json.dump({"schema_version":1,"run_started_utc":now,"no_original_bytes_archived":True,"not_a_point_in_time_quote_receipt":True,"gate_a":"OPEN","market_state":"PAPER/0u","observations":observations},out,indent=2)
+          if failed:
+            sys.exit(1)
+      - name: Upload sanitized manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-observation-manifest
+          path: provider_observation/manifest.json
+          if-no-files-found: error
+          retention-days: 7
