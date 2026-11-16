@@ -188,7 +188,7 @@ def append_ledger(db_path, result):
                 old_doc=json.loads(old_payload)
             except (ValueError,TypeError) as ex:
                 raise Blocked("Existing ledger contains unreadable payload") from ex
-            expected=hashlib.sha256((prior+"\\n"+old_payload).encode("utf-8")).hexdigest()
+            expected=hashlib.sha256((prior+"\n"+old_payload).encode("utf-8")).hexdigest()
             if old_id!=old_doc.get("pick_id") or old_prev!=prior or old_sha!=expected:
                 raise Blocked("Existing ledger chain damaged; refusing append")
             if (old_id!=result["pick_id"] and
