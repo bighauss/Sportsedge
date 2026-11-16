@@ -56,10 +56,16 @@ def inspect(primary, secondary, *, decision_utc):
             raise ChainHold("SOURCE_CHRONOLOGY_INVALID")
         if (decision - captured).total_seconds() > 300:
             raise ChainHold("STALE_SOURCE")
-    if primary["bookmaker_id"] == secondary["bookmaker_id"]:
+    # Case/space variants are not distinct bookmaker or transport chains.
+    # A shared transport can expose two logos with different claimed upstream
+    # IDs, and must NOT be counted as an independent second feed.
+    normalized = lambda q, field: q[field].strip().casefold()
+    if normalized(primary,"bookmaker_id") == normalized(secondary,"bookmaker_id"):
         raise ChainHold("SAME_BOOKMAKER")
-    if primary["upstream_chain_id"] == secondary["upstream_chain_id"]:
+    if normalized(primary,"upstream_chain_id") == normalized(secondary,"upstream_chain_id"):
         raise ChainHold("SHARED_UPSTREAM_CHAIN")
+    if normalized(primary,"transport_id") == normalized(secondary,"transport_id"):
+        raise ChainHold("SHARED_TRANSPORT")
     if primary["original_receipt_id"] == secondary["original_receipt_id"] or primary["original_sha256"] == secondary["original_sha256"]:
         raise ChainHold("DUPLICATE_ORIGINAL_RECEIPT")
     return {"status": "RESEARCH_CHAIN_CLAIMS_ONLY", "official": False, "stake_u": 0,
