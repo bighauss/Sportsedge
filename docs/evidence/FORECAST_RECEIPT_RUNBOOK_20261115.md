@@ -6,33 +6,57 @@ It does **not** attest who supplied the sources, that the wall clock was trusted
 which markets DraftKings offered, what true closing prices were, or that the
 model was calibrated. It does not produce a wagerable card or satisfy Gate A–E.
 
-## Private execution
+## Private execution — one trusted shared registry
 
-The operator must supply genuine authorized, as-of source bytes and forecast
-outputs. No source material or credentials belong in this public repository.
-This tool does not fetch them and never manufactures absent predictions.
+The operator must supply actual authorized, as-of source bytes and original
+model output files. No provider credentials or private source material belong
+in this public repository. This tool cannot fetch originals or manufacture
+predictions.
 
-1. First create a pregame freeze with
+1. First create a genuinely pregame seven-sport PIT freeze with
    `python -m sportsedge.validation.seven_sport_pit_freeze PRIVATE_REQUEST.json --out PRIVATE_FREEZE.json`.
-   It must contain an exact digest of the model code, config and each feature
-   source. Its original source bytes stay in owner-private storage.
-2. After the model actually writes the original probability-output JSON (not
-   retrospectively generated), execute:
-   ```bash
-   python -m sportsedge.validation.prospective_forecast_receipt \
-      --freeze PRIVATE_FREEZE.json \
-      --forecast PRIVATE_FORECAST.json \
-      --out PRIVATE_NEW_RECEIPT.json
-   ```
-3. Retain all three original files and model input sources. The receipt only
-   records SHA-256 digests; it contains **no predictions**, prices or player names.
-   No file is overwritten. Capture must be before the event start and within
-   five minutes of running the receipt command.
+   Retain the unchanged original code, configuration, feature data and freeze.
+2. Provision **one persistent, shared and owner-only registry** for forecast
+   receipts. It must be an absolute existing directory of mode 0700, owned by
+   the running account, with no symlink aliases, outside the public checkout
+   and runner working directory. Every worker must use the **same** namespace.
+3. After the model produces its original probabilities before the event, run:
 
-Use a private directory with mode 0700 and files with mode 0600; symlinks and
-paths inside the public checkout are refused. This requires a local computer,
-trusted storage or an authorized execution environment. It is *not* a live feed
-or a phone-only sports-data connection.
+   ```bash
+   mkdir -m 700 /private/sportsedge/forward-forecast-registry
+   python -m sportsedge.validation.prospective_forecast_receipt \
+     --freeze PRIVATE_FREEZE.json \
+     --forecast PRIVATE_FORECAST.json \
+     --registry-root /private/sportsedge/forward-forecast-registry
+   ```
+
+   The receipt path is generated automatically as
+   `forecast-receipt-<sha256-of-sport-event-market-period-original-freeze>.json`.
+   The CLI prints that private path. An optional explicit `--out` is accepted
+   **only** if it is exactly the canonical location. A second output under a
+   different filename or directory is refused.
+4. Retain the unchanged original freeze/forecast bytes and private digest
+   receipt. The report stores hashes, source counts and identity hashes only:
+   **no model probabilities, personal player names or bet prices**. Original
+   files are never overwritten; the 0600 receipt is create-only and fsynced.
+
+The original forecast must be generated and captured after the earlier freeze
+and before kickoff, with a claimed capture no older than five minutes when
+the receipt is written. Missing actual as-of publication evidence remains a
+blocking gap; local hash verification is not an independent time attestation.
+
+## Scope and limitations of canonical uniqueness
+
+The source-to-forecast receipt now has one operator-shared physical slot per
+**(sport, event, market family, period, original PIT freeze SHA)**. Changing
+probabilities or output filename cannot create a second receipt for that
+identity; two concurrent processes contend for one `O_EXCL` path.
+**This is not a global uniqueness proof**: a different registry root on another
+host, administrator rewrite/removal, or a separately generated original freeze
+can still yield competing local claims. The operator must attest a common
+shared mount and eventually export a signed immutable external history. The
+pure `assess()` helper is a read-only diagnostic, not a production admission
+path. Original source-clock/authentication gates remain OPEN.
 
 ## Forecast file contract
 
