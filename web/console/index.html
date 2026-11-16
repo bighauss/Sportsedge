@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#080d17">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+  <meta name="description" content="SportsEdge research console — market coverage, evidence status and tools. No official bets or unverified +EV claims.">
+  <title>SportsEdge — Research Console</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./core.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="m4 20 8-8 6 6 10-12" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 6h6v6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div><div class="brand-name">SPORTS<span>EDGE</span></div><div class="brand-sub">RESEARCH TERMINAL <span class="vtext">V1</span></div></div>
+      </div>
+      <nav class="mainnav" aria-label="Views">
+        <button class="nav-item active" data-tab="overview" aria-current="page"><span class="nav-icon">▦</span> Overview</button>
+        <button class="nav-item" data-tab="markets"><span class="nav-icon">▤</span> Market inventory</button>
+        <button class="nav-item" data-tab="sources"><span class="nav-icon">◈</span> Source evidence</button>
+        <button class="nav-item" data-tab="toolkit"><span class="nav-icon">⌘</span> AI toolkit</button>
+      </nav>
+      <div class="side-footer">
+        <div class="side-note"><span class="side-dot"></span><strong>FAIL-CLOSED MODE</strong><span>All selections remain research-only.</span></div>
+        <p>Data stays in this tab. No login, tracking, external odds requests or automatic uploads.</p>
+      </div>
+    </aside>
+    <div class="mainwrap">
+      <header class="topbar">
+        <div class="top-eyebrow"><span class="signal-pulse"></span> OPERATIONS / QUANT RESEARCH <span class="top-divider">/</span> <strong id="currentView">Overview</strong></div>
+        <div class="top-actions"><span class="top-date" id="currentTime">LOCAL REVIEW</span><button id="importTop" class="button outline small" type="button">↥ Import snapshot</button><span class="paper-chip"><span class="paper-dot"></span> PAPER / 0u</span></div>
+      </header>
+      <main id="main" class="maincontent">
+        <section class="view active" id="view-overview" aria-labelledby="overviewTitle">
+          <div class="page-head">
+            <div class="eyebrow">SPORTSEDGE / MISSION CONTROL</div>
+            <h1 id="overviewTitle">Signal over <em>noise.</em></h1>
+            <p>The full market landscape, with every missing receipt and closed gate visible. No fabricated edges. No silent market exclusions.</p>
+          </div>
+          <div class="hero">
+            <div class="hero-art" aria-hidden="true"><div class="orb orb-a"></div><div class="orb orb-b"></div><div class="grid-art"></div></div>
+            <div class="hero-copy"><span class="hero-label"><span class="status-light"></span> RESEARCH MODE • RELEASE GATES NOT CLEARED</span><h2>Built to verify.<br><span>Not to guess.</span></h2><p>Import a sanitized market-status export or open a clearly labeled synthetic demonstration. This frontend cannot approve wagers or authenticate odds.</p><div class="hero-buttons"><button class="button primary" id="heroImport" type="button">↥ Import local snapshot</button><button class="button secondary" id="loadDemo" type="button">Explore sample data</button></div></div>
+            <div class="hero-status" aria-hidden="true"><div class="mini-label">LIVE ELIGIBILITY</div><div class="hero-zero">0<span>u</span></div><div class="mini-line"><span></span> NO OFFICIAL RELEASE</div></div>
+          </div>
+          <div class="kpis" aria-label="Dataset metrics">
+            <div class="kpi"><div class="kpi-label">Inventory rows <span>↗</span></div><div class="kpi-number" id="kpiRows">—</div><p>Received from local snapshot</p></div>
+            <div class="kpi"><div class="kpi-label">Events represented <span>⌗</span></div><div class="kpi-number" id="kpiEvents">—</div><p>Not the full scheduled slate</p></div>
+            <div class="kpi"><div class="kpi-label">Verified quote sources <span>◇</span></div><div class="kpi-number" id="kpiSources">0</div><p>No independent authentication</p></div>
+            <div class="kpi"><div class="kpi-label">Approved stake <span>⊘</span></div><div class="kpi-number accent">0<span class="unit">u</span></div><p>Locked by release policy</p></div>
+          </div>
+          <div class="content-grid">
+            <section class="panel span-7" aria-labelledby="coverageTitle"><div class="panel-top"><div><div class="panel-kicker">THE SEVEN-SPORT VIEW</div><h3 id="coverageTitle">Inventory by sport</h3></div><button class="text-link" type="button" data-goto="markets">All markets ↗</button></div><div class="sport-grid" id="sportGrid"></div><div class="panel-foot">Counts represent imported inventory rows only — not model coverage or qualified bets.</div></section>
+            <section class="panel span-5" aria-labelledby="gatesTitle"><div class="panel-top"><div><div class="panel-kicker">RELEASE PROTOCOL</div><h3 id="gatesTitle">Truth Gates A–E</h3></div><span class="lock-label">⌁ LOCKED</span></div><ol class="gate-list" id="gateList"></ol><div class="panel-foot">A local JSON file cannot independently certify any release gate.</div></section>
+          </div>
+          <section class="panel recent-panel" aria-labelledby="previewTitle"><div class="panel-top"><div><div class="panel-kicker">AT A GLANCE</div><h3 id="previewTitle">Market exception feed</h3></div><button class="text-link" data-goto="markets" type="button">Inspect inventory ↗</button></div><div id="previewRows" class="preview-rows"></div></section>
+        </section>
+        <section class="view" id="view-markets" aria-labelledby="marketsTitle" hidden>
+          <div class="page-head compact"><div class="eyebrow">FULL INVENTORY / ALL FAMILIES</div><h1 id="marketsTitle">Every market. <em>Every gap.</em></h1><p>Import a sanitized snapshot to inspect evidence blockers across sports and market families. Alternate lines, props and period markets are never silently omitted.</p></div>
+          <div class="toolbar"><label class="search-wrap"><span class="sr-only">Search market inventory</span><span aria-hidden="true">⌕</span><input id="marketQuery" type="search" placeholder="Search events, markets, reasons" autocomplete="off"></label><label class="select-wrap"><span class="sr-only">Filter by sport</span><select id="sportFilter"></select></label><label class="select-wrap"><span class="sr-only">Filter by status</span><select id="stateFilter"></select></label></div>
+          <div class="panel table-panel"><div class="panel-top"><div><div class="panel-kicker">MARKET SOURCE STATUS</div><h3 id="tableTitle">Observed research rows <span id="rowCounter" class="counter">0</span></h3></div><span id="snapshotMarker" class="table-marker">NO DATA LOADED</span></div><div class="table-scroll"><table><thead><tr><th>Sport</th><th>Event / ID</th><th>Market family</th><th>Evidence state</th><th>Reason</th></tr></thead><tbody id="marketTable"></tbody></table></div><div class="table-footer">Never includes odds, probabilities, EV, picks or stake sizes. Original input file stays in this browser tab.</div></div>
+        </section>
+        <section class="view" id="view-sources" aria-labelledby="sourcesTitle" hidden>
+          <div class="page-head compact"><div class="eyebrow">SOURCE OF TRUTH</div><h1 id="sourcesTitle">Receipts before <em>results.</em></h1><p>Imported status notes are local claims, not authenticated source proofs. No live bookmaker connections exist in this standalone page.</p></div>
+          <div class="source-hero panel"><div class="source-icon" aria-hidden="true">◇</div><div><h3>Authentication is not a visual badge.</h3><p>Real admission requires provider-origin receipts, timestamps, cross-book independence, complete point-in-time inputs, chronological calibration and independently matched closing lines.</p></div><span class="status-tag red">NO GATE CLEARED</span></div>
+          <div class="source-layout"><section class="panel"><div class="panel-top"><div><div class="panel-kicker">LOCAL SOURCE REGISTER</div><h3>Connections & receipts</h3></div></div><div id="sourceList" class="source-list"></div></section><section class="panel"><div class="panel-top"><div><div class="panel-kicker">DATA CONTRACT</div><h3>Safe local import</h3></div></div><div class="instructions"><p><strong>Supported:</strong> status-only JSON using <code>sportsedge-public-research-v1</code>.</p><p><strong>Not supported:</strong> credentials, account exports, sportsbook request payloads, exact odds, model probabilities, calculated EV, bets or staking data.</p><p>Importing data makes it viewable in this tab; it never verifies the provider or opens Gate A–E. Nothing is transmitted or stored persistently.</p></div><div class="source-actions"><button class="button primary" id="sourceImport" type="button">Import snapshot</button><button class="button secondary" id="clearSnapshot" type="button">Clear loaded data</button></div><div class="input-note" id="snapshotDetails">No source file imported.</div></section></div>
+        </section>
+        <section class="view" id="view-toolkit" aria-labelledby="toolkitTitle" hidden>
+          <div class="page-head compact"><div class="eyebrow">CREATIVE + RESEARCH STACK</div><h1 id="toolkitTitle">Build better. <em>Stay grounded.</em></h1><p>A launchpad for the AI and design tools you shared. Links open the provider website; no accounts or APIs are connected to SportsEdge here.</p></div>
+          <div class="toolkit-heading"><div><div class="panel-kicker">PRODUCT DESIGN</div><h3>Interface inspiration</h3></div><span>7 LINKS</span></div><div class="tool-grid" id="designTools"></div>
+          <div class="toolkit-heading second"><div><div class="panel-kicker">AI WORKFLOW</div><h3>Research, media & creative</h3></div><span>12 LINKS</span></div><div class="tool-grid" id="aiTools"></div>
+          <div class="toolkit-disclaimer">External services have their own pricing, licensing, privacy and usage rules. Web extraction must use authorized access and cannot substitute for authenticated sportsbook quote receipts.</div>
+        </section>
+        <footer class="main-footer"><span>© SPORTSEDGE • RESEARCH CONSOLE V1</span><span>ZERO PAID DATA DEPENDENCIES · ZERO OFFICIAL BETS</span></footer>
+      </main>
+    </div>
+  </div>
+  <nav class="mobile-nav" aria-label="Mobile navigation"><button class="mobile-nav-item active" data-tab="overview">▦<span>Home</span></button><button class="mobile-nav-item" data-tab="markets">▤<span>Markets</span></button><button class="mobile-nav-item" data-tab="sources">◈<span>Sources</span></button><button class="mobile-nav-item" data-tab="toolkit">⌘<span>Toolkit</span></button></nav>
+  <input id="snapshotInput" type="file" accept=".json,application/json" hidden aria-label="Choose a local SportsEdge public snapshot JSON file">
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

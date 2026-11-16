@@ -1,0 +1,35 @@
+name: SportsEdge research console static UI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  console-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Parse JS without runtime or dependencies
+        run: |
+          node --check web/console/core.js
+          node --check web/console/app.js
+      - name: Run 100% offline fail-closed data-contract tests
+        run: node --test web/console/test-core.js
+      - name: Assert no remote JS/CSS, credentials or active wager copy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('web/console/index.html').read_text()
+          assert 'https://' not in html, 'External scripts and resources must be absent from HTML'
+          assert '<script defer src="./core.js"' in html
+          assert '<script defer src="./app.js"' in html
+          assert 'PAPER / 0u' in html
+          assert 'sportsedge-public-research-v1' in Path('web/console/core.js').read_text()
+          assert '0' in html
+          print('STATIC_UI_NO_EXTERNAL_IMPORTS; PAPER_0u')
+          PY
