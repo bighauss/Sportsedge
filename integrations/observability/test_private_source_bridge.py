@@ -163,6 +163,33 @@ class PrivateBridgeTests(unittest.TestCase):
         _, report = transform(self.raw(self.attempt))
         self.assertIn("ORIGINAL_RECEIPT_CONTENT_MISMATCH", report["rows"][0]["reason"])
 
+    def test_original_quote_boolean_cannot_equal_integer_price(self):
+        # Python True == 1 must not bind a claimed numeric quote to boolean bytes.
+        self.attempt["take"]["price_american"] = True
+        original = self.attempt["originals"]["take"]
+        body = json.loads(Path(original["path"]).read_text())
+        body["price_american"] = 1
+        raw = json.dumps(body).encode()
+        Path(original["path"]).write_bytes(raw)
+        original["sha256"] = digest(raw)
+        self.attempt["take"]["sha256"] = digest(raw)
+        _, report = transform(self.raw(self.attempt))
+        self.assertIn("ORIGINAL_RECEIPT_CONTENT_MISMATCH:price_american",
+                      report["rows"][0]["reason"])
+
+    def test_original_quote_float_cannot_equal_integer_price(self):
+        self.attempt["take"]["price_american"] = 200.0
+        original = self.attempt["originals"]["take"]
+        body = json.loads(Path(original["path"]).read_text())
+        body["price_american"] = 200
+        raw = json.dumps(body).encode()
+        Path(original["path"]).write_bytes(raw)
+        original["sha256"] = digest(raw)
+        self.attempt["take"]["sha256"] = digest(raw)
+        _, report = transform(self.raw(self.attempt))
+        self.assertIn("ORIGINAL_RECEIPT_CONTENT_MISMATCH:price_american",
+                      report["rows"][0]["reason"])
+
     def test_claimed_source_after_freeze_blocks(self):
         self.attempt["source"]["captured_utc"] = "2026-11-15T17:46:00Z"
         _, report = transform(self.raw(self.attempt))
