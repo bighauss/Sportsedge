@@ -20,7 +20,7 @@ From models/cbb run:
     python -m unittest -v test_point_in_time_score_walkforward.py
     python point_in_time_score_walkforward.py /private/cbb/frozen_games.json --report /private/cbb/new_score_report.json --min-prior 30 --max-quote-age-hours 24
 
-The rolling evaluator only uses earlier score outcomes whose FINAL publication timestamp is strictly before the current prediction freeze, within the same season. A minimum of 30 earlier released outcomes is mandatory. Scores and predictive dispersions are not fitted using later game results.
+The rolling evaluator only uses earlier score outcomes whose FINAL publication AND original archive-capture timestamps are BOTH strictly before the current prediction freeze, within the same season. A minimum of 30 earlier released outcomes is mandatory. Scores and predictive dispersions are not fitted using later game results.
 
 ## Report
 
