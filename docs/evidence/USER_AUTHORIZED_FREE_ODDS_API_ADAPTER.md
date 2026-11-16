@@ -80,6 +80,22 @@ Once both captures exist, run the existing `ledger/historical_clv_bridge.py` wit
 
 No account credentials, local executor, cron job, provider schedule or independent DraftKings receipt was created automatically. A missing key, missing real provider event ID, public checkout destination, stale/one-sided odds or post-start market remains BLOCK/PAPER; unmatched markets are visible with rejection counts. This is a convenience command, not a replacement for the separately verified source provenance, finalized lineup evidence, market-specific model calibration, or Issue #10 release gates.
 
+## Reconcile all planned event snapshots after TAKE/CLOSE (offline, no API key)
+
+When the authorized local runtime has already captured TAKE and CLOSE observations, run **one independent complete-census check** before using any research CLV average:
+
+```sh
+python -m sportsedge.odds.capture_plan_reconciliation \
+  --plan /private/sportsedge-original-odds/nfl_capture_plan.json \
+  --output /private/sportsedge-original-odds/nfl_capture_coverage.json
+```
+
+The command makes **zero** network requests and spends **zero** API credits. It rechecks the approved full-slate plan and original private event catalog, inspects each actual archived provider raw/manifest pair, and recalculates every normalized TAKE/CLOSE CSV **from original raw provider response bytes**. Both the CSV and its audit sidecar must agree with exact-source prices, hashes, event ID, requested markets/books and kickoff; a recalculated CSV hash alone cannot conceal edited odds. Stale/absent source evidence is kept as an explicit block.
+
+Its JSON output includes *every event from the original planned denominator*, with separate TAKE and CLOSE statuses and missing/duplicate/rejected snapshot counts. Two TAKE files for one event are **both quarantined**, rather than selecting the favorable one. Raw provider captures with no normalized phase, invalid original manifests or off-plan IDs remain visible as unresolved evidence. Even `PAPER_0U_ALL_PLAN_CAPTURE_FILES_CONSISTENT` only proves **local archive consistency**; it never upgrades third-party aggregator source claims into verified original book receipts, bets, independent +EV or official CLV. The output is private create-only mode 0600 and retains `official_counted=0`, `approved_stake_u=0`.
+
+This is **not** an automatic scheduler or a promise that a full slate has already been captured. The actual account, plan, separate T−60 TAKE/T−5 CLOSE execution, original DK and independent-book authentication, outcomes and forward calibration remain external requirements. If the operator never captured a market, the report shows missing evidence instead of inventing it.
+
 ## Private raw captures → provisional price-history comparison
 
 The built-in six-sport source-archival path can now normalize **only** paired, fresh, point-in-time full-game moneylines, spreads and totals from the user-authorized **The Odds API** raw responses into the strict historical CLV CSV contract. This supplies a concrete free-tier **prospective** closing-price workflow; it does NOT provide the provider's past historical odds on the free plan, convert relayed prices into independent DK receipts, or connect BestBook automatically.
@@ -107,4 +123,4 @@ PGA **Majors outrights** are addressed by a separate provider-specific path, not
 
 The provider's documented free tier has **500 credits/month**, current odds only. Its historical odds endpoint is paid; this source cannot retroactively fill pre-kickoff prices that were never saved. Budget polling frequency to the rate and credit allowance shown by the genuine provider response. Never store API keys in code, chat, CI, GitHub or manifests.
 
-**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle sportsedge.odds.test_event_discovery sportsedge.odds.test_quota_capture_plan sportsedge.odds.test_planned_capture_guard -v` (synthetic only).
+**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle sportsedge.odds.test_event_discovery sportsedge.odds.test_quota_capture_plan sportsedge.odds.test_planned_capture_guard sportsedge.odds.test_capture_plan_reconciliation -v` (synthetic only).

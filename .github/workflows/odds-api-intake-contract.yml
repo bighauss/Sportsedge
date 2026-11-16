@@ -14,6 +14,8 @@ on:
       - 'sportsedge/odds/test_quota_capture_plan.py'
       - 'sportsedge/odds/planned_capture_guard.py'
       - 'sportsedge/odds/test_planned_capture_guard.py'
+      - 'sportsedge/odds/capture_plan_reconciliation.py'
+      - 'sportsedge/odds/test_capture_plan_reconciliation.py'
       - 'sportsedge/odds/test_prospective_clv_cycle.py'
       - 'ledger/historical_clv_bridge.py'
       - '.github/workflows/odds-api-intake-contract.yml'
@@ -37,4 +39,4 @@ jobs:
         with:
           python-version: '3.11'
       - name: Run synthetic provider identity, key redaction, and no-live-bet tests
-        run: python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle sportsedge.odds.test_event_discovery sportsedge.odds.test_quota_capture_plan sportsedge.odds.test_planned_capture_guard -v
+        run: python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle sportsedge.odds.test_event_discovery sportsedge.odds.test_quota_capture_plan sportsedge.odds.test_planned_capture_guard sportsedge.odds.test_capture_plan_reconciliation -v
