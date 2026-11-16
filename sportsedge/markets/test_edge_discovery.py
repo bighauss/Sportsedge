@@ -91,6 +91,12 @@ class EdgeSignalRedTeam(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"SIGNAL_QUOTE_IDENTITY"):
             evaluate_signal(priced,mk(line="-4.5"),take)
 
+    def test_tampered_no_vig_is_rejected_if_opposite_original_quote_present(self):
+        market, take, priced, opposite, _ = priced_home()
+        false_market = dict(priced, no_vig_market_p_conditional=.70)
+        with self.assertRaisesRegex(ValueError, "SIGNAL_NO_VIG_PAIR_MISMATCH"):
+            evaluate_signal(false_market, market, take, opposite)
+
     def test_negative_model_disagreement_retained_not_shortlisted(self):
         m, take, priced, other, _=priced_home(home_wins=400)
         signal=evaluate_signal(priced,m,take)
@@ -133,7 +139,7 @@ class EdgeSignalRedTeam(unittest.TestCase):
 
     def test_failure_in_simulation_pricing_never_yields_signal(self):
         m=mk()
-        take=quote(m,observed=D+timedelta(minutes=1))
+        take=quote(m,observed=D-timedelta(minutes=8))
         other=quote(mk(selection="AWAY",line="3.5"),receipt="r2",quote_id="q2")
         board=run_research_board(batch(),(MarketCandidate(
             m,take,other,{"sport":"NFL"}),),D)
