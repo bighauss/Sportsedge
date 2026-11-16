@@ -17,3 +17,18 @@ Schema version `sportsedge-issue10-structural-v1`, with exact keys `schema`, `ca
 **What it absolutely does not prove:** Self-supplied timestamps, hashes, labels, price counts, claimed book identity, roster observations, calibration files or settlement timestamps are **NOT trusted evidence**. This tool does not verify provider transport, cryptographic signatures, PIT publication by an independent source, real slate completeness, CLV fair-price accuracy or independent human approval. Even when every structural threshold is satisfied, `release_certified=false`, `approved_stake_u=0`, `official_counted=0`, and every gate `externally_certified=false`. A separately approved independent credentialed evaluation process is mandatory for any real promotion.
 
 Reports are create-only, include input SHA-256 and aggregate counts/reasons but not player, sportsbook, event or raw quote fields. Raw provider captures, actual bets/results and credentials remain in restricted Drive.
+
+## Private receipt boundary and deterministic report creation
+
+The tool refuses both source manifests and report destinations inside the
+public SportsEdge GitHub checkout, including symlinked paths and nested
+working-directory invocations. Put them in an access-restricted private
+workspace. Invalid `NaN`/`Infinity` JSON literals fail closed. The tool
+serializes its entire paper-only report before creating the destination with
+exclusive-create and owner-only file permissions on POSIX platforms. It
+refuses to overwrite any existing result.
+
+These are **local data-integrity controls**, not provider attestation,
+independent immutable storage, or a secure replacement for access controls.
+No report can certify an OFFICIAL bet or lift Issue #10 without external
+source verification and distinct owner-signed approval.

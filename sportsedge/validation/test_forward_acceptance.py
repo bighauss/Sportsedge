@@ -184,6 +184,60 @@ class AuditContract(unittest.TestCase):
             self.assertTrue(r["input_sha256"].startswith("sha256:"))
             with self.assertRaises(FileExistsError):report_file(source,out)
 
+    def test_private_input_and_output_must_be_outside_public_checkout(self):
+        repo = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp)/"source.json"
+            src.write_text(json.dumps(fixture(3,1,1)))
+            bad_output = repo/"sportsedge"/"validation"/"do_not_create_private_report.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_ACCEPTANCE_REPORT_INSIDE_PUBLIC_REPOSITORY"):
+                report_file(src, bad_output)
+            self.assertFalse(bad_output.exists())
+            bad_input = repo/"sportsedge"/"validation"/"do_not_read_private_evidence.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_ACCEPTANCE_INPUT_INSIDE_PUBLIC_REPOSITORY"):
+                report_file(bad_input, Path(tmp)/"out.json")
+
+    def test_symlinked_public_repo_path_is_refused(self):
+        repo = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp)/"source.json"
+            src.write_text(json.dumps(fixture(3,1,1)))
+            symlink = Path(tmp)/"public_alias"
+            try:
+                symlink.symlink_to(repo/"sportsedge", target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+            with self.assertRaisesRegex(ValueError, "PRIVATE_ACCEPTANCE_REPORT_INSIDE_PUBLIC_REPOSITORY"):
+                report_file(src, symlink/"validation"/"do_not_write.json")
+
+    def test_nonfinite_manifest_token_rejected_without_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp)/"source.json"
+            dest = Path(tmp)/"report.json"
+            raw = json.dumps(fixture(1,0,0))
+            raw = raw.replace('"price_rows": 10', '"price_rows": NaN')
+            src.write_text(raw)
+            with self.assertRaisesRegex(ValueError, "NONFINITE_MANIFEST_JSON"):
+                report_file(src, dest)
+            self.assertFalse(dest.exists())
+
+    def test_create_only_private_report_mode_and_original_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp)/"source.json"
+            dest = Path(tmp)/"report.json"
+            src.write_text(json.dumps(fixture(1,1,1)))
+            original = src.read_bytes()
+            report = report_file(src, dest)
+            self.assertFalse(report["release_certified"])
+            self.assertEqual(src.read_bytes(), original)
+            self.assertEqual(json.loads(dest.read_text())["state"],
+                             "PAPER_0U_EXTERNAL_EVIDENCE_NOT_AUTHENTICATED")
+            import os, stat
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(dest.stat().st_mode), 0o600)
+            with self.assertRaises(FileExistsError):
+                report_file(src, dest)
+
     def test_duplicate_manifest_json_key_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
