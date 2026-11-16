@@ -103,6 +103,14 @@ class TrainingOnlyFitter(unittest.TestCase):
         self.assertEqual(report["blocked_reasons"]["DUPLICATE_EVENT_ALL_COPIES_QUARANTINED"],2)
         self.assertIsNone(report["sd_total"])
 
+    def test_whitespace_and_case_variants_cannot_hide_duplicate_events(self):
+        rows=records(self.base)
+        rows[3]["event_id"]="  "+rows[2]["event_id"].upper()+"  "
+        x=self.fit(rows)
+        self.assertEqual(x["blocked_rows"],2)
+        self.assertEqual(x["blocked_reasons"]["DUPLICATE_EVENT_ALL_COPIES_QUARANTINED"],2)
+        self.assertEqual(x["status"],"BLOCK_DISPERSION_FIT")
+
     def test_mixed_frozen_model_hashes_block_even_if_scores_valid(self):
         rows=records(self.base)
         rows[1]["model_sha256"]="sha256:"+"c"*64
