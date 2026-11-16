@@ -21,6 +21,12 @@ def row(i=0, market="SPREAD", selection="HOME", line=-3.0):
     return {
         "sport":"NFL","game_id":f"game{i}","home_id":"CHI","away_id":"GB",
         "market":market,"selection":selection,"book":"DraftKings",
+        "period":"FG",
+        "provider_event_id":f"dk_event_{i}",
+        "provider_market_id":f"dk_market_{market}_{i}",
+        "provider_outcome_id":f"dk_outcome_{selection}_{i}",
+        "provider_opposite_outcome_id":f"dk_opposite_{i}",
+        "quote_receipt_id":f"dk_quote_{i}",
         "home_spread_or_total_line":line,
         "american_taken":-110,"american_opposite":-110,
         "model_p_win":0.5,"model_p_push":0.25,"model_p_loss":0.25,
@@ -200,6 +206,23 @@ class NFLPITMarketBenchmarkTests(unittest.TestCase):
         self.assertEqual(out["market_evaluations"]["SPREAD"]["status"],"PAPER_HOLD_0U")
         self.assertFalse(out["market_quotes_verified"])
         self.assertFalse(out["closing_line_verified"])
+
+    def test_non_fg_period_and_provider_id_collisions_are_rejected(self):
+        a=row()
+        a["period"]="1H"
+        out=evaluate_market_rows([a])
+        self.assertIn("EXPLICIT_FULL_GAME_PERIOD_REQUIRED",
+                      out["rejected_rows"][0]["reason"])
+        a=row()
+        a["provider_outcome_id"]=a["provider_opposite_outcome_id"]
+        out=evaluate_market_rows([a])
+        self.assertIn("SAME_PROVIDER_OUTCOME_ID_BOTH_SIDES",
+                      out["rejected_rows"][0]["reason"])
+        a=row()
+        a["provider_market_id"]=""
+        out=evaluate_market_rows([a])
+        self.assertIn("EVENT_OR_BOOK_ID_MISSING",
+                      out["rejected_rows"][0]["reason"])
 
     def test_custom_freshness_limit_must_be_bounded(self):
         with self.assertRaisesRegex(ValueError,"INVALID_PREGAME_FRESHNESS_LIMIT"):
