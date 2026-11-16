@@ -25,6 +25,16 @@ Run:
   python ledger/close_snapshot_archive.py /private/capture_manifest.json --private-ledger /private/snapshots.ndjson
   cd ledger && python test_close_snapshot_archive.py
 
+Source manifests and private ledger destinations are refused if they resolve
+inside the SportsEdge public Git checkout, regardless of the process working
+directory or symlink paths. Original CSV rows and formatting are never edited.
+The intake now fails on duplicate CSV headers, overlong rows, non-finite
+numeric lines, duplicate selections whose numeric lines differ only in
+formatting (e.g. `49.5` vs `+049.500`), and a purported provider observation
+timestamp later than local capture. Distinct alternate lines remain distinct.
+Optional provider-observation metadata and the local hash chain still
+**do not** independently authenticate a provider or prove historical time.
+
 CLOSE requires time before kickoff and no farther than 10 minutes from start;
 TAKE permits earlier capture. Original CSV byte hashes are verified. The
 output is a local chained JSONL append, NOT a trusted clock, digitally signed
