@@ -50,8 +50,9 @@ def _identity(row):
     for name in ("event_id","market","selection"):
         if not isinstance(row.get(name),str) or not row[name].strip():
             raise ValueError("INCOMPLETE_BASE_SELECTION_ID")
-    base=(str(row.get("sport") or "").strip().upper(),
-          row["event_id"].strip(),_market_token(row["market"]),
+    # Omit sport from the *ambiguity family* to quarantine mixed legacy
+    # and full-identity copies. Exact keys still include sport separately.
+    base=(row["event_id"].strip(),_market_token(row["market"]),
           row["selection"].strip().casefold())
     extended=any(str(row.get(x) or "").strip() for x in IDENTITY_FIELDS)
     if not extended:
@@ -75,7 +76,8 @@ def _identity(row):
         raise ValueError("EXTENDED_PROP_PLAYER_AND_STAT_REQUIRED")
     if market in ("teamtotal","teamtotals","tt") and not team:
         raise ValueError("EXTENDED_TEAM_TOTAL_SUBJECT_REQUIRED")
-    key=("EXACT_MARKET",*base,row["book"].strip().casefold(),
+    key=("EXACT_MARKET",row["sport"].strip().upper(),*base,
+         row["book"].strip().casefold(),
          row["period"].strip().casefold(),
          row["settlement"].strip().casefold(),line,player,team,stat)
     return base,key,"EXACT_MARKET"
@@ -96,8 +98,7 @@ def parse(rows):
             if isinstance(r,dict) and all(isinstance(r.get(f),str) and
                                          r[f].strip() for f in
                                          ("event_id","market","selection")):
-                invalid_bases.add((str(r.get("sport") or "").strip().upper(),
-                                   r["event_id"].strip(),
+                invalid_bases.add((r["event_id"].strip(),
                                    _market_token(r["market"]),
                                    r["selection"].strip().casefold()))
     good=[];blocked=[]
