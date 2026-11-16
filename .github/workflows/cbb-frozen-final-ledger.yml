@@ -1,0 +1,28 @@
+name: CBB original frozen-final ledger synthetic tests
+on:
+  push:
+    paths:
+      - "models/cbb/cbbd_frozen_final_join.py"
+      - "models/cbb/test_cbbd_frozen_final_join.py"
+      - ".github/workflows/cbb-frozen-final-ledger.yml"
+  pull_request:
+    paths:
+      - "models/cbb/cbbd_frozen_final_join.py"
+      - "models/cbb/test_cbbd_frozen_final_join.py"
+      - ".github/workflows/cbb-frozen-final-ledger.yml"
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile strict CBB original-to-final join
+        run: python -m compileall -q models/cbb/cbbd_frozen_final_join.py models/cbb/test_cbbd_frozen_final_join.py
+      - name: Original board census and final receipt integrity tests (offline)
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbbd_frozen_final_join.py
