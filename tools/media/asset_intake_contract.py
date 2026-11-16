@@ -38,15 +38,15 @@ def preflight(raw, receipt, *, now_utc):
     captured, now = utc(receipt.get("captured_utc")), utc(now_utc)
     if captured > now:
         raise MediaHold("FUTURE_CAPTURE")
-    if receipt["media_type"] == "image/png" and not raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    if receipt["media_type"] == "image/png" and not raw.startswith(b"\x89PNG\r\n\x1a\n"):
         raise MediaHold("MEDIA_SIGNATURE_MISMATCH")
-    if receipt["media_type"] == "image/jpeg" and not raw.startswith(b"\\xff\\xd8\\xff"):
+    if receipt["media_type"] == "image/jpeg" and not raw.startswith(b"\xff\xd8\xff"):
         raise MediaHold("MEDIA_SIGNATURE_MISMATCH")
     if receipt["media_type"] == "image/webp" and not (raw.startswith(b"RIFF") and raw[8:12] == b"WEBP"):
         raise MediaHold("MEDIA_SIGNATURE_MISMATCH")
     if receipt["media_type"] == "audio/wav" and not (raw.startswith(b"RIFF") and raw[8:12] == b"WAVE"):
         raise MediaHold("MEDIA_SIGNATURE_MISMATCH")
-    if receipt["media_type"] == "audio/mpeg" and not (raw.startswith(b"ID3") or raw[:1] == b"\\xff"):
+    if receipt["media_type"] == "audio/mpeg" and not (raw.startswith(b"ID3") or raw[:1] == b"\xff"):
         raise MediaHold("MEDIA_SIGNATURE_MISMATCH")
     return {"status": "PRIVATE_MEDIA_READY_FOR_HUMAN_REVIEW", "publish_approved": False,
             "sha256": receipt["sha256"], "asset_id": receipt["asset_id"],
