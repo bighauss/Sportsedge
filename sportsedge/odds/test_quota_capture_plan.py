@@ -205,5 +205,55 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(report["source_event_manifest_filename"],p.name)
         self.assertEqual(report["sport"],"NFL")
 
+    def test_rehashed_catalog_team_mismatch_still_refused_against_raw(self):
+        p=self.roster()
+        meta=json.loads(p.read_text())
+        target=self.root/meta["catalog_filename"]
+        edited=target.read_text().replace("Home 0","Imposter Home",1)
+        target.write_text(edited)
+        meta["catalog_sha256"]="sha256:"+sha256(edited.encode()).hexdigest()
+        p.write_text(json.dumps(meta))
+        with self.assertRaisesRegex(PlanningBlocked,"EVENT_RAW_TO_CATALOG_IDENTITY_DRIFT"):
+            self.plan(p)
+
+    def test_rehashed_original_kickoff_mismatch_still_refused_against_catalog(self):
+        p=self.roster()
+        meta=json.loads(p.read_text())
+        target=self.root/meta["original_raw_filename"]
+        raw=json.loads(target.read_text())
+        raw[0]["commence_time"]=(NOW+timedelta(minutes=61)).isoformat()
+        changed=json.dumps(raw).encode()
+        target.write_bytes(changed)
+        meta["original_raw_sha256"]="sha256:"+sha256(changed).hexdigest()
+        p.write_text(json.dumps(meta))
+        with self.assertRaisesRegex(PlanningBlocked,"EVENT_RAW_TO_CATALOG_IDENTITY_DRIFT"):
+            self.plan(p)
+
+    def test_rehashed_raw_duplicate_provider_event_id_fails(self):
+        p=self.roster()
+        meta=json.loads(p.read_text())
+        target=self.root/meta["original_raw_filename"]
+        raw=json.loads(target.read_text())
+        raw[1]["id"]=raw[0]["id"]
+        changed=json.dumps(raw).encode()
+        target.write_bytes(changed)
+        meta["original_raw_sha256"]="sha256:"+sha256(changed).hexdigest()
+        p.write_text(json.dumps(meta))
+        with self.assertRaisesRegex(PlanningBlocked,"EVENT_ORIGINAL_IDENTITY_INVALID"):
+            self.plan(p)
+
+    def test_rehashed_raw_sport_mismatch_fails_even_if_catalog_hash_valid(self):
+        p=self.roster()
+        meta=json.loads(p.read_text())
+        target=self.root/meta["original_raw_filename"]
+        raw=json.loads(target.read_text())
+        raw[0]["sport_key"]=SPORTS["NBA"]
+        changed=json.dumps(raw).encode()
+        target.write_bytes(changed)
+        meta["original_raw_sha256"]="sha256:"+sha256(changed).hexdigest()
+        p.write_text(json.dumps(meta))
+        with self.assertRaisesRegex(PlanningBlocked,"EVENT_ORIGINAL_IDENTITY_INVALID"):
+            self.plan(p)
+
 if __name__=="__main__":
     unittest.main()
