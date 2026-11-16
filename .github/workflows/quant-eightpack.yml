@@ -20,3 +20,5 @@ jobs:
         run: python -m unittest discover -s research/audit -p 'test_quant_*.py' -v
       - name: Run independent G18 grading defect regressions
         run: python -m unittest discover -s research/audit -p 'test_g18_*.py' -v
+      - name: Run printed-card EV arithmetic and appendix regressions
+        run: python -m unittest discover -s research/audit -p 'test_printed_card_*.py' -v
