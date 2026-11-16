@@ -36,6 +36,8 @@ def verify(manifest_bytes: bytes, source_bytes: dict[str, bytes]):
     try:
         m = json.loads(manifest_bytes, object_pairs_hook=_pairs,
                        parse_constant=lambda _: (_ for _ in ()).throw(Hold("NONFINITE_JSON")))
+    except Hold:
+        raise
     except (UnicodeError, ValueError, TypeError) as exc:
         raise Hold("MANIFEST_JSON_INVALID") from exc
     if not isinstance(m, dict) or m.get("schema") != "SPORTSEDGE_OBSERVABILITY_PIT_V1":
