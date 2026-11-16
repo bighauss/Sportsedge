@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from research.risk.v21_risk_contract import diagnostic
+from research.risk.strict_v21_v22 import diagnostic
 from .evidence import (DualSourceDecision, PITBinding, QuoteReceipt,
                        evaluate_dual_source, utc)
 from .storage import EvidenceChain
