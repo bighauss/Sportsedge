@@ -83,7 +83,7 @@ python integrations/observability/quality_gate.py \
   --out /private/sportsedge_quality_2026-11-15.json
 
 cd integrations/observability
-python -m unittest -v test_quality_gate.py test_optional_sinks.py test_promptfoo_policy.py
+python -m unittest -v test_quality_gate.py test_optional_sinks.py test_promptfoo_policy.py test_aggregate_monitor.py
 ```
 
 The evaluator creates a new report and refuses to overwrite a prior report.
@@ -133,6 +133,30 @@ SportsEdge's real generative agent, test factual claims, or measure its token
 costs. To evaluate a real agent later, bind actual **sanitized** outputs
 to the same `candidate` schema and keep a private trace/evaluation ledger.
 The GitHub workflow `promptfoo-offline.yml` runs only offline fixtures.
+
+## Compare two private monitoring runs (aggregate alerts)
+
+This is a small, sample-gated drift *screen* with fixed initial alert
+thresholds; it is not a claim of model drift or profit impact:
+
+```sh
+python integrations/observability/aggregate_monitor.py \
+  --baseline /private/quality_prior.json \
+  --current /private/quality_today.json \
+  --out /private/quality_comparison.json
+```
+
+Default candidate alerts only when both runs have ≥30 total rows:
+blocked-row rate increased by more than 5 percentage points; matched
+same-book/same-selection close coverage dropped by more than 10 percentage
+points where both have ≥30 valid rows; or descriptive binary Brier worsened
+by more than 0.03 where both have ≥30 settled W/L observations. The comparison
+keeps only counts, not event or player identifiers. With smaller samples it
+returns `INSUFFICIENT_SAMPLE_NO_DRIFT_CLAIM`.
+
+These thresholds are engineering defaults, not pre-registered model acceptance
+criteria. Composition differences or missing genuine source attestation can
+cause false alarms; assess independently before changing any model.
 
 ## Langfuse opt-in only
 
