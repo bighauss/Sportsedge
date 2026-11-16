@@ -6,7 +6,7 @@ Use games/<tag>_dk_screens.json (flat O/U + anytime-TD capture format).
   blended EV  = (0.30 p_model + 0.70 p_no_vig_market) * decimal - 1
 Two-sided markets are de-vigged; one-sided markets (anytime TD) use the posted implied
 probability (vig NOT removed), which makes blended EV conservative.
-Guard: model/market probability ratio outside 0.67-1.5 or gap >0.12 means the hand-set inputs are suspect, not an edge; those plays are listed, not shown as bets.
+Guard: shared models/common/guard.py (model/market ratio outside 0.67-1.5 or gap >0.12 means the inputs are suspect, not an edge; those plays are listed, not shown as bets).
 Rules: drop overs above / unders below the projection; thin props max 3 stars;
 Low confidence = -1 star and half size; quarter-Kelly on a 100u bankroll, min 0.25u,
 max 1.5u; 3u per player/theme cap; NO per-game cap (Isaac, Nov 15).
@@ -15,6 +15,8 @@ python models/nfl_dfs/run_it_card.py [game.json] [dk_screens.json] [sims]
 """
 import json, os, statistics, sys
 import showdown_mc as mc
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'common'))
+from guard import is_input_gap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -59,8 +61,7 @@ def main():
         if line is not None and mean is not None:
             if side == "Over" and line > mean + 1e-9: return
             if side == "Under" and line < mean - 1e-9: return
-        ratio = p_model / max(p_nv, 1e-9)
-        if ratio > 1.5 or ratio < 0.67 or abs(p_model - p_nv) > 0.12:
+        if is_input_gap(p_model, p_nv):
             disagree.append(dict(play=desc, price=odds, p_model=round(p_model, 3), p_market_nv=round(p_nv, 3)))
             return
         pb = 0.3 * p_model + 0.7 * p_nv
@@ -139,7 +140,7 @@ def main():
         pr = sum(stat_fn("anytime_td", p, tm, r, None) >= 1 for r in raw) / n
         add(f"{p} Anytime TD", "Prop", "Yes", None, o, pr, implied(o), None, thin=cfg["players"][p]["pos"] in ("TE",) and implied(o) < .1, group=p)
     plays.sort(key=lambda x: -x["blended_ev"])
-    # sizing: 3u per player/theme only (Isaac removed the 2u/game cap)
+    # sizing: 3u/theme only (Isaac removed the 2u/game cap) (player), correlated same-player counts once
     used, per = 0.0, {}
     for x in plays:
         room = 3.0 - per.get(x["group"], 0.0)
