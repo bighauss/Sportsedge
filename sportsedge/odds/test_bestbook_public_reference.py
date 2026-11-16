@@ -131,7 +131,8 @@ class BestBookPublicResearch(unittest.TestCase):
     def test_invalid_odds_cannot_be_used(self):
         raw = PUBLIC_FIXTURE.replace(b"DET \xe2\x88\x92135", b"DET +99")
         report = analyze(raw, read_at_utc=NOW)
-        self.assertIn("INVALID_DISPLAYED_AMERICAN_ODDS",
+        # A two-digit +99 fails the exact ML-pair grammar before price parsing.
+        self.assertIn("INVALID_DISPLAYED_ML_PAIR",
                       [x["reason"] for x in report["missing_or_blocked_public_rows"]])
         self.assertEqual(report["approved_stake_u"], 0)
 
