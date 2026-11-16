@@ -1,5 +1,7 @@
 # RISK_POLICY.md — SportsEdge stricter-of-v2.1/v2.2 lock
 
+**Effective date: 2026-11-15 (America/Chicago), research-only policy documentation; official release remains prohibited.**
+
 **Policy ID:** `SPORTSEDGE_STRICT_V21_V22_20261115_R1`  
 **Scope:** NFL, CFB, CBB, NBA, MLB, NHL, PGA; ALL market families.  
 **State:** PAPER / **0 approved units**, 0 official-counted selections, no auto-betting.  
@@ -12,6 +14,8 @@
 - **The v2.2 statement “NO per-game unit cap” is NOT adopted.** Keep the stricter v2.1 aggregate **2u per-event maximum**, including all correlated legs. This does not turn a multi-leg cluster into a single unbounded risk position.
 - Cap order: **0u official until A–E** > reject unsupported/unknown or incomplete evidence > 12-point gap HOLD > v2.2 dog cap and low-confidence shrink > v2.1 quarter-Kelly, caps and stop conditions. The strictest applicable bound wins, not the most recent wording.
 - No silent changes: a different risk limit, sizing rule, model weight or adoption judgment requires a new policy ID, separate diff, unseen-data test and explicit owner sign-off. Historical originals remain untouched.
+
+> **No silent changes. Any future change requires explicit PR + version bump.**
 
 ## Numeric and operational requirements
 
@@ -39,3 +43,5 @@ The `research/risk/strict_v21_v22.py` overlay is **diagnostic only** and default
 GitHub Issue [#10](https://github.com/bighauss/Sportsedge/issues/10) is the blocking source of truth. Each market needs authentic independent odds receipts (Gate A), PIT feature lineage (B), three leak-free registered calibration cycles (C), >=200 independently matched settled CLV triples (D), and fully connected v2.1/v2.2 risk and settlement audits (E), plus the documented 100-card and five-day evidence thresholds and signed promotion. Synthetic tests and local SHA-256s never satisfy an external authenticity gate.
 
 **Current release status:** none independently certified; **PAPER / 0u**. Market/odds discovery and research projections are separate from wager eligibility.
+
+Tag intent: `risk-policy-lock-2026-11-15` on the approved main commit only; verify `refs/tags/` after successful post-merge GitHub Actions. Do not confuse a branch, draft, or PR head with a Git tag.

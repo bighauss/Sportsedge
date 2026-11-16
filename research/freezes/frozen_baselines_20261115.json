@@ -1,0 +1,90 @@
+{
+  "schema": "sportsedge-research-code-freezes-v1",
+  "baseline_commit": "29c85365e27665f16ba378cf2c7fc9c81f5754c1",
+  "recorded_ct": "2026-11-15",
+  "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+  "release": "PAPER_0U",
+  "official_counted": 0,
+  "hash_type": "git_blob_sha1_content_address_not_authentication",
+  "evidence_scope": "PREFREEZE SOURCE-CODE PINS ONLY. True model freeze requires original input hashes, weights/config, witnessed pregame output probabilities, contemporaneous source timestamps, and an audit of the final exact commit. CBB original 496 picks missing; NHL standalone not integrated; PGA account unauthorized. No historical hashes or provider timestamps are inferred.",
+  "sports": {
+    "NFL": {
+      "status": "PREFREEZE_CODE_PIN_ONLY_PIT_DATA_MISSING",
+      "cohort": "2026_NFL_WEEKS_5_TO_9_RETROSPECTIVE_PLAYER_RESEARCH",
+      "sources": {
+        "models/nfl/epa_ridge_pit.py": "df4978dcfaaa2925344218302e58862da0eb2e1f",
+        "models/nfl/score_walkforward_pit.py": "3255312f2ecdaa7b5f905d78ec90bd4aa6297038"
+      },
+      "grade_record": "docs/evidence/FREEZE_AND_GRADE_PACKAGE_20261115.md",
+      "forward_state": "NOT_YET_AUTHENTICATED"
+    },
+    "CBB": {
+      "status": "PREFREEZE_CODE_PIN_ONLY_G18_ORIGINAL_MISSING",
+      "sources": {
+        "models/cbb/sportsedge_cbb_model.py": "f02dd29ef444f49cdf4560a86d5b8a517519081d",
+        "models/cbb/torvik_cbbd_pregame_bridge.py": "bfc75e0375d13d6be900c83f9bafe0f3deb10f62",
+        "models/cbb/cbbd_frozen_final_join.py": "45cb12d1d66ada5e7834008e9d402c8992e6dd28"
+      },
+      "grade_record": "docs/evidence/FREEZE_AND_GRADE_PACKAGE_20261115.md",
+      "forward_state": "PREREGISTERED_NO_VALID_PREGAME_ROWS_YET"
+    },
+    "CFB": {
+      "status": "CODE_BASELINE_LOCKED_UNCALIBRATED",
+      "sources": {
+        "models/cfb/sportsedge_cfb_model.py": "a07f4cd429e344e8ee0d131bdfa8e1ef7a91da20"
+      },
+      "forward_state": "WAITING_POINT_IN_TIME_INPUTS"
+    },
+    "NBA": {
+      "status": "CODE_BASELINE_LOCKED_UNCALIBRATED",
+      "sources": {
+        "models/nba/sportsedge_nba_model.py": "0036cb9a2a7eff9fed9b175a0175a963d20e6b3e"
+      },
+      "forward_state": "WAITING_POINT_IN_TIME_INPUTS"
+    },
+    "MLB": {
+      "status": "CODE_BASELINE_LOCKED_UNCALIBRATED",
+      "sources": {
+        "models/mlb/sportsedge_mlb_model.py": "bdedf10c09c307ee51fcec0f7da32cb4fa7974b8"
+      },
+      "forward_state": "WAITING_POINT_IN_TIME_INPUTS"
+    },
+    "NHL": {
+      "status": "PREFREEZE_CODE_PIN_ONLY_NEEDS_KERNEL_INTEGRATION",
+      "sources": {
+        "models/nhl/sportsedge_nhl_model.py": "7bdc447550e8ff5750ec3515a587fd92a65ba74c"
+      },
+      "forward_state": "WAITING_POINT_IN_TIME_INPUTS"
+    },
+    "PGA": {
+      "status": "CODE_BASELINE_LOCKED_UNCALIBRATED",
+      "sources": {
+        "models/pga/tournament_sim.py": "0d9ff5535eb5e4c7eabf16de6b929293b3f96e79"
+      },
+      "forward_state": "WAITING_AUTHORIZED_DATAGOLF_AND_MARKET_INPUTS"
+    }
+  },
+  "frozen_engine": {
+    "path": "engine/sportsedge_v5.py",
+    "git_blob_sha1": "e7f282e2ece2506227fed1681aab9c33607e50bc",
+    "original_sha256": "72ccaad75b066315f31137f40556321b7057a28119760a6a0b1c2e28da78e02f"
+  },
+  "risk_contract": {
+    "path": "research/risk/v21_risk_contract.py",
+    "git_blob_sha1": "f9758c771e1f4f482c5cad889c1883b5626ce9ae",
+    "limits": {
+      "daily_u": 5,
+      "game_u": 2,
+      "theme_u": 3,
+      "quarter_kelly": 0.25,
+      "initial_min_u": 0.25,
+      "initial_max_u": 1.5,
+      "model_blend": 0.3,
+      "market_blend": 0.7
+    },
+    "overlay_path": "research/risk/strict_v21_v22.py",
+    "overlay_git_blob_sha1": "03a0931ae6f5428ce912f4158d8fdbab4d236d6f",
+    "note": "Actual v2.2 addendum proposes NO per-game unit cap; v2.1 2u/game is stricter. Overlay additionally blocks >12-point model/market gaps and caps dog ML >=+200 at 0.25u. All diagnostic-only PAPER."
+  },
+  "initial_inspected_commit": "d9399409a86d63346b7fe0597c415fd406fd97fe"
+}
