@@ -199,6 +199,8 @@ def verify_provider_originals(finals, provider_raw, provider_manifest):
     This establishes local byte-to-derived-row agreement only. The provider
     identity and first-publication time still need independent attestation.
     """
+    if not isinstance(finals, dict):
+        raise Hold("CBBD_DERIVED_FINAL_REPORT_INVALID")
     raw = safe_path(provider_raw).read_bytes()
     man, _ = _load(provider_manifest)
     if not isinstance(man, dict) or man.get("format") != "CBBD_GAMES_CAPTURE_V1" or \
@@ -226,6 +228,8 @@ def verify_provider_originals(finals, provider_raw, provider_manifest):
         if isinstance(r, dict) and type(r.get("id")) is int and r["id"] > 0
     )
     for i, (raw_game, normalized) in enumerate(zip(provider_rows, finals["rows"])):
+        if not isinstance(normalized, dict):
+            raise Hold("CBBD_DERIVED_FINAL_ROW_NOT_OBJECT")
         if not isinstance(raw_game, dict):
             if normalized.get("status") == FINAL_ROW_STATUS:
                 raise Hold("CBBD_NON_OBJECT_SOURCE_CANNOT_BE_FINAL")
