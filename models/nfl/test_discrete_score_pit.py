@@ -1,6 +1,14 @@
 """Research-only empirical discrete NFL scoring regression tests."""
 from copy import deepcopy
 from contextlib import redirect_stdout
+import io
+import json
+import os
+from pathlib import Path
+import stat
+import tempfile
+from unittest.mock import patch
+from contextlib import redirect_stdout
 from hashlib import sha256
 from io import StringIO
 import json
@@ -14,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 import unittest
 
 from discrete_score_pit import score_distribution, main
+from score_walkforward_pit import REPO_ROOT, main
 from score_walkforward_pit import REPO_ROOT
 
 SHA = "sha256:" + "b" * 64
@@ -327,6 +336,145 @@ class DiscreteScorePrivateArchiveTests(unittest.TestCase):
         self.assertEqual(out["score_diagnostics"]["abs_margin_3_frequency"], .25)
         self.assertEqual(out["score_diagnostics"]["abs_margin_7_frequency"], .5)
         self.assertEqual(out["approved_stake_u"], 0)
+
+
+class DiscretePrivateCLITests(unittest.TestCase):
+    """Test real CLI file permissions and strict parsing with synthetic sources."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        target, history, lines = fixtures()
+        self.paths = {}
+        for name, value in (
+            ("target", target), ("history", history), ("lines", lines)
+        ):
+            path = self.root / (name + ".json")
+            path.write_text(json.dumps(value), encoding="utf-8")
+            self.paths[name] = path
+        self.paths["out"] = self.root / "score_result.json"
+
+    def run_cli(self, **overrides):
+        paths = dict(self.paths)
+        paths.update(overrides)
+        argv = [
+            "discrete_score_pit.py",
+            "--target", str(paths["target"]),
+            "--history", str(paths["history"]),
+            "--lines", str(paths["lines"]),
+            "--out", str(paths["out"]),
+        ]
+        with patch("sys.argv", argv), redirect_stdout(io.StringIO()):
+            return main()
+
+    def test_cli_private_output_create_only_0600_and_sha(self):
+        before = {key: path.read_bytes() for key, path in self.paths.items()
+                  if key != "out"}
+        self.run_cli()
+        destination = self.paths["out"]
+        self.assertTrue(destination.is_file())
+        self.assertEqual(stat.S_IMODE(destination.stat().st_mode), 0o600)
+        result = json.loads(destination.read_bytes())
+        self.assertEqual(result["status"], "PAPER_HOLD_0U")
+        self.assertEqual(result["approved_stake_u"], 0)
+        self.assertEqual(result["census"]["eligible_prior_residual_pairs"], 60)
+        self.assertEqual(set(result["local_input_sha256"]),
+                         {"target", "history", "lines"})
+        self.assertTrue(all(
+            before[name] == self.paths[name].read_bytes() for name in before))
+        original = destination.read_bytes()
+        with self.assertRaises(FileExistsError):
+            self.run_cli()
+        self.assertEqual(original, destination.read_bytes())
+
+    def test_duplicate_forecast_json_key_refused_before_output(self):
+        target = self.paths["target"]
+        raw = target.read_text(encoding="utf-8")
+        raw = raw.replace('"game_id": "target"',
+                          '"game_id": "target", "game_id": "spoof"', 1)
+        self.assertIn('"game_id": "spoof"', raw)
+        target.write_text(raw, encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "DUPLICATE_JSON_KEY"):
+            self.run_cli()
+        self.assertFalse(self.paths["out"].exists())
+
+    def test_nested_history_duplicate_source_key_refused(self):
+        path = self.paths["history"]
+        raw = path.read_text(encoding="utf-8")
+        raw = raw.replace('"final_home": 24',
+                          '"final_home": 24, "final_home": 999', 1)
+        self.assertIn('"final_home": 999', raw)
+        path.write_text(raw, encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "DUPLICATE_JSON_KEY"):
+            self.run_cli()
+        self.assertFalse(self.paths["out"].exists())
+
+    def test_market_line_duplicate_json_key_refused(self):
+        path = self.paths["lines"]
+        raw = path.read_text(encoding="utf-8")
+        raw = raw.replace('"game_total": 45.0',
+                          '"game_total": 45.0, "game_total": 44.5', 1)
+        self.assertIn('"game_total": 44.5', raw)
+        path.write_text(raw, encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "DUPLICATE_JSON_KEY"):
+            self.run_cli()
+        self.assertFalse(self.paths["out"].exists())
+
+    def test_json_nonfinite_literal_or_exponent_refused(self):
+        path = self.paths["lines"]
+        original = path.read_text(encoding="utf-8")
+        path.write_text(original.replace('"game_total": 45.0',
+                                         '"game_total": NaN'), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "NONFINITE_JSON_LITERAL"):
+            self.run_cli()
+        path.write_text(original.replace('"game_total": 45.0',
+                                         '"game_total": 1e9999'), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "NONFINITE_JSON_NUMBER"):
+            self.run_cli()
+        self.assertFalse(self.paths["out"].exists())
+
+    def test_checkout_source_and_output_paths_refused_before_read(self):
+        # Even an existing Python file in the public repo may never be
+        # passed as a JSON evidence input.
+        with self.assertRaisesRegex(ValueError,
+                                    "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+            self.run_cli(target=REPO_ROOT / "models/nfl/discrete_score_pit.py")
+        with self.assertRaisesRegex(ValueError,
+                                    "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+            self.run_cli(out=REPO_ROOT / "discrete_research_output.json")
+        self.assertFalse(self.paths["out"].exists())
+
+    def test_symlink_alias_resolving_into_checkout_refused(self):
+        alias = self.root / "repository-alias"
+        alias.symlink_to(REPO_ROOT, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError,
+                                    "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+            self.run_cli(history=alias / "models/nfl/test_discrete_score_pit.py")
+        with self.assertRaisesRegex(ValueError,
+                                    "PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO"):
+            self.run_cli(out=alias / "research_private.json")
+        self.assertFalse(self.paths["out"].exists())
+
+    def test_output_symlink_to_existing_private_file_refused(self):
+        original = self.root / "must_not_change.json"
+        original.write_text("old-data", encoding="utf-8")
+        alias = self.paths["out"]
+        alias.symlink_to(original)
+        with self.assertRaisesRegex(ValueError, "PRIVATE_OUTPUT_SYMLINK_REFUSED"):
+            self.run_cli()
+        self.assertEqual(original.read_text(encoding="utf-8"), "old-data")
+
+    def test_fsync_failure_removes_partial_output_but_not_inputs(self):
+        before = self.paths["history"].read_bytes()
+        with patch("score_walkforward_pit.os.fsync",
+                   side_effect=OSError("simulated write failure")):
+            with self.assertRaisesRegex(OSError, "simulated write failure"):
+                self.run_cli()
+        self.assertFalse(self.paths["out"].exists())
+        self.assertEqual(before, self.paths["history"].read_bytes())
+
+
 
 
 if __name__=="__main__":
