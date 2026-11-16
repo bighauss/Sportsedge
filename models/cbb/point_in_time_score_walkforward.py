@@ -15,6 +15,7 @@ from datetime import datetime
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 from statistics import mean, stdev
@@ -346,10 +347,58 @@ def _reject_constant(v):
 
 
 def _private(path):
-    resolved = Path(path).expanduser().resolve()
-    if resolved == ROOT or ROOT in resolved.parents:
-        raise ValueError("PRIVATE_SOURCE_AND_REPORT_REQUIRED_OUTSIDE_PUBLIC_REPO")
+    """Reject paths lexically inside the PUBLIC checkout OR resolving into it."""
+    lexical = Path(os.path.abspath(os.path.expanduser(str(path))))
+    resolved = lexical.resolve()
+    for candidate in (lexical, resolved):
+        if candidate == ROOT or ROOT in candidate.parents:
+            raise ValueError("PRIVATE_SOURCE_AND_REPORT_REQUIRED_OUTSIDE_PUBLIC_REPO")
     return resolved
+
+
+def _require_private_source(path):
+    source = _private(path)
+    if not source.is_file():
+        raise ValueError("PRIVATE_SOURCE_FILE_REQUIRED")
+    # A report with full provider IDs should never read from a public source
+    # whose file permissions expose private original quotes/results.
+    if source.stat().st_mode & 0o077:
+        raise ValueError("PRIVATE_SOURCE_FILE_MODE_MUST_BE_0600")
+    return source
+
+
+def _require_private_directory(path):
+    directory = _private(path)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if directory.stat().st_mode & 0o077:
+        raise ValueError("PRIVATE_OUTPUT_DIRECTORY_MODE_MUST_BE_0700")
+    return directory
+
+
+def _exclusive_private_write(path, data):
+    target = _private(path)
+    fd = None
+    created = False
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(str(target), flags, 0o600)
+        created = True
+        with os.fdopen(fd, "wb") as out:
+            fd = None
+            os.fchmod(out.fileno(), 0o600)
+            out.write(data)
+            out.flush()
+            os.fsync(out.fileno())
+    except BaseException:
+        if fd is not None:
+            os.close(fd)
+        if created:
+            try:
+                target.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def main(argv=None):
@@ -365,6 +414,8 @@ def main(argv=None):
         raise ValueError("INPUT_OUTPUT_COLLISION")
     if report.exists():
         raise FileExistsError("CREATE_ONLY_REPORT")
+    _require_private_directory(report.parent)
+    source = _require_private_source(source)
     raw=source.read_bytes()
     records=json.loads(raw.decode("utf-8-sig"),
                        object_pairs_hook=_no_duplicate_keys,
@@ -372,11 +423,10 @@ def main(argv=None):
     output=audit(records,min_prior=args.min_prior,
                  max_quote_age_hours=args.max_quote_age_hours)
     output["source_sha256"]=hashlib.sha256(raw).hexdigest()
-    # The report itself contains only provider-supplied records already included
-    # in the private input; NEVER write it into public Git.
-    with report.open("x",encoding="utf-8") as f:
-        json.dump(output,f,indent=2,sort_keys=True,allow_nan=False)
-        f.write("\n")
+    # Preserve original input bytes and fail closed on output write failures.
+    # Exclusive-create 0600/fsync prevents a permissive default umask leak.
+    payload = (json.dumps(output,indent=2,sort_keys=True,allow_nan=False) + "\n").encode("utf-8")
+    _exclusive_private_write(report,payload)
     return 0
 
 
