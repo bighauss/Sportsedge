@@ -1,0 +1,117 @@
+"""One-command private prospective odds capture + CLV CSV conversion.
+
+Run once for TAKE snapshot and separately in the last ten minutes pregame for
+a CLOSE snapshot. No daemon, scheduler, paid history, secret logging, bookmaker
+authentication, bet placement or official CLV. Never infer a real wager from a
+TAKE-labeled board snapshot; this is an archival role only.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from urllib.request import urlopen
+
+from sportsedge.odds.free_odds_aggregator_intake import capture, SPORTS
+from sportsedge.odds.the_odds_api_clv_export import write_export
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PHASES = frozenset({"TAKE", "CLOSE"})
+
+
+def private_root(location: Path) -> Path:
+    root = Path(location).resolve()
+    if root == REPO_ROOT or REPO_ROOT in root.parents:
+        raise ValueError("PRIVATE_CAPTURE_PATH_IS_PUBLIC_CHECKOUT")
+    return root
+
+
+def capture_cycle(
+    sport: str,
+    private_dir: Path,
+    event_id: str,
+    phase: str,
+    *,
+    markets: tuple[str, ...] = ("h2h", "spreads", "totals"),
+    bookmakers: tuple[str, ...] = ("draftkings", "fanduel"),
+    key: str | None = None,
+    opener=urlopen,
+):
+    """Capture only a genuine provider event ID via documented v4 HTTP GET.
+
+    The capture is local and carries no arbitrary provider endpoint selection.
+    Original response JSON remains unchanged and hash-verified by converter.
+    """
+    root = private_root(private_dir)
+    if phase not in PHASES:
+        raise ValueError("PHASE_MUST_BE_TAKE_OR_CLOSE")
+    if sport not in SPORTS:
+        raise ValueError("UNSUPPORTED_SPORT")
+    if not isinstance(event_id, str) or not event_id:
+        raise ValueError("REAL_PROVIDER_EVENT_ID_REQUIRED")
+    info = capture(
+        sport,
+        root,
+        key=key,
+        event_id=event_id,
+        markets=markets,
+        bookmakers=bookmakers,
+        opener=opener,
+    )
+    raw_name = info["raw_filename"]
+    if raw_name != Path(raw_name).name or not raw_name.endswith(".json"):
+        raise ValueError("UNSAFE_PROVIDER_ORIGINAL_FILENAME")
+    stem = Path(raw_name).stem
+    manifest = root / (stem + ".manifest.json")
+    if not manifest.is_file() or not manifest.resolve().is_relative_to(root):
+        raise ValueError("ORIGINAL_PROVIDER_MANIFEST_MISSING")
+    # CLOSE is an archived snapshot role. Downstream comparison still requires
+    # an exact observed close inside its own 10-minute event-start window.
+    normalized_file = root / (stem + "." + phase.lower() + ".csv")
+    exported = write_export(manifest, normalized_file, "TAKE" if phase == "TAKE" else "HISTORY")
+    return {
+        "schema": "sportsedge-prospective-clv-cycle-v1",
+        "state": (
+            "PAPER_0U_PROSPECTIVE_CAPTURE_NOT_ORIGINAL_BOOK_AUTHENTICATED"
+            if exported["rows_generated"]
+            else "BLOCK_NO_VALID_FRESH_TWO_SIDED_QUOTES"
+        ),
+        "sport": sport,
+        "phase": phase,
+        "event_id_provider_native": event_id,
+        "original_json_filename": raw_name,
+        "original_manifest_filename": manifest.name,
+        "normalized_csv_filename": normalized_file.name,
+        "normalized_audit_filename": normalized_file.name + ".audit.json",
+        "original_raw_sha256": info["original_raw_sha256"],
+        "normalized_csv_sha256": exported["normalized_csv_sha256"],
+        "provider_credits_remaining": info["provider_remaining_credits"],
+        "raw_provider_outcomes_returned": info["outcomes_returned"],
+        "normalized_two_sided_selection_rows": exported["rows_generated"],
+        "market_groups_quarantined_by_reason": exported["market_groups_quarantined_by_reason"],
+        "original_books_independently_authenticated": False,
+        "provider_quote_clock_externally_attested": False,
+        "official_counted": 0,
+        "approved_stake_u": 0,
+    }
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("sport", choices=sorted(SPORTS))
+    parser.add_argument("private_dir", type=Path)
+    parser.add_argument("--event-id", required=True, help="A real ID from the authorized upstream provider")
+    parser.add_argument("--phase", choices=sorted(PHASES), required=True)
+    parser.add_argument("--markets", nargs="+", default=["h2h", "spreads", "totals"])
+    parser.add_argument("--bookmakers", nargs="+", default=["draftkings", "fanduel"])
+    args = parser.parse_args(argv)
+    # API key remains in SPORTSEDGE_ODDS_API_KEY, not argv or any returned file.
+    result = capture_cycle(
+        args.sport, args.private_dir, args.event_id, args.phase,
+        markets=tuple(args.markets), bookmakers=tuple(args.bookmakers),
+    )
+    print(json.dumps(result, sort_keys=True, indent=2))
+
+
+if __name__ == "__main__":
+    main()
