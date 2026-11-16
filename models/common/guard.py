@@ -3,14 +3,25 @@ A play is an input gap (hidden, listed) when the model probability is more than 
 the no-vig market probability, or the gap exceeds 0.12. Same-game plays on one side/total share a theme group
 (see exposure_group) so they size as one exposure. No per-game unit cap."""
 
+import math
+
 RATIO_MAX, RATIO_MIN, GAP_MAX = 1.5, 0.67, 0.12
 
 
 def is_input_gap(p_model: float, p_market_nv: float) -> bool:
-    if p_market_nv <= 0:
+    # Invalid, missing, non-finite or impossible probabilities must never
+    # evade the guard through NaN comparison semantics.
+    try:
+        model = float(p_model)
+        market = float(p_market_nv)
+    except (TypeError, ValueError, OverflowError):
         return True
-    ratio = p_model / p_market_nv
-    return ratio > RATIO_MAX or ratio < RATIO_MIN or abs(p_model - p_market_nv) > GAP_MAX
+    if not (math.isfinite(model) and math.isfinite(market)):
+        return True
+    if not (0.0 <= model <= 1.0 and 0.0 < market < 1.0):
+        return True
+    ratio = model / market
+    return ratio > RATIO_MAX or ratio < RATIO_MIN or abs(model - market) > GAP_MAX
 
 
 def exposure_group(game: str, kind: str, subject: str) -> str:
