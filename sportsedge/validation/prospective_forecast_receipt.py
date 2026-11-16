@@ -11,9 +11,11 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 import json
+import math
 import os
 from pathlib import Path
 import re
+import stat
 
 from sportsedge.validation.seven_sport_pit_freeze import (
     _private_path, _raw_file, _utc, _unique_json, SPORTS, FAMILIES,
@@ -32,11 +34,24 @@ ROW_FIELDS = frozenset({"market_identity", "model_probability"})
 MAX_FORECAST_BYTES = 5_000_000
 
 
+def _finite_json(value):
+    # Native json.loads accepts numeric exponent overflow like 1e999 as inf.
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("NONFINITE_JSON")
+    if isinstance(value, dict):
+        for item in value.values():
+            _finite_json(item)
+    elif isinstance(value, list):
+        for item in value:
+            _finite_json(item)
+
+
 def _parse(raw, label):
     try:
         data = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json,
                           parse_constant=lambda x: (_ for _ in ()).throw(
                               ValueError("NONFINITE_JSON:" + x)))
+        _finite_json(data)
     except (UnicodeError, ValueError) as exc:
         raise ValueError("INVALID_OR_AMBIGUOUS_JSON:" + label) from exc
     if not isinstance(data, dict):
@@ -197,11 +212,53 @@ def assess(freeze, forecast, *, original_freeze, original_forecast, actual_now=N
     }
 
 
-def record_files(freeze_file, forecast_file, destination, *, actual_now=None):
+def _trusted_registry_root(value):
+    """Enforce one operator-provisioned owner-private shared original namespace.
+
+    The operator must fix this root across ALL writers. This code cannot attest
+    to other hosts, other roots, filesystem integrity or published source times.
+    """
+    if value is None or not isinstance(value, (str, os.PathLike)):
+        raise ValueError("TRUSTED_FORECAST_REGISTRY_REQUIRED")
+    raw = Path(value)
+    if not raw.is_absolute():
+        raise ValueError("TRUSTED_FORECAST_REGISTRY_ABSOLUTE_REQUIRED")
+    root = Path(os.path.abspath(os.fspath(raw)))
+    repo = Path(__file__).resolve().parents[2]
+    current = Path.cwd().resolve()
+    if (root == repo or repo in root.parents or
+            root == current or current in root.parents or
+            any(p.is_symlink() for p in (root, *root.parents))):
+        raise ValueError("TRUSTED_FORECAST_REGISTRY_PUBLIC_OR_SYMLINK_REFUSED")
+    if not root.is_dir():
+        raise ValueError("TRUSTED_FORECAST_REGISTRY_DIRECTORY_MISSING")
+    info = root.stat()
+    if (not stat.S_ISDIR(info.st_mode) or
+            stat.S_IMODE(info.st_mode) != 0o700 or
+            info.st_uid != os.getuid()):
+        raise ValueError("TRUSTED_FORECAST_REGISTRY_OWNER_0700_REQUIRED")
+    return root
+
+
+def _canonical_receipt_path(root, report):
+    """One immutable slot per prior original PIT freeze and market identity."""
+    fields = ("sport", "event_id", "market_family", "period",
+              "original_freeze_sha256")
+    key = [report[f] for f in fields]
+    if any(not isinstance(v, str) or not v for v in key):
+        raise ValueError("FORECAST_REGISTRY_IDENTITY_INVALID")
+    identifier = sha256(json.dumps(key, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest()
+    return root / ("forecast-receipt-" + identifier + ".json")
+
+
+def record_files(freeze_file, forecast_file, destination=None, *,
+                 registry_root, actual_now=None):
     src = _private_path(freeze_file, "freeze")
     pred = _private_path(forecast_file, "forecast")
-    out = _private_path(destination, "receipt", output=True)
-    if src == pred or out in (src, pred):
+    registry = _trusted_registry_root(registry_root)
+    provided = (_private_path(destination, "receipt", output=True)
+                if destination is not None else None)
+    if src == pred or provided in (src, pred):
         raise ValueError("SOURCE_AND_OUTPUT_PATHS_MUST_DIFFER")
     raw_freeze = _raw_file(src, "freeze")
     raw_forecast = _raw_file(pred, "forecast")
@@ -210,6 +267,10 @@ def record_files(freeze_file, forecast_file, destination, *, actual_now=None):
     report = assess(_parse(raw_freeze, "freeze"), _parse(raw_forecast, "forecast"),
                     original_freeze=raw_freeze, original_forecast=raw_forecast,
                     actual_now=actual_now)
+    expected = _canonical_receipt_path(registry, report)
+    if provided is not None and provided != expected:
+        raise ValueError("NONCANONICAL_FORECAST_RECEIPT_PATH")
+    out = _private_path(expected, "receipt", output=True)
     payload = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode()
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(out, flags, 0o600)
@@ -221,20 +282,24 @@ def record_files(freeze_file, forecast_file, destination, *, actual_now=None):
     except BaseException:
         out.unlink(missing_ok=True)
         raise
-    return report
+    return {**report, "private_receipt_path": str(out)}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--freeze", required=True)
     parser.add_argument("--forecast", required=True)
-    parser.add_argument("--out", required=True)
+    parser.add_argument("--registry-root", required=True,
+                        help="one provisioned shared 0700 original-receipt namespace")
+    parser.add_argument("--out", help="optional exact canonical path (else derived)")
     args = parser.parse_args(argv)
-    report = record_files(args.freeze, args.forecast, args.out)
+    report = record_files(args.freeze, args.forecast, args.out,
+                          registry_root=args.registry_root)
     print(json.dumps({
         "status": report["state"], "sport": report["sport"],
         "predictions": report["prediction_count"],
         "approved_stake_u": 0, "official_counted": 0,
+        "private_receipt_path": report["private_receipt_path"],
     }, sort_keys=True))
     return 0
 
