@@ -30,6 +30,11 @@ from .cli import (
 )
 from .allmarkets_research import SPORTS, PERIODS
 
+# These sports are schedule/inventory ONLY. The five-sport pricing kernel does
+# not price NHL/PGA markets and must never be invoked for them.
+SCHEDULE_ONLY_SPORTS = frozenset({"NHL", "PGA"})
+SCHEDULE_SPORTS = SPORTS | SCHEDULE_ONLY_SPORTS
+
 SCHEMA = "sportsedge-five-sport-slate-research-v1"
 CENTRAL = ZoneInfo("America/Chicago")
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
@@ -43,6 +48,13 @@ FAMILIES = {
     "CBB": BASE_FAMILIES + BASKETBALL_EXTRA,
     "NBA": BASE_FAMILIES + BASKETBALL_EXTRA,
     "MLB": BASE_FAMILIES + BASEBALL_EXTRA,
+    # Inventory labels are NOT supported/wagerable pricing market types.
+    "NHL": ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PERIOD_MARKET",
+            "PLAYER_PROP", "GOALIE_SAVES", "FIRST_GOAL", "SGP", "DFS"),
+    "PGA": ("OUTRIGHT", "TOP5", "TOP10", "TOP20", "MAKE_CUT",
+            "MISS_CUT", "MATCHUP", "THREE_BALL", "ROUND_LEADER",
+            "FIRST_ROUND_LEADER", "ROUND_SCORE", "TOURNAMENT_SCORE",
+            "BIRDIES", "BOGEYS", "EAGLES", "HOLE_IN_ONE", "DFS"),
 }
 ALLOWED_ROOT = frozenset({
     "schema", "slate_id", "slate_date_ct", "sports",
@@ -59,7 +71,7 @@ def _exact(obj, keys, label):
 
 
 def _identity(sport, event_id):
-    if sport not in SPORTS or not isinstance(event_id, str) or not ID.fullmatch(event_id):
+    if sport not in SCHEDULE_SPORTS or not isinstance(event_id, str) or not ID.fullmatch(event_id):
         raise ValueError("INVALID_SPORT_OR_EVENT_ID")
     return (sport, event_id)
 
@@ -185,7 +197,7 @@ def run_slate(manifest, *, now=None):
     day=_date(manifest["slate_date_ct"])
     sports=manifest["sports"]
     if (not isinstance(sports,list) or not sports
-            or any(s not in SPORTS for s in sports)
+            or any(s not in SCHEDULE_SPORTS for s in sports)
             or len(set(sports))!=len(sports)):
         raise ValueError("INVALID_REQUESTED_SPORTS")
     expected=manifest["expected_events"]
@@ -217,6 +229,8 @@ def run_slate(manifest, *, now=None):
             raise ValueError("UNSCHEDULED_EVENT_INPUT")
         if key in inputs:
             raise ValueError("DUPLICATED_EVENT_INPUT")
+        if key[0] in SCHEDULE_ONLY_SPORTS:
+            raise ValueError("SCHEDULE_ONLY_SPORT_HAS_NO_VALIDATED_PRICER")
         inputs[key]=row["manifest"]
     # Validate all source IDs before entering any market pricer. A reused
     # provider quote across two events blocks the entire research import.
@@ -233,7 +247,8 @@ def run_slate(manifest, *, now=None):
     totals={"expected":len(registry),"inputs":len(inputs),
             "no_capture":0,"no_market_rows":0,"sgp_only_games":0,
             "sgp_inventory_rows":0,"after_start":0,"priced_research":0,
-            "blocked_research":0,"model_input_failures":0}
+            "blocked_research":0,"model_input_failures":0,
+            "schedule_only_unpriced_events":0}
     for key,start in sorted(registry.items(),key=lambda x:(x[1],x[0])):
         sport,event_id=key
         present=parsed.get(key,Counter())
@@ -242,7 +257,8 @@ def run_slate(manifest, *, now=None):
             count=present.get(family,0)
             family_matrix[family]={
                 "submitted_research_candidates":count,
-                "status":("RESEARCH_INPUT_RECEIVED_NOT_AUTHENTICATED" if count
+                "status":("NO_SUPPORTED_PRICING_ADAPTER" if sport in SCHEDULE_ONLY_SPORTS
+                          else "RESEARCH_INPUT_RECEIVED_NOT_AUTHENTICATED" if count
                           else "NOT_SUBMITTED_OR_NOT_OFFERED_UNVERIFIED"),
                 "official_counted":0,
             }
@@ -253,7 +269,12 @@ def run_slate(manifest, *, now=None):
             "research_blocked":0,"official_counted":0,
             "approved_stake_u":0,"card":None,
         }
-        if key not in inputs:
+        if sport in SCHEDULE_ONLY_SPORTS:
+            event_out.update(status="BLOCK",
+                             reasons=["NO_SUPPORTED_NHL_OR_PGA_PRICING_KERNEL",
+                                      "SCHEDULE_AND_MARKET_OFFERING_NOT_AUTHENTICATED"])
+            totals["schedule_only_unpriced_events"]+=1
+        elif key not in inputs:
             event_out.update(status="BLOCK", reasons=["SCHEDULE_EVENT_CAPTURE_MISSING"])
             totals["no_capture"]+=1
         elif when >= start:
@@ -330,6 +351,7 @@ def run_slate(manifest, *, now=None):
                 k[1] for k in inputs if k[0]==sport} for e in entries),
             "research_processed_games":sum(e["status"]=="PAPER_0U_RESEARCH_ONLY" for e in entries),
             "status":"NO_AUTHENTICATED_SCHEDULE_EVIDENCE" if not entries
+                else "SCHEDULE_ONLY_NO_PRICING_KERNEL" if sport in SCHEDULE_ONLY_SPORTS
                 else "RESEARCH_ONLY_NOT_RELEASE_CLEARED",
         }
     return {
@@ -342,7 +364,10 @@ def run_slate(manifest, *, now=None):
         "full_market_inventory_independently_authenticated":False,
         "prospective_probability_calibration_verified":False,
         "verified_bookmaker_clv":False,
-        "five_sports":sport_summary,
+        "five_sports":sport_summary,  # legacy compatibility key
+        "sport_coverage":sport_summary,
+        "research_pricing_sports":sorted(SPORTS),
+        "schedule_only_sports":sorted(SCHEDULE_ONLY_SPORTS),
         "counts":totals,
         "events":events,
         "approved_stake_u":0, "official_counted":0, "card":None,
@@ -355,6 +380,15 @@ def main(argv=None):
     if len(args)!=2:
         raise SystemExit("Usage: python -m sportsedge.markets.slate_orchestrator PRIVATE_INPUT.json PRIVATE_OUTPUT.json")
     source,dest=map(Path,args)
+    # The input may contain private quote IDs and source metadata. Do not
+    # read a manifest or emit an output inside the public checkout, regardless
+    # of the process working directory or symlinked path spelling.
+    repo_root=Path(__file__).resolve().parents[2]
+    source_resolved, dest_resolved=source.resolve(),dest.resolve()
+    if source_resolved==repo_root or repo_root in source_resolved.parents:
+        raise ValueError("RESEARCH_SLATE_INPUT_MUST_BE_PRIVATE")
+    if dest_resolved==repo_root or repo_root in dest_resolved.parents:
+        raise ValueError("RESEARCH_SLATE_OUTPUT_MUST_BE_PRIVATE")
     if source.resolve()==dest.resolve():
         raise ValueError("REFUSE_SLATE_INPUT_OVERWRITE")
     original=source.read_bytes()
@@ -365,10 +399,7 @@ def main(argv=None):
                        parse_constant=_deny_nonfinite_json)
     result=run_slate(request)
     result["input_sha256"]="sha256:"+sha256(original).hexdigest()
-    # Source/model/price references are private. Do not write into public repo.
-    root=Path.cwd().resolve()
-    if root==dest.resolve() or root in dest.resolve().parents:
-        raise ValueError("RESEARCH_SLATE_OUTPUT_MUST_BE_PRIVATE")
+    # Source/output privacy already checked against the resolved repository root.
     payload=(json.dumps(result,indent=2,sort_keys=True,allow_nan=False)+"\n").encode("utf-8")
     fd=os.open(dest,os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,"O_NOFOLLOW",0),0o600)
     try:
