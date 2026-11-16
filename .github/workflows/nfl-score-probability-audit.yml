@@ -1,0 +1,24 @@
+name: NFL prequential 3way score probability research audit
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/score_probability_audit_pit.py'
+      - 'models/nfl/test_score_probability_audit_pit.py'
+      - 'models/nfl/PROBABILITY_AUDIT_README.md'
+      - '.github/workflows/nfl-score-probability-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prequential-score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Leak-free 3way scoring and private research archive regressions
+        run: python -m unittest discover -s models/nfl -p 'test_score_probability_audit_pit.py' -v
+      - name: Compile scoring audit
+        run: python -m py_compile models/nfl/score_probability_audit_pit.py
