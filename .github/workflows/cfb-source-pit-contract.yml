@@ -1,0 +1,26 @@
+name: CFB source PIT contract (synthetic only)
+on:
+  pull_request:
+    paths:
+      - 'models/cfb/cfb_source_pit_contract.py'
+      - 'models/cfb/test_cfb_source_pit_contract.py'
+      - '.github/workflows/cfb-source-pit-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/cfb/cfb_source_pit_contract.py'
+      - 'models/cfb/test_cfb_source_pit_contract.py'
+      - '.github/workflows/cfb-source-pit-contract.yml'
+permissions:
+  contents: read
+jobs:
+  cfb-pit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile models/cfb/cfb_source_pit_contract.py models/cfb/test_cfb_source_pit_contract.py
+      - run: python -m unittest models.cfb.test_cfb_source_pit_contract -v
