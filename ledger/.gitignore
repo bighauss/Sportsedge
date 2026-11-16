@@ -1,0 +1,9 @@
+# Keep real sportsbook evidence, local ledgers and receipts PRIVATE.
+*.csv
+*.tsv
+*.json
+*.jsonl
+*.ndjson
+*.pdf
+*.zip
+private/
