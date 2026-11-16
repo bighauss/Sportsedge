@@ -21,7 +21,9 @@ def utc(s):
         raise ValueError("INVALID_UTC") from exc
 
 def validate(rows, *, minimum_dropbacks=150):
-    if type(minimum_dropbacks) is not int or minimum_dropbacks < 1:
+    # Only the preregistered 100- and 150-dropback research populations
+    # are comparable. Lowering to 1 creates untested small-sample outliers.
+    if type(minimum_dropbacks) is not int or minimum_dropbacks not in (100, 150):
         raise ValueError("INVALID_THRESHOLD")
     if not isinstance(rows, list) or not rows:
         raise ValueError("ROWS_REQUIRED")
