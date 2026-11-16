@@ -5,7 +5,8 @@ snapshot_utc,kickoff_utc,final_utc,model_sha256,source_sha256,odds.
 outcome is 1 win / 0 loss; pushes and unsettled rows excluded.
 Market probability must be independently sourced/de-vigged upstream.
 """
-import argparse,csv,datetime as dt,json,math
+import argparse,csv,datetime as dt,json,math,hashlib,io,os
+from pathlib import Path
 from collections import Counter, defaultdict
 FIELDS=("event_id","market","selection","model_p","market_p","outcome","snapshot_utc","kickoff_utc","final_utc","model_sha256","source_sha256","odds")
 def utc(s):
@@ -80,11 +81,70 @@ def audit(rows):
         "disagreement":[{"market":m,"bucket":b,"direction":d,**stats(v)} for (m,b,d),v in sorted(groups.items())],
         "calibration":[{"market":m,"decile":d,**stats(v)} for (m,d),v in sorted(cal.items())],
         "caution":"ROI is hypothetical flat 1u per retained selection at original odds, NOT verified execution; correlated alt lines share events. A large number of selections with fewer than 30 distinct events is not sufficient independent evidence. Missing pushes excluded; no CLV, sportsbook-provider authentication, or original point-in-time feature certification."}
-def main():
-    p=argparse.ArgumentParser();p.add_argument("csv");p.add_argument("--output");a=p.parse_args()
-    with open(a.csv,newline="") as f: result=audit(csv.DictReader(f))
-    s=json.dumps(result,indent=2,sort_keys=True)
-    if a.output:
-        with open(a.output,"w") as f:f.write(s+"\n")
-    else:print(s)
-if __name__=="__main__":main()
+
+REPO_ROOT=Path(__file__).resolve().parents[1]
+
+def _private_path(value):
+    """Refuse source data or detailed result reports anywhere under public Git."""
+    lexical=Path(os.path.abspath(os.fspath(value)))
+    resolved=lexical.resolve()
+    if any(p==REPO_ROOT or REPO_ROOT in p.parents for p in (lexical,resolved)):
+        raise ValueError("PRIVATE_G2_DATA_OR_OUTPUT_INSIDE_PUBLIC_CHECKOUT")
+    if lexical.is_symlink() or any(parent.is_symlink() for parent in lexical.parents):
+        raise ValueError("UNTRUSTED_SYMLINK_PATH")
+    return lexical
+
+def _read_original_csv(path):
+    """No silent duplicate-header aliasing or truncated/overlong evidence rows."""
+    raw=path.read_bytes()
+    try:
+        decoded=raw.decode("utf-8-sig")
+        reader=csv.DictReader(io.StringIO(decoded,newline=""))
+        fields=reader.fieldnames
+        if (not fields or len(fields)!=len(set(fields)) or
+                not set(FIELDS).issubset(fields)):
+            raise ValueError("MISSING_OR_DUPLICATE_CSV_HEADER")
+        rows=list(reader)
+        if any(None in row or any(value is None for value in row.values())
+               for row in rows):
+            raise ValueError("TRUNCATED_OR_OVERLONG_CSV_ROW")
+    except (UnicodeError,csv.Error) as e:
+        raise ValueError("CORRUPT_SOURCE_CSV") from e
+    return rows,hashlib.sha256(raw).hexdigest()
+
+def _create_private_report(path,output):
+    """Create only with mode 0600; never overwrite an evidence file/report."""
+    flags=os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os,"O_NOFOLLOW",0)
+    fd=os.open(path,flags,0o600)
+    try:
+        with os.fdopen(fd,"w",encoding="utf-8") as stream:
+            fd=-1
+            stream.write(output)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        if fd>=0:
+            os.close(fd)
+        path.unlink(missing_ok=True)
+        raise
+
+def main(argv=None):
+    p=argparse.ArgumentParser()
+    p.add_argument("csv")
+    p.add_argument("--output")
+    a=p.parse_args(argv)
+    private_input=_private_path(a.csv)
+    private_output=_private_path(a.output) if a.output else None
+    rows,digest=_read_original_csv(private_input)
+    result=audit(rows)
+    result["input_sha256"]=digest
+    result["input_original_provider_authenticated"]=False
+    s=json.dumps(result,indent=2,sort_keys=True,allow_nan=False)+"\n"
+    if private_output:
+        _create_private_report(private_output,s)
+    else:
+        print(s,end="")
+    return 0
+
+if __name__=="__main__":
+    main()
