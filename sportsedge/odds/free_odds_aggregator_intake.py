@@ -17,7 +17,16 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, quote
 from urllib.request import Request, urlopen
 
-SPORTS = {"NFL":"americanfootball_nfl", "CBB":"basketball_ncaab"}
+# Exact provider-advertised v4 sport keys. PGA Majors outrights use a different
+# multiway settlement contract and are not normalized by this game-lines intake.
+SPORTS = {
+    "NFL": "americanfootball_nfl",
+    "CFB": "americanfootball_ncaaf",
+    "CBB": "basketball_ncaab",
+    "NBA": "basketball_nba",
+    "MLB": "baseball_mlb",
+    "NHL": "icehockey_nhl",
+}
 BOOKS = {"draftkings", "fanduel", "betmgm", "betrivers", "pinnacle", "caesars"}
 KEY_RE = re.compile(r"[A-Za-z0-9_.:-]{8,256}\Z")
 MARKET_RE = re.compile(r"[a-z][a-z0-9_]{1,55}\Z")
