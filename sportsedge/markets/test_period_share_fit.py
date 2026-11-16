@@ -19,7 +19,8 @@ def ts(t):
 
 def make_rows(sport="NFL", *, count=56, start=None):
     start = start or datetime.now(timezone.utc).replace(microsecond=0)-timedelta(days=35)
-    keys = ("Q1","Q2","Q3","Q4") if sport!="MLB" else tuple("I"+str(i) for i in range(1,10))
+    keys = (tuple("I"+str(i) for i in range(1,10)) if sport=="MLB" else
+            ("H1","H2") if sport=="CBB" else ("Q1","Q2","Q3","Q4"))
     rows=[]
     for i in range(count):
         dt=start+timedelta(days=i//8, minutes=(i%8)*30)
@@ -87,9 +88,20 @@ class PeriodShareTests(unittest.TestCase):
                 self.assertEqual(x["accepted_rows"],56)
                 self.assertEqual(len(x["period_shares"]),4)
 
-    def test_cbb_half_data_never_forged_into_four_quarters(self):
-        with self.assertRaisesRegex(ValueError,"CBB_MENS_HALVES_CANNOT_BE_FOUR_QUARTERS"):
-            self.fit(sport="CBB")
+    def test_cbb_true_halves_fit_and_fake_quarters_are_blocked(self):
+        rows=make_rows("CBB",start=self.now-timedelta(days=35))
+        fitted=self.fit(rows,sport="CBB")
+        self.assertEqual(fitted["accepted_rows"],56)
+        self.assertEqual(fitted["period_keys"],["H1","H2"])
+        self.assertEqual(len(fitted["period_shares"]),2)
+        self.assertAlmostEqual(sum(fitted["period_shares"]),1)
+        fake=make_rows("NFL",start=self.now-timedelta(days=35))
+        for row in fake:
+            row["sport"]="CBB"
+        blocked=self.fit(fake,sport="CBB")
+        self.assertEqual(blocked["status"],"BLOCK_PERIOD_SHARE_FIT")
+        self.assertEqual(blocked["blocked_rows"],56)
+        self.assertIn("PERIOD_INCOMPLETE_OR_EXTRA_PERIOD",blocked["blocked_reasons"])
 
     def test_reject_over_time_and_extra_periods(self):
         rows=make_rows(start=self.now-timedelta(days=35))
@@ -263,13 +275,19 @@ class PeriodShareTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"PERIOD_FIT_AFTER_PROJECTION_FREEZE"):
                 run_from_manifest(p)
 
-    def test_invalid_cbb_period_fit_never_used_in_run_it(self):
-        raw=encode(self.rows)
+    def test_actual_cbb_halves_fit_wires_into_research_run_it(self):
+        rows=make_rows("CBB",start=self.now-timedelta(days=35))
+        raw=encode(rows)
         with tempfile.TemporaryDirectory() as d:
-            path=Path(d)/"orig.jsonl";path.write_bytes(raw)
+            path=Path(d)/"cbb-halves.jsonl";path.write_bytes(raw)
             p=self._private_manifest(path,raw,sport="CBB")
-            with self.assertRaisesRegex(ValueError,"CBB_MENS_HALVES_CANNOT_BE_FOUR_QUARTERS"):
-                run_from_manifest(p)
+            result=run_from_manifest(p)
+            self.assertEqual(result["period_fit_accepted_n"],56)
+            self.assertEqual(result["period_fit_status"],
+                "TRAIN_ONLY_PERIOD_SHARES_RESEARCH_UNCALIBRATED")
+            self.assertFalse(result["period_share_calibration_verified"])
+            self.assertEqual(result["approved_stake_u"],0)
+            self.assertIsNone(result["card"])
 
     def test_too_small_and_zero_score_training_blocks(self):
         a=make_rows(count=20,start=self.now-timedelta(days=35))
