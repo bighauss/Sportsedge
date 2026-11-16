@@ -238,6 +238,37 @@ class AuditContract(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 report_file(src, dest)
 
+    def test_public_lexical_alias_outside_target_still_refused(self):
+        from sportsedge.validation.forward_acceptance import REPOSITORY_ROOT
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as private, tempfile.TemporaryDirectory(
+                prefix=".test_public_path_", dir=REPOSITORY_ROOT) as in_repo:
+            original = Path(private)/"source.json"
+            original.write_text(json.dumps(fixture(0,0,0)))
+            alias = Path(in_repo)/"outside.json"
+            try:
+                alias.symlink_to(original)
+            except (NotImplementedError, OSError):
+                self.skipTest("symlink creation unavailable")
+            result = Path(private)/"report.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_ACCEPTANCE_INPUT_INSIDE_PUBLIC_REPOSITORY"):
+                report_file(alias, result)
+            self.assertFalse(result.exists())
+
+    def test_partial_output_removed_on_sync_failure(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as private:
+            original = Path(private)/"input.json"
+            output = Path(private)/"report.json"
+            original.write_text(json.dumps(fixture(0,0,0)))
+            original_bytes = original.read_bytes()
+            with patch("sportsedge.validation.forward_acceptance.os.fsync",
+                       side_effect=OSError("simulated disk failure")):
+                with self.assertRaisesRegex(OSError, "simulated disk failure"):
+                    report_file(original, output)
+            self.assertFalse(output.exists())
+            self.assertEqual(original.read_bytes(), original_bytes)
+
     def test_duplicate_manifest_json_key_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
