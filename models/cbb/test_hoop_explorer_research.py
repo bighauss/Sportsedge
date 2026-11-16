@@ -141,6 +141,33 @@ class HoopExplorerTest(unittest.TestCase):
         with self.assertRaisesRegex(he.Blocked, "MIXED_SEASONS"):
             self.load(export, manifest)
 
+    def test_prior_season_comps_allowed_if_provenance_is_before_tip(self):
+        historical = [{**P1, "Season": "2026"}, {**P2, "Season": "2026"}]
+        export, manifest = self.bundle(
+            rows=historical, mutate=lambda m: m.update(season=2026))
+        players, ev = self.load(export, manifest)
+        self.assertEqual(players[0]["season"], 2026)
+
+    def test_future_season_source_blocked(self):
+        future = [{**P1, "Season": "2028"}]
+        export, manifest = self.bundle(
+            rows=future, mutate=lambda m: m.update(season=2028))
+        with self.assertRaisesRegex(he.Blocked, "SOURCE_SEASON_AFTER_GAME_SEASON"):
+            self.load(export, manifest)
+
+    def test_lineup_target_cannot_be_from_another_team(self):
+        players, pe = self.load(*self.bundle())
+        lineups, le = self.load(*self.bundle(kind="lineup"), kind="lineup")
+        with self.assertRaisesRegex(he.Blocked, "LINEUP_TARGET_PLAYER_TEAM_IDENTITY_MISMATCH"):
+            he.research_report(players, pe, target_player_id="p2", lineups=lineups,
+                               lineup_evidence=le, team_id="umd", prior_net=0, pad_k=200)
+
+    def test_role_target_rejects_invalid_number(self):
+        players, ev = self.load(*self.bundle())
+        with self.assertRaisesRegex(he.Blocked, "MISSING_OR_INVALID_NUMBER"):
+            he.roster_fit(players, {"targets": {"usage_pct": "NaN",
+                                                "turnover_pct": 12, "three_pct": 36}})
+
     def test_nonfinite_stats_blocked(self):
         export, manifest = self.bundle(rows=[{**P1, "RAPM": "NaN"}])
         with self.assertRaisesRegex(he.Blocked, "NUMBER_OUT_OF_RANGE"):
