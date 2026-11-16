@@ -8,23 +8,109 @@ Market probability must be independently sourced/de-vigged upstream.
 import argparse,csv,datetime as dt,json,math,hashlib,io,os
 from pathlib import Path
 from collections import Counter, defaultdict
+from decimal import Decimal, InvalidOperation
 FIELDS=("event_id","market","selection","model_p","market_p","outcome","snapshot_utc","kickoff_utc","final_utc","model_sha256","source_sha256","odds")
 def utc(s):
     d=dt.datetime.fromisoformat(s.replace("Z","+00:00"))
     if d.tzinfo is None or d.utcoffset()!=dt.timedelta(0): raise ValueError("non-UTC timestamp")
     return d
+# Legacy eleven-column G2 datasets are still reportable as unverified
+# research. Fully identified market rows must be complete and cannot silently
+# mix with legacy copies of the same game/market/selection.
+IDENTITY_FIELDS=("book","period","settlement","line","player_id","team_id","stat")
+MANDATORY_EXTENDED=("book","period","settlement")
+LINE_MARKETS=frozenset(("spread","spreads","total","totals","teamtotal","teamtotals","tt",
+                         "alternatespread","alternatetotal","playerprop","prop"))
+PLAYER_MARKETS=frozenset(("playerprop","prop","attd","atd","firsttd","td2plus",
+                          "firstbasket","homerun","anytimegoal","firstgoal"))
+
+def _market_token(value):
+    return str(value).strip().casefold().replace(" ","").replace("_","").replace("-","")
+
+def _line(value):
+    raw=str(value if value is not None else "").strip()
+    if not raw:
+        return ""
+    try:
+        d=Decimal(raw)
+        if not d.is_finite():
+            raise ValueError("NONFINITE_MARKET_LINE")
+        return format(d.normalize(),"f")
+    except (InvalidOperation,ValueError) as e:
+        raise ValueError("INVALID_MARKET_LINE") from e
+
+def _identity(row):
+    """Snapshot-independent decision key. Duplicate records cannot inflate ROI.
+
+    Exact book/period/line/participant identity preserves legitimate alternate
+    lines, distinct players and separate independently reported books.
+    """
+    if not isinstance(row,dict):
+        raise ValueError("INVALID_CSV_ROW")
+    for name in ("event_id","market","selection"):
+        if not isinstance(row.get(name),str) or not row[name].strip():
+            raise ValueError("INCOMPLETE_BASE_SELECTION_ID")
+    base=(row["event_id"].strip(),_market_token(row["market"]),
+          row["selection"].strip().casefold())
+    extended=any(str(row.get(x) or "").strip() for x in IDENTITY_FIELDS)
+    if not extended:
+        return base, ("LEGACY_UNATTESTED",*base), "LEGACY_UNATTESTED"
+    missing=[x for x in MANDATORY_EXTENDED
+             if not isinstance(row.get(x),str) or not row[x].strip()]
+    if missing:
+        raise ValueError("INCOMPLETE_EXTENDED_MARKET_ID:"+",".join(missing))
+    market=base[1]
+    line=_line(row.get("line"))
+    if (market in LINE_MARKETS or
+            market.startswith("alt") or
+            "prop" in market or "yard" in market or "point" in market or
+            "reception" in market or "assist" in market or "rebound" in market or
+            "shot" in market or "save" in market) and not line:
+        raise ValueError("EXTENDED_NUMERIC_LINE_REQUIRED")
+    player=str(row.get("player_id") or "").strip().casefold()
+    team=str(row.get("team_id") or "").strip().casefold()
+    stat=str(row.get("stat") or "").strip().casefold()
+    if ("prop" in market or market in PLAYER_MARKETS) and (not player or not stat):
+        raise ValueError("EXTENDED_PROP_PLAYER_AND_STAT_REQUIRED")
+    if market in ("teamtotal","teamtotals","tt") and not team:
+        raise ValueError("EXTENDED_TEAM_TOTAL_SUBJECT_REQUIRED")
+    key=("EXACT_MARKET",*base,row["book"].strip().casefold(),
+         row["period"].strip().casefold(),
+         row["settlement"].strip().casefold(),line,player,team,stat)
+    return base,key,"EXACT_MARKET"
+
 def parse(rows):
     rows=list(rows)
-    # Never select the first among conflicting frozen records. All duplicate
-    # copies are held until source reconciliation, independent of file order.
-    counts=Counter((r.get('event_id'),r.get('market'),r.get('selection'),
-                    r.get('snapshot_utc')) for r in rows)
+    # First pass: count every reconstructible decision independent of
+    # screenshot clock. A malformed duplicate must not poison the valid copy.
+    keys=[];bases=defaultdict(set);counts=Counter();invalid_bases=set()
+    for r in rows:
+        try:
+            base,k,mode=_identity(r)
+            keys.append((base,k,mode))
+            counts[k]+=1
+            bases[base].add(mode)
+        except (ValueError,TypeError,AttributeError):
+            keys.append(None)
+            if isinstance(r,dict) and all(isinstance(r.get(f),str) and
+                                         r[f].strip() for f in
+                                         ("event_id","market","selection")):
+                invalid_bases.add((r["event_id"].strip(),
+                                   _market_token(r["market"]),
+                                   r["selection"].strip().casefold()))
     good=[];blocked=[]
     for i,r in enumerate(rows,2):
         try:
-            if any(not r.get(k) for k in FIELDS):raise ValueError("MISSING_FIELD")
-            k=(r["event_id"],r["market"],r["selection"],r["snapshot_utc"])
-            if counts[k]>1:raise ValueError("DUPLICATE")
+            k=keys[i-2]
+            if k is None:
+                _identity(r)  # preserve the exact identity error
+                raise ValueError("INVALID_DECISION_IDENTITY")
+            base,identity,mode=k
+            if (base in invalid_bases or len(bases[base])>1):
+                raise ValueError("MIXED_OR_MALFORMED_DECISION_IDENTITY_ALL_COPIES_BLOCKED")
+            if counts[identity]>1:
+                raise ValueError("DUPLICATE_DECISION_ALL_SNAPSHOTS_BLOCKED")
+            if any(not r.get(f) for f in FIELDS):raise ValueError("MISSING_FIELD")
             for h in ("model_sha256","source_sha256"):
                 s=r[h]
                 if len(s)!=64 or any(c not in "0123456789abcdef" for c in s):raise ValueError("INVALID_HASH")
@@ -34,7 +120,10 @@ def parse(rows):
             if r["outcome"] not in ("0","1"):raise ValueError("UNSETTLED_OR_PUSH")
             odds=int(r["odds"]); profit=(odds/100 if odds>=100 else 100/abs(odds)) if abs(odds)>=100 else None
             if profit is None or odds==0:raise ValueError("INVALID_ODDS")
-            good.append((r["market"],p,q,int(r["outcome"]),profit,r["event_id"]))
+            stratum=(r["market"] if mode=="LEGACY_UNATTESTED" else
+                     "|".join((r["market"],r["book"].strip(),
+                               r["period"].strip(),r["settlement"].strip())))
+            good.append((stratum,p,q,int(r["outcome"]),profit,r["event_id"]))
         except (ValueError,TypeError,KeyError) as e:blocked.append({"row":i,"reason":str(e)})
     return good,blocked
 def bucket(x):
@@ -77,6 +166,7 @@ def audit(rows):
         groups[(m,bucket(p-q),"model_above" if p>q else "model_below_or_equal")].append(row)
         cal[(m,min(9,int(p*10)))].append(row)
     return {"status":"RESEARCH_ONLY_NOT_VALIDATED_EV","accepted":len(valid),"blocked":blocked,
+        "market_identity_note":"Extended source rows require book, period, settlement and exact line/subject when applicable. Legacy rows are not price-authenticated; repeated decisions across snapshots and mixed identity copies are quarantined.",
         "overall":stats(valid),
         "disagreement":[{"market":m,"bucket":b,"direction":d,**stats(v)} for (m,b,d),v in sorted(groups.items())],
         "calibration":[{"market":m,"decile":d,**stats(v)} for (m,d),v in sorted(cal.items())],
