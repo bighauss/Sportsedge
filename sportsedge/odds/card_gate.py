@@ -197,6 +197,13 @@ def gate_candidate(
             forward = evaluate_forward(forward_freeze, forward_rows)
             if forward.get("status") != "PAPER_0U_UNATTESTED_FORWARD_RESEARCH":
                 reasons.append("FORWARD_HOLDOUT_INVALID_STATUS")
+            # A PAPER report may legitimately have every outcome unsettled.
+            # It is NOT evidence of scored forward probability performance.
+            scored = forward.get("scored")
+            if (type(scored) is not int or scored < 1
+                    or not isinstance(forward.get("model"), dict)
+                    or not isinstance(forward.get("book"), dict)):
+                reasons.append("FORWARD_HOLDOUT_NO_SCORED_RESULTS")
         except (Hold, TypeError, ValueError, KeyError, AttributeError) as exc:
             reasons.append("FORWARD_HOLDOUT_INVALID:" + str(exc))
     pit_problems = ()
