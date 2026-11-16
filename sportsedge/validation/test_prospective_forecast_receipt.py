@@ -6,12 +6,14 @@ from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
 from sportsedge.validation.seven_sport_pit_freeze import ROOT, freeze_file
 from sportsedge.validation.prospective_forecast_receipt import (
-    assess, record_files, _parse,
+    assess, record_files, _parse, _trusted_registry_root, _canonical_receipt_path,
 )
 
 NOW = datetime(2026, 11, 16, 1, 3, tzinfo=timezone.utc)
@@ -81,6 +83,8 @@ class ForecastReceiptTests(unittest.TestCase):
         }
         self.forecast_path=self.root/"forecast.json"
         self.save()
+        self.registry=self.root/"one-shared-forecast-registry"
+        self.registry.mkdir(mode=0o700)
 
     def save(self):
         file_desc(self.forecast_path,json.dumps(self.forecast).encode())
@@ -93,8 +97,9 @@ class ForecastReceiptTests(unittest.TestCase):
                       original_forecast=raw, actual_now=now)
 
     def test_real_freeze_to_forecast_private_archive_create_only(self):
-        report_path=self.root/"receipt.json"
-        report=record_files(self.freeze_path,self.forecast_path,report_path,actual_now=NOW)
+        report=record_files(self.freeze_path,self.forecast_path,
+                            registry_root=self.registry,actual_now=NOW)
+        report_path=Path(report["private_receipt_path"])
         self.assertEqual(report["state"],"PAPER_0U_LOCAL_FORECAST_BOUND_TO_FREEZE")
         self.assertEqual(report["prediction_count"],1)
         self.assertEqual(report["feature_count"],1)
@@ -107,11 +112,11 @@ class ForecastReceiptTests(unittest.TestCase):
         self.assertNotIn("INCLUDES_OT",report_path.read_text())
         self.assertNotIn("0.55",report_path.read_text())
         with self.assertRaisesRegex(ValueError,"OUTPUT_MUST_BE_NEW"):
-            record_files(self.freeze_path,self.forecast_path,report_path,actual_now=NOW)
+            record_files(self.freeze_path,self.forecast_path,report_path,registry_root=self.registry,actual_now=NOW)
 
     def test_original_forecast_bytes_sha_is_exact(self):
         report=record_files(self.freeze_path,self.forecast_path,
-                            self.root/"receipt.json",actual_now=NOW)
+                            registry_root=self.registry,actual_now=NOW)
         self.assertEqual(report["original_forecast_sha256"],
                          "sha256:"+sha256(self.forecast_path.read_bytes()).hexdigest())
         self.assertEqual(report["original_freeze_sha256"],
@@ -123,7 +128,7 @@ class ForecastReceiptTests(unittest.TestCase):
         file_desc(self.freeze_path,json.dumps(blob).encode())
         with self.assertRaisesRegex(ValueError,"FORECAST_DOES_NOT_BIND"):
             record_files(self.freeze_path,self.forecast_path,
-                         self.root/"receipt.json",actual_now=NOW)
+                         self.root/"receipt.json",registry_root=self.registry,actual_now=NOW)
 
     def test_wrong_or_missing_code_config_and_feature_hashes_fail(self):
         for field in ("model_code_sha256","model_config_sha256"):
@@ -219,23 +224,84 @@ class ForecastReceiptTests(unittest.TestCase):
     def test_public_repo_path_and_symlinked_files_refused(self):
         with self.assertRaisesRegex(ValueError,"PUBLIC_REPOSITORY"):
             record_files(self.freeze_path,self.forecast_path,
-                         ROOT/"NEVER_WRITE_FORECAST_PRIVATE.json",actual_now=NOW)
+                         ROOT/"NEVER_WRITE_FORECAST_PRIVATE.json",registry_root=self.registry,actual_now=NOW)
         alias=self.root/"alias_forecast.json"
         alias.symlink_to(self.forecast_path)
         with self.assertRaisesRegex(ValueError,"SYMLINK"):
             record_files(self.freeze_path,alias,
-                         self.root/"receipt.json",actual_now=NOW)
+                         self.root/"receipt.json",registry_root=self.registry,actual_now=NOW)
 
     def test_research_input_and_output_have_owner_only_permissions(self):
         self.forecast_path.chmod(0o644)
         with self.assertRaisesRegex(ValueError,"PRIVATE_FILE_PERMISSIONS"):
             record_files(self.freeze_path,self.forecast_path,
-                         self.root/"receipt.json",actual_now=NOW)
+                         self.root/"receipt.json",registry_root=self.registry,actual_now=NOW)
         self.forecast_path.chmod(0o600)
         self.root.chmod(0o755)
         with self.assertRaisesRegex(ValueError,"PRIVATE_PARENT_PERMISSIONS"):
             record_files(self.freeze_path,self.forecast_path,
-                         self.root/"receipt.json",actual_now=NOW)
+                         self.root/"receipt.json",registry_root=self.registry,actual_now=NOW)
+
+    def test_changed_probabilities_cannot_write_another_valid_receipt(self):
+        first=record_files(self.freeze_path,self.forecast_path,
+                           registry_root=self.registry,actual_now=NOW)
+        path=Path(first["private_receipt_path"])
+        before=path.read_bytes()
+        self.forecast["predictions"][0]["model_probability"]="0.61"
+        self.save()
+        with self.assertRaisesRegex(FileExistsError,"OUTPUT_MUST_BE_NEW"):
+            record_files(self.freeze_path,self.forecast_path,
+                         registry_root=self.registry,actual_now=NOW)
+        with self.assertRaisesRegex(ValueError,"NONCANONICAL_FORECAST_RECEIPT_PATH"):
+            record_files(self.freeze_path,self.forecast_path,
+                         self.root/"alternate-receipt.json",
+                         registry_root=self.registry,actual_now=NOW)
+        self.assertEqual(path.read_bytes(),before)
+
+    def test_changed_model_prob_does_not_change_canonical_slot(self):
+        report=self.check()
+        expected=_canonical_receipt_path(self.registry,report)
+        self.forecast["predictions"][0]["model_probability"]="0.76"
+        modified=self.check()
+        self.assertEqual(expected,_canonical_receipt_path(self.registry,modified))
+        self.assertEqual(expected.parent,self.registry)
+
+    def test_registry_root_mode_and_symlink_alias_refused(self):
+        missing=self.root/"missing"
+        with self.assertRaisesRegex(ValueError,"DIRECTORY_MISSING"):
+            _trusted_registry_root(missing)
+        self.assertEqual(_trusted_registry_root(self.registry),self.registry)
+        self.registry.chmod(0o755)
+        with self.assertRaisesRegex(ValueError,"OWNER_0700_REQUIRED"):
+            _trusted_registry_root(self.registry)
+        self.registry.chmod(0o700)
+        alias=self.root/"registry-alias"
+        alias.symlink_to(self.registry,target_is_directory=True)
+        with self.assertRaisesRegex(ValueError,"PUBLIC_OR_SYMLINK_REFUSED"):
+            _trusted_registry_root(alias)
+
+    def test_two_independent_processes_compete_for_same_receipt_path(self):
+        script=(
+            "import sys; from datetime import datetime, timezone; "
+            "from sportsedge.validation.prospective_forecast_receipt import record_files; "
+            "record_files(sys.argv[1],sys.argv[2],registry_root=sys.argv[3],"
+            "actual_now=datetime(2026,11,16,1,3,tzinfo=timezone.utc))"
+        )
+        workers=[subprocess.Popen([
+            sys.executable,"-c",script,str(self.freeze_path),
+            str(self.forecast_path),str(self.registry)
+        ],cwd=str(ROOT),stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            for _ in range(2)]
+        outputs=[w.communicate(timeout=15) for w in workers]
+        self.assertEqual(sorted(w.returncode for w in workers),[0,1],outputs)
+        files=list(self.registry.glob("forecast-receipt-*.json"))
+        self.assertEqual(len(files),1)
+        self.assertEqual(files[0].stat().st_mode & 0o777,0o600)
+        self.assertTrue(any(b"FileExistsError" in err for _,err in outputs))
+
+    def test_nested_json_exponent_overflow_refused(self):
+        with self.assertRaisesRegex(ValueError,"INVALID_OR_AMBIGUOUS_JSON"):
+            _parse(b'{"metadata":{"rating":1e999}}',"fixture")
 
 
 if __name__=="__main__":
