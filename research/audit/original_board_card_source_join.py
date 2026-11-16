@@ -252,6 +252,18 @@ def audit(original_board_bytes, printed_card_bytes, *,
         ev_half = Decimal("0.5").scaleb(-pick["ev_percent_digits"])
         tolerance = p_half * dec_odds(own) + ev_half
         discrepancy = abs(ev - pick["printed_ev_percent"])
+        # The original V1 engine prints cond(p_win,p_loss) for ML, *excluding*
+        # pushes. Its EV instead uses unconditional p_win*payout - p_loss.
+        # Therefore p_cond*decimal-1 is NOT an appropriate arithmetic test
+        # for 1H ML where regulation can tie. Original simulation draws are
+        # required to establish exact p_win, p_loss and p_push.
+        push_settlement = row["market"].endswith("_ML")
+        binary_consistent = None if push_settlement else discrepancy <= tolerance
+        implied_push = None
+        if push_settlement and abs(ev) > Decimal("0.000001"):
+            implied = Decimal(1) - pick["printed_ev_percent"] / ev
+            if Decimal(0) <= implied <= Decimal(1):
+                implied_push = round(float(implied), 6)
         matched.append({
             "section": pick["section"], "card_rank": pick["card_rank"],
             "printed_selection": pick["printed_selection"],
@@ -268,7 +280,11 @@ def audit(original_board_bytes, printed_card_bytes, *,
             "ev_from_display_probability_pct": round(float(ev), 6),
             "printed_ev_pct": float(pick["printed_ev_percent"]),
             "display_rounding_tolerance_pp": round(float(tolerance), 6),
-            "ev_arithmetic_consistent_with_display_rounding": discrepancy <= tolerance,
+            "ev_arithmetic_consistent_with_display_rounding": binary_consistent,
+            "ev_math_check": ("PUSH_AWARE_1H_ML_ORIGINAL_WIN_LOSS_DRAWS_REQUIRED"
+                              if push_settlement else
+                              ("PASS" if binary_consistent else "DISCREPANCY_BEYOND_ROUNDING")),
+            "approx_implied_push_share_from_display": implied_push,
             "original_gate": "MODEL_DOUBTED" if pick["section"] == "MODEL-DOUBTED" else "PAPER_CARD",
             "quote_receipt": "MISSING_ORIGINAL_PROVIDER_BYTES_AND_OBSERVED_UTC",
             "model_feature_vintage": "NOT_INDEPENDENTLY_ATTESTED",
@@ -281,7 +297,10 @@ def audit(original_board_bytes, printed_card_bytes, *,
         "model_doubted": sum(r["section"] == "MODEL-DOUBTED" for r in matched),
         "unique_source_matches": len(matched),
         "arithmetic_discrepancies": sum(
-            not r["ev_arithmetic_consistent_with_display_rounding"] for r in matched
+            r["ev_arithmetic_consistent_with_display_rounding"] is False for r in matched
+        ),
+        "push_aware_ml_rows_needing_original_draws": sum(
+            r["ev_arithmetic_consistent_with_display_rounding"] is None for r in matched
         ),
         "source_file_timing_only": {
             "original_board_saved_utc": original_board_saved_utc,
@@ -291,6 +310,7 @@ def audit(original_board_bytes, printed_card_bytes, *,
         "source_limits": [
             "This joins archived FILE bytes, not original sportsbook provider quote receipts.",
             "One-sided model EV is not calibrated EV or official wager ROI.",
+            "First-half ML printed p is conditional on non-push; printed EV is unconditional in original V1. These rows cannot use binary EV arithmetic without original p_push.",
             "No model-feature publication vintage, player injury vintage or quote observation UTC verified.",
             "A printed 209-row card is not the original complete 496-row picks.csv.",
             "No historical result, score, censor or wager entry used in this source join."
