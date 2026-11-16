@@ -164,7 +164,7 @@ class HoopExplorerTest(unittest.TestCase):
 
     def test_role_target_rejects_invalid_number(self):
         players, ev = self.load(*self.bundle())
-        with self.assertRaisesRegex(he.Blocked, "MISSING_OR_INVALID_NUMBER"):
+        with self.assertRaisesRegex(he.Blocked, "NUMBER_OUT_OF_RANGE"):
             he.roster_fit(players, {"targets": {"usage_pct": "NaN",
                                                 "turnover_pct": 12, "three_pct": 36}})
 
