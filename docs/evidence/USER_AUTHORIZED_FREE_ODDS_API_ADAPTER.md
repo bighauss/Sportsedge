@@ -27,7 +27,7 @@ python -m sportsedge.odds.free_odds_aggregator_intake NFL /private/sportsedge-or
 
 On a machine you control, after you have legally provisioned the provider API key in the environment, capture a genuine provider event ID at TAKE time and once again within ten minutes before kickoff at CLOSE time. These commands **do not run on ChatGPT's servers, GitHub Actions, or in the background**: you or an authorized local task scheduler must invoke them at the actual clock times.
 
-\`\`\`sh
+```sh
 # Save SPORTSEDGE_ODDS_API_KEY in your private OS environment.
 # Never commit, paste, log or pass it as a command-line argument.
 python -m sportsedge.odds.prospective_clv_cycle NFL /private/sportsedge-original-odds \
@@ -35,11 +35,11 @@ python -m sportsedge.odds.prospective_clv_cycle NFL /private/sportsedge-original
 # At T−5 minutes, while pregame odds are still actually available:
 python -m sportsedge.odds.prospective_clv_cycle NFL /private/sportsedge-original-odds \
   --event-id ACTUAL_PROVIDER_EVENT_ID --phase CLOSE
-\`\`\`
+```
 
 The utility makes one authorized event-scoped API call per invocation using the documented HTTPS endpoint. It safely writes the private original response and SHA256 manifest, and in the same command creates the private normalized two-sided quote CSV and companion audit report. Output names contain unique capture identifiers and phases, and each file is create-only. Original provider response bytes are never rewritten. Provider credentials are not stored in source code, filenames or manifests. The provider-claimed market update timestamp, local capture timestamp, event and exact line are retained separately.
 
-Once both captures exist, run the existing \`ledger/historical_clv_bridge.py\` with the actual **TAKE phase CSV path** and **CLOSE phase CSV path**; do not guess generated filenames. A TAKE-labeled board snapshot is **not** proof that anybody wagered that selection. The resulting paper CLV compares observed market probabilities; it is not a performance ledger for actual bets.
+Once both captures exist, run the existing `ledger/historical_clv_bridge.py` with the actual **TAKE phase CSV path** and **CLOSE phase CSV path**; do not guess generated filenames. A TAKE-labeled board snapshot is **not** proof that anybody wagered that selection. The resulting paper CLV compares observed market probabilities; it is not a performance ledger for actual bets.
 
 No account credentials, local executor, cron job, provider schedule or independent DraftKings receipt was created automatically. A missing key, missing real provider event ID, public checkout destination, stale/one-sided odds or post-start market remains BLOCK/PAPER; unmatched markets are visible with rejection counts. This is a convenience command, not a replacement for the separately verified source provenance, finalized lineup evidence, market-specific model calibration, or Issue #10 release gates.
 
