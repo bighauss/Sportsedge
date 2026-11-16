@@ -1,0 +1,20 @@
+name: NFL team split PIT contract
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/team_split_pit_contract.py'
+      - 'models/nfl/test_team_split_pit_contract.py'
+      - '.github/workflows/nfl-team-split-pit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m unittest models.nfl.test_team_split_pit_contract -v
