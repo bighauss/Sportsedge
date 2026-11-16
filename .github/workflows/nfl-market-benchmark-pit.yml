@@ -1,0 +1,24 @@
+name: NFL original-odds point-in-time market benchmark
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/market_benchmark_pit.py'
+      - 'models/nfl/test_market_benchmark_pit.py'
+      - 'models/nfl/MARKET_BENCHMARK_README.md'
+      - '.github/workflows/nfl-market-benchmark-pit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Paired baseline, original-price grading and PIT source gates
+        run: python -m unittest discover -s models/nfl -p 'test_market_benchmark_pit.py' -v
+      - name: Compile read-only market baseline research
+        run: python -m py_compile models/nfl/market_benchmark_pit.py
