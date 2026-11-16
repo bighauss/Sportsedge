@@ -31,6 +31,25 @@ https://hoop-explorer.com/AiFreeAccounts . No documented public unattended
 MCP/API endpoint or automated source authentication has been verified.
 Do not scrape undocumented endpoints or put API keys in repo or manifests.
 
+## Optional Hoop-Explorer AI (BYOK) setup
+
+The user screenshot from 2026-10-15 shows a **separate on-site** free-provider
+guide at https://hoop-explorer.com/AiFreeAccounts .
+
+1. Open the Hoop-Explorer AI settings and a supported AI analysis page.
+2. Create your own account with a provider shown on the live guide (e.g.
+   OpenRouter's free-model option, subject to provider availability/quotas).
+3. Enable AI in the site, choose BYOK, select the provider/model, and paste
+   the key **in the provider input on Hoop-Explorer**. Never send a key through
+   a ChatGPT message, Github issue, export, or commit.
+4. Review the provider's current free credits, request caps and billing
+   conditions. "Free account" does not guarantee unlimited free inference.
+5. Export filtered/split analysis as CSV/JSON only where supported and
+   permitted. The exported data is what this SportsEdge companion consumes.
+
+SportsEdge does **not** use or store that on-site key, proxy private requests
+to Hoop-Explorer, or claim the creator's MCP server has been published.
+
 ## Requirements before using real data
 
 - Export the **player leaderboard** and, optionally, the **five-person lineup**
@@ -44,7 +63,10 @@ Do not scrape undocumented endpoints or put API keys in repo or manifests.
 - Record truthful `data_through_utc`, `published_utc`, `captured_utc`.
   If publication / as-of times are unknown, the export is **not** an eligible
   pregame point-in-time research input. Do not invent timestamps.
-- Use end-year season coding: November 2026 → season 2027.
+- Use end-year season coding: November 2026 → game season 2027.
+  Earlier, *fully observed* season-2026 player exports can be analyzed
+  against a 2027 pregame freeze if their source clocks precede it; future
+  source seasons are rejected. Do not mix different seasons in a WOWY join.
 - Build a sidecar manifest per export containing exactly the source fields.
   `columns` maps *canonical field → exact observed column name*, not an
   assumed provider schema. Required player keys: `player_id`, `team_id`,
