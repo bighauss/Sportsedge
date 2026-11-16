@@ -101,8 +101,10 @@ def metadata(manifest, raw, kind, freeze_utc, tipoff_utc):
     if not (through <= published <= captured <= freeze < tip):
         raise Blocked("LOOKAHEAD_OR_SOURCE_CLOCK_ORDER")
     season = season_year(manifest.get("season"), "manifest.season")
-    if tip.year + int(tip.month >= 8) != season:
-        raise Blocked("SEASON_TIPOFF_MISMATCH")
+    # Prior-season player baselines are valid for a future matchup if their
+    # actual source timestamps precede the freeze; future seasons never are.
+    if season > tip.year + int(tip.month >= 8):
+        raise Blocked("SOURCE_SEASON_AFTER_GAME_SEASON")
     columns = manifest.get("columns")
     if not isinstance(columns, dict) or not REQUIRED[kind].issubset(columns):
         raise Blocked("REQUIRED_EXPLICIT_COLUMN_MAP_MISSING")
