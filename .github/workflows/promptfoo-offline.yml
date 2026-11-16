@@ -1,0 +1,31 @@
+name: Promptfoo offline research-contract fixtures
+on:
+  pull_request:
+    paths:
+      - 'integrations/observability/promptfoo/**'
+      - '.github/workflows/promptfoo-offline.yml'
+  push:
+    paths:
+      - 'integrations/observability/promptfoo/**'
+      - '.github/workflows/promptfoo-offline.yml'
+  workflow_dispatch:
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+      PROMPTFOO_DISABLE_TELEMETRY: '1'
+      PROMPTFOO_DISABLE_SHARING: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline fixture-only Promptfoo checks (no AI accounts)
+        run: npm exec --yes --package=promptfoo@0.125.1 -- promptfoo eval --config integrations/observability/promptfoo/promptfooconfig.yaml --no-cache
