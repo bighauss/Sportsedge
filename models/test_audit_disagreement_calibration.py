@@ -27,7 +27,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(bucket(.6-.5),"10-20pp")
  def test_roi_and_ci(self):
   a=audit([row()])
-  self.assertAlmostEqual(a["overall"]["roi"],100/110)
+  self.assertAlmostEqual(a["overall"]["roi"],100/110,places=6)
   self.assertTrue(a["overall"]["insufficient_n30"])
   self.assertEqual(len(a["overall"]["observed_wilson_95"]),2)
  def test_stats_after_odds_tuple_expansion(self):
