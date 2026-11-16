@@ -262,10 +262,16 @@ def report_file(source, destination):
     payload = (json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(dst, flags, 0o600)
-    with os.fdopen(fd, "wb") as fh:
-        fh.write(payload)
-        fh.flush()
-        os.fsync(fh.fileno())
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+    except BaseException:
+        # A half-written report cannot masquerade as completed evidence.
+        # The file was created with O_EXCL by this invocation only.
+        dst.unlink(missing_ok=True)
+        raise
     return report
 
 def main(argv=None):
