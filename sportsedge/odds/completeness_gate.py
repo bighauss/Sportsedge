@@ -120,10 +120,12 @@ def _recorded_quote(row, start):
     captured = _utc(row["captured_utc"])
     if observed > captured:
         raise CompletenessError("ORIGINAL_TIMESTAMP_AFTER_CAPTURE")
-    if (captured - observed).total_seconds() > 300:
-        raise CompletenessError("STALE_ORIGINAL_QUOTE_GT_300S")
+    # A post-kickoff quote is categorically invalid, even when it is stale.
+    # Test start before the age gate so evidence failures are never disguised.
     if observed >= start or captured >= start:
         raise CompletenessError("POST_START_QUOTE")
+    if (captured - observed).total_seconds() > 300:
+        raise CompletenessError("STALE_ORIGINAL_QUOTE_GT_300S")
     h = row.get("source_receipt_sha256")
     if h is not None and (not isinstance(h, str) or not re.fullmatch(r"[a-f0-9]{64}", h)):
         raise CompletenessError("INVALID_SOURCE_RECEIPT_HASH")
