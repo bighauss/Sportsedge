@@ -193,6 +193,19 @@ class HistoricalSourcePairingTests(unittest.TestCase):
         with self.assertRaises(AuditBlocked):
             run(c=raw)
 
+    def test_first_half_push_inference_never_overwrites_book_implied_probability(self):
+        report = run()
+        half = next(r for r in report["matches"] if
+                    r["printed_selection"] == "CBB 1H Rice ML")
+        self.assertEqual(half["ev_math_check"],
+                         "PUSH_AWARE_1H_ML_ORIGINAL_WIN_LOSS_DRAWS_REQUIRED")
+        self.assertIsNone(half["ev_arithmetic_consistent_with_display_rounding"])
+        self.assertAlmostEqual(half["single_book_implied_probability"],
+                               100 / (100 + 575), places=8)
+        self.assertAlmostEqual(half["approx_implied_push_share_from_display"],
+                               1 - 60.3 / 62.675, places=5)
+        self.assertEqual(report["arithmetic_discrepancies"], 0)
+
     def test_ev_disagreement_flagged_without_optimizing(self):
         raw = card_bytes().replace(b"+139.2%", b"+999.0%")
         result = run(c=raw)
