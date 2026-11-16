@@ -1,0 +1,19 @@
+name: Gate A independent source-chain contract synthetic
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/odds/independent_chain_contract.py'
+      - 'sportsedge/odds/test_independent_chain_contract.py'
+      - '.github/workflows/independent-chain.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest sportsedge.odds.test_independent_chain_contract -v
