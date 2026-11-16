@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 from hashlib import sha256
 import json
 from math import isfinite
 from pathlib import Path
 
 from epa_ridge_pit import utc
-from score_walkforward_pit import FEATURE_COLUMNS, private_evidence_path
+from score_walkforward_pit import FEATURE_COLUMNS, private_evidence_path, create_private_output
 
 
 def _unique_json_object(pairs):
@@ -138,11 +139,12 @@ def main():
         ratings, events,
         ratings_sha256="sha256:" + sha256(raw).hexdigest(),
     )
-    with output_path.open("x", newline="", encoding="utf-8") as f:
-        fields = sorted(FEATURE_COLUMNS)
-        writer = csv.DictWriter(f, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    buffer = io.StringIO(newline="")
+    fields = sorted(FEATURE_COLUMNS)
+    writer = csv.DictWriter(buffer, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    create_private_output(args.out, buffer.getvalue().encode("utf-8"))
     print(json.dumps({
         "status": "PAPER_HOLD_0U", "event_rows": len(rows),
         "approved_stake_u": 0, "output": args.out,

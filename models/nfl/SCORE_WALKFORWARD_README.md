@@ -10,7 +10,7 @@ The output reports projected *research-only* team scores and margins, plus walk-
 
 The supplied snapshots and their timestamps are caller assertions. To claim genuine historical pregame predictions, an independent archive must prove the bytes and source publication time were available before each forecast cutoff. Downloading today and backdating `forecast_asof_utc` is prohibited.
 
-**Private-path enforcement:** Both the EPA snapshot bridge and the score walk-forward CLI reject `--ratings`, `--events`, `--features`, `--results` and `--out` whenever the resolved path is within the public SportsEdge Git checkout. This includes `..` traversal and symlinks resolving into the repo. Place original source and output artifacts in a restricted directory outside the repository; the path check does not itself authenticate source timestamps or guarantee filesystem access controls.
+**Private-path enforcement:** Both CLIs reject `--ratings`, `--events`, `--features`, `--results` and `--out` when the **lexical or resolved** path lies inside the public SportsEdge Git checkout, including symlinks pointing into or outward from it. The research CSV and JSON outputs are exclusive-create (`0600`), flushed and synced; any partial newly-created output is deleted when write/fsync fails. Never store original receipt artifacts inside the public repo; path checks and local hashes still do not independently authenticate source publication time.
 
 ## Exact-ID EPA snapshot adapter
 
