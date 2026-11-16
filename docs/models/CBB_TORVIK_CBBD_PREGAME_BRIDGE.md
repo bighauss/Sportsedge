@@ -13,7 +13,7 @@ RESEARCH ONLY / PAPER 0u. This code does not place bets, change frozen v5, edit 
 Create three **private** UTF-8 CSVs outside public GitHub:
 
 1. Ratings (from an authorized T-Rank archive export, e.g., toRvik bart_archive): required headers team,adj_o,adj_d,adj_tempo. Optional date column YYYYMMDD/ISO. All 300+ rows must have exact unique team names and positive finite metrics. Full season ending year passed separately; 2026-27 is season 2027. CSVs sourced from today must NOT be used for predictions frozen on earlier dates.
-2. Explicit review-only crosswalk: cbbd_id,torvik_team. CBBD IDs are positive exact integer strings, target strings match the ratings names exactly and uniquely; one-to-one, no ambiguous mappings. Unmapped games will be blocked with reason EXACT_CBBD_TO_TORVIK_MAPPING_MISSING. This is a distinct identity dataset, not a substring search.
+2. Explicit review-only crosswalk: cbbd_id,cbbd_team_name,torvik_team. CBBD IDs are positive exact integer strings; cbbd_team_name must match the exact provider-supplied homeTeam/awayTeam label in each original CBBD game; torvik_team must match the frozen ratings name exactly. Both provider labels and Torvik targets must be unique (one-to-one). Any mismatch blocks the game, never a fuzzy alias. Unmapped games will be blocked with reason EXACT_CBBD_TO_TORVIK_MAPPING_MISSING. This is a distinct identity dataset, not a substring search.
 3. Season-specific measured HCA research: cbbd_id,home_court_points. Every nonneutral home team must have an explicitly recorded HCA points estimate. No default 3 or 3.36 is filled if missing. This HCA coefficient is not deemed calibrated merely by being present.
 
 Save each through the private create-only raw-byte archiver (one per source file):
