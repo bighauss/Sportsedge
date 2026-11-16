@@ -12,7 +12,14 @@ class Tests(unittest.TestCase):
  def test_missing_hash(self):
   a=audit([row(source_sha256="bad")]);self.assertEqual(a["accepted"],0)
  def test_duplicate(self):
-  a=audit([row(),row()]);self.assertEqual(a["accepted"],1);self.assertEqual(len(a["blocked"]),1)
+  a=audit([row(),row()]);self.assertEqual(a["accepted"],0);self.assertEqual(len(a["blocked"]),2)
+ def test_conflicting_duplicate_quarantines_both(self):
+  a=audit([row(),row(odds="+200",outcome="0")])
+  self.assertEqual(a["accepted"],0)
+  self.assertEqual([x["reason"] for x in a["blocked"]],["DUPLICATE_COLLISION_ALL_ROWS"]*2)
+ def test_unique_other_snapshot_not_duplicate(self):
+  a=audit([row(),row(snapshot_utc="2026-11-15T19:50:00Z")])
+  self.assertEqual(a["accepted"],2)
  def test_push(self):self.assertEqual(audit([row(outcome="push")])["accepted"],0)
  def test_naive(self):self.assertEqual(audit([row(snapshot_utc="2026-11-15T20:00:00")])["accepted"],0)
  def test_invalid_probability(self):self.assertEqual(audit([row(model_p="1.2")])["accepted"],0)
