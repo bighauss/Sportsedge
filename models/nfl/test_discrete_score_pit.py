@@ -323,7 +323,7 @@ class DiscreteScorePrivateArchiveTests(unittest.TestCase):
         h[0]["final_home"] = 21
         h[0]["final_away"] = 24
         out = score_distribution(t, h, lines=l)
-        self.assertEqual(out["score_diagnostics"]["margin_3_frequency"], 0.0)
+        self.assertEqual(out["score_diagnostics"]["margin_3_frequency"], round(14/60, 8))
         self.assertEqual(out["score_diagnostics"]["abs_margin_3_frequency"], .25)
         self.assertEqual(out["score_diagnostics"]["abs_margin_7_frequency"], .5)
         self.assertEqual(out["approved_stake_u"], 0)
