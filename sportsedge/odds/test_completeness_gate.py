@@ -60,7 +60,7 @@ class CompletenessTests(unittest.TestCase):
         s = sample()
         s["events"][0]["market_inventory"].append(
             {"book": "DK", "provider_market_id": "prop-1", "family": "PLAYER_PROP",
-             "period": "FG", "side": "OVER", "line": "61.5"})
+             "period": "FG", "side": "OVER", "line": "61.5", "player_id": "GSIS-1", "stat": "REC_YDS"})
         self.assertIn("OFFERED_MARKET_UNACCOUNTED_FOR", reasons(s))
 
     def test_original_quote_after_capture_rejected(self):
@@ -142,6 +142,103 @@ class CompletenessTests(unittest.TestCase):
         s = sample()
         s["events"][0]["market_inventory"] = []
         self.assertIn("OFFERED_MARKET_INVENTORY_MISSING", reasons(s))
+
+    def test_declared_missing_core_without_fake_provider_market(self):
+        s = sample()
+        s["events"][0]["market_inventory"].pop()
+        s["events"][0]["quotes"].pop()
+        s["events"][0]["core_absences"] = [{
+            "book": "DK", "family": "TOTAL", "period": "FG", "side": "UNDER",
+            "reason": "NO_AUTHORIZED_ACCESS", "noted_at_utc": "2026-11-16T21:00:01Z"
+        }]
+        r = evaluate(s)
+        self.assertEqual(r["status"], "PAPER_0U_DECLARED_CORE_GAPS")
+        self.assertEqual(r["failures"], [])
+        self.assertFalse(r["gate_a_authenticated"])
+
+    def test_not_offered_unverified_fails(self):
+        s = sample()
+        s["events"][0]["market_inventory"].pop()
+        s["events"][0]["quotes"].pop()
+        s["events"][0]["core_absences"] = [{
+            "book": "DK", "family": "TOTAL", "period": "FG", "side": "UNDER",
+            "reason": "NOT_OFFERED", "noted_at_utc": "2026-11-16T21:00:01Z"
+        }]
+        self.assertIn("CORE_ABSENCE_REASON_UNVERIFIED_OR_INVALID", reasons(s))
+
+    def test_late_core_absence_fails(self):
+        s = sample()
+        s["events"][0]["market_inventory"].pop()
+        s["events"][0]["quotes"].pop()
+        s["events"][0]["core_absences"] = [{
+            "book": "DK", "family": "TOTAL", "period": "FG", "side": "UNDER",
+            "reason": "NOT_CAPTURED", "noted_at_utc": "2026-11-17T01:00:00Z"
+        }]
+        self.assertIn("CORE_ABSENCE_NOTED_AFTER_START", reasons(s))
+
+    def test_absent_but_present_conflict(self):
+        s = sample()
+        s["events"][0]["core_absences"] = [{
+            "book": "DK", "family": "TOTAL", "period": "FG", "side": "UNDER",
+            "reason": "NOT_CAPTURED", "noted_at_utc": "2026-11-16T21:00:01Z"
+        }]
+        self.assertIn("CORE_SLOT_PRESENT_AND_ABSENT_CONFLICT", reasons(s))
+
+    def test_duplicate_absences_fail(self):
+        s = sample()
+        s["events"][0]["market_inventory"].pop()
+        s["events"][0]["quotes"].pop()
+        a = {"book": "DK", "family": "TOTAL", "period": "FG", "side": "UNDER",
+             "reason": "NOT_CAPTURED", "noted_at_utc": "2026-11-16T21:00:01Z"}
+        s["events"][0]["core_absences"] = [a, dict(a)]
+        self.assertIn("DUPLICATE_CORE_ABSENCE", reasons(s))
+
+    def test_two_players_shared_market_id_not_collapsed(self):
+        s = sample()
+        for player in ("GSIS-1", "GSIS-2"):
+            row = {"book": "DK", "provider_market_id": "shared-stat-market",
+                   "family": "PLAYER_PROP", "period": "FG", "side": "OVER",
+                   "line": "61.5", "player_id": player, "stat": "REC_YDS",
+                   "settlement": "FG_INCL_OT"}
+            s["events"][0]["market_inventory"].append(row)
+            s["events"][0]["quotes"].append({**row, "price_american": -110,
+                "original_observed_utc": "2026-11-16T21:00:00Z",
+                "captured_utc": "2026-11-16T21:00:01Z"})
+        self.assertEqual(evaluate(s)["failures"], [])
+
+    def test_player_prop_requires_ids(self):
+        s = sample()
+        s["events"][0]["market_inventory"].append({
+            "book": "DK", "provider_market_id": "stat-market",
+            "family": "PLAYER_PROP", "period": "FG", "side": "OVER", "line": "61.5"})
+        from sportsedge.odds.completeness_gate import CompletenessError
+        with self.assertRaisesRegex(CompletenessError, "PLAYER_AND_STAT_IDENTITY_REQUIRED"):
+            evaluate(s)
+
+    def test_two_team_totals_not_collapsed(self):
+        s = sample()
+        for team in ("SEA", "LV"):
+            row = {"book": "DK", "provider_market_id": "team-total",
+                   "family": "TEAM_TOTAL", "period": "FG",
+                   "side": "UNDER", "line": "20.5", "team_id": team}
+            s["events"][0]["market_inventory"].append(row)
+            s["events"][0]["quotes"].append({**row, "price_american": -105,
+                "original_observed_utc": "2026-11-16T21:00:00Z",
+                "captured_utc": "2026-11-16T21:00:01Z"})
+        self.assertEqual(evaluate(s)["failures"], [])
+
+    def test_stale_original_quote_not_counted_as_fresh(self):
+        s = sample()
+        s["events"][0]["quotes"][0]["original_observed_utc"] = "2026-11-16T20:50:00Z"
+        self.assertIn("STALE_ORIGINAL_QUOTE_GT_300S", reasons(s))
+
+    def test_after_start_exclusion_rejected(self):
+        s = sample()
+        q = s["events"][0]["quotes"].pop()
+        s["events"][0]["exclusions"].append({
+            **{k: q[k] for k in ("book","provider_market_id","family","period","side","line")},
+            "reason": "NO_PRICE", "noted_at_utc": "2026-11-17T01:00:00Z"})
+        self.assertIn("EXCLUSION_NOTED_AFTER_START", reasons(s))
 
     def test_fake_clv_and_official_not_created(self):
         s = sample()
