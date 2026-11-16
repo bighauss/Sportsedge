@@ -1,0 +1,24 @@
+name: NFL situational as-of source gate tests
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/situational_asof_pit.py'
+      - 'models/nfl/test_situational_asof_pit.py'
+      - 'models/nfl/SITUATIONAL_ASOF_README.md'
+      - '.github/workflows/nfl-situational-asof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  situation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: QB rest roof weather chronological fixture checks
+        run: python -m unittest discover -s models/nfl -p 'test_situational_asof_pit.py' -v
+      - name: Compile research source gate
+        run: python -m py_compile models/nfl/situational_asof_pit.py
