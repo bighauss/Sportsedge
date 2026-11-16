@@ -4,3 +4,9 @@ out/
 models/*/samples/
 models/*/sample/
 models/*/sample_inputs/
+
+# Research observability outputs: never commit private evidence or telemetry
+mlruns/
+.promptfoo/
+integrations/observability/out/
+integrations/observability/*.bin
