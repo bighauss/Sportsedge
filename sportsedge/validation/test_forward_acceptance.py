@@ -71,6 +71,28 @@ class AuditContract(unittest.TestCase):
         r=analyze(p)
         self.assertFalse(r["gates"]["B_PIT"]["structural_threshold_met"])
 
+    def test_gate_b_does_not_pass_when_99_cards_have_no_pit_package(self):
+        """Adversarial: one complete PIT card cannot cover 99 empty PIT cards."""
+        p = fixture()
+        for row in p["cards"][:-1]:
+            row["pit_total"] = 0
+            row["pit_complete"] = 0
+        report = analyze(p)
+        gate = report["gates"]["B_PIT"]
+        self.assertEqual(gate["reported_fraction"], 1.0)
+        self.assertEqual(gate["reported_zero_pit_cards_last_100"], 99)
+        self.assertFalse(gate["structural_threshold_met"])
+        self.assertFalse(report["release_certified"])
+
+    def test_gate_b_all_cards_with_pit_packages_still_passes_structural_only(self):
+        """The existing clean reported fixture should remain structurally eligible."""
+        report = analyze(fixture())
+        gate = report["gates"]["B_PIT"]
+        self.assertEqual(gate["reported_zero_pit_cards_last_100"], 0)
+        self.assertTrue(gate["structural_threshold_met"])
+        self.assertFalse(gate["externally_certified"])
+        self.assertEqual(report["approved_stake_u"], 0)
+
     def test_structural_clv_requires_exact_market_and_later_close(self):
         p=fixture()
         p["clv_triples"][0]["market_identity_matched"]=False
