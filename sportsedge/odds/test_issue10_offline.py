@@ -15,6 +15,8 @@ from sportsedge.odds.evidence import (
 )
 from sportsedge.odds.storage import EvidenceChain, REPOSITORY_ROOT
 from sportsedge.odds.card_gate import gate_candidate
+from research.risk.v22_policy_guard import VERSION as SELECTED_V22_POLICY
+from research.risk.strict_v21_v22 import POLICY_VERSION as EXECUTED_STRICT_POLICY
 
 UTC = timezone.utc
 D = datetime(2026, 11, 15, 17, 3, tzinfo=UTC)
@@ -426,7 +428,11 @@ class TestExportAndStorage(unittest.TestCase):
         with patch("sportsedge.odds.card_gate.diagnostic",
                    return_value={"status":"PAPER_0U","flags":[]}):
             good=gate_candidate(candidate,dual,pit,primary,D,secondary=secondary)
-            self.assertEqual(good["status"],"PAPER_0U")
+            self.assertEqual(good["status"],"BLOCK")
+            self.assertIn("GATE_E_V22_CARD_LEDGER_NOT_CONNECTED",good["reasons"])
+            self.assertIn("SELECTED_V22_POLICY_VERSION_MISSING_OR_MISMATCHED",good["reasons"])
+            self.assertFalse(good["gate_e_v22_connected"])
+            self.assertTrue(good["risk_policy_conflict"])
             self.assertIsNone(good["card"])
             self.assertEqual(good["approved_stake_u"],0)
             cases={
@@ -446,6 +452,85 @@ class TestExportAndStorage(unittest.TestCase):
                     self.assertEqual(outcome["status"],"BLOCK")
                     self.assertIn(reason,outcome["reasons"])
                     self.assertEqual(outcome["approved_stake_u"],0)
+
+    def test_selected_v22_cannot_be_certified_by_strict_game_cap_engine(self):
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        candidate={
+            "bet_id":"v22-selected","rules_version":SELECTED_V22_POLICY,
+            "event_id":primary.market.event_id,"market":"SPREAD","sport":"NFL",
+            "period":"FG","side":"HOME","line":"-3.5","price_american":-110,
+            "p_model":"0.60","p_market_novig":"0.50","ratings_half_present":False,
+            "source_receipt_verified":True,"independent_model_verified":True,
+            "model_freeze_verified":True,"independent_quote_chain_verified":True,
+        }
+        result=gate_candidate(candidate,dual,pit,primary,D,secondary=secondary)
+        self.assertEqual(result["status"],"BLOCK")
+        self.assertEqual(result["selected_risk_policy_version"],SELECTED_V22_POLICY)
+        self.assertEqual(result["executed_risk_policy_version"],EXECUTED_STRICT_POLICY)
+        self.assertEqual(result["declared_candidate_risk_policy_version"],SELECTED_V22_POLICY)
+        self.assertEqual(result["v22_original_gap_pp_unattested"],"10.00")
+        self.assertEqual(result["v22_effective_gap_pp_unattested"],"5.00")
+        self.assertNotIn("SELECTED_V22_POLICY_VERSION_MISSING_OR_MISMATCHED",result["reasons"])
+        self.assertIn("EXECUTING_STRICT_GAME_2U_CAP_CONFLICTS_WITH_SELECTED_V22",result["reasons"])
+        self.assertIn("V22:UNVERIFIED_SOURCE_RECEIPT_VERIFIED",result["reasons"])
+        self.assertEqual(result["approved_stake_u"],0)
+        self.assertFalse(result["gate_e_v22_connected"])
+        self.assertIsNone(result["card"])
+
+    def test_unknown_and_missing_policy_versions_cannot_enter_card(self):
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        for declared in (None,EXECUTED_STRICT_POLICY,"v2.1","v2.2","INVENTED_V3"):
+            with self.subTest(declared=declared):
+                candidate={"bet_id":"policy-case"}
+                if declared is not None:
+                    candidate["rules_version"]=declared
+                result=gate_candidate(candidate,dual,pit,primary,D,secondary=secondary)
+                self.assertEqual(result["status"],"BLOCK")
+                self.assertIn("SELECTED_V22_POLICY_VERSION_MISSING_OR_MISMATCHED",result["reasons"])
+                self.assertEqual(result["approved_stake_u"],0)
+
+    def test_mocked_paper_guards_cannot_bypass_v22_gate_e_conflict(self):
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        with patch("sportsedge.odds.card_gate.diagnostic",
+                   return_value={"status":"PAPER_0U","flags":[]}):
+            with patch("sportsedge.odds.card_gate.assess_v22",
+                       return_value={"status":"PAPER_0U","flags":[]}):
+                result=gate_candidate(
+                    {"bet_id":"both-mocked","rules_version":SELECTED_V22_POLICY},
+                    dual,pit,primary,D,secondary=secondary,
+                )
+        self.assertEqual(result["status"],"BLOCK")
+        self.assertIn("GATE_E_V22_CARD_LEDGER_NOT_CONNECTED",result["reasons"])
+        self.assertTrue(result["risk_policy_conflict"])
+        self.assertFalse(result["gate_e_v22_connected"])
+
+    def test_chain_preserves_selected_executed_policy_version_conflict(self):
+        primary=quote()
+        secondary=quote("FD","FanDuel","FanDuel")
+        dual=evaluate_dual_source(primary,secondary,D,market_mapping_verified=True)
+        pit=PITBinding((),frozenset(),D-timedelta(minutes=2))
+        with tempfile.TemporaryDirectory() as root:
+            store=EvidenceChain(root)
+            report=gate_candidate(
+                {"bet_id":"policy-chain","rules_version":SELECTED_V22_POLICY},
+                dual,pit,primary,D,secondary=secondary,chain=store,
+            )
+            self.assertEqual(store.verify()[0],1)
+            payload=json.loads(store.path.read_text().splitlines()[0])["payload"]
+            self.assertEqual(payload["state"],"BLOCK")
+            self.assertEqual(payload["approved_stake_u"],0)
+            self.assertIn("SELECTED_POLICY:"+SELECTED_V22_POLICY,payload["reason_codes"])
+            self.assertIn("EXECUTED_POLICY:"+EXECUTED_STRICT_POLICY,payload["reason_codes"])
+            self.assertEqual(report["hash_chain_head"],store.verify()[1])
 
     def test_forged_dual_receipt_ids_do_not_create_paper_eligible_card(self):
         from unittest.mock import patch
