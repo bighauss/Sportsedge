@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import sportsedge.validation.seven_sport_pit_freeze as module
+from unittest.mock import patch
 
 from sportsedge.validation.seven_sport_pit_freeze import (
     ROOT, SPORTS, analyze, freeze_file, _parse,
@@ -146,7 +148,7 @@ class SevenSportFreeze(unittest.TestCase):
 
     def test_model_file_outside_repository_cannot_claim_repo_code(self):
         model = dict(self.req["model_code"], path="../../etc/passwd")
-        with self.assertRaisesRegex(ValueError, "MODEL_CODE_MUST_BE_IN_SPORT_DIRECTORY"):
+        with self.assertRaisesRegex(ValueError, "REPO_RELATIVE_CODE_PATH_REQUIRED"):
             self.analyze(model_code=model)
 
     def test_training_cutoff_after_registration_rejected(self):
@@ -204,6 +206,53 @@ class SevenSportFreeze(unittest.TestCase):
         feature_path.chmod(0o644)
         with self.assertRaisesRegex(ValueError, "PRIVATE_FILE_PERMISSIONS_REQUIRED"):
             self.analyze()
+
+    def test_feature_parent_symlink_refused(self):
+        source = dict(self.req["feature_sources"][0])
+        original = Path(source["file"]["path"])
+        alias_dir = self.root / "aliased_private_parent"
+        alias_dir.symlink_to(self.root, target_is_directory=True)
+        source["file"] = dict(source["file"], path=str(alias_dir / original.name))
+        with self.assertRaisesRegex(ValueError, "SYMLINK_FORBIDDEN:feature_0"):
+            self.analyze(feature_sources=[source])
+
+    def test_model_code_symlink_alias_refused_before_resolve(self):
+        fake_root = self.root / "synthetic_repo"
+        path = fake_root / "models" / "nfl"
+        path.mkdir(parents=True)
+        original = path / "actual.py"
+        original.write_bytes(b"MODEL_VALUE = 1\\n")
+        alias = path / "alias.py"
+        alias.symlink_to(original)
+        code = {"path": "models/nfl/alias.py",
+                "sha256": "sha256:" + sha256(original.read_bytes()).hexdigest()}
+        with patch.object(module, "ROOT", fake_root):
+            with self.assertRaisesRegex(ValueError, "MODEL_CODE_SYMLINK_ALIAS"):
+                self.analyze(model_code=code)
+
+    def test_dotdot_model_code_alias_not_claimed_as_canonical(self):
+        code = dict(self.req["model_code"],
+                    path="models/nfl/../nfl/discrete_score_pit.py")
+        with self.assertRaisesRegex(ValueError, "REPO_RELATIVE_CODE_PATH_REQUIRED"):
+            self.analyze(model_code=code)
+
+    def test_private_source_swap_between_check_and_open_blocked(self):
+        original = Path(self.req["feature_sources"][0]["file"]["path"])
+        replacement = self.root / "alternate_source.json"
+        replacement.write_bytes(original.read_bytes())  # same SHA to prove race
+        replacement.chmod(0o600)
+        real_preflight = module._private_path
+
+        def swap_after_check(path, label, *, output=False):
+            resolved = real_preflight(path, label, output=output)
+            if label == "feature_0":
+                original.unlink()
+                original.symlink_to(replacement)
+            return resolved
+
+        with patch.object(module, "_private_path", side_effect=swap_after_check):
+            with self.assertRaisesRegex(ValueError, "SOURCE_NOFOLLOW_OPEN_FAILED:feature_0"):
+                self.analyze()
 
     def test_policy_id_is_not_caller_supplied(self):
         self.assertEqual(self.analyze()["policy_version"],

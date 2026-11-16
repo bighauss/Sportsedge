@@ -78,7 +78,9 @@ def _private_path(path, label, *, output=False):
     resolved = absolute.resolve()
     if _contained(absolute, ROOT) or _contained(resolved, ROOT):
         raise ValueError("PUBLIC_REPOSITORY_PATH:" + label)
-    if p.is_symlink():
+    # Resolve-only checks hide symlinked parent directories, whose targets
+    # may change between validation and opening the source.
+    if any(part.is_symlink() for part in (absolute, *absolute.parents)):
         raise ValueError("SYMLINK_FORBIDDEN:" + label)
     if not resolved.parent.is_dir() or (resolved.parent.stat().st_mode & 0o077):
         raise ValueError("PRIVATE_PARENT_PERMISSIONS_REQUIRED:" + label)
@@ -96,11 +98,30 @@ def _private_path(path, label, *, output=False):
 
 
 def _raw_file(path, label):
+    """Bind bounded source data to one no-follow owner-private file descriptor."""
     resolved = _private_path(path, label)
-    raw = resolved.read_bytes()
-    if not 0 < len(raw) <= MAX_BYTES:
-        raise ValueError("SOURCE_SIZE_INVALID:" + label)
-    return raw
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(resolved, flags)
+    except OSError:
+        raise ValueError("SOURCE_NOFOLLOW_OPEN_FAILED:" + label) from None
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("MISSING_REGULAR_SOURCE:" + label)
+        if metadata.st_mode & 0o077:
+            raise ValueError("PRIVATE_FILE_PERMISSIONS_REQUIRED:" + label)
+        if not 0 < metadata.st_size <= MAX_BYTES:
+            raise ValueError("SOURCE_SIZE_INVALID:" + label)
+        with os.fdopen(fd, "rb") as source:
+            fd = -1
+            raw = source.read(MAX_BYTES + 1)
+        if not 0 < len(raw) <= MAX_BYTES:
+            raise ValueError("SOURCE_SIZE_INVALID:" + label)
+        return raw
+    finally:
+        if fd >= 0:
+            os.close(fd)
 
 
 def _artifact(item, label, *, public_code=False, sport=None):
@@ -111,7 +132,9 @@ def _artifact(item, label, *, public_code=False, sport=None):
         raise ValueError("INVALID_SHA256:" + label)
     if public_code:
         rawpath = item["path"]
-        if not isinstance(rawpath, str) or rawpath.startswith("/") or "\\" in rawpath:
+        if (not isinstance(rawpath, str) or not rawpath or
+                rawpath.startswith("/") or "\\" in rawpath or
+                any(segment in ("", ".", "..") for segment in rawpath.split("/"))):
             raise ValueError("REPO_RELATIVE_CODE_PATH_REQUIRED")
         expected_prefix = "models/" + str(sport).lower() + "/"
         if rawpath.startswith("models/common/"):
@@ -120,6 +143,13 @@ def _artifact(item, label, *, public_code=False, sport=None):
             raise ValueError("CROSS_SPORT_MODEL_CODE_FORBIDDEN")
         if not rawpath.startswith(expected_prefix):
             raise ValueError("MODEL_CODE_MUST_BE_IN_SPORT_DIRECTORY")
+        # Reject symlinked file or directory aliases *before* resolve().
+        # A source-repo hash of the target alone cannot verify a claimed path.
+        cursor = ROOT
+        for segment in Path(rawpath).parts:
+            cursor = cursor / segment
+            if cursor.is_symlink():
+                raise ValueError("MODEL_CODE_SYMLINK_ALIAS")
         filepath = (ROOT / rawpath).resolve()
         if not _contained(filepath, ROOT) or filepath.is_symlink() or (
                 not filepath.is_file() or filepath.suffix != ".py"):
