@@ -1,0 +1,28 @@
+name: Historical CLV reference bridge synthetic contracts
+on:
+  pull_request:
+    paths:
+      - 'ledger/historical_clv_bridge.py'
+      - 'ledger/test_historical_clv_bridge.py'
+      - 'ledger/HISTORICAL_CLV_BRIDGE_README.md'
+      - '.github/workflows/historical-clv-bridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ledger/historical_clv_bridge.py'
+      - 'ledger/test_historical_clv_bridge.py'
+      - 'ledger/HISTORICAL_CLV_BRIDGE_README.md'
+      - '.github/workflows/historical-clv-bridge.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail-closed historical CLV contracts (no live calls)
+        run: python -m unittest discover -s ledger -p 'test_historical_clv_bridge.py' -v
