@@ -151,17 +151,23 @@ def project(game, home, away, league, hca=None, *, max_age_hours=None):
 
 def research_board(items, *, max_age_hours=None):
     """Retain one explicit result for EVERY attempted game; no silent deletes."""
+    # Pre-count all source game identities. Quarantine every ambiguous copy:
+    # accepting the first occurrence makes research selection order-dependent.
+    from collections import Counter
+    items = list(items)
+    ids = [(item.get("game") or {}).get("game_id")
+           if isinstance(item, dict) and isinstance(item.get("game"), dict) else None
+           for item in items]
+    counts = Counter(gid for gid in ids if isinstance(gid, str) and gid.strip())
     results = []
-    seen = set()
     for index, item in enumerate(items):
         game = item.get("game") if isinstance(item, dict) else None
         gid = game.get("game_id") if isinstance(game, dict) else None
         try:
             if not isinstance(gid, str) or not gid.strip():
                 raise Blocked("GAME_ID_REQUIRED")
-            if gid in seen:
+            if counts[gid] > 1:
                 raise Blocked("DUPLICATE_GAME_ID")
-            seen.add(gid)
             outcome = project(game, item.get("home"), item.get("away"),
                               item.get("league"), item.get("hca"),
                               max_age_hours=max_age_hours)
