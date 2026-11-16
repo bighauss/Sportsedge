@@ -1,0 +1,29 @@
+name: NFL score conversion walk-forward synthetic controls
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/epa_ridge_pit.py'
+      - 'models/nfl/score_walkforward_pit.py'
+      - 'models/nfl/feature_snapshot_bridge_pit.py'
+      - 'models/nfl/test_feature_snapshot_bridge_pit.py'
+      - 'models/nfl/test_score_walkforward_pit.py'
+      - 'models/nfl/SCORE_WALKFORWARD_README.md'
+      - '.github/workflows/nfl-score-walkforward.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  score-asof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: PIT score regression suite
+        run: |
+          python -m unittest discover -s models/nfl -p 'test_score_walkforward_pit.py' -v
+          python -m unittest discover -s models/nfl -p 'test_feature_snapshot_bridge_pit.py' -v
+      - name: Compile score conversion research file
+        run: python -m py_compile models/nfl/score_walkforward_pit.py models/nfl/feature_snapshot_bridge_pit.py
