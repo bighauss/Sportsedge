@@ -132,7 +132,7 @@ def _parse_final(final, p):
     a = _integer(final.get("away_score"), "final.away_score", 0, 250)
     if h == a:
         raise Blocked("FULL_GAME_FINAL_TIE_OR_NON_FINAL")
-    return dict(published=published, home=h, away=a, margin=h-a, total=h+a)
+    return dict(published=published, captured=captured, home=h, away=a, margin=h-a, total=h+a)
 
 
 def _parse_quote(quote, p, max_quote_age_hours):
@@ -260,14 +260,14 @@ def audit(rows, *, min_prior=30, max_quote_age_hours=24):
     season_totals = defaultdict(lambda: {"n_evaluated":0,"n_eligible":0})
     for season, records in sorted(by_season.items()):
         # Strict earlier publication time, not simply earlier tipoff.
-        releases = sorted(records,key=lambda x:(x["published"],x["id"]))
+        releases = sorted(records,key=lambda x:(x["captured"],x["id"]))
         predictions = sorted(records,key=lambda x:(x["freeze"],x["id"]))
         ix = 0
         n = 0
         residual_mean = 0.0
         residual_m2 = 0.0
         for p in predictions:
-            while ix < len(releases) and releases[ix]["published"] < p["freeze"]:
+            while ix < len(releases) and releases[ix]["published"] < p["freeze"] and releases[ix]["captured"] < p["freeze"]:
                 t = releases[ix]
                 resid = t["margin"]-t["margin_p"]
                 n += 1
@@ -322,6 +322,7 @@ def audit(rows, *, min_prior=30, max_quote_age_hours=24):
         "per_season": {str(k):v for k,v in sorted(season_totals.items())},
         "rows": all_reports,
         "warnings": [
+            "ONLY_FINALS_PUBLISHED_AND_CAPTURED_BEFORE_FORECAST_ENTER_TRAINING",
             "SELF_ASSERTED_TIMESTAMPS_AND_SHA_DIGESTS_NOT_PROVIDER_AUTHENTICATION",
             "REQUIRES_UNALTERED_PRE_TIP_PREDICTIONS_AND_AUTHENTIC_POSTGAME_RESULTS",
             "NO_LATE_MARKET_DATA_RECONSTRUCTION_OR_CLV",
