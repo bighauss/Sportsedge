@@ -211,11 +211,26 @@ class SimulationBatch:
     generated_at_utc: datetime
     outcomes: tuple[Outcome, ...]
     calibration_status: str = "UNVERIFIED"
+    # Optional for caller-created synthetic batches. Generated research
+    # scenarios MUST carry their complete versioned input specification hash.
+    scenario_spec_sha256: str | None = None
+    scenario_generator_version: str | None = None
 
     def __post_init__(self):
         if self.sport not in SPORTS or not self.event_id or not self.home_id or not self.away_id or self.home_id==self.away_id:
             raise ValueError("INVALID_EVENT_OR_SPORT")
         _hash(self.model_sha256);_hash(self.feature_sha256)
+        if (self.scenario_spec_sha256 is None) != (self.scenario_generator_version is None):
+            raise ValueError("SCENARIO_SPEC_LINEAGE_FIELDS_MUST_BE_PAIRED")
+        if self.scenario_spec_sha256 is not None:
+            try:
+                _hash(self.scenario_spec_sha256)
+            except ValueError as exc:
+                raise ValueError("SCENARIO_SPEC_LINEAGE_HASH_INVALID") from exc
+            if (not isinstance(self.scenario_generator_version,str)
+                    or not self.scenario_generator_version.startswith("SPORTSEDGE_")
+                    or len(self.scenario_generator_version)>128):
+                raise ValueError("SCENARIO_SPEC_LINEAGE_GENERATOR_INVALID")
         if _time(self.asof_utc)>_time(self.generated_at_utc):
             raise ValueError("MODEL_ASOF_AFTER_GENERATION")
         if not self.outcomes:

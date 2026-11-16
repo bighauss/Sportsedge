@@ -9,11 +9,45 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from hashlib import sha256
+import json
 import math
+from pathlib import Path
 import random
 
 from .allmarkets_research import Outcome, SimulationBatch, STAT_NAMES, _hash, _time
 from .projection_bridge import TeamProjection
+
+
+GENERATOR_VERSION = "SPORTSEDGE_GAUSSIAN_RESEARCH_GENERATOR_R1"
+
+
+def scenario_spec_digest(projection: TeamProjection, dispersion: "DistributionInput",
+                         roster_ids: frozenset[str],
+                         player_moments: tuple["PlayerMoment",...],
+                         count: int, seed: int) -> str:
+    """Full input/code fingerprint, NOT a statement of predictive calibration.
+
+    Preserve supplied player-moment order because RNG advances in that order.
+    Exclude wall-clock execution timestamp: identical frozen specs with the
+    same seed/count should yield the same fingerprint and simulated outcomes.
+    """
+    def moment_map(value):
+        return {name: (item.isoformat() if isinstance(item, datetime) else item)
+                for name, item in vars(value).items()}
+
+    definition = {
+        "generator_version": GENERATOR_VERSION,
+        "generator_file_sha256": sha256(Path(__file__).read_bytes()).hexdigest(),
+        "projection": moment_map(projection),
+        "dispersion": moment_map(dispersion),
+        "roster_ids": sorted(roster_ids),
+        "player_moments_in_draw_order": [moment_map(x) for x in player_moments],
+        "scenario_count": count, "seed": seed,
+    }
+    raw = json.dumps(definition, sort_keys=True, separators=(",",":"),
+                     allow_nan=False).encode("utf-8")
+    return "sha256:"+sha256(raw).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -132,6 +166,8 @@ def generate_score_scenarios(
             raise ValueError("PLAYER_NOT_ON_FROZEN_EVENT_ROSTER")
     if len({(p.player_id,p.stat) for p in player_moments})!=len(player_moments):
         raise ValueError("DUPLICATE_PLAYER_STAT_MOMENT")
+    spec_digest=scenario_spec_digest(
+        projection,dispersion,roster_ids,player_moments,count,seed)
     rng=random.Random(seed)
     outcomes=[]
     for _ in range(count):
@@ -157,7 +193,9 @@ def generate_score_scenarios(
         projection.sport,projection.event_id,projection.home_id,projection.away_id,
         roster_ids,projection.model_sha256,projection.feature_sha256,
         projection.asof_utc,generated_at_utc,tuple(outcomes),
-        calibration_status="UNVERIFIED")
+        calibration_status="UNVERIFIED",
+        scenario_spec_sha256=spec_digest,
+        scenario_generator_version=GENERATOR_VERSION)
 
 
 def generator_limitations() -> tuple[str,...]:

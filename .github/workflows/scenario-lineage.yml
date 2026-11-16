@@ -1,0 +1,32 @@
+name: Scenario specification lineage and replay (offline)
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/allmarkets_research.py'
+      - 'sportsedge/markets/run_it_research.py'
+      - 'sportsedge/markets/test_scenario_lineage.py'
+      - 'docs/markets/SCENARIO_LINEAGE.md'
+      - '.github/workflows/scenario-lineage.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/allmarkets_research.py'
+      - 'sportsedge/markets/run_it_research.py'
+      - 'sportsedge/markets/test_scenario_lineage.py'
+      - 'docs/markets/SCENARIO_LINEAGE.md'
+      - '.github/workflows/scenario-lineage.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Scenario fingerprint, replay, original risk and scenario price tests
+        run: python -m unittest -v sportsedge.markets.test_scenario_lineage sportsedge.markets.test_edge_discovery sportsedge.markets.test_run_it_research sportsedge.markets.test_allmarkets_research sportsedge.markets.test_cli

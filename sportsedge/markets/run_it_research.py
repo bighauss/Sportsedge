@@ -66,6 +66,9 @@ def run_research_board(
         # Preserve the underlying simulated probabilities and book comparison;
         # no EV certification or betting admission is implied by this signal.
         signal=evaluate_signal(priced,c.market,c.dk_quote,c.dk_other_side)
+        if signal is not None:
+            signal["scenario_spec_sha256"]=batch.scenario_spec_sha256
+            signal["scenario_generator_version"]=batch.scenario_generator_version
         dual=DualSourceDecision(
             "BLOCK",("PROVIDER_PROVENANCE_NOT_INDEPENDENTLY_AUTHENTICATED",
                      "SECONDARY_INDEPENDENT_BOOK_NOT_VERIFIED"),
@@ -102,6 +105,7 @@ def run_research_board(
             "research_state":priced["status"],
             "research_reasons":priced["reasons"],
             "edge_signal":signal,
+            "scenario_spec_sha256":batch.scenario_spec_sha256,
             "raw_ev_unverified":priced.get("raw_ev_unverified"),
             "blended_ev_unverified":priced.get("blended_ev_unverified"),
             "guard_state":guard["status"],
@@ -116,6 +120,8 @@ def run_research_board(
         "status":"PAPER_0U_RESEARCH_ONLY",
         "sport":batch.sport,"event_id":batch.event_id,
         "model_sha256":batch.model_sha256,"feature_sha256":batch.feature_sha256,
+        "scenario_spec_sha256":batch.scenario_spec_sha256,
+        "scenario_generator_version":batch.scenario_generator_version,
         "submitted_candidates":len(candidates),
         "v21_ran_for_all_candidates":True,
         "guard_checked_count":len(rows),
