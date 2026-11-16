@@ -65,9 +65,9 @@ def _bad_constant(v):
 def _key(row):
     if not isinstance(row, dict):
         raise CompletenessError("NONOBJECT_MARKET_ROW")
-    fields = ("book", "provider_market_id", "family", "period")
+    fields = ("book", "provider_market_id", "family", "period", "side", "line")
     values = tuple(row.get(k) for k in fields)
-    if not all(isinstance(v, str) and v.strip() for v in values):
+    if not all(isinstance(v, str) and v.strip() for v in values[:5]) or not isinstance(values[5], str):
         raise CompletenessError("MARKET_IDENTITY_MISSING")
     return values
 
@@ -76,7 +76,7 @@ def _recorded_quote(row, start):
     mandatory = ("line", "price_american", "original_observed_utc", "captured_utc")
     if any(k not in row for k in mandatory):
         raise CompletenessError("ORIGINAL_QUOTE_FIELDS_MISSING")
-    if not isinstance(row["line"], (str, int, float)) or isinstance(row["line"], bool):
+    if not isinstance(row["line"], str):
         raise CompletenessError("QUOTE_LINE_MISSING")
     if type(row["price_american"]) is not int or not (100 <= abs(row["price_american"]) <= 100000):
         raise CompletenessError("PRICE_NOT_VALID_AMERICAN_INT")
@@ -149,8 +149,11 @@ def evaluate(archive):
         for key in sorted(keys - fulfilled):
             failures.append({"event_id": eid, "market": key, "reason": "OFFERED_MARKET_UNACCOUNTED_FOR"})
         for family in sorted(CORE):
-            if not any(k[0] == "DK" and k[2] == family and k[3] == "FG" for k in keys):
-                failures.append({"event_id": eid, "market": ("DK", family, "FG"), "reason": "CORE_MARKET_MISSING_WITHOUT_EXCLUSION"})
+            expected = ("HOME", "AWAY") if family in ("ML", "SPREAD") else ("OVER", "UNDER")
+            for side in expected:
+                if not any(k[0] == "DK" and k[2] == family and k[3] == "FG" and k[4] == side for k in keys):
+                    failures.append({"event_id": eid, "market": ("DK", family, "FG", side),
+                                     "reason": "CORE_SIDE_MISSING_WITHOUT_EXCLUSION"})
         checks.append({"event_id": eid, "sport": sport, "inventory_count": len(keys),
                        "accounted_count": len(keys & fulfilled), "quote_row_count": len(quotes),
                        "exclusion_count": len(exclusions)})
