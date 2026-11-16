@@ -360,7 +360,7 @@ def main(argv=None):
         lineups, le = load_export(
             args.lineups_export, args.lineups_manifest, kind="lineup",
             freeze_utc=args.freeze_utc, tipoff_utc=args.tipoff_utc,
-            archive_dir=args.archive_dir)
+            archive_dir=args.archive_dir, exploratory=args.exploratory)
         if le["scope_id"] != pe["scope_id"] or le["season"] != pe["season"]:
             raise Blocked("LINEUP_AND_PLAYER_SOURCE_SCOPE_OR_SEASON_DIFFER")
     profile = json.loads(Path(args.role_profile).read_text()) if args.role_profile else None
