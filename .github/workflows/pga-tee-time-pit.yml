@@ -1,0 +1,19 @@
+name: PGA tee-time PIT census synthetic
+on:
+  pull_request:
+    paths:
+      - 'research/pga/tee_time_pit.py'
+      - 'research/pga/test_tee_time_pit.py'
+      - '.github/workflows/pga-tee-time-pit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest research.pga.test_tee_time_pit -v
