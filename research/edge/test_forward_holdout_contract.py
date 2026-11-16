@@ -10,6 +10,21 @@ def row():
 class Tests(unittest.TestCase):
     def test_valid(self):
         x=evaluate(F,[row()]);self.assertEqual(x["denominator"],1);self.assertFalse(x["official"])
+    def test_unhashable_or_nonfinite_selection_id_is_hold_not_crash(self):
+        for bad in (set(), [], {}, float("nan"), float("inf"), True):
+            with self.subTest(bad=bad):
+                r=row();r["line"]=bad
+                with self.assertRaisesRegex(Hold,"DUPLICATE_OR_MISSING_IDENTITY"):
+                    evaluate(F,[r])
+
+    def test_unsettled_invalid_probabilities_cannot_hide_from_census(self):
+        for field,bad in (("model_p",float("nan")),("book_p",None),
+                          ("book_p",True),("model_p",float("inf"))):
+            with self.subTest(field=field,bad=bad):
+                r=row();r["outcome"]=None;r[field]=bad
+                with self.assertRaisesRegex(Hold,"PROBABILITY_INVALID"):
+                    evaluate(F,[r])
+
     def test_duplicate(self):
         with self.assertRaisesRegex(Hold,"DUPLICATE"):evaluate(F,[row(),row()])
     def test_future_feature(self):
