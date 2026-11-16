@@ -15,7 +15,7 @@ import re
 
 from sportsedge.markets.public_release_capture import ASSETS, capture_public_release, require_private_archive_path
 
-ALLOWED = ("NFL_WEEKLY_2026", "NFL_NGS_PASS", "NFL_NGS_RUSH", "NFL_NGS_RECEIVE")
+ALLOWED = ("NFL_PBP_2026", "NFL_WEEKLY_2026", "NFL_NGS_PASS", "NFL_NGS_RUSH", "NFL_NGS_RECEIVE")
 EVENT_ID_RE = re.compile(r"[a-zA-Z0-9_.:-]{1,96}\Z")
 RUN_RE = re.compile(r"[0-9a-zA-Z_-]{1,64}\Z")
 
@@ -85,6 +85,7 @@ def prospective_archive(private_parent, *, assets=ALLOWED, event_id=None,
                 "provider_updated_claim": raw_manifest.get("provider_updated_at_claim"),
                 "retrieved_at_utc": raw_manifest["retrieved_at_utc"],
                 "original_filename": archives[0].name,
+                "source_schema_scan_mode": raw_manifest.get("source_schema_scan_mode"),
                 "publisher_publication_authenticated": False,
             })
     except Exception as exc:
