@@ -92,7 +92,7 @@ class PointInTimeScoreWalkforwardTests(unittest.TestCase):
         self.assertEqual(previous["predictions"][3]["training_games"], 3)
         self.assertEqual(altered["predictions"][3]["training_games"], 2)
         self.assertIsNone(altered["predictions"][3]["projected_home_score"])
-        self.assertEqual(altered["predictions"][9]["training_games"], 9)
+        self.assertEqual(altered["predictions"][9]["training_games"], 8)
 
     def test_missing_score_keeps_prediction_but_no_grade(self):
         rows, outcomes = fixtures()
