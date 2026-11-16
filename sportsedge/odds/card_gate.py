@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from research.risk.strict_v21_v22 import diagnostic, POLICY_VERSION as EXECUTED_STRICT_POLICY
-from research.risk.v22_policy_guard import assess as assess_v22, VERSION as SELECTED_V22_POLICY
+from research.risk.v22_policy_guard import assess as assess_v22, VERSION as HISTORICAL_V22_ADDENDUM
 from .evidence import (DualSourceDecision, PITBinding, QuoteReceipt,
                        evaluate_dual_source, utc)
 from .storage import EvidenceChain
@@ -80,14 +80,16 @@ def gate_candidate(
     sanitized = dict(candidate)
     sanitized["source_receipt_verified"] = False
     sanitized["independent_model_verified"] = False
-    # The owner-adopted v2.2 addendum removes the old per-game cap, but the
-    # executing strict v2.1/v2.2 diagnostic still retains that 2u ceiling.
-    # Evaluate v2.2 as an UNAUTHENTICATED research preflight, and never
-    # silently describe strict-v2.1 card accounting as v2.2 compliance.
-    # Caller booleans are always sanitized; they are not provider attestations.
+    # A LATER owner direction selected the STRICTER of v2.1's 2u event cap
+    # and v2.2's no-cap addendum. That selects the existing 2u strict overlay
+    # for new research; never invent a 1u policy or silently remove the cap.
+    # Continue evaluating older v2.2 conditions as an UNAUTHENTICATED paper
+    # preflight. No source flags are independent provider attestations.
     requested_policy = candidate.get("rules_version")
     v22_inputs = {
-        "rules_version": requested_policy,
+        # Independently test historical addendum arithmetic even when the
+        # candidate correctly declares the newer selected strict policy.
+        "rules_version": HISTORICAL_V22_ADDENDUM,
         "source_receipt_verified": False,
         "independent_model_verified": False,
         "model_freeze_verified": False,
@@ -110,15 +112,17 @@ def gate_candidate(
         v21 = {"status": "BLOCK", "approved_stake_u": 0,
                "flags": ["V21_RUNTIME_ERROR:" + type(exc).__name__]}
     reasons = list(dual.reasons)
-    # This conflict remains an explicit hard Gate E hold even when every
-    # caller-provided 'verified' field is True or a diagnostic is mocked.
-    if requested_policy != SELECTED_V22_POLICY:
-        reasons.append("SELECTED_V22_POLICY_VERSION_MISSING_OR_MISMATCHED")
+    # The later stricter-cap owner direction supersedes the earlier
+    # no-game-cap clause, but Gate E is still not externally certified.
+    # A forged paper diagnostic must never produce a release-eligible card.
+    if requested_policy != EXECUTED_STRICT_POLICY:
+        reasons.append("SELECTED_STRICT_POLICY_VERSION_MISSING_OR_MISMATCHED")
     reasons.extend((
-        "GATE_E_V22_CARD_LEDGER_NOT_CONNECTED",
-        "EXECUTING_STRICT_GAME_2U_CAP_CONFLICTS_WITH_SELECTED_V22",
-        "SELECTED_POLICY:" + SELECTED_V22_POLICY,
+        "GATE_E_STRICT_CARD_LEDGER_NOT_CERTIFIED",
+        "STRICT_2U_EVENT_CAP_OVERRIDES_EARLIER_V22_NO_CAP_ADDENDUM",
+        "SELECTED_POLICY:" + EXECUTED_STRICT_POLICY,
         "EXECUTED_POLICY:" + EXECUTED_STRICT_POLICY,
+        "HISTORICAL_V22_ADDENDUM:" + HISTORICAL_V22_ADDENDUM,
     ))
     v22_flags = v22.get("flags", ())
     if not isinstance(v22_flags, (list, tuple)) or any(
@@ -171,9 +175,8 @@ def gate_candidate(
     v21_blocked = bool(v21_flags) or v21.get("status") != "PAPER_0U"
     if v21_blocked:
         reasons.append("V21_POLICY_BLOCKED")
-    # There is no v2.2-compatible card/ledger implementation yet. The
-    # legacy 2u game ceiling is retained for historical/research diagnostics
-    # only, never a basis for releasing a modern v2.2 betting card.
+    # The selected strict 2u risk overlay remains a research diagnostic,
+    # NOT end-to-end original sportsbook authentication or Gate E approval.
     state = "BLOCK"
     report = {
         "status": state, "card": None, "approved_stake_u": 0,
@@ -184,13 +187,15 @@ def gate_candidate(
         "v21_status": str(v21.get("status", "BLOCK")),
         "v21_diagnostic_u": 0,  # Hide hypothetical stake from a nonvalidated path.
         "v22_status": str(v22.get("status", "BLOCK")),
-        "selected_risk_policy_version": SELECTED_V22_POLICY,
+        "selected_risk_policy_version": EXECUTED_STRICT_POLICY,
+        "historical_v22_addendum_version": HISTORICAL_V22_ADDENDUM,
         "declared_candidate_risk_policy_version": (
             requested_policy if isinstance(requested_policy, str) else None),
         "executed_risk_policy_version": EXECUTED_STRICT_POLICY,
         "v22_original_gap_pp_unattested": v22.get("original_gap_pp"),
         "v22_effective_gap_pp_unattested": v22.get("effective_gap_pp"),
-        "risk_policy_conflict": True,
+        "risk_policy_conflict": requested_policy != EXECUTED_STRICT_POLICY,
+        "strict_2u_game_cap_selected": True,
         "gate_e_v22_connected": False,
         "source_externally_authenticated": False,
         "hash_chain_head": None,
