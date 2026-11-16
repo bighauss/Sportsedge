@@ -49,6 +49,44 @@ def capture(tmp, rows, *, transport=None, key="fake-test-key", clock=STAMP):
 
 
 class CbbdCaptureTests(unittest.TestCase):
+    def test_public_checkout_lexical_and_symlink_aliases_rejected(self):
+        with self.assertRaisesRegex(Hold, "PUBLIC_GIT_REPOSITORY"):
+            safe_path(ROOT/"models"/"cbb"/"no-private-artifact")
+        with tempfile.TemporaryDirectory() as tmp:
+            link=Path(tmp)/"public_alias"
+            link.symlink_to(ROOT,target_is_directory=True)
+            with self.assertRaisesRegex(Hold, "PUBLIC_GIT_REPOSITORY"):
+                safe_path(link/"some-artifact.json")
+
+    def test_exposed_output_directory_blocked_before_provider_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest=Path(tmp)/"world-readable"
+            dest.mkdir()
+            dest.chmod(0o755)
+            seen=[]
+            with self.assertRaisesRegex(Hold, "PRIVATE_DIRECTORY_PERMISSIONS_TOO_BROAD"):
+                capture(dest,[game()],transport=lambda req,n: seen.append(req))
+            self.assertEqual(seen,[])
+            self.assertEqual(list(dest.iterdir()),[])
+
+    def test_original_manifest_and_finals_file_modes_are_0600(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cap=capture(tmp,[game()])
+            raw=Path(cap["raw_path"])
+            manifest=Path(cap["manifest_path"])
+            self.assertEqual(raw.stat().st_mode & 0o077,0)
+            self.assertEqual(manifest.stat().st_mode & 0o077,0)
+            report=Path(tmp)/"new_finals.json"
+            finals_from_capture(raw,manifest,output_path=report)
+            self.assertEqual(report.stat().st_mode & 0o077,0)
+
+    def test_failed_original_fsync_removes_partial_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("cbbd_prospective_capture.os.fsync",side_effect=OSError("synthetic fsync failure")):
+                with self.assertRaisesRegex(OSError, "synthetic fsync failure"):
+                    capture(tmp,[game()])
+            self.assertEqual(list(Path(tmp).iterdir()),[])
+
     def test_requires_explicit_secret_no_network_without_key(self):
         called=[]
         with tempfile.TemporaryDirectory() as tmp:
