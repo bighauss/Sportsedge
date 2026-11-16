@@ -78,6 +78,66 @@ class CompletenessTests(unittest.TestCase):
         s["events"][0]["market_inventory"].append(deepcopy(s["events"][0]["market_inventory"][0]))
         self.assertIn("DUPLICATE_INVENTORY_MARKET", reasons(s))
 
+    def test_conflicting_same_selection_prices_all_copies_quarantined(self):
+        s = sample()
+        # Two source rows make one alleged offer ambiguous; do not pick first.
+        competing = deepcopy(s["events"][0]["quotes"][0])
+        competing["price_american"] = -145
+        s["events"][0]["quotes"].append(competing)
+        result = evaluate(s)
+        self.assertEqual(result["status"], "PAPER_0U_INCOMPLETE")
+        self.assertIn("DUPLICATE_OR_CONFLICTING_SOURCE_DISPOSITION", reasons(s))
+        self.assertIn("OFFERED_MARKET_UNACCOUNTED_FOR", reasons(s))
+        self.assertEqual(result["checks"][0]["quote_row_count"], 7)
+        self.assertEqual(result["checks"][0]["accounted_count"], 5)
+        self.assertEqual(result["approved_stake_u"], 0)
+
+    def test_identical_source_quote_copies_do_not_double_count(self):
+        s = sample()
+        s["events"][0]["quotes"].append(deepcopy(s["events"][0]["quotes"][0]))
+        result = evaluate(s)
+        self.assertIn("DUPLICATE_OR_CONFLICTING_SOURCE_DISPOSITION", reasons(s))
+        self.assertEqual(result["checks"][0]["accounted_count"], 5)
+
+    def test_quote_and_not_offered_claim_same_market_are_conflicted(self):
+        s = sample()
+        quote = s["events"][0]["quotes"][0]
+        s["events"][0]["exclusions"].append({
+            **{k:quote[k] for k in ("book","provider_market_id","family",
+                                    "period","side","line")},
+            "reason": "NOT_OFFERED", "noted_at_utc": "2026-11-16T21:00:01Z",
+        })
+        result = evaluate(s)
+        self.assertIn("DUPLICATE_OR_CONFLICTING_SOURCE_DISPOSITION", reasons(s))
+        self.assertEqual(result["checks"][0]["accounted_count"], 5)
+
+    def test_two_exclusions_for_one_core_outcome_are_conflicted(self):
+        s = sample()
+        quote = s["events"][0]["quotes"].pop()
+        base = {k:quote[k] for k in ("book","provider_market_id","family",
+                                      "period","side","line")}
+        s["events"][0]["exclusions"].extend([
+            {**base,"reason":"NO_PRICE","noted_at_utc":"2026-11-16T21:00:01Z"},
+            {**base,"reason":"NOT_CAPTURED","noted_at_utc":"2026-11-16T21:00:02Z"},
+        ])
+        self.assertIn("DUPLICATE_OR_CONFLICTING_SOURCE_DISPOSITION", reasons(s))
+        self.assertEqual(evaluate(s)["checks"][0]["accounted_count"], 5)
+
+    def test_distinct_alternate_lines_do_not_collide(self):
+        s = sample()
+        original = s["events"][0]["quotes"][0]
+        alt = deepcopy(original)
+        alt["line"] = "1.5"
+        alt["provider_market_id"] = "alternate-rung-1"
+        s["events"][0]["quotes"].append(alt)
+        s["events"][0]["market_inventory"].append({
+            k: alt[k] for k in ("book","provider_market_id","family",
+                                "period","side","line")
+        })
+        report = evaluate(s)
+        self.assertEqual(report["failures"], [])
+        self.assertEqual(report["checks"][0]["accounted_count"], 7)
+
     def test_missing_offered_inventory(self):
         s = sample()
         s["events"][0]["market_inventory"] = []
