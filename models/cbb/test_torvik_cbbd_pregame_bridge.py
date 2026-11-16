@@ -21,6 +21,7 @@ def schedule(game_id=10, **kwargs):
     r={"id":game_id,"season":2027,"startDate":"2026-11-15T20:00:00Z",
        "startTimeTbd":False,"status":"scheduled",
        "homeTeamId":101,"awayTeamId":202,
+       "homeTeam":"Synthetic Home","awayTeam":"Synthetic Away",
        "neutralSite":False,"homePoints":None,"awayPoints":None}
     r.update(kwargs)
     return r
@@ -57,8 +58,8 @@ def fixtures(tmp, *, games=None, ratings=None, mapping=None, home_court=None):
     samples={
         "ratings":("TORVIK_RATINGS", ratings or raw_ratings(),DATA_TIME),
         "map":("CBBD_ID_CROSSWALK",mapping or [
-            {"cbbd_id":"101","torvik_team":"Team1"},
-            {"cbbd_id":"202","torvik_team":"Team2"}],MAP_TIME),
+            {"cbbd_id":"101","cbbd_team_name":"Synthetic Home","torvik_team":"Team1"},
+            {"cbbd_id":"202","cbbd_team_name":"Synthetic Away","torvik_team":"Team2"}],MAP_TIME),
         "hca":("HCA_RESEARCH", home_court or [
             {"cbbd_id":"101","home_court_points":"3.36"}],MAP_TIME),
     }
@@ -113,16 +114,26 @@ class TorvikCbddBridgeTests(unittest.TestCase):
     def test_fuzzy_miami_alias_never_falls_back(self):
         with tempfile.TemporaryDirectory() as tmp:
             kw=fixtures(tmp,mapping=[
-                {"cbbd_id":"101","torvik_team":"Team1"},
-                {"cbbd_id":"999","torvik_team":"Team2"}])
+                {"cbbd_id":"101","cbbd_team_name":"Synthetic Home","torvik_team":"Team1"},
+                {"cbbd_id":"999","cbbd_team_name":"Synthetic Other","torvik_team":"Team2"}])
             r=project_scheduled(**kw)
             self.assertIn("EXACT_CBBD_TO_TORVIK_MAPPING_MISSING",r["results"][0]["reason"])
+
+    def test_provider_name_revalidation_blocks_crosswalk_identity_swap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kw=fixtures(tmp,mapping=[
+                {"cbbd_id":"101","cbbd_team_name":"Wrong Provider Label","torvik_team":"Team1"},
+                {"cbbd_id":"202","cbbd_team_name":"Synthetic Away","torvik_team":"Team2"}])
+            r=project_scheduled(**kw)
+            self.assertEqual(r["projected_rows"],0)
+            self.assertIn("CBBD_PROVIDER_TEAM_NAME_CHANGED_OR_CROSSWALK_WRONG",
+                          r["results"][0]["reason"])
 
     def test_crosswalk_collision_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             kw=fixtures(tmp,mapping=[
-                {"cbbd_id":"101","torvik_team":"Team1"},
-                {"cbbd_id":"202","torvik_team":"Team1"}])
+                {"cbbd_id":"101","cbbd_team_name":"Synthetic Home","torvik_team":"Team1"},
+                {"cbbd_id":"202","cbbd_team_name":"Synthetic Away","torvik_team":"Team1"}])
             with self.assertRaisesRegex(Hold,"CROSSWALK_NOT_BIJECTIVE"):
                 project_scheduled(**kw)
 
@@ -207,8 +218,8 @@ class TorvikCbddBridgeTests(unittest.TestCase):
     def test_crosswalk_refuses_unmatched_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             kw=fixtures(tmp,mapping=[
-                {"cbbd_id":"101","torvik_team":"Team1"},
-                {"cbbd_id":"202","torvik_team":"Miami (OH)"}])
+                {"cbbd_id":"101","cbbd_team_name":"Synthetic Home","torvik_team":"Team1"},
+                {"cbbd_id":"202","cbbd_team_name":"Synthetic Away","torvik_team":"Miami (OH)"}])
             with self.assertRaisesRegex(Hold,"CROSSWALK_TARGET_NOT_IN_FROZEN_RATINGS"):
                 project_scheduled(**kw)
 
