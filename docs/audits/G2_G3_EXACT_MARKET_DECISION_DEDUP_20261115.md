@@ -49,9 +49,12 @@ book may survive as distinct **research observations**, but their
 and ordinary independent-trial Wilson confidence intervals remain NULL.
 
 Extended analysis strata separately identify sport, market, book,
-period and settlement. A half-game player prop is never blended into
-the same score group as a full-game prop simply because the names
-and model probabilities resemble each other.
+period, settlement, exact numeric line, player ID, team ID and stat. A
+half-game player prop or a different threshold cannot be silently blended
+into another market's calibration bucket. Independent event IDs are
+namespaced by sport so an unrelated NFL and CBB event with the same
+external ID are not miscounted as a single game. Each reported audit
+includes an explicit blocked-reason census.
 
 ## Caveats
 
