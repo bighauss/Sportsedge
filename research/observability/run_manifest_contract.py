@@ -26,6 +26,19 @@ def _pairs(pairs):
         out[k] = v
     return out
 
+def _finite_original_json(value):
+    # json.loads accepts numeric exponent overflow (1e999 -> float('inf'))
+    # even when parse_constant rejects NaN and Infinity spellings.
+    if isinstance(value, float) and not math.isfinite(value):
+        raise Hold("NONFINITE_JSON")
+    if isinstance(value, dict):
+        for child in value.values():
+            _finite_original_json(child)
+    elif isinstance(value, list):
+        for child in value:
+            _finite_original_json(child)
+
+
 def verify(manifest_bytes: bytes, source_bytes: dict[str, bytes]):
     """Validate original bytes, identity, clocks and exact source denominator.
 
@@ -36,6 +49,7 @@ def verify(manifest_bytes: bytes, source_bytes: dict[str, bytes]):
     try:
         m = json.loads(manifest_bytes, object_pairs_hook=_pairs,
                        parse_constant=lambda _: (_ for _ in ()).throw(Hold("NONFINITE_JSON")))
+        _finite_original_json(m)
     except Hold:
         raise
     except (UnicodeError, ValueError, TypeError) as exc:
