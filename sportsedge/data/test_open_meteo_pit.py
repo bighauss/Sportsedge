@@ -216,6 +216,14 @@ class WeatherProspectiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ForecastSourceError, "DUPLICATE_ORIGINAL_JSON_KEY"):
             parse_hourly(raw, sample(), now=NOW)
 
+    def test_exponent_overflow_nested_json_rejected(self):
+        # Python's standard JSON parser may convert 1e999 to float infinity.
+        # A nonselected provider metadata field may not bypass that guard.
+        bad = provider().replace(b'"generationtime_ms": 0.6',
+                                 b'"generationtime_ms": 1e999')
+        with self.assertRaisesRegex(ForecastSourceError, "NONFINITE_JSON_EXPONENT"):
+            parse_hourly(bad, sample(), now=NOW)
+
     def test_original_byte_changes_digest(self):
         good = parse_hourly(provider(), sample(), now=NOW)
         other = json.loads(provider())
