@@ -148,7 +148,7 @@ class SevenSportFreeze(unittest.TestCase):
 
     def test_model_file_outside_repository_cannot_claim_repo_code(self):
         model = dict(self.req["model_code"], path="../../etc/passwd")
-        with self.assertRaisesRegex(ValueError, "MODEL_CODE_MUST_BE_IN_SPORT_DIRECTORY"):
+        with self.assertRaisesRegex(ValueError, "REPO_RELATIVE_CODE_PATH_REQUIRED"):
             self.analyze(model_code=model)
 
     def test_training_cutoff_after_registration_rejected(self):
