@@ -24,7 +24,7 @@ from torvik_point_in_time_baseline import project, Blocked
 ROOT = Path(__file__).resolve().parents[2]
 KINDS = {
     "TORVIK_RATINGS": {"team", "adj_o", "adj_d", "adj_tempo"},
-    "CBBD_ID_CROSSWALK": {"cbbd_id", "torvik_team"},
+    "CBBD_ID_CROSSWALK": {"cbbd_id", "cbbd_team_name", "torvik_team"},
     "HCA_RESEARCH": {"cbbd_id", "home_court_points"},
 }
 
@@ -95,8 +95,12 @@ def archive_csv(*, source_path, private_dir, kind, season, clock=None):
                        120 if column == "adj_tempo" else 250)
         else:
             key = _team_id(row["cbbd_id"])
-            if kind == "CBBD_ID_CROSSWALK" and not row["torvik_team"].strip():
-                raise Hold("CROSSWALK_NAME_REQUIRED")
+            if kind == "CBBD_ID_CROSSWALK" and (
+                not row["torvik_team"].strip() or
+                not row["cbbd_team_name"].strip() or
+                row["cbbd_team_name"].strip() != row["cbbd_team_name"]
+            ):
+                raise Hold("CROSSWALK_EXACT_NAMES_REQUIRED")
             if kind == "HCA_RESEARCH":
                 _float(row["home_court_points"], "home_court_points", -20, 20)
         if key in seen:
@@ -186,15 +190,18 @@ def _lookups(rating_rows, map_rows, hca_rows):
                          for n in ("adj_o", "adj_d", "adj_tempo")}
     if len(ratings) < 300:
         raise Hold("TORVIK_UNIVERSE_INCOMPLETE")
-    crosswalk, targets = {}, set()
+    crosswalk, targets, provider_names = {}, set(), set()
     for r in map_rows:
-        ident, name = _team_id(r["cbbd_id"]), r["torvik_team"]
-        if ident in crosswalk or name in targets:
+        ident, name, provider_name = (
+            _team_id(r["cbbd_id"]), r["torvik_team"], r["cbbd_team_name"]
+        )
+        if ident in crosswalk or name in targets or provider_name in provider_names:
             raise Hold("CROSSWALK_NOT_BIJECTIVE")
         if name not in ratings:
             raise Hold("CROSSWALK_TARGET_NOT_IN_FROZEN_RATINGS")
-        crosswalk[ident] = name
+        crosswalk[ident] = (name, provider_name)
         targets.add(name)
+        provider_names.add(provider_name)
     hca = {}
     for r in hca_rows:
         ident = _team_id(r["cbbd_id"])
@@ -282,6 +289,9 @@ def project_scheduled(*, schedule_raw, schedule_manifest,
                 raise Hold("HOME_AWAY_ID_SAME")
             if hid not in crosswalk or aid not in crosswalk:
                 raise Hold("EXACT_CBBD_TO_TORVIK_MAPPING_MISSING")
+            if g.get("homeTeam") != crosswalk[hid][1] or \
+               g.get("awayTeam") != crosswalk[aid][1]:
+                raise Hold("CBBD_PROVIDER_TEAM_NAME_CHANGED_OR_CROSSWALK_WRONG")
             if not g["neutralSite"] and hid not in hca:
                 raise Hold("HCA_INPUT_MISSING_NO_DEFAULT")
             entry = {"game_id": ident, "season": season,
@@ -291,7 +301,7 @@ def project_scheduled(*, schedule_raw, schedule_manifest,
                      "model_sha256": model_hash}
             def team_features(cbbd_id):
                 source = _source(rm, cbbd_id, season)
-                return {**source, **ratings[crosswalk[cbbd_id]]}
+                return {**source, **ratings[crosswalk[cbbd_id][0]]}
             league = {**_source(rm, "LEAGUE", season),
                       "league_adj_o": league_off,
                       "league_tempo": league_tempo}
