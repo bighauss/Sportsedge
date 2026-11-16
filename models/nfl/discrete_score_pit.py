@@ -141,10 +141,10 @@ def _threeway(values):
     }
 
 
-def _market_result(values, label, line):
+def _market_result(values, label, line, sign=1):
     if line is None:
         return {"status": "NOT_CAPTURED", "reason": "NO_SAME_EVENT_PREGAME_LINE"}
-    x = _threeway([x + line for x in values])
+    x = _threeway([x + sign * line for x in values])
     x.update({"status": "PAPER_HOLD_0U", "line": line, "market_family": label,
               "source_authentication": False})
     return x
@@ -227,11 +227,11 @@ def score_distribution(target, history, *, lines=None, min_history=50):
         output["markets"]["SPREAD"] = _market_result(
             margins, "HOME_SPREAD", home_spread)
         output["markets"]["GAME_TOTAL"] = _market_result(
-            totals, "GAME_TOTAL", None if game_total is None else -game_total)
+            totals, "GAME_TOTAL", game_total, sign=-1)
         output["markets"]["HOME_TEAM_TOTAL"] = _market_result(
-            homes, "HOME_TEAM_TOTAL", None if htt is None else -htt)
+            homes, "HOME_TEAM_TOTAL", htt, sign=-1)
         output["markets"]["AWAY_TEAM_TOTAL"] = _market_result(
-            aways, "AWAY_TEAM_TOTAL", None if att is None else -att)
+            aways, "AWAY_TEAM_TOTAL", att, sign=-1)
         output["score_diagnostics"] = {
             "empirical_pairs": len(pairs),
             "mean_home": round(sum(homes) / len(homes), 5),
