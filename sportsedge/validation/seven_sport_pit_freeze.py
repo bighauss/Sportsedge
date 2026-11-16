@@ -103,7 +103,7 @@ def _raw_file(path, label):
     return raw
 
 
-def _artifact(item, label, *, public_code=False):
+def _artifact(item, label, *, public_code=False, sport=None):
     if not isinstance(item, dict) or set(item) != FILE_KEYS:
         raise ValueError("INVALID_FILE_DESCRIPTOR:" + label)
     given = item["sha256"]
@@ -113,6 +113,11 @@ def _artifact(item, label, *, public_code=False):
         rawpath = item["path"]
         if not isinstance(rawpath, str) or rawpath.startswith("/") or "\\" in rawpath:
             raise ValueError("REPO_RELATIVE_CODE_PATH_REQUIRED")
+        expected_prefix = "models/" + str(sport).lower() + "/"
+        if rawpath.startswith("models/") and not rawpath.startswith(expected_prefix):
+            raise ValueError("CROSS_SPORT_MODEL_CODE_FORBIDDEN")
+        if not rawpath.startswith(expected_prefix):
+            raise ValueError("MODEL_CODE_MUST_BE_IN_SPORT_DIRECTORY")
         filepath = (ROOT / rawpath).resolve()
         if not _contained(filepath, ROOT) or filepath.is_symlink() or (
                 not filepath.is_file() or filepath.suffix != ".py"):
@@ -156,7 +161,7 @@ def analyze(request, *, actual_now=None):
     # timestamp relabeling or snapshots created after kickoff.
     if not freeze <= now <= freeze + timedelta(minutes=5) or not now < tip:
         raise ValueError("FREEZE_NOT_PROSPECTIVE_WITH_CURRENT_CLOCK")
-    code = _artifact(request["model_code"], "model_code", public_code=True)
+    code = _artifact(request["model_code"], "model_code", public_code=True, sport=request["sport"])
     config = _artifact(request["model_config"], "model_config")
     features = request["feature_sources"]
     if not isinstance(features, list) or not (1 <= len(features) <= 1000):
