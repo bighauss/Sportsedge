@@ -138,6 +138,7 @@ def build_ratings(plays, games, *, asof_utc, source_observed_utc,
               "excluded_missing_epa": 0, "excluded_wp_filter": 0}
     teams = set()
     used_games = set()
+    seen_plays = set()
     for row in plays:
         counts["source_rows"] += 1
         if not isinstance(row, dict) or not str(row.get("game_id") or ""):
@@ -164,6 +165,19 @@ def build_ratings(plays, games, *, asof_utc, source_observed_utc,
         if (passed == "1") == (rushed == "1"):
             counts["excluded_non_scrimmage"] += 1
             continue
+        # nflfastR identifies a play by the (game_id, drive, play_id)
+        # composite. Non-scrimmage rows can lack these values and are
+        # excluded first, but every eligible pass/rush requires them.
+        play_id = row.get("play_id")
+        drive = row.get("drive")
+        if play_id is None or not str(play_id).strip():
+            raise ValueError("PBP_PLAY_ID_MISSING")
+        if drive is None or not str(drive).strip():
+            raise ValueError("PBP_DRIVE_MISSING")
+        source_key = (game_id, str(drive).strip(), str(play_id).strip())
+        if source_key in seen_plays:
+            raise ValueError("DUPLICATE_PBP_PLAY_ID")
+        seen_plays.add(source_key)
         if row.get("epa") in (None, ""):
             counts["excluded_missing_epa"] += 1
             continue
@@ -222,9 +236,10 @@ def main():
         manifest = json.load(f)
     with raw.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        required = {"game_id", "posteam", "defteam", "pass", "rush", "epa"}
-        if not reader.fieldnames or not required.issubset(reader.fieldnames):
-            raise ValueError("MISSING_PBP_COLUMNS")
+        required = {"game_id", "drive", "play_id", "posteam", "defteam", "pass", "rush", "epa"}
+        if (not reader.fieldnames or len(reader.fieldnames) != len(set(reader.fieldnames))
+                or not required.issubset(reader.fieldnames)):
+            raise ValueError("MISSING_OR_DUPLICATE_PBP_COLUMNS")
         result = build_ratings(
             reader, manifest, asof_utc=args.asof_utc,
             source_observed_utc=args.source_observed_utc,

@@ -26,6 +26,8 @@ FUTURE = {
 def play(game_id, offense, defense, kind, epa, wp="0.5"):
     return {
         "game_id": game_id,
+        "play_id": f"{game_id}:{offense}:{defense}:{kind}:{epa}",
+        "drive": "1",
         "posteam": offense,
         "defteam": defense,
         "pass": "1" if kind == "pass" else "0",
@@ -137,6 +139,42 @@ class EPAPITTests(unittest.TestCase):
         rows[0]["pass"] = "maybe"
         with self.assertRaisesRegex(ValueError, "INVALID_PASS_RUSH_FLAG"):
             model(rows)
+
+    def test_duplicate_play_id_does_not_inflate_epa(self):
+        rows = fixture()
+        duplicate = dict(rows[0])
+        duplicate["epa"] = "5000"  # contradictory copy, same source play ID
+        rows.append(duplicate)
+        with self.assertRaisesRegex(ValueError, "DUPLICATE_PBP_PLAY_ID"):
+            model(rows)
+
+    def test_missing_play_id_refused(self):
+        rows = fixture()
+        rows[0].pop("play_id")
+        with self.assertRaisesRegex(ValueError, "PBP_PLAY_ID_MISSING"):
+            model(rows)
+
+    def test_same_play_id_on_different_drive_is_distinct(self):
+        # Official nflfastR dictionary identifies plays by game+drive+play.
+        rows = fixture()
+        again = dict(rows[0])
+        again["drive"] = "2"
+        result = model(rows + [again])
+        self.assertEqual(result["units"]["pass"]["play_count"], 5)
+
+    def test_missing_drive_refused_on_scrimmage_play(self):
+        rows = fixture()
+        rows[0].pop("drive")
+        with self.assertRaisesRegex(ValueError, "PBP_DRIVE_MISSING"):
+            model(rows)
+
+    def test_non_scrimmage_without_play_id_excluded(self):
+        rows = fixture() + [{"game_id": "g1", "posteam": "SEA",
+                             "defteam": "LV", "pass": "0", "rush": "0",
+                             "epa": "0", "wp": "0.5"}]
+        result = model(rows)
+        self.assertEqual(result["census"]["excluded_non_scrimmage"], 1)
+        self.assertEqual(result["units"]["pass"]["play_count"], 4)
 
     def test_wrong_team_identity_refused(self):
         rows = fixture()
