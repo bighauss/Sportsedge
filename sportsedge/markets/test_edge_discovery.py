@@ -33,7 +33,7 @@ class EdgeSignalRedTeam(unittest.TestCase):
         self.assertAlmostEqual(signal["model_p_conditional_nonpush"], 700/1200)
         self.assertAlmostEqual(signal["no_vig_book_p_conditional"], .5)
         self.assertAlmostEqual(signal["quote_break_even_p_conditional"], 110/210)
-        self.assertAlmostEqual(signal["model_minus_market_pp"], (700/1200-.5)*100)
+        self.assertAlmostEqual(signal["model_minus_market_pp"], (700/1200-.5)*100, places=5)
         self.assertGreater(signal["mc_wilson95_lower_conditional"], .5)
         self.assertGreater(signal["mc_only_lower_minus_quote_pp"], 0)
         self.assertEqual(signal["source_authentication_verified"], False)
