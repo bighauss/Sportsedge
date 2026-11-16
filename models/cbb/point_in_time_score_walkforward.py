@@ -91,6 +91,8 @@ def _parse_prediction(record):
     tip = _time(record.get("tipoff_utc"), "tipoff_utc")
     if freeze >= tip:
         raise Blocked("PREDICTION_NOT_FROZEN_PRE_TIP")
+    if tip.year + int(tip.month >= 8) != season:
+        raise Blocked("SEASON_END_YEAR_DOES_NOT_MATCH_TIP_DATE")
     _hash(record.get("model_sha256"), "model_sha256")
     sources = record.get("source_clock_consistent_not_authenticated")
     if not isinstance(sources, dict) or not {"home", "away", "league"}.issubset(sources):
