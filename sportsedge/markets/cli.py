@@ -24,6 +24,7 @@ from .projection_bridge import TeamProjection, from_claude_sport, from_nfl_ridge
 from .pit_source_manifest import verify_model_feature_manifest
 from .projection_distribution import DistributionInput,generate_score_scenarios
 from .score_dispersion_fit import fit_score_residuals, private_path, MAX_BYTES as MAX_FIT_BYTES
+from .period_share_fit import fit_period_shares, _private_path as period_private_path, MAX_SIZE as MAX_PERIOD_BYTES
 from .player_forecast_intake import ingest_player_forecast_csv
 from .run_it_research import MarketCandidate,run_research_board
 from .source_ingestion import SOURCES
@@ -90,7 +91,7 @@ def _quote(data:dict|None)->PriceReceipt|None:
 
 def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     _only_keys(payload,{"projection","projection_ref","distribution","dispersion_fit_ref",
-                        "markets","player_file","roster_ids","event_team_ids",
+                        "period_fit_ref","markets","player_file","roster_ids","event_team_ids",
                         "simulation_count","simulation_seed"},"root")
     if ("projection" in payload)==("projection_ref" in payload):
         raise ValueError("EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED")
@@ -138,13 +139,14 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
         q=dict(p);q["asof_utc"]=_iso(q["asof_utc"])
         projection=TeamProjection(**q)
     fitted_dispersion=None
+    using_period_fit="period_fit_ref" in payload
     if "dispersion_fit_ref" in payload:
-        # Only fit the residual widths from the actual, prior-to-forecast
-        # saved result ledger. Period shares are still explicit UNCALIBRATED
-        # inputs; real PIT/forward calibration and provider auth remain open.
+        # Neither historical receipts nor score-width fits can be inferred
+        # from current quote prices. No training-row exclusions are hidden.
         ref=_only_keys(payload["dispersion_fit_ref"],
             {"path","raw_sha256","fit_asof_utc"},"dispersion_fit_ref")
         settings=_only_keys(payload["distribution"],
+            {"sport","status"} if using_period_fit else
             {"sport","period_shares","status"},"fitted_distribution")
         if settings["sport"] != projection.sport:
             raise ValueError("DISPERSION_FIT_SPORT_MISMATCH")
@@ -169,17 +171,47 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
         dd={"sport":projection.sport,
             "sd_margin":fitted_dispersion["sd_margin"],
             "sd_total":fitted_dispersion["sd_total"],
-            "period_shares":tuple(settings["period_shares"]),
             "model_sha256":fitted_dispersion["fitter_model_sha256"],
             "training_end_utc":_iso(ref["fit_asof_utc"]),
             "status":settings["status"]}
+        if not using_period_fit:
+            dd["period_shares"]=tuple(settings["period_shares"])
     else:
-        dispersion=_only_keys(payload["distribution"],{
-            "sport","sd_margin","sd_total","period_shares","model_sha256",
-            "training_end_utc","status"},"distribution")
+        allowed=({"sport","sd_margin","sd_total","model_sha256",
+                  "training_end_utc","status"} if using_period_fit else
+                 {"sport","sd_margin","sd_total","period_shares",
+                  "model_sha256","training_end_utc","status"})
+        dispersion=_only_keys(payload["distribution"],allowed,"distribution")
         dd=dict(dispersion)
         dd["training_end_utc"]=_iso(dd["training_end_utc"])
-        dd["period_shares"]=tuple(dd["period_shares"])
+        if not using_period_fit:
+            dd["period_shares"]=tuple(dd["period_shares"])
+
+    fitted_periods=None
+    if using_period_fit:
+        # NCAA men's CBB publishes halves, not four real quarters.
+        if projection.sport=="CBB":
+            raise ValueError("CBB_MENS_HALVES_CANNOT_BE_FOUR_QUARTERS")
+        ref=_only_keys(payload["period_fit_ref"],
+            {"path","raw_sha256","fit_asof_utc"},"period_fit_ref")
+        if _iso(ref["fit_asof_utc"])>=projection.asof_utc:
+            raise ValueError("PERIOD_FIT_AFTER_PROJECTION_FREEZE")
+        if not isinstance(ref["path"],str) or not ref["path"].strip():
+            raise ValueError("PERIOD_SOURCE_PATH_REQUIRED")
+        source=period_private_path(ref["path"])
+        if not source.is_file() or not 0<source.stat().st_size<=MAX_PERIOD_BYTES:
+            raise ValueError("PERIOD_SOURCE_MISSING_OR_TOO_LARGE")
+        raw=source.read_bytes()
+        if "sha256:"+sha256(raw).hexdigest()!=ref["raw_sha256"]:
+            raise ValueError("PERIOD_SOURCE_ORIGINAL_HASH_MISMATCH")
+        fitted_periods=fit_period_shares(
+            raw,sport=projection.sport,fit_asof_utc=ref["fit_asof_utc"])
+        if fitted_periods["status"]!="TRAIN_ONLY_PERIOD_SHARES_RESEARCH_UNCALIBRATED":
+            raise ValueError("PERIOD_TRAINING_CENSUS_INCOMPLETE_OR_LEAKED")
+        if payload["distribution"]["sport"]!=projection.sport:
+            raise ValueError("PERIOD_DISTRIBUTION_SPORT_MISMATCH")
+        dd["period_shares"]=tuple(fitted_periods["period_shares"])
+        dd["period_fit_model_sha256"]=fitted_periods["period_fit_model_sha256"]
     distribution=DistributionInput(**dd)
     roster=frozenset(payload.get("roster_ids",()))
     if any(not isinstance(p,str) or not p.strip() for p in roster):
@@ -230,6 +262,14 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     results["dispersion_fit_model_sha256"]=(
         fitted_dispersion["fitter_model_sha256"] if fitted_dispersion else None)
     results["period_share_calibration_verified"]=False
+    results["period_fit_status"]=(
+        fitted_periods["status"] if fitted_periods else "NOT_TRAINED_FROM_PERIOD_LEDGER")
+    results["period_fit_accepted_n"]=(
+        fitted_periods["accepted_rows"] if fitted_periods else 0)
+    results["period_fit_source_sha256"]=(
+        fitted_periods["source_file_sha256"] if fitted_periods else None)
+    results["period_fit_model_sha256"]=(
+        fitted_periods["period_fit_model_sha256"] if fitted_periods else None)
     results["pit_file_manifest_status"]=(
         pit_manifest_audit.status if pit_manifest_audit else "NOT_CHECKED")
     results["pit_file_hash"]=(

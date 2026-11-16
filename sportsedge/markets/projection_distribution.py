@@ -59,9 +59,14 @@ class DistributionInput:
     model_sha256: str
     training_end_utc: datetime
     status: str = "UNCALIBRATED_RESEARCH"
+    # Optional empirical period-share data/code fingerprint. The separate
+    # score-width fit/model identity remains in model_sha256.
+    period_fit_model_sha256: str | None = None
 
     def __post_init__(self):
         _hash(self.model_sha256)
+        if self.period_fit_model_sha256 is not None:
+            _hash(self.period_fit_model_sha256)
         _time(self.training_end_utc)
         if self.status != "UNCALIBRATED_RESEARCH":
             raise ValueError("CALIBRATION_STATUS_UNSUPPORTED")
