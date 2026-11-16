@@ -168,9 +168,11 @@ class SevenSportFreeze(unittest.TestCase):
             freeze_file(src, dst, actual_now=NOW)
 
     def test_public_repo_output_refused(self):
+        src = self.root / "private_request.json"
+        src.write_text(json.dumps(self.req))
+        src.chmod(0o600)
         with self.assertRaisesRegex(ValueError, "PUBLIC_REPOSITORY_PATH"):
-            freeze_file(self.root / "not-a-request.json",
-                        ROOT / "insecure_public_freeze.json", actual_now=NOW)
+            freeze_file(src, ROOT / "insecure_public_freeze.json", actual_now=NOW)
 
     def test_source_mode_0644_refused(self):
         feature_path = Path(self.req["feature_sources"][0]["file"]["path"])
