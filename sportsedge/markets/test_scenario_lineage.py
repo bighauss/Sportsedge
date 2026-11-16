@@ -76,8 +76,10 @@ class ScenarioLineageTests(unittest.TestCase):
 
     def test_paper_run_it_research_carries_same_scenario_hash(self):
         s=simulate()
-        m=mk()
-        opp=mk(selection="AWAY",line="3.5")
+        # Regulation-only settlement makes a tie a valid result here;
+        # full-game NFL scenarios without overtime must correctly BLOCK.
+        m=mk(settlement="REGULATION")
+        opp=mk(selection="AWAY",line="3.5",settlement="REGULATION")
         result=run_research_board(s,(MarketCandidate(m,
             quote(m,receipt="take",quote_id="qA"),
             quote(opp,receipt="opp",quote_id="qB"),
