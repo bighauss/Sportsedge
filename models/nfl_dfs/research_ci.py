@@ -19,6 +19,7 @@ RESEARCH_SUITES = (
     "models/nba/test_anchor_evaluator.py",
     "models/common/test_research_guardrails.py",
     "sportsedge/validation/test_paper_ledger.py",
+    "research/risk/test_portfolio_stress_audit.py",
 )
 
 
