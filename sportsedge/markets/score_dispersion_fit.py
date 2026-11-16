@@ -164,7 +164,7 @@ def fit_score_residuals(raw, *, sport, cutoff_utc, minimum_training=50,
         if error is None:
             if not isinstance(row, dict):
                 error = "TRAINING_ROW_NOT_OBJECT"
-            elif seen.get((row.get("sport"),
+            elif isinstance(row.get("sport"), str) and seen.get((row["sport"],
                             row.get("event_id").strip().casefold()
                             if isinstance(row.get("event_id"), str) else None), 0) > 1:
                 error = "DUPLICATE_EVENT_ALL_COPIES_QUARANTINED"
