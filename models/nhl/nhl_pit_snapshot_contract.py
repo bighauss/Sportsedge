@@ -10,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import argparse
 import json
+import math
 import os
+import stat
 from pathlib import Path
 import re
 
@@ -53,11 +55,27 @@ def _invalid_constant(value):
     raise Blocked("NONFINITE_JSON:" + value)
 
 
+def _finite_original_json(data):
+    # json.loads accepts exponent overflow (e.g. 1e999 -> infinity)
+    # even if NaN and Infinity text is rejected by parse_constant.
+    if isinstance(data, float) and not math.isfinite(data):
+        raise Blocked("NONFINITE_JSON")
+    if isinstance(data, dict):
+        for value in data.values():
+            _finite_original_json(value)
+    elif isinstance(data, list):
+        for value in data:
+            _finite_original_json(value)
+
+
 def _json(original, label):
     try:
-        return json.loads(original.decode("utf-8"), object_pairs_hook=_unique_pairs,
+        data = json.loads(original.decode("utf-8"), object_pairs_hook=_unique_pairs,
                           parse_constant=_invalid_constant)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        _finite_original_json(data)
+        return data
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError,
+            OverflowError) as exc:
         raise Blocked("INVALID_UTF8_JSON:" + label) from exc
 
 
@@ -88,22 +106,54 @@ def _path(raw, label, *, allow_model=False):
     if not isinstance(source, str) or not source.strip() or "\x00" in source:
         raise Blocked("MISSING_PATH:" + label)
     lexical = Path(os.path.abspath(source))
+    if not lexical.is_absolute():
+        raise Blocked("ABSOLUTE_PRIVATE_SOURCE_REQUIRED:" + label)
+    # Resolve to check public checkout aliases, then retain the lexical path
+    # so no-follow opens reject any new last-component alias.
     resolved = lexical.resolve()
     if not allow_model and (lexical == ROOT or ROOT in lexical.parents
                             or resolved == ROOT or ROOT in resolved.parents):
         raise Blocked("SOURCE_INSIDE_PUBLIC_REPOSITORY:" + label)
-    return resolved
+    if any(component.is_symlink() for component in (lexical, *lexical.parents)):
+        raise Blocked("SYMLINKED_ORIGINAL_SOURCE_REFUSED:" + label)
+    return lexical
 
 
 def _bytes(path, label):
-    if not path.is_file():
-        raise Blocked("SOURCE_NOT_A_FILE:" + label)
-    if path.stat().st_size == 0 or path.stat().st_size > 20_000_000:
-        raise Blocked("SOURCE_EMPTY_OR_TOO_LARGE:" + label)
-    data = path.read_bytes()
-    if not data or len(data) > 20_000_000:
-        raise Blocked("SOURCE_EMPTY_OR_TOO_LARGE:" + label)
-    return data
+    # No path.read_bytes(): preserve a bounded, single original FD during
+    # each read, and never follow the final component into a different file.
+    p = Path(path)
+    allow_public_model = (label == "MODEL" and
+                          (p == ROOT or ROOT in p.parents))
+    if not allow_public_model:
+        try:
+            parent = p.parent.stat()
+        except OSError as exc:
+            raise Blocked("PRIVATE_SOURCE_PARENT_UNAVAILABLE:" + label) from exc
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != os.getuid()
+                or stat.S_IMODE(parent.st_mode) != 0o700):
+            raise Blocked("PRIVATE_PARENT_OWNER_0700_REQUIRED:" + label)
+    try:
+        fd = os.open(p, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                     | getattr(os, "O_NONBLOCK", 0))
+    except (OSError, ValueError) as exc:
+        raise Blocked("SOURCE_NOT_A_FILE:" + label) from exc
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise Blocked("SOURCE_NOT_A_FILE:" + label)
+        if not allow_public_model and (info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o600):
+            raise Blocked("PRIVATE_ORIGINAL_OWNER_0600_REQUIRED:" + label)
+        if not 0 < info.st_size <= 20_000_000:
+            raise Blocked("SOURCE_EMPTY_OR_TOO_LARGE:" + label)
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            data = stream.read(20_000_001)
+        if not 0 < len(data) <= 20_000_000:
+            raise Blocked("SOURCE_EMPTY_OR_TOO_LARGE:" + label)
+        return data
+    finally:
+        os.close(fd)
 
 
 def assess(manifest):

@@ -11,7 +11,7 @@ From the repository root:
     python -m models.nhl.nhl_pit_snapshot_contract \
       /private/NHL_snapshot_manifest.json --report /private/NHL_new_report.json
 
-The manifest and original source files must be private **outside this public repository**, except that the MODEL artifact may be an exact file in the source tree. The private output uses exclusive create, mode 0600 and fsync; an existing report is never overwritten.
+The manifest and original source files must be private **outside this public repository**, except that the MODEL artifact may be an exact non-symlinked source-code file in the checkout. Every private original source and original manifest must be an owner-owned regular file **mode 0600** inside an owner-owned **0700 containing directory**. Symlinks in any component, even ones pointing out of the public repo, are rejected. The validator reads each source through a bounded no-follow regular-file descriptor (not an ordinary path read); local claim hashes and repeated source checks still cannot independently authenticate an upstream publisher. The private output uses exclusive create, mode 0600 and fsync; an existing report is never overwritten.
 
 ## Input schema
 
@@ -48,7 +48,7 @@ The original LINEUP file must be strict JSON with exactly: event_id, home_team_i
 
 ## Fail-closed and non-promotion conditions
 
-- Missing file, zero bytes, >20MB, duplicate role or reused raw file, checksum mismatch, nonfinite/duplicate-key JSON, unknown IDs, conflicting lineup IDs, unconfirmed goalies, future data-through/publication, late capture, post-kickoff freeze and local file swapping all refuse a report.
+- Missing file, non-owner/non-private permissions, symlinked original aliases, zero bytes, >20MB, duplicate role or reused raw file, checksum mismatch, **nested numeric 1e999 overflow** or duplicate-key JSON, unknown IDs, conflicting lineup IDs, unconfirmed goalies, future data-through/publication, late capture, post-kickoff freeze and local file swapping all refuse a report.
 - Every successful **structural** report still states: status PAPER_0U_SOURCE_CLAIMS_UNAUTHENTICATED, official_market_count 0, approved_stake_u 0, release_certified false and external_provider_authentication false.
 - Provider IDs and historical publisher/clock fields are caller declarations. Hashing original bytes does **not** prove publication time or independent external origin. Actual NHL MoneyPuck/goalie data schemas, stable player crosswalks, past-game timing and permissions are not authenticated here. Neither authentic DraftKings nor a separate independent book has been connected.
 - No model pricing is invoked by this preflight. The existing NHL shared-scenarios kernel can only consume subsequent distinct frozen projection inputs after roster/source provenance is externally checked; its incomplete OT and player markets remain BLOCKED.
@@ -59,3 +59,5 @@ The original LINEUP file must be strict JSON with exactly: event_id, home_team_i
     python -m unittest models.nhl.test_nhl_pit_snapshot_contract -v
 
 The tests create synthetic temp source files outside the public checkout, verify raw bytes/identity/time conditions, and assert all reports stay research-only. They do not collect data, fit calibration parameters or demonstrate an edge.
+
+**MoneyPuck source-rights caveat:** [MoneyPuck's published data page](https://www.moneypuck.com/data.htm) explicitly permits free noncommercial/ad-hoc journalistic data use with attribution; other uses require contacting MoneyPuck, and unapproved website scraping is blocked. This research preflight does not fetch MoneyPuck data, grant commercial rights, establish that an automated transfer is permitted, or verify any source-published timestamp. Do not use a later downloaded season CSV as pre-event evidence for a prior game. A separately permissioned original-file adapter and external goalie-confirmation evidence are still required.
