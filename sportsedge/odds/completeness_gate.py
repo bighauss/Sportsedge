@@ -21,6 +21,10 @@ SPORTS = frozenset(("NFL", "CFB", "CBB", "NBA", "MLB", "NHL", "PGA"))
 REASONS = frozenset(("NOT_OFFERED", "NOT_CAPTURED", "NO_AUTHORIZED_ACCESS",
                      "NO_PRICE", "UNSUPPORTED", "STALE", "AFTER_START",
                      "IDENTITY_UNMATCHED", "PROVIDER_ERROR"))
+# An absent core outcome is not an offered market; never fabricate a provider
+# market ID or a quote to make an inventory check pass. In particular,
+# NOT_OFFERED requires upstream authentication that this offline tool lacks.
+CORE_ABSENCE_REASONS = REASONS - {"NOT_OFFERED", "AFTER_START"}
 
 
 class CompletenessError(ValueError):
@@ -69,7 +73,39 @@ def _key(row):
     values = tuple(row.get(k) for k in fields)
     if not all(isinstance(v, str) and v.strip() for v in values[:5]) or not isinstance(values[5], str):
         raise CompletenessError("MARKET_IDENTITY_MISSING")
-    return values
+    # A provider_market_id may cover multiple players/teams or alternate rungs.
+    # Retain participant and settlement identity rather than collapsing them.
+    extras = ("team_id", "player_id", "stat", "settlement")
+    identifiers = tuple(row.get(k, "") for k in extras)
+    if any(not isinstance(v, str) for v in identifiers):
+        raise CompletenessError("MARKET_PARTICIPANT_IDENTITY_INVALID")
+    family = values[2].upper()
+    if "PLAYER_PROP" in family and (not identifiers[1] or not identifiers[2]):
+        raise CompletenessError("PLAYER_AND_STAT_IDENTITY_REQUIRED")
+    if "TEAM_TOTAL" in family and not identifiers[0]:
+        raise CompletenessError("TEAM_TOTAL_IDENTITY_REQUIRED")
+    return values + identifiers
+
+
+def _core_absence(row, start):
+    """Record a missing DK core *slot*, not an invented offered outcome."""
+    if not isinstance(row, dict):
+        raise CompletenessError("CORE_ABSENCE_NOT_OBJECT")
+    expected = {"book", "family", "period", "side", "reason", "noted_at_utc"}
+    if set(row) != expected:
+        raise CompletenessError("CORE_ABSENCE_SCHEMA_INVALID")
+    book, family, period, side = (row[k] for k in
+                                  ("book", "family", "period", "side"))
+    if book != "DK" or family not in CORE or period != "FG":
+        raise CompletenessError("CORE_ABSENCE_NOT_DK_FULL_GAME")
+    sides = ("HOME", "AWAY") if family in ("ML", "SPREAD") else ("OVER", "UNDER")
+    if side not in sides:
+        raise CompletenessError("CORE_ABSENCE_WRONG_SIDE")
+    if row["reason"] not in CORE_ABSENCE_REASONS:
+        raise CompletenessError("CORE_ABSENCE_REASON_UNVERIFIED_OR_INVALID")
+    if _utc(row["noted_at_utc"]) >= start:
+        raise CompletenessError("CORE_ABSENCE_NOTED_AFTER_START")
+    return (book, family, period, side)
 
 
 def _recorded_quote(row, start):
@@ -110,13 +146,27 @@ def evaluate(archive):
             raise CompletenessError("SPORT_NOT_SUPPORTED")
         start = _utc(event.get("kickoff_utc"))
         catalog, quotes, exclusions = (event.get(k) for k in ("market_inventory", "quotes", "exclusions"))
+        # This list explicitly accounts for core slots NOT present in an upstream
+        # market inventory, without inventing a provider_market_id or price.
+        missing_core = event.get("core_absences", [])
         if not isinstance(catalog, list) or not catalog:
             failures.append({"event_id": eid, "reason": "OFFERED_MARKET_INVENTORY_MISSING"})
             continue
-        if not isinstance(quotes, list) or not isinstance(exclusions, list):
+        if not isinstance(quotes, list) or not isinstance(exclusions, list) or not isinstance(missing_core, list):
             failures.append({"event_id": eid, "reason": "QUOTE_OR_EXCLUSION_LIST_MISSING"})
             continue
         keys, fulfilled = set(), set()
+        seen_core_absences = set()
+        for record in missing_core:
+            try:
+                missing_slot = _core_absence(record, start)
+            except CompletenessError as exc:
+                failures.append({"event_id": eid, "reason": str(exc)})
+                continue
+            if missing_slot in seen_core_absences:
+                failures.append({"event_id": eid, "market": missing_slot,
+                                 "reason": "DUPLICATE_CORE_ABSENCE"})
+            seen_core_absences.add(missing_slot)
         # Preserve the full original offered-outcome census. One source
         # disposition per exact book/market/period/side/line is mandatory:
         # accepting the first of two prices or a price plus NOT_OFFERED
@@ -150,9 +200,10 @@ def evaluate(archive):
                 failures.append({"event_id": eid, "market": key, "reason": "EXCLUSION_REASON_INVALID"})
                 continue
             try:
-                _utc(exclusion.get("noted_at_utc"))
-            except CompletenessError:
-                failures.append({"event_id": eid, "market": key, "reason": "EXCLUSION_TIMESTAMP_INVALID"})
+                if _utc(exclusion.get("noted_at_utc")) >= start:
+                    raise CompletenessError("EXCLUSION_NOTED_AFTER_START")
+            except CompletenessError as exc:
+                failures.append({"event_id": eid, "market": key, "reason": str(exc)})
                 continue
             fulfilled.add(key)
         for key in sorted(original_disposition_counts):
@@ -170,14 +221,23 @@ def evaluate(archive):
         for family in sorted(CORE):
             expected = ("HOME", "AWAY") if family in ("ML", "SPREAD") else ("OVER", "UNDER")
             for side in expected:
-                if not any(k[0] == "DK" and k[2] == family and k[3] == "FG" and k[4] == side for k in keys):
+                present = any(k[0] == "DK" and k[2] == family and k[3] == "FG" and k[4] == side for k in keys)
+                if present and ("DK", family, "FG", side) in seen_core_absences:
+                    failures.append({"event_id": eid, "market": ("DK", family, "FG", side),
+                                     "reason": "CORE_SLOT_PRESENT_AND_ABSENT_CONFLICT"})
+                if not present and ("DK", family, "FG", side) not in seen_core_absences:
                     failures.append({"event_id": eid, "market": ("DK", family, "FG", side),
                                      "reason": "CORE_SIDE_MISSING_WITHOUT_EXCLUSION"})
         checks.append({"event_id": eid, "sport": sport, "inventory_count": len(keys),
                        "accounted_count": len(keys & fulfilled), "quote_row_count": len(quotes),
-                       "exclusion_count": len(exclusions)})
+                       "exclusion_count": len(exclusions),
+                       "core_absence_count": len(seen_core_absences)})
+    absent_any_core = any(c["core_absence_count"] for c in checks)
+    status = ("PAPER_0U_INCOMPLETE" if failures else
+              "PAPER_0U_DECLARED_CORE_GAPS" if absent_any_core else
+              "PAPER_0U_COMPLIANT_INVENTORY")
     return {"schema": "sportsedge-odds-completeness-result-v1",
-            "status": "PAPER_0U_COMPLIANT_INVENTORY" if not failures else "PAPER_0U_INCOMPLETE",
+            "status": status,
             "checks": checks, "failures": failures, "gate_a_authenticated": False,
             "official_counted": 0, "approved_stake_u": 0,
             "note": "Local completeness does not verify upstream book permission, offer truth, timestamps or independent source paths."}
