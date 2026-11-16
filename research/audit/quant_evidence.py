@@ -69,8 +69,12 @@ def _asof_check(row: dict) -> None:
     american(row['price_american'])
     if str(row.get('qualified')).lower() not in ('0', '1', 'true', 'false'):
         raise ValueError('UNLOCKED_SELECTION_STATUS')
-    if 'prop' in row['market'].lower() and not row.get('player_id'):
+    market_id = _market_id(str(row['market']))
+    if ('prop' in market_id or market_id in ('attd', 'firsttd', 'td2plus',
+                                             'firstbasket', 'homerun')) and not str(row.get('player_id') or '').strip():
         raise ValueError('UNBOUND_PROP_ID')
+    if market_id == 'teamtotal' and not str(row.get('team_id') or '').strip():
+        raise ValueError('UNBOUND_TEAM_TOTAL_ID')
     if not row.get('book'):
         raise ValueError('UNBOUND_BOOK')
 
@@ -116,6 +120,15 @@ def _selection_fingerprint(row: dict) -> tuple:
             str(row.get('stat') or '').strip().casefold())
 
 
+def _decision_key(fingerprint: tuple) -> tuple:
+    """One paper decision across quote snapshots: same outcome and line, not a new bet.
+
+    A later quote can change the price but cannot produce a second independently
+    executed wager without a separate transaction ledger and source proof.
+    """
+    return fingerprint[:9] + fingerprint[10:]
+
+
 def _mirror_key(fingerprint: tuple) -> tuple:
     """Opposite selections from one quote instant must not both inflate ROI.
 
@@ -147,7 +160,7 @@ def _validate_market_pair(row: dict) -> float:
     if not digest_ok(row['paired_quote_sha256']):
         raise ValueError('MARKET_BASELINE_PAIR_NOT_ATTESTED')
     if (row['paired_event_id'] != row['event_id'] or
-        row['paired_book'].strip().casefold() != row['book'].strip().casefold() or
+        _book_id(row['paired_book']) != _book_id(row['book']) or
         row['paired_period'].strip().casefold() != row['period'].strip().casefold() or
         _market_id(row['paired_market']) != _market_id(row['market'])):
         raise ValueError('MISMATCHED_MARKET_PAIR_IDENTITY')
@@ -156,6 +169,24 @@ def _validate_market_pair(row: dict) -> float:
     side = str(row['side']).strip().casefold()
     if side not in opposite or row['paired_side'].strip().casefold() != opposite[side]:
         raise ValueError('MISMATCHED_OPPOSING_SIDE')
+    market_id = _market_id(row['market'])
+    # A same-line UNDER for a different player or different team total is NOT
+    # an opposing quote. Requiring exact subject IDs prevents fabricated fair
+    # baselines from unrelated offers sharing a threshold and event.
+    if ('prop' in market_id or market_id in ('attd', 'firsttd', 'td2plus',
+                                             'firstbasket', 'homerun')):
+        fields = ('player_id', 'stat')
+    elif market_id == 'teamtotal':
+        fields = ('team_id', 'stat')
+    else:
+        fields = ()
+    for field in fields:
+        actual = str(row.get(field) or '').strip().casefold()
+        paired = str(row.get('paired_' + field) or '').strip().casefold()
+        if field in ('team_id','player_id') and not actual:
+            raise ValueError('UNBOUND_SUBJECT_FOR_MARKET_BASELINE:' + field)
+        if (actual or paired) and (not paired or actual != paired):
+            raise ValueError('MISMATCHED_MARKET_PAIR_SUBJECT:' + field)
     orig = _canonical_line(row.get('line'))
     pair = _canonical_line(row.get('paired_line'))
     if _market_id(row['market']) in ('spread','puckline','runline','rl'):
@@ -212,7 +243,7 @@ def _cluster_ci(pairs: list[tuple[str, float]], *, reps: int = 400, seed: int = 
 def _summary(records: list[dict]) -> dict:
     n = len(records)
     if not n:
-        return {'n': 0, 'events': 0, 'roi': None, 'net_units': 0.0,
+        return {'n': 0, 'events': 0, 'wins': 0, 'losses': 0, 'pushes': 0, 'roi': None, 'net_units': 0.0,
                 'brier': None, 'log_loss': None, 'market_brier': None,
                 'win_rate': None, 'win_wilson95': None, 'roi_event_cluster95': None,
                 'small_sample': True}
@@ -225,6 +256,7 @@ def _summary(records: list[dict]) -> dict:
     unit_total = sum(r['unit'] for r in records)
     n_w = sum(r['outcome'] == 'W' for r in decided)
     return {'n': n, 'decided_n': len(decided), 'events': events,
+            'wins': n_w, 'losses': len(decided)-n_w, 'pushes': n-len(decided),
             'net_units': round(unit_total, 6), 'roi': round(unit_total/n, 6),
             'roi_event_cluster95': _cluster_ci([(r['event_id'], r['unit']) for r in records]),
             'win_rate': round(n_w/len(decided), 6) if decided else None,
@@ -245,8 +277,9 @@ def replay(rows: list[dict]) -> dict:
     rejected = []
     accepted = []
     unqualified = 0
-    all_ids = set()
-    fingerprints = set()
+    all_ids: dict[str, list[dict]] = defaultdict(list)
+    fingerprints: dict[tuple, list[dict]] = defaultdict(list)
+    decisions: dict[tuple, list[dict]] = defaultdict(list)
     mirror_checks: dict[tuple, list[dict]] = defaultdict(list)
     for n, row in enumerate(rows, 2):
         try:
@@ -254,12 +287,10 @@ def replay(rows: list[dict]) -> dict:
             if str(row['qualified']).lower() in ('0', 'false'):
                 unqualified += 1
                 continue
-            selection_id = row.get('selection_id', '')
-            if not selection_id or selection_id in all_ids:
-                raise ValueError('MISSING_OR_DUPLICATE_SELECTION_ID')
+            selection_id = str(row.get('selection_id') or '').strip()
+            if not selection_id:
+                raise ValueError('MISSING_SELECTION_ID')
             fingerprint = _selection_fingerprint(row)
-            if fingerprint in fingerprints:
-                raise ValueError('DUPLICATE_CANONICAL_QUALIFIED_BET')
             if row.get('outcome') not in VALID_OUTCOMES:
                 raise ValueError('NOT_SETTLED_WIN_LOSS_PUSH')
             if not row.get('result_source'):
@@ -271,32 +302,47 @@ def replay(rows: list[dict]) -> dict:
             outcome = row['outcome']
             profit = american(row['price_american'])[0] - 1
             unit = {'W': profit, 'L': -1.0, 'P': 0.0}[outcome]
-            all_ids.add(selection_id)
-            fingerprints.add(fingerprint)
             record = {'event_id': row['event_id'], 'sport': row['sport'],
                       'market': row['market'], 'side': row['side'],
                       'selection_id': selection_id, 'game_start_utc': when(row['game_start_utc']),
                       'outcome': outcome, 'p': p, 'q': q, 'unit': unit,
                       '_original_csv_line': n}
             accepted.append(record)
+            all_ids[selection_id].append(record)
+            fingerprints[fingerprint].append(record)
+            decisions[_decision_key(fingerprint)].append(record)
             mirror_key = _mirror_key(fingerprint)
             if mirror_key is not None:
                 mirror_checks[mirror_key].append(record)
         except (ValueError, TypeError, KeyError) as exc:
             rejected.append({'row': n, 'selection_id': row.get('selection_id'), 'reason': str(exc)})
 
-    # Fail CLOSED: source prices containing both sides at the same quote instant
-    # are not an independently qualified portfolio. Quarantine every member;
-    # merely displaying a mirrored-side warning would contaminate ROI/Brier.
+    # Fail CLOSED. Simultaneous opposite sides are mirrored board offers, not
+    # independent wagers. Repeated identical selections across captures are
+    # also not multiple paper decisions; quarantine ALL of their occurrences.
     mirror_groups = [group for group in mirror_checks.values()
                      if _is_opposed({r['side'].strip().casefold() for r in group})]
-    quarantined_lines = {r['_original_csv_line'] for group in mirror_groups for r in group}
+    quarantines: dict[int, str] = {}
     for group in mirror_groups:
         for r in group:
-            rejected.append({'row': r['_original_csv_line'],
-                             'selection_id': r['selection_id'],
-                             'reason': 'MIRRORED_QUALIFIED_PAIR_QUARANTINED'})
-    accepted = [r for r in accepted if r['_original_csv_line'] not in quarantined_lines]
+            quarantines[r['_original_csv_line']] = 'MIRRORED_QUALIFIED_PAIR_QUARANTINED'
+    duplicate_group_keys: set[frozenset[int]] = set()
+    for groupings, reason in (
+        (all_ids, 'DUPLICATE_SELECTION_ID_QUARANTINED'),
+        (fingerprints, 'DUPLICATE_CANONICAL_QUALIFIED_BET_QUARANTINED'),
+        (decisions, 'REPEATED_QUALIFIED_DECISION_QUARANTINED'),
+    ):
+        for group in groupings.values():
+            if len(group) > 1:
+                duplicate_group_keys.add(frozenset(r['_original_csv_line'] for r in group))
+                for r in group:
+                    quarantines.setdefault(r['_original_csv_line'], reason)
+    for r in accepted:
+        n = r['_original_csv_line']
+        if n in quarantines:
+            rejected.append({'row': n, 'selection_id': r['selection_id'],
+                             'reason': quarantines[n]})
+    accepted = [r for r in accepted if r['_original_csv_line'] not in quarantines]
     accepted.sort(key=lambda r: (r['game_start_utc'], r['selection_id']))
     ledger = []
     balance = peak = max_drawdown = 0.0
@@ -318,7 +364,9 @@ def replay(rows: list[dict]) -> dict:
         'input_rows': len(rows), 'unqualified': unqualified,
         'rejected_qualified_or_invalid': rejected, 'eligible': len(accepted),
         'possible_opposite_side_selection_groups': len(mirror_groups),
-        'mirror_quarantined_rows': len(quarantined_lines),
+        'mirror_quarantined_rows': len({r['_original_csv_line'] for group in mirror_groups for r in group}),
+        'duplicate_decision_groups': len(duplicate_group_keys),
+        'total_quarantined_rows': len(quarantines),
         'overall': _summary(accepted),
         'max_drawdown_units': round(max_drawdown, 6),
         'by_market': [{'sport': sport, 'market': market, **_summary(group)}
@@ -328,7 +376,7 @@ def replay(rows: list[dict]) -> dict:
                             'observed_win_rate': round(mean(r['outcome'] == 'W' for r in group), 6),
                             **_summary(group)} for (sport, market, bucket), group in sorted(cal.items())],
         'ledger': ledger,
-        'warning': 'Same-time opposite qualified sides are quarantined from ROI/calibration. Scoring previously frozen records is not walk-forward TRAINING; self-reported hashes do not certify sportsbook availability, execution or profitable edge.',
+        'warning': 'Mirrored sides and repeated paper decisions (including across price snapshots) are quarantined from ROI/calibration. This is not walk-forward TRAINING or authenticated execution; hashes cannot certify sportsbook availability.',
     }
 
 

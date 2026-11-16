@@ -36,13 +36,15 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertEqual(out['rejected_qualified_or_invalid'][0]['reason'],'PIT_FEATURE_NOT_RELEASED')
     def test_duplicate_id_cannot_double_count(self):
         out=replay([dict(BASE),dict(BASE,event_id='E2')])
-        self.assertEqual(out['eligible'],1)
-        self.assertEqual(len(out['rejected_qualified_or_invalid']),1)
+        self.assertEqual(out['eligible'],0)
+        self.assertEqual({x['row'] for x in out['rejected_qualified_or_invalid']}, {2,3})
+        self.assertEqual(out['total_quarantined_rows'], 2)
     def test_canonical_duplicate_under_different_id_denied(self):
         same=dict(BASE,selection_id='B2',market='Spreads',side='HOME',line='-3.50')
         out=replay([dict(BASE),same])
-        self.assertEqual(out['eligible'],1)
-        self.assertEqual(out['rejected_qualified_or_invalid'][0]['reason'],'DUPLICATE_CANONICAL_QUALIFIED_BET')
+        self.assertEqual(out['eligible'],0)
+        self.assertEqual({x['row'] for x in out['rejected_qualified_or_invalid']}, {2,3})
+        self.assertEqual(out['total_quarantined_rows'],2)
     def test_opposite_spread_sides_quarantined_not_in_roi(self):
         home = dict(BASE)
         away = dict(BASE, selection_id='B2', side='away', line='+3.5',
@@ -119,9 +121,8 @@ class QuantEvidenceTests(unittest.TestCase):
         duplicate = dict(BASE, selection_id='B2', book='DraftKings',
                          line='-3.50')
         report = replay([original, duplicate])
-        self.assertEqual(report['eligible'], 1)
-        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
-                         'DUPLICATE_CANONICAL_QUALIFIED_BET')
+        self.assertEqual(report['eligible'], 0)
+        self.assertEqual(report['total_quarantined_rows'],2)
 
     def test_pair_line_or_side_mismatch_denied(self):
         pair=dict(BASE,market_p_no_vig='.5',paired_quote_sha256=H,paired_price_american='-110',
@@ -181,5 +182,102 @@ class QuantEvidenceTests(unittest.TestCase):
         out=market_census(rows)
         self.assertEqual(out['provided_inventory_n'],2)
         self.assertEqual(out['status_counts'],{'NOT_CAPTURED':1,'NOT_OFFERED':1})
+
+
+    def test_same_decision_different_capture_and_price_quarantines_both(self):
+        earliest=dict(BASE)
+        later=dict(BASE,selection_id='B2',captured_utc='2026-11-15T12:22:00Z',
+                   price_american='+150',outcome='W')
+        out=replay([earliest,later])
+        self.assertEqual(out['eligible'],0)
+        self.assertEqual(out['total_quarantined_rows'],2)
+        self.assertIsNone(out['overall']['roi'])
+        self.assertEqual(out['overall']['net_units'],0)
+        self.assertEqual({x['reason'] for x in out['rejected_qualified_or_invalid']},
+                         {'REPEATED_QUALIFIED_DECISION_QUARANTINED'})
+
+    def test_same_decision_snapshot_book_alias_quarantines_both(self):
+        r1=dict(BASE)
+        r2=dict(BASE,selection_id='B2',book='Draft Kings',
+                captured_utc='2026-11-15T12:04:00Z')
+        self.assertEqual(replay([r1,r2])['eligible'],0)
+
+    def test_different_line_legitimate_distinct_decision(self):
+        r1=dict(BASE)
+        r2=dict(BASE,selection_id='B2',line='-4.5',
+                captured_utc='2026-11-15T12:04:00Z')
+        self.assertEqual(replay([r1,r2])['eligible'],2)
+
+    def test_different_book_is_separate_reference_but_paper(self):
+        r1=dict(BASE)
+        r2=dict(BASE,selection_id='B2',book='FanDuel',
+                captured_utc='2026-11-15T12:04:00Z')
+        report=replay([r1,r2])
+        self.assertEqual(report['eligible'],2)
+        self.assertEqual(report['status'],'REPLAY_PAPER_0U_NOT_EXECUTION_AUTHENTICATED')
+
+    def test_team_total_without_exact_team_identity_denied(self):
+        r=dict(BASE,market='TEAM_TOTAL',line='80.5',side='over')
+        report=replay([r])
+        self.assertEqual(report['eligible'],0)
+        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
+                         'UNBOUND_TEAM_TOTAL_ID')
+
+    def test_anytime_touchdown_without_player_id_denied(self):
+        r=dict(BASE,market='ATTD',side='yes',line='')
+        report=replay([r])
+        self.assertEqual(report['eligible'],0)
+        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
+                         'UNBOUND_PROP_ID')
+
+    def test_no_vig_player_pair_rejects_different_player(self):
+        r=dict(BASE,market='player_prop:passing_yards',line='250.5',side='over',
+               player_id='p1',stat='passing_yards',market_p_no_vig='.5',
+               paired_quote_sha256=H,paired_price_american='-110',
+               paired_captured_utc=BASE['captured_utc'],paired_event_id='E1',
+               paired_book='DraftKings',paired_period='FG',
+               paired_market='player_prop:passing_yards',paired_side='under',
+               paired_line='250.5',paired_player_id='p2',paired_stat='passing_yards')
+        report=replay([r])
+        self.assertEqual(report['eligible'],0)
+        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
+                         'MISMATCHED_MARKET_PAIR_SUBJECT:player_id')
+
+    def test_no_vig_player_pair_rejects_different_stat(self):
+        r=dict(BASE,market='player_prop:passing_yards',line='250.5',side='over',
+               player_id='p1',stat='passing_yards',market_p_no_vig='.5',
+               paired_quote_sha256=H,paired_price_american='-110',
+               paired_captured_utc=BASE['captured_utc'],paired_event_id='E1',
+               paired_book='DK',paired_period='FG',
+               paired_market='player_prop:passing_yards',paired_side='under',
+               paired_line='250.5',paired_player_id='p1',paired_stat='rushing_yards')
+        report=replay([r])
+        self.assertEqual(report['eligible'],0)
+        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
+                         'MISMATCHED_MARKET_PAIR_SUBJECT:stat')
+
+    def test_no_vig_team_total_pair_rejects_opposing_team(self):
+        r=dict(BASE,market='TEAM_TOTAL',line='80.5',side='over',team_id='H001',
+               market_p_no_vig='.5',paired_quote_sha256=H,
+               paired_price_american='-110',paired_captured_utc=BASE['captured_utc'],
+               paired_event_id='E1',paired_book='DK',paired_period='FG',
+               paired_market='team_total',paired_side='under',paired_line='80.5',
+               paired_team_id='A001')
+        report=replay([r])
+        self.assertEqual(report['eligible'],0)
+        self.assertEqual(report['rejected_qualified_or_invalid'][0]['reason'],
+                         'MISMATCHED_MARKET_PAIR_SUBJECT:team_id')
+
+    def test_valid_paired_player_same_subject_alias_book(self):
+        r=dict(BASE,market='player_prop:passing_yards',line='250.5',side='over',
+               player_id='p1',stat='passing_yards',market_p_no_vig='.5',
+               paired_quote_sha256=H,paired_price_american='-110',
+               paired_captured_utc=BASE['captured_utc'],paired_event_id='E1',
+               paired_book='Draft Kings',paired_period='FG',
+               paired_market='player_prop:passing_yards',paired_side='under',
+               paired_line='250.5',paired_player_id='p1',paired_stat='passing_yards')
+        report=replay([r])
+        self.assertEqual(report['eligible'],1)
+        self.assertEqual(report['overall']['market_baseline_matched_n'],1)
 
 if __name__=='__main__':unittest.main()
