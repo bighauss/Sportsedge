@@ -36,6 +36,19 @@ class TestSplitIntake(unittest.TestCase):
     def test_bad_percentage(self):
         p=sample();p["rows"][0]["metrics"]["third_down_pct"]=110
         with self.assertRaisesRegex(ValueError,"PERCENT_OUT_OF_RANGE"):validate(p)
+    def test_last3_never_exceeds_available_season_sample(self):
+        p=sample()
+        p["rows"][0]["games"]=1
+        with self.assertRaisesRegex(ValueError,"LAST3_EXCEEDS_SEASON"):
+            validate(p)
+
+    def test_venue_split_never_exceeds_available_season_sample(self):
+        p=sample()
+        p["rows"][0]["games"]=2
+        p["rows"][1]["games"]=2
+        with self.assertRaisesRegex(ValueError,"VENUE_EXCEEDS_SEASON"):
+            validate(p)
+
     def test_last3_count(self):
         p=sample();p["rows"][1]["games"]=4
         with self.assertRaisesRegex(ValueError,"LAST3_SAMPLE_INVALID"):validate(p)
