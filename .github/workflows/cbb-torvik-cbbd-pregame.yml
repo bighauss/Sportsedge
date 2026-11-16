@@ -1,0 +1,28 @@
+name: CBB Torvik-CBBD pregame bridge synthetic tests
+on:
+  push:
+    paths:
+      - "models/cbb/torvik_cbbd_pregame_bridge.py"
+      - "models/cbb/test_torvik_cbbd_pregame_bridge.py"
+      - ".github/workflows/cbb-torvik-cbbd-pregame.yml"
+  pull_request:
+    paths:
+      - "models/cbb/torvik_cbbd_pregame_bridge.py"
+      - "models/cbb/test_torvik_cbbd_pregame_bridge.py"
+      - ".github/workflows/cbb-torvik-cbbd-pregame.yml"
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile CBB bridge and dependencies
+        run: python -m compileall -q models/cbb/torvik_cbbd_pregame_bridge.py models/cbb/test_torvik_cbbd_pregame_bridge.py
+      - name: Exact identity, snapshot and HCA fail-closed regressions
+        working-directory: models/cbb
+        run: python -m unittest -v test_torvik_cbbd_pregame_bridge.py
