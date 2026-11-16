@@ -50,6 +50,38 @@ class AuditContract(unittest.TestCase):
         self.assertEqual(r["official_counted"],0)
         self.assertTrue(all(not x["externally_certified"] for x in r["gates"].values()))
 
+    def test_numeric_remainders_are_self_reported_and_never_promote(self):
+        r = analyze(fixture(cards=99, closes=199, cycles=2))
+        self.assertEqual(r["counts_provenance"], "SELF_REPORTED_PRIVATE_MANIFEST_ONLY")
+        self.assertIsNone(r["independently_verified_gate_counts"])
+        self.assertEqual(r["gates"]["A_prices"]["reported_remaining_to_100"], 1)
+        self.assertEqual(r["gates"]["C_calibration"]["reported_remaining_to_3"], 1)
+        self.assertEqual(r["gates"]["D_CLV"]["reported_remaining_to_200"], 1)
+        self.assertEqual(r["gates"]["E_guard"]["reported_remaining_to_100"], 1)
+        self.assertFalse(r["release_certified"])
+        self.assertEqual(r["approved_stake_u"], 0)
+
+    def test_pit_shortfall_exposes_missingness_without_backfill(self):
+        p = fixture()
+        for row in p["cards"]:
+            row["pit_total"] = 100
+            row["pit_complete"] = 94
+        r = analyze(p)
+        b = r["gates"]["B_PIT"]
+        self.assertEqual(b["reported_incomplete_packages_last_100"], 600)
+        self.assertEqual(b["reported_packages_short_of_95pct"], 100)
+        self.assertFalse(b["structural_threshold_met"])
+        self.assertFalse(b["externally_certified"])
+
+    def test_empty_manifest_thresholds_do_not_imply_zero_verified_external_history(self):
+        r = analyze(fixture(cards=0, closes=0, cycles=0))
+        self.assertEqual(r["gates"]["A_prices"]["reported_remaining_to_100"], 100)
+        self.assertEqual(r["gates"]["C_calibration"]["reported_remaining_to_3"], 3)
+        self.assertEqual(r["gates"]["D_CLV"]["reported_remaining_to_200"], 200)
+        self.assertEqual(r["gates"]["E_guard"]["reported_remaining_to_100"], 100)
+        self.assertEqual(r["gates"]["five_days"]["reported_remaining_to_5"], 5)
+        self.assertIsNone(r["independently_verified_gate_counts"])
+
     def test_recent_bad_card_resets_clean_streak(self):
         p=fixture()
         p["cards"][-1]["stale_quote_rows"]=1
