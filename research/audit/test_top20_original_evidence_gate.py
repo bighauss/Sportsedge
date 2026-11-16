@@ -282,6 +282,53 @@ class ForensicGateTests(unittest.TestCase):
         with self.assertRaisesRegex(EvidenceError,"NONFINITE_JSON_NUMBER"):
             _parse(a,CLAIM_SCHEMA)
 
+    def test_json_underflow_is_not_silently_rewritten_to_zero(self):
+        # Exact saved EV/probability evidence cannot round nonzero numbers to 0.
+        for tiny in ("1e-999", "-1e-999", "1e-324"):
+            raw = ('{"schema":"sportsedge-original-claim-census-v1",'
+                   '"rows":[{"saved_claimed_ev":' + tiny + '}]}').encode()
+            with self.subTest(tiny=tiny):
+                with self.assertRaisesRegex(EvidenceError, "UNDERFLOW_JSON_NUMBER"):
+                    _parse(raw, CLAIM_SCHEMA)
+
+    def test_1h_moneyline_unknown_tie_rule_never_gets_a_grade(self):
+        # A three-way half-time win loses on a draw; a two-way ML pushes.
+        row = claim(market="ML", period="1H", side="HOME", line="",
+                    historical_grade="W", p_win_unconditional=.4,
+                    p_loss_unconditional=.6)
+        tied = final(home_1h=35, away_1h=35)
+        out = run(row, finals=[tied])["top_claims"][0]
+        self.assertIsNone(out["corrected_grade"])
+        self.assertIn("ORIGINAL_1H_MONEYLINE_TIE_RULE_MISSING", out["flags"])
+        self.assertEqual(out["historical_grade"], "W")
+
+    def test_1h_moneyline_2way_tie_push_vs_3way_tie_loss(self):
+        tied = final(home_1h=35, away_1h=35)
+        two = run(claim(market="ML", period="1H", side="HOME", line="",
+                        moneyline_tie_rule="TWO_WAY_TIE_PUSH"), finals=[tied])["top_claims"][0]
+        three = run(claim(market="ML", period="1H", side="HOME", line="",
+                          moneyline_tie_rule="THREE_WAY_TIE_LOSS"), finals=[tied])["top_claims"][0]
+        self.assertEqual(two["corrected_grade"], "P")
+        self.assertEqual(three["corrected_grade"], "L")
+        self.assertNotIn("ORIGINAL_1H_MONEYLINE_TIE_RULE_MISSING", two["flags"])
+        self.assertNotIn("ORIGINAL_1H_MONEYLINE_TIE_RULE_MISSING", three["flags"])
+
+    def test_1h_moneyline_three_way_normal_win_and_loss(self):
+        winning = run(claim(market="ML", period="1H", side="HOME", line="",
+                            moneyline_tie_rule="THREE_WAY_TIE_LOSS"),
+                      finals=[final(home_1h=36, away_1h=35)])["top_claims"][0]
+        losing = run(claim(market="ML", period="1H", side="HOME", line="",
+                           moneyline_tie_rule="THREE_WAY_TIE_LOSS"),
+                     finals=[final(home_1h=34, away_1h=35)])["top_claims"][0]
+        self.assertEqual(winning["corrected_grade"], "W")
+        self.assertEqual(losing["corrected_grade"], "L")
+
+    def test_1h_moneyline_invalid_rule_flagged_even_without_finals(self):
+        row = run(claim(market="ML", period="1H", side="AWAY", line="",
+                        moneyline_tie_rule="UNKNOWN"), finals=[])["top_claims"][0]
+        self.assertIn("ORIGINAL_1H_MONEYLINE_TIE_RULE_MISSING", row["flags"])
+        self.assertIsNone(row["corrected_grade"])
+
     def test_invalid_malformed_row_kept(self):
         a = audit(raw_claim([None,claim(event_id="VALID")]),raw_finals([final()]))
         self.assertEqual(a["claimed_rows_total"],2)
