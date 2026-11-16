@@ -4,6 +4,8 @@ on:
     paths:
       - 'tools/validate_provider_observation.py'
       - 'tools/test_validate_provider_observation.py'
+      - 'tools/test_provider_observation_upload_gate.py'
+      - '.github/workflows/provider-observation.yml'
       - '.github/workflows/provider-manifest-validation.yml'
   workflow_dispatch:
 permissions:
@@ -18,4 +20,4 @@ jobs:
         with:
           python-version: '3.11'
       - name: Run adversarial validator tests
-        run: python -m unittest tools.test_validate_provider_observation -v
+        run: python -m unittest tools.test_validate_provider_observation tools.test_provider_observation_upload_gate -v
