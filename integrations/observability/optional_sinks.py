@@ -53,6 +53,14 @@ def metrics_only(report):
         if not math.isfinite(value):
             raise ExportBlocked("INVALID_METRIC:" + key)
         result[key] = float(value)
+    for key in ("n_decided", "n_clv_matched", "n_clv_unmatched"):
+        if key in result:
+            v = result[key]
+            if int(v) != v or v < 0 or v > result["clock_consistent_rows"]:
+                raise ExportBlocked("METRIC_COUNT_OUTSIDE_VALID_ROW_CENSUS:" + key)
+    if "n_clv_matched" in result and "n_clv_unmatched" in result:
+        if result["n_clv_matched"] + result["n_clv_unmatched"] != result["clock_consistent_rows"]:
+            raise ExportBlocked("CLOSING_COVERAGE_COUNT_MISMATCH")
     return result
 
 
