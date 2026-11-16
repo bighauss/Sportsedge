@@ -30,6 +30,17 @@ class Tests(unittest.TestCase):
   self.assertAlmostEqual(a["overall"]["roi"],100/110)
   self.assertTrue(a["overall"]["insufficient_n30"])
   self.assertEqual(len(a["overall"]["observed_wilson_95"]),2)
+ def test_stats_after_odds_tuple_expansion(self):
+  a=audit([row(),row(event_id="second",model_p=".4",market_p=".3",outcome="0",odds="+250")])
+  self.assertEqual(a["accepted"],2)
+  self.assertEqual(a["overall"]["market_brier"],.17)
+  self.assertAlmostEqual(a["overall"]["roi"],(100/110-1)/2,places=5)
+  self.assertTrue(all(k in a["overall"] for k in ("market_log_loss","bias","observed","predicted")))
+ def test_n30_and_wilson_bounds(self):
+  a=audit([row(event_id=str(i),outcome="1" if i<15 else "0") for i in range(30)])
+  self.assertFalse(a["overall"]["insufficient_n30"])
+  self.assertLess(a["overall"]["observed_wilson_95"][0],.5)
+  self.assertGreater(a["overall"]["observed_wilson_95"][1],.5)
  def test_invalid_odds(self):
   self.assertEqual(audit([row(odds="0")])["accepted"],0)
 if __name__=="__main__":unittest.main()
