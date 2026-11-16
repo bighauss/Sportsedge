@@ -323,6 +323,26 @@ class GovernanceTests(unittest.TestCase):
         self.assertEqual(out["state"], "PASS_NO_PROTECTED_DIFF")
         self.assertEqual(len(calls),1)
 
+    def test_first_governed_pr_manifest_self_check(self):
+        manifest_path = GOLDEN_PATH.parents[1] / (
+            "docs/governance/changes/pr-268.json"
+        )
+        d = parse(manifest_path.read_bytes())
+        changed = [
+            ".github/workflows/agent-high-risk-governance.yml",
+            "research/ai_governance/golden_agent_safety_v1.json",
+            "tools/agent_change_governance.py",
+            "tools/test_agent_change_governance.py",
+            "docs/governance/changes/pr-268.json",
+            "docs/governance/TRUSTED_AGENT_CHANGE_GATE.md",
+        ]
+        out = validate_manifest(
+            to_raw(d), pr_number=268,
+            base_commit=d["base_commit"], changed_paths=changed)
+        self.assertEqual(out["state"], "PASS_DECLARED_REVIEW_ONLY")
+        self.assertEqual(out["protected_paths"], d["protected_paths"])
+        self.assertEqual(out["official_counted"], 0)
+
     def test_missing_head_manifest_fails_closed(self):
         def fake_git(repo,args):
             if args[0] == "diff":
