@@ -19,7 +19,7 @@ from pathlib import Path
 from build_game_inputs import Blocked, utc, verified, records
 
 CORE=("season","week","season_type","player_id","attempts","completions",
-      "passing_tds","interceptions","carries","rushing_yards","rushing_tds",
+      "passing_tds","passing_interceptions","carries","rushing_yards","rushing_tds",
       "targets","receptions","receiving_yards","receiving_tds")
 NGS=("season","week","season_type","player_gsis_id","team_abbr","targets",
      "receptions","yards","rec_touchdowns")
@@ -90,6 +90,10 @@ def build(manifest_path,lookback=5,min_games=3):
         if info["pos"] not in ("DST","K") and (name,info["team"]) not in nameset:
             raise Blocked("Missing exact GSIS identity for "+name)
     raw=load_snapshot_csv(paths["weekly"],CORE)
+    # Real nflverse 2026 player-week release uses passing_interceptions,
+    # never unqualified interceptions. This is verified against the
+    # 2026-11-15 original provider archive SHA256 379dd8008d9e1d9d6c2994df2ee2fcfc04da1cf4ad47c8198a6e8798ea9ca860.
+    # A renamed/missing raw stat must BLOCK instead of becoming zero.
     if not raw: raise Blocked("Empty weekly source")
     if "team" not in raw[0] and "recent_team" not in raw[0]:
         raise Blocked("Weekly source missing both team and recent_team columns")
@@ -154,7 +158,7 @@ def build(manifest_path,lookback=5,min_games=3):
           "pass_att":round(att/n,4),"rush_att":round(car/n,4),
           "pass_td":round(totals["passing_tds"]/n,4),
           "rush_td":round(totals["rushing_tds"]/n,4),
-          "int_rate":round(totals["interceptions"]/att,6),
+          "int_rate":round(totals["passing_interceptions"]/att,6),
           "targets":{},"rush":{},
           "recv":{"_default":[round(mean_catch,5),round(mean_rec_y,5)]},
           "ypc":{},"pass_td_w":{},"rush_td_w":{}
