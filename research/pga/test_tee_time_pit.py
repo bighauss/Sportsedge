@@ -55,6 +55,48 @@ class TeeTimeContract(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "SOURCE_PROVENANCE_MISSING"):
             audit(raw, man, frozen_utc=FROZEN, expected_player_ids=["p1", "p2"])
 
+    def test_json_exponent_overflow_in_unused_provider_field_blocked(self):
+        raw,man=fixture()
+        original=json.loads(raw)
+        # A nested nonfinite numeric remains invalid even if not used by the
+        # displayed field identity and all hashes locally agree.
+        candidate=json.dumps(original).replace(
+            '"status": "ENTERED"', '"status": "ENTERED", "provider_rating": 1e999', 1)
+        raw=candidate.encode()
+        man["sha256"]=hashlib.sha256(raw).hexdigest()
+        with self.assertRaisesRegex(ValueError,"ORIGINAL_JSON_INVALID"):
+            audit(raw,man,frozen_utc=FROZEN,expected_player_ids=["p1","p2"])
+
+    def test_withdrawn_without_tee_slot_kept_in_original_denominator(self):
+        rows=[FIELD[0],{"player_id":"p2","status":"WITHDRAWN"}]
+        raw,man=fixture(rows)
+        result=audit(raw,man,frozen_utc=FROZEN,expected_player_ids=["p1","p2"])
+        self.assertEqual(result["field_rows"],2)
+        self.assertEqual(result["withdrawn_rows"],1)
+        self.assertEqual(result["unassigned_tee_time_rows"],1)
+        self.assertFalse(result["expected_field_independently_authenticated"])
+        self.assertFalse(result["provider_authentication_attested"])
+        self.assertEqual(result["approved_stake_u"],0)
+
+    def test_entered_without_tee_slot_refused_not_auto_filled(self):
+        rows=[{"player_id":"p1","status":"ENTERED"},FIELD[1]]
+        raw,man=fixture(rows)
+        with self.assertRaisesRegex(ValueError,"TEE_TIME_REQUIRED_FOR_ENTERED"):
+            audit(raw,man,frozen_utc=FROZEN,expected_player_ids=["p1","p2"])
+
+    def test_withdrawn_stale_provided_tee_slot_refused(self):
+        rows=[FIELD[0],dict(FIELD[1],tee_time_utc=FROZEN)]
+        raw,man=fixture(rows)
+        with self.assertRaisesRegex(ValueError,"TEE_TIME_NOT_FUTURE"):
+            audit(raw,man,frozen_utc=FROZEN,expected_player_ids=["p1","p2"])
+
+    def test_unknown_without_tee_slot_retained_as_unauthenticated(self):
+        rows=[FIELD[0],{"player_id":"p2","status":"UNKNOWN","tee_time_utc":None}]
+        raw,man=fixture(rows)
+        report=audit(raw,man,frozen_utc=FROZEN,expected_player_ids=["p1","p2"])
+        self.assertEqual(report["unassigned_tee_time_rows"],1)
+        self.assertEqual(report["state"],"PAPER_0U_SOURCE_CLAIMS_UNAUTHENTICATED")
+
     def test_missing_provider_claim_rejected(self):
         raw,man=fixture()
         man["source"]=""
