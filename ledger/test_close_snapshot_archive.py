@@ -54,7 +54,7 @@ class Tests(unittest.TestCase):
 
     def test_overlong_csv_row_rejected_not_truncated(self):
         raw,m=fixture()
-        altered=raw.rstrip(b"\n")+b",INJECTED\n"
+        altered=raw.rstrip(b"\r\n")+b",INJECTED\r\n"
         m["source_sha256"]=hashlib.sha256(altered).hexdigest()
         with self.assertRaisesRegex(Blocked,"MALFORMED_CSV_ROW"):
             make_records(altered,m)
