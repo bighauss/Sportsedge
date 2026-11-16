@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import re
+from collections import Counter
 from pathlib import Path
 
 REQUIRED = ('sport','event_id','period','market','side','line','price_american',
@@ -45,7 +46,12 @@ def identity(row):
     return '|'.join((val('sport'),val('event_id'),period,market,val('side'),line,val('player_id')))
 
 def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
-    seen=set(); valid=[]; rejected=[]
+    rows=list(rows)
+    # Flag every copy of a duplicate, regardless of source row order.  Selecting
+    # the first copy silently can favor a stale quote or retrospectively edited
+    # probability; the operator must reconcile duplicate raw evidence instead.
+    identity_counts=Counter(identity(row) for row in rows)
+    valid=[]; rejected=[]
     for number, row in enumerate(rows, 2):
         flags=[]
         is_ml=(row.get('market') or '').strip().casefold() in ('ml','moneyline','money_line')
@@ -53,8 +59,7 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
                  and not (name=='line' and is_ml)]
         if missing: flags.append('MISSING_FIELDS:' + ','.join(missing))
         key=identity(row)
-        if key in seen: flags.append('DUPLICATE_CANONICAL_SELECTION')
-        seen.add(key)
+        if identity_counts[key] > 1: flags.append('DUPLICATE_CANONICAL_SELECTION')
         if (row.get('sport') or '').strip().upper() not in ALLOWED: flags.append('UNKNOWN_SPORT')
         if 'PROP' in (row.get('market') or '').upper() and not (row.get('player_id') or '').strip():
             flags.append('MISSING_PLAYER_ID')
