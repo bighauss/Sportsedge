@@ -4,6 +4,13 @@ No network, no vendor scraping, no credentials, no wagering. The CSV supplies
 PAPER source observations only: upstream bookmaker quotes are NOT independently
 authenticated. Supports exact FG two-sided h2h/spreads/totals; all other
 market families are quarantined, never mapped to invented settlement IDs.
+
+Original provider JSON + SHA manifest must live outside the public checkout.
+Conflicting/duplicated source market groups are quarantined ALL-COPY, never
+first-wins. CSV and .audit.json are private, exclusive-create 0600 outputs:
+a failed write removes only files actually created by that invocation, and
+never deletes previously existing originals. No user wager is inferred from
+a price-board TAKE snapshot.
 """
 from __future__ import annotations
 
