@@ -63,7 +63,7 @@ class HoopExplorerTest(unittest.TestCase):
             "data_through_utc": "2026-11-15T17:00:00Z",
             "published_utc": "2026-11-15T17:10:00Z",
             "captured_utc": "2026-11-15T17:30:00Z",
-            "columns": COLUMNS if kind == "player" else LINEUP_COLUMNS,
+            "columns": dict(COLUMNS) if kind == "player" else dict(LINEUP_COLUMNS),
             "disjoint_partition": kind == "lineup",
         }
         if mutate:
