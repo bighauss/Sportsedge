@@ -291,6 +291,17 @@ class StrictCBBJoinTests(unittest.TestCase):
                     provider_manifest=None, ledger_path=root/"new.json",
                     audit_path=root/"new_audit.json")
 
+    def test_non_object_derived_final_report_and_row_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw, manifest, report_path = originals_from_capture(root)
+            with self.assertRaisesRegex(Hold, "CBBD_DERIVED_FINAL_REPORT_INVALID"):
+                verify_provider_originals([], raw, manifest)
+            derived = json.loads(report_path.read_text())
+            derived["rows"][0] = None
+            with self.assertRaisesRegex(Hold, "CBBD_DERIVED_FINAL_ROW_NOT_OBJECT"):
+                verify_provider_originals(derived, raw, manifest)
+
     def test_truncated_derived_rows_rejected_even_with_original_count(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
