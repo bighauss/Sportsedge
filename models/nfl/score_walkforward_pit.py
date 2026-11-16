@@ -12,6 +12,7 @@ import csv
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+import os
 from math import isfinite, sqrt
 from pathlib import Path
 
@@ -23,10 +24,40 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def private_evidence_path(path):
-    resolved = Path(path).expanduser().resolve()
-    if resolved == REPO_ROOT or REPO_ROOT in resolved.parents:
+    """Reject both checkout-local aliases and symlinks pointing INTO checkout.
+
+    A checkout-local symlink to a private directory is not an acceptable
+    evidence path: the public Git checkout can later expose the alias.
+    """
+    lexical = Path(os.path.abspath(Path(path).expanduser()))
+    resolved = lexical.resolve()
+    if (lexical == REPO_ROOT or REPO_ROOT in lexical.parents or
+            resolved == REPO_ROOT or REPO_ROOT in resolved.parents):
         raise ValueError("PRIVATE_EVIDENCE_INSIDE_PUBLIC_REPO")
     return resolved
+
+
+def create_private_output(path, payload):
+    """Write one new private file mode 0600, or leave no partial artifact."""
+    original = Path(path).expanduser()
+    target = private_evidence_path(original)
+    if original.is_symlink():
+        raise ValueError("PRIVATE_OUTPUT_SYMLINK_REFUSED")
+    if not isinstance(payload, bytes):
+        raise TypeError("PRIVATE_OUTPUT_BYTES_REQUIRED")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(target, flags, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+    except BaseException:
+        # We created this destination with O_EXCL; remove only our own
+        # incomplete output, never edit the original source input.
+        target.unlink(missing_ok=True)
+        raise
+    return target
 
 FEATURE_COLUMNS = frozenset((
     "game_id", "home_team", "away_team", "kickoff_utc",
@@ -285,9 +316,8 @@ def main():
         "features": "sha256:" + sha256(feature_path.read_bytes()).hexdigest(),
         "results": "sha256:" + sha256(result_path.read_bytes()).hexdigest(),
     }
-    with output_path.open("x", encoding="utf-8") as fh:
-        json.dump(score, fh, indent=2, sort_keys=True)
-        fh.write("\n")
+    payload = (json.dumps(score, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
+    create_private_output(args.out, payload)
     print(json.dumps({
         "status": score["status"], "game_count": score["game_count"],
         "scored_games": score["score_metrics"]["fully_walkforward_evaluated_games"],
