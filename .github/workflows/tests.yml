@@ -15,7 +15,7 @@ jobs:
         run: python -m unittest -v test_guard_probability_safety.py
       - name: PGA point-in-time market preflight
         working-directory: models/pga
-        run: python -m unittest -v test_market_preflight.py test_tournament_sim.py
+        run: python -m unittest -v test_market_preflight.py test_tournament_sim.py test_snapshot_gate.py
       - name: MLB
         working-directory: models/mlb
         run: python make_samples.py && python test_sportsedge_mlb_model.py
@@ -31,6 +31,9 @@ jobs:
       - name: CBB
         working-directory: models/cbb
         run: python test_cbb.py
+      - name: DFS historical + canonical receipt gate
+        working-directory: models/nfl_dfs
+        run: python test_historical_coverage_preflight.py && python test_verify_canonical_outputs.py && python verify_canonical_outputs.py PIT_CIN_2026-11-15
       - name: NFL DFS (Showdown and point-in-time replay)
         working-directory: models/nfl_dfs
         run: python test_showdown_mc.py && python test_public_nfl_gamelogs.py && python test_item4.py && python test_weekly_game_inputs.py && python test_markets.py
