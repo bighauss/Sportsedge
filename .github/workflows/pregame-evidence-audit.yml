@@ -20,5 +20,7 @@ jobs:
         run: python research/audit/test_pregame_edge_audit.py
       - name: Cross-sport feature chronology and leakage regressions
         run: python research/audit/test_feature_chronology_preflight.py
+      - name: G1 original-card exact-board pairing, receipts and EV rounding
+        run: python research/audit/test_original_board_card_source_join.py
       - name: Public NFL prospective source capture boundary and clock tests
         run: python -m unittest sportsedge.validation.test_forward_public_nfl_archive -v
