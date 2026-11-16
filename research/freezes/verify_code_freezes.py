@@ -73,7 +73,8 @@ def verify(manifest: dict, repo: Path) -> dict:
     if not isinstance(risk, dict):
         raise FreezeViolation("MISSING_RISK_CONTRACT")
     seen.append(verified_file(repo, risk["path"], risk["git_blob_sha1"]))
-    if risk.get("limits", {}).get("game_u") != 1 or risk.get("limits", {}).get("daily_u") != 5:
+    seen.append(verified_file(repo, risk["overlay_path"], risk["overlay_git_blob_sha1"]))
+    if risk.get("limits", {}).get("game_u") != 2 or risk.get("limits", {}).get("daily_u") != 5:
         raise FreezeViolation("RISK_LOCK_MISMATCH")
     if manifest.get("release") != "PAPER_0U" or manifest.get("official_counted") != 0:
         raise FreezeViolation("NO_OFFICIAL_RELEASE_ALLOWED")
