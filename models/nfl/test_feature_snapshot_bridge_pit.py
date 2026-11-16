@@ -122,6 +122,25 @@ class ExactEPAFeatureBridgeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "NONFINITE_JSON_LITERAL"):
                     strict_original_json(b'{"value":' + literal + b'}')
 
+    def test_bridge_cli_success_private_0600_csv_create_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rating_path, event_path, output = (root / "ratings.json",
+                                              root / "events.json",
+                                              root / "features.csv")
+            rating_path.write_text(json.dumps(ratings()), encoding="utf-8")
+            event_path.write_text(json.dumps([event()]), encoding="utf-8")
+            argv = ["feature_snapshot_bridge_pit.py", "--ratings", str(rating_path),
+                    "--events", str(event_path), "--out", str(output)]
+            with patch("sys.argv", argv):
+                main()
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertIn("epa_ratings_sha256", output.read_text())
+            before = output.read_bytes()
+            with patch("sys.argv", argv), self.assertRaises(FileExistsError):
+                main()
+            self.assertEqual(output.read_bytes(), before)
+
     def test_bridge_cli_rejects_duplicate_rating_and_event_keys(self):
         with tempfile.TemporaryDirectory() as directory:
             private = Path(directory)
