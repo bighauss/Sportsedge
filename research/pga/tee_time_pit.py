@@ -14,19 +14,30 @@ def utc(value):
         raise ValueError("UTC_REQUIRED")
     return dt.astimezone(timezone.utc)
 
+def unique_pairs(pairs):
+    out = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError("ORIGINAL_DUPLICATE_JSON_KEY")
+        out[key] = value
+    return out
+
+
 def audit(raw: bytes, manifest: dict, *, frozen_utc: str, expected_player_ids: list[str]):
     """All offered field entries must be retained; no inferred withdrawals or odds."""
     if not isinstance(raw, bytes) or not raw or len(raw) > 5_000_000:
         raise ValueError("RAW_BYTES_INVALID")
     if not isinstance(manifest, dict) or manifest.get("sha256") != hashlib.sha256(raw).hexdigest():
         raise ValueError("ORIGINAL_SHA_MISMATCH")
-    if manifest.get("source") in (None, "") or manifest.get("source_receipt_id") in (None, ""):
+    if any(not isinstance(manifest.get(k), str) or not manifest[k].strip()
+           for k in ("source", "source_receipt_id")):
         raise ValueError("SOURCE_PROVENANCE_MISSING")
     observed, captured, frozen = (utc(manifest.get(k)) for k in ("observed_utc", "captured_utc", "frozen_utc"))
     if frozen != utc(frozen_utc) or observed > captured or captured > frozen:
         raise ValueError("SOURCE_CLOCK_INVALID")
     try:
-        data = json.loads(raw, parse_constant=lambda _: (_ for _ in ()).throw(ValueError("NONFINITE")))
+        data = json.loads(raw, object_pairs_hook=unique_pairs,
+                          parse_constant=lambda _: (_ for _ in ()).throw(ValueError("NONFINITE")))
     except (UnicodeError, ValueError, TypeError) as exc:
         raise ValueError("ORIGINAL_JSON_INVALID") from exc
     if not isinstance(data, list) or not data:
