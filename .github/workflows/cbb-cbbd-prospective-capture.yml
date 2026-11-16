@@ -1,0 +1,28 @@
+name: CBB CBBD prospective capture synthetic tests
+on:
+  push:
+    paths:
+      - "models/cbb/cbbd_prospective_capture.py"
+      - "models/cbb/test_cbbd_prospective_capture.py"
+      - ".github/workflows/cbb-cbbd-prospective-capture.yml"
+  pull_request:
+    paths:
+      - "models/cbb/cbbd_prospective_capture.py"
+      - "models/cbb/test_cbbd_prospective_capture.py"
+      - ".github/workflows/cbb-cbbd-prospective-capture.yml"
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: python -m compileall -q models/cbb/cbbd_prospective_capture.py models/cbb/test_cbbd_prospective_capture.py
+      - name: Permissioned-source and first-observation safety tests (OFFLINE)
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbbd_prospective_capture.py
