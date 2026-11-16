@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 import phone_card as m
@@ -113,6 +114,50 @@ class PhoneCardTests(unittest.TestCase):
         with self.assertRaises(m.InvalidCard):m.render(d,self.root)
         d=fixture();d["plays"][0]["status"]="OFFICIAL"
         with self.assertRaises(m.InvalidCard):m.render(d,self.root)
+
+    def test_cli_creates_svg_once_and_refuses_overwrite(self):
+        data=fixture()
+        src=self.root/"card.json"
+        svg=self.root/"card.svg"
+        src.write_text(json.dumps(data))
+        with patch("sys.argv", ["phone_card", str(src), str(svg)]):
+            m.main()
+        original=svg.read_bytes()
+        self.assertTrue(original.startswith(b"<svg"))
+        with patch("sys.argv", ["phone_card", str(src), str(svg)]):
+            with self.assertRaisesRegex(m.InvalidCard, "cannot be overwritten"):
+                m.main()
+        self.assertEqual(svg.read_bytes(), original)
+
+    def test_private_output_rejects_public_checkout_even_from_other_cwd(self):
+        repo=Path(m.__file__).resolve().parents[2]
+        bad=repo/"sportsedge"/"cards"/"private_unauthorized.svg"
+        with patch("pathlib.Path.cwd", return_value=self.root):
+            with self.assertRaisesRegex(m.InvalidCard, "outside the public repository"):
+                m.private_output_path(bad)
+        self.assertFalse(bad.exists())
+
+    def test_symlink_destination_is_never_overwritten(self):
+        original=self.root/"historical.svg"
+        original.write_text("SIGNED OLDER CARD")
+        link=self.root/"current.svg"
+        try:
+            link.symlink_to(original)
+        except (OSError, NotImplementedError):
+            self.skipTest("Symlink creation unavailable")
+        with self.assertRaisesRegex(m.InvalidCard,"symlinked"):
+            m.private_output_path(link)
+        self.assertEqual(original.read_text(),"SIGNED OLDER CARD")
+
+    def test_invalid_output_suffix_does_not_create_directory(self):
+        data=fixture()
+        src=self.root/"card.json"
+        src.write_text(json.dumps(data))
+        output=self.root/"newdir"/"private.txt"
+        with patch("sys.argv", ["phone_card", str(src), str(output)]):
+            with self.assertRaisesRegex(m.InvalidCard,"Only .svg or .png"):
+                m.main()
+        self.assertFalse(output.parent.exists())
 
     def test_same_inputs_same_svg_bytes(self):
         d=fixture()
