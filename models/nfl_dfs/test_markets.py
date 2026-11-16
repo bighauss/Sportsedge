@@ -149,4 +149,7 @@ class MarketsTests(unittest.TestCase):
 
 
 if __name__=="__main__":
+    import subprocess,sys
+    subprocess.run([sys.executable,"../nba/test_minutes_candidate.py"],check=True)
+    subprocess.run([sys.executable,"../nba/test_anchor_evaluator.py"],check=True)
     unittest.main()
