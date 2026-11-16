@@ -149,6 +149,4 @@ class MarketsTests(unittest.TestCase):
 
 
 if __name__=="__main__":
-    import subprocess,sys
-    subprocess.run([sys.executable,"test_market_walkforward.py"],check=True)
     unittest.main()
