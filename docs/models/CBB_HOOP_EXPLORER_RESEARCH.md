@@ -50,6 +50,55 @@ guide at https://hoop-explorer.com/AiFreeAccounts .
 SportsEdge does **not** use or store that on-site key, proxy private requests
 to Hoop-Explorer, or claim the creator's MCP server has been published.
 
+## Fastest phone-only data intake (no keys or computer)
+
+1. In mobile Safari, open Hoop-Explorer's Player Leaderboard or Lineup
+   Analyzer. Use the site's **own** permitted CSV/JSON export action.
+   If export is unavailable on mobile, do not attempt undocumented endpoints.
+2. In the iPhone Share sheet select **Save to Files**, then attach the
+   original file in the SportsEdge ChatGPT conversation; avoid screenshots,
+   which discard the column schema and source provenance.
+3. The assistant can inspect its headers and advise on explicit mappings.
+   **Do not paste an API key or place raw exports in the public GitHub repo.**
+4. If you run Python in a private environment (Codespace, Colab, etc.), the
+   header-only manifest draft creator is:
+
+```sh
+python models/cbb/hoop_explorer_intake.py \
+  --input /private/players.csv \
+  --kind player \
+  --out /private/players.inspect.json
+```
+
+The inspector outputs the exact raw-file SHA-256, observed headers, source
+row count and a manifest draft with **null** as-of fields and **unmapped**
+columns. It intentionally does **not** print player names or raw stat rows.
+Do not manufacture timestamps, assume that names imply canonical IDs, or
+represent a generated manifest as independent provider verification.
+
+### When Hoop-Explorer has no verifiable historical release timestamp
+
+For **descriptive scouting only**, an operator may complete a manifest with
+verified export headers and exact canonical IDs while keeping timestamp
+fields null. The explicit exploratory mode does not require a game to
+be selected and cannot qualify any row for the historical/PIT backtests:
+
+```sh
+python models/cbb/hoop_explorer_research.py \
+  --players-export /private/players.csv \
+  --players-manifest /private/players.manifest.json \
+  --target-player-id VERIFIED_ID \
+  --exploratory \
+  --out /private/scouting_only.json
+```
+
+Results must retain `provenance_status=UNVERIFIED_EXPLORATORY_NO_PIT`,
+`point_in_time_admissible=false`, `official=false`, `stake_u=0` and
+`pricing_enabled=false`. Strict pregame mode remains unchanged: source
+data-through, published and capture clocks **must** be provided, ordered
+and externally validated separately. Neither mode automatically downloads
+data from Hoop-Explorer.
+
 ## Requirements before using real data
 
 - Export the **player leaderboard** and, optionally, the **five-person lineup**
