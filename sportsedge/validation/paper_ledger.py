@@ -169,13 +169,32 @@ def append_ledger(db_path, result):
     """
     db_path=Path(db_path).resolve()
     db_path.parent.mkdir(parents=True,exist_ok=True)
+    if not isinstance(result.get("selection_identity"), list) or not result["selection_identity"]:
+        raise Blocked("Exact canonical market identity required")
     stable=json.dumps(result,sort_keys=True,separators=(",",":"),ensure_ascii=False)
+    target_identity=json.dumps(result["selection_identity"],sort_keys=True,separators=(",",":"))
     with sqlite3.connect(db_path,timeout=15) as db:
         db.execute("CREATE TABLE IF NOT EXISTS ledger("
                    "seq INTEGER PRIMARY KEY AUTOINCREMENT,"
                    "pick_id TEXT NOT NULL UNIQUE,"
                    "payload TEXT NOT NULL,prev_sha TEXT NOT NULL,record_sha TEXT NOT NULL)")
         db.execute("BEGIN IMMEDIATE")
+        # Before each append or idempotent read, validate the *entire* existing
+        # chain inside the same write lock. A corrupt prefix must not be extended.
+        prior="0"*64
+        for old_id,old_payload,old_prev,old_sha in db.execute(
+                "SELECT pick_id,payload,prev_sha,record_sha FROM ledger ORDER BY seq"):
+            try:
+                old_doc=json.loads(old_payload)
+            except (ValueError,TypeError) as ex:
+                raise Blocked("Existing ledger contains unreadable payload") from ex
+            expected=hashlib.sha256((prior+"\\n"+old_payload).encode("utf-8")).hexdigest()
+            if old_id!=old_doc.get("pick_id") or old_prev!=prior or old_sha!=expected:
+                raise Blocked("Existing ledger chain damaged; refusing append")
+            if (old_id!=result["pick_id"] and
+                json.dumps(old_doc.get("selection_identity"),sort_keys=True,separators=(",",":"))==target_identity):
+                raise Blocked("Canonical selection already recorded under different pick ID")
+            prior=old_sha
         existing=db.execute("SELECT payload,record_sha FROM ledger WHERE pick_id=?",
                             (result["pick_id"],)).fetchone()
         if existing is not None:
