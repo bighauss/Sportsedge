@@ -275,9 +275,9 @@ def audit(original_board_bytes, printed_card_bytes, *,
         binary_consistent = None if push_settlement else discrepancy <= tolerance
         implied_push = None
         if push_settlement and abs(ev) > Decimal("0.000001"):
-            implied = Decimal(1) - pick["printed_ev_percent"] / ev
-            if Decimal(0) <= implied <= Decimal(1):
-                implied_push = round(float(implied), 6)
+            approx_push = Decimal(1) - pick["printed_ev_percent"] / ev
+            if Decimal(0) <= approx_push <= Decimal(1):
+                implied_push = round(float(approx_push), 6)
         matched.append({
             "section": pick["section"], "card_rank": pick["card_rank"],
             "printed_selection": pick["printed_selection"],
