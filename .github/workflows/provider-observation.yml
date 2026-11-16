@@ -12,6 +12,7 @@ jobs:
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
     steps:
+      - uses: actions/checkout@v4
       - name: Capture sanitized provider observations
         shell: python
         run: |
@@ -55,6 +56,9 @@ jobs:
             json.dump({"schema_version":1,"run_started_utc":now,"no_original_bytes_archived":True,"not_a_point_in_time_quote_receipt":True,"gate_a":"OPEN","market_state":"PAPER/0u","observations":observations},out,indent=2)
           if failed:
             sys.exit(1)
+      - name: Validate manifest before archival
+        if: success()
+        run: python tools/validate_provider_observation.py provider_observation/manifest.json
       - name: Upload sanitized manifest
         if: always()
         uses: actions/upload-artifact@v4
