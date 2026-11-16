@@ -202,26 +202,33 @@ def analyze(manifest):
     date_streak = _recent_clean_day_streak(cards)
     gates = {
         "A_prices": {"threshold_cards": 100, "reported_clean_recent_streak": consecutive_clean,
-                     "structural_threshold_met": consecutive_clean >= 100},
+                     "structural_threshold_met": consecutive_clean >= 100,
+                     "reported_remaining_to_100": max(0, 100 - consecutive_clean)},
         "B_PIT": {"minimum_fraction": 0.95, "reported_total_packages_last_100": total_pit,
                   "reported_complete_packages_last_100": complete_pit,
                   "reported_zero_pit_cards_last_100": zero_pit_cards,
                   "reported_fraction": ratio,
+                  "reported_incomplete_packages_last_100": total_pit - complete_pit,
+                  "reported_packages_short_of_95pct": max(0, (95 * total_pit + 99) // 100 - complete_pit),
                   "structural_threshold_met": total_pit > 0 and ratio >= 0.95
                       and zero_pit_cards == 0},
         "C_calibration": {"minimum_cycles": 3, "reported_cycles": cycles,
                           "reported_clean_registered_cycles": clean_cycles,
                           "reported_latest_clean_cycle_streak": latest_clean_cycles,
-                          "structural_threshold_met": latest_clean_cycles >= 3},
+                          "structural_threshold_met": latest_clean_cycles >= 3,
+                          "reported_remaining_to_3": max(0, 3 - latest_clean_cycles)},
         "D_CLV": {"minimum_settled_comparable": 200,
                    "reported_structurally_comparable_closes": matched_closes,
                    "reported_exclusion_reasons": excluded_closes,
-                   "structural_threshold_met": matched_closes >= 200},
+                   "structural_threshold_met": matched_closes >= 200,
+                   "reported_remaining_to_200": max(0, 200 - matched_closes)},
         "E_guard": {"threshold_cards": 100, "reported_no_bypass_recent_streak": consecutive_guards,
-                     "structural_threshold_met": consecutive_guards >= 100},
+                     "structural_threshold_met": consecutive_guards >= 100,
+                     "reported_remaining_to_100": max(0, 100 - consecutive_guards)},
         "five_days": {"minimum_reported_consecutive_dates": 5,
                       "reported_calendar_date_streak": date_streak,
-                      "structural_threshold_met": date_streak >= 5},
+                      "structural_threshold_met": date_streak >= 5,
+                      "reported_remaining_to_5": max(0, 5 - date_streak)},
     }
     # No provider attestation, trusted wall-clock source, signed independent
     # calibration reviews, slate-completeness proof or owner promotion signature
@@ -230,6 +237,8 @@ def analyze(manifest):
         x["externally_certified"] = False
     return {"state": "PAPER_0U_EXTERNAL_EVIDENCE_NOT_AUTHENTICATED",
             "official_counted": 0, "approved_stake_u": 0,
+            "counts_provenance": "SELF_REPORTED_PRIVATE_MANIFEST_ONLY",
+            "independently_verified_gate_counts": None,
             "input_cards": len(cards), "input_clv_triples": len(manifest["clv_triples"]),
             "input_calibration_cycles": cycles, "gates": gates,
             "reported_all_structural_thresholds_met":
