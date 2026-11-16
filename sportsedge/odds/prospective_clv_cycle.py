@@ -14,6 +14,7 @@ from pathlib import Path
 
 from sportsedge.odds.free_odds_aggregator_intake import capture, SPORTS, utc
 from sportsedge.odds.the_odds_api_clv_export import write_export, load_evidence
+from sportsedge.odds.planned_capture_guard import guard_plan
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASES = frozenset({"TAKE", "CLOSE"})
@@ -37,6 +38,7 @@ def capture_cycle(
     bookmakers: tuple[str, ...] = ("draftkings", "fanduel"),
     key: str | None = None,
     opener=None,
+    plan_path: Path | None = None,
 ):
     """Capture only a genuine provider event ID via documented v4 HTTP GET.
 
@@ -52,6 +54,11 @@ def capture_cycle(
         raise ValueError("UNSUPPORTED_SPORT")
     if not isinstance(event_id, str) or not event_id:
         raise ValueError("REAL_PROVIDER_EVENT_ID_REQUIRED")
+    # A supplied quota plan must validate BEFORE a credit-consuming request.
+    # No plan means legacy research capture, never claim plan approval.
+    planned = (guard_plan(plan_path, sport=sport, event_id=event_id,
+                          phase=phase, markets=markets, bookmakers=bookmakers)
+               if plan_path is not None else None)
     info = capture(
         sport,
         root,
@@ -68,6 +75,32 @@ def capture_cycle(
     manifest = root / (stem + ".manifest.json")
     if not manifest.is_file() or not manifest.resolve().is_relative_to(root):
         raise ValueError("ORIGINAL_PROVIDER_MANIFEST_MISSING")
+    # Retain original response even if the provider moved kickoff after plan.
+    # Never label a changed event as an approved planned observation.
+    if planned is not None:
+        _, events, _, _ = load_evidence(manifest)
+        if (len(events) != 1 or
+            utc(events[0].get("commence_time")).isoformat() !=
+                planned["expected_kickoff_utc"]):
+            return {
+                "schema": "sportsedge-prospective-clv-cycle-v1",
+                "state": "BLOCK_PROVIDER_KICKOFF_CHANGED_FROM_APPROVED_PLAN",
+                "sport":sport, "phase":phase,
+                "event_id_provider_native":event_id,
+                "original_json_filename":raw_name,
+                "original_manifest_filename":manifest.name,
+                "normalized_csv_filename":None,
+                "normalized_audit_filename":None,
+                "original_raw_sha256":info["original_raw_sha256"],
+                "normalized_csv_sha256":None,
+                "provider_credits_remaining":info["provider_remaining_credits"],
+                "normalized_two_sided_selection_rows":0,
+                "market_groups_quarantined_by_reason":{
+                    "PROVIDER_KICKOFF_CHANGED_FROM_APPROVED_PLAN":1},
+                "source_plan_sha256":planned["plan_sha256"],
+                "capture_plan_guard":"BLOCK_KICKOFF_CHANGED",
+                "official_counted":0,"approved_stake_u":0,
+            }
     # CLOSE is a near-kickoff *capture*, not just an arbitrarily labeled file.
     # Keep the original response and hash manifest for evidence even when a
     # premature/late collection fails the CLOSE window. Do not emit a CLOSE CSV
@@ -101,6 +134,8 @@ def capture_cycle(
                 "provider_quote_clock_externally_attested": False,
                 "official_counted": 0,
                 "approved_stake_u": 0,
+                "source_plan_sha256": planned["plan_sha256"] if planned else None,
+                "capture_plan_guard": "PLAN_PREHTTP_PASSED" if planned else "NOT_PLAN_BOUND",
             }
     normalized_file = root / (stem + "." + phase.lower() + ".csv")
     exported = write_export(manifest, normalized_file, "TAKE" if phase == "TAKE" else "HISTORY")
@@ -128,6 +163,8 @@ def capture_cycle(
         "provider_quote_clock_externally_attested": False,
         "official_counted": 0,
         "approved_stake_u": 0,
+        "source_plan_sha256": planned["plan_sha256"] if planned else None,
+        "capture_plan_guard": "PLAN_PREHTTP_PASSED" if planned else "NOT_PLAN_BOUND",
     }
 
 
@@ -137,6 +174,8 @@ def main(argv=None):
     parser.add_argument("private_dir", type=Path)
     parser.add_argument("--event-id", required=True, help="A real ID from the authorized upstream provider")
     parser.add_argument("--phase", choices=sorted(PHASES), required=True)
+    parser.add_argument("--plan", type=Path,
+                        help="Optional private quota plan: validate before provider request")
     parser.add_argument("--markets", nargs="+", default=["h2h", "spreads", "totals"])
     parser.add_argument("--bookmakers", nargs="+", default=["draftkings", "fanduel"])
     args = parser.parse_args(argv)
@@ -144,6 +183,7 @@ def main(argv=None):
     result = capture_cycle(
         args.sport, args.private_dir, args.event_id, args.phase,
         markets=tuple(args.markets), bookmakers=tuple(args.bookmakers),
+        plan_path=args.plan,
     )
     print(json.dumps(result, sort_keys=True, indent=2))
 
