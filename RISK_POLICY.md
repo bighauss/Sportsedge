@@ -1,28 +1,47 @@
-# RISK_POLICY.md — SportsEdge 2026-11-15 locked safety policy
+# RISK_POLICY.md — SportsEdge stricter-of-v2.1/v2.2 lock
 
-**Effective date: 2026-11-15 (America/Chicago).**  
-**Policy ID:** `SPORTSEDGE_RISK_2026_11_15_LOCK_V1`.  
-**Status:** binding safety policy for all research lanes; execution remains **PAPER / 0u**.
+**Effective date: 2026-11-15 (America/Chicago), research-only policy documentation; official release remains prohibited.**
 
-## Conflict resolution: v2.1 versus the proposed v2.2 risk cap
+**Policy ID:** `SPORTSEDGE_STRICT_V21_V22_20261115_R1`  
+**Scope:** NFL, CFB, CBB, NBA, MLB, NHL, PGA; ALL market families.  
+**State:** PAPER / **0 approved units**, 0 official-counted selections, no auto-betting.  
+**Effective in proposed code:** only when this version is merged, tested, reviewed and deliberately used; this file does not certify a real-money release.
 
-- The owner-restored v2.1 document sets **2.00u per game**, **5.00u per Central decision day**, **3.00u per correlated theme**.
-- The previously documented stricter R1 candidate sets **1.00u per game**, 4.00u/day and 0.75u/signal, but the *actual* v2.2 NFL report only documents a six-point disagreement HOLD; it does **not** establish a verified alternative v2.2 per-game numerical cap. Do not mislabel the R1 values as independently verified v2.2 values.
-- **Conservative decision: lock the stricter demonstrated game cap, 1.00u per event/game.** All other owner-restored v2.1 parameters remain binding: 5.00u per CT decision day and 3.00u correlated-theme maximum. A selection must meet **every** limit; the 1.00u game cap is an additional tightening over v2.1, not a relaxation or quiet replacement of its other safety gates.
-- This supersedes the earlier `RISK_POLICY_LOCK.md` draft's 2u game statement. Frozen v5 and historical decisions are not rewritten. The NFL v2.2 model candidate is not promoted.
+## Authority and conflict resolution
+
+- Existing public baseline: `docs/rules/RUN_IT_V2_1_MANDATORY_RESTORATION.md`, `research/risk/v21_risk_contract.py`.
+- Owner-directed v2.2 addendum in private Drive: `2026-11-15_1920CT_CLAUDE_to_ALL_RUN-IT-STANDARD_v2.2_ADOPTED_addendum.md`. Its owner-adoption claim was contested in a peer audit. The owner's November 15 execution instruction here explicitly selects **the stricter protection whenever v2.1 and v2.2 disagree**.
+- **The v2.2 statement “NO per-game unit cap” is NOT adopted.** Keep the stricter v2.1 aggregate **2u per-event maximum**, including all correlated legs. This does not turn a multi-leg cluster into a single unbounded risk position.
+- Cap order: **0u official until A–E** > reject unsupported/unknown or incomplete evidence > 12-point gap HOLD > v2.2 dog cap and low-confidence shrink > v2.1 quarter-Kelly, caps and stop conditions. The strictest applicable bound wins, not the most recent wording.
+- No silent changes: a different risk limit, sizing rule, model weight or adoption judgment requires a new policy ID, separate diff, unseen-data test and explicit owner sign-off. Historical originals remain untouched.
 
 > **No silent changes. Any future change requires explicit PR + version bump.**
 
-## Sizing and release
+## Numeric and operational requirements
 
-Initial research sizing: **quarter Kelly** from blended probability 30% independently modeled + 70% independently verified no-vig market, priced at the originally timestamped DK offer, with an initial 0.25–1.5u band if positive EV. Then apply required LOW-confidence and trailing-50-comparable-CLV half-size modifiers. Explicitly model pushes, SGP dependence and actual correlated exposure. A 1.5u initial diagnostic can be capped to at most **1.0u total for its game**; never rescale the 1u cap per leg or per card. True exposure sums across independent legs, markets, reruns, and all sports on the CT quote/decision date.
+| Guard | Locked decision |
+| --- | --- |
+| Market-specific official permission | **0u, PAPER only** until genuine A–E evidence and signed promotion |
+| Maximum total daily exposure (Chicago decision date) | **5u** across all sports |
+| Maximum total per event / correlated game | **2u**, sum full actual liability of ALL legs |
+| Maximum theme exposure | **3u** in the same risk ledger |
+| Initial v2.1 stake diagnostic | 0.25u–1.5u band on push-aware quarter-Kelly; subsequent reductions may take it below 0.25u |
+| Base probability blend | v2.1 30% independently verified model + 70% independent no-vig market; never claim fitted skill |
+| Missing ratings half | Explicitly identified half-only model: shrink raw model p halfway toward no-vig p **before** 30/70 blend; force LOW confidence. Missing essential PIT/source feature still BLOCKS, rather than being excused as LOW |
+| Model/market disagreement | **>12 percentage points raw or post-shrink = HOLD / 0u**; >3 points flagged for investigation; do not let shrink hide an original >12-point gap |
+| Moneyline underdog price >= +200 | At most **0.25 diagnostic units**; remains capped until 50 independently auditable settled dog-ML CLV observations and separate policy release |
+| Negative comparable CLV over latest 50 | Halve v2.1 diagnostic size per sport; unmatched closes NEVER counted |
+| LOW confidence | Halve diagnostic size and reduce displayed stars if applicable; never infer eligibility from low confidence alone |
+| Injury/lineup change | T–90 snapshot; material change requires reprice or kill; do not use late/after-start lines |
+| Data/settlement/correlation | Explicit event, player/team IDs, market/period/line/side, settlement, source and clock; SGP requires a validated joint price |
+| Missing information | Keep market family visible as blocked/NO_DATA/NO_PRICE/NO_MODEL/NO_PROVENANCE, not silently omitted |
 
-Every accepted candidate requires identified pregame quote/source, model, lineup and time-chain, T−90 injury lock, all-market inventory, full settlement contract, duplicate-bet prevention, verified risk ledger and signed A–E Truth Gate. No credential, API response, model code SHA, or unvalidated input flag alone grants a real bet.
+The `research/risk/strict_v21_v22.py` overlay is **diagnostic only** and defaults to fail-closed for unknown ratings-half or critical as-of feature status. A self-declared `features_asof_verified` field is NOT independent authentication. `sportsedge/odds/card_gate.py` also sanitizes caller claims and always refuses an official card. Existing v5 model bytes and historical predictions are unchanged.
 
-Until independently verified A–E evidence exists **all approved stakes are zero and all selections remain non-counted**, irrespective of nonzero `diagnostic_u` or passing synthetic tests.
+## Release gate
 
-## Code enforcement
+GitHub Issue [#10](https://github.com/bighauss/Sportsedge/issues/10) is the blocking source of truth. Each market needs authentic independent odds receipts (Gate A), PIT feature lineage (B), three leak-free registered calibration cycles (C), >=200 independently matched settled CLV triples (D), and fully connected v2.1/v2.2 risk and settlement audits (E), plus the documented 100-card and five-day evidence thresholds and signed promotion. Synthetic tests and local SHA-256s never satisfy an external authenticity gate.
 
-`research/risk/v21_risk_contract.py` is an offline research diagnostic. Its `CAP_GAME` must equal **1.00** under this lock; additionally enforce the same cap in any later production aggregator, ledger and execution entrypoint before claiming safety certification. The numeric scope is game/event aggregate, not just a market ticket. Keep both CI proof and risk-ledger observations. No production execution currently certified.
+**Current release status:** none independently certified; **PAPER / 0u**. Market/odds discovery and research projections are separate from wager eligibility.
 
-Tag requested after final reviewed policy commit: `risk-policy-lock-2026-11-15`. A Git tag is not a Git branch; do not claim it exists until the ref `refs/tags/risk-policy-lock-2026-11-15` actually resolves to the lock commit.
+Tag intent: `risk-policy-lock-2026-11-15` on the approved main commit only; verify `refs/tags/` after successful post-merge GitHub Actions. Do not confuse a branch, draft, or PR head with a Git tag.
