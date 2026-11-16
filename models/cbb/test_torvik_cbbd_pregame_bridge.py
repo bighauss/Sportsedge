@@ -5,11 +5,13 @@ from datetime import datetime, timezone, timedelta
 import hashlib
 import json
 from pathlib import Path
+import os
 import tempfile
+from unittest.mock import patch
 import unittest
 
 from cbbd_prospective_capture import capture_games, Hold
-from torvik_cbbd_pregame_bridge import archive_csv, project_scheduled
+from torvik_cbbd_pregame_bridge import archive_csv, project_scheduled, safe_path
 
 SCHEDULE_TIME = datetime(2026,11,15,17,0,tzinfo=timezone.utc)
 DATA_TIME = datetime(2026,11,15,17,30,tzinfo=timezone.utc)
@@ -79,6 +81,47 @@ def fixtures(tmp, *, games=None, ratings=None, mapping=None, home_court=None):
 
 
 class TorvikCbddBridgeTests(unittest.TestCase):
+    def test_public_checkout_lexical_and_resolved_aliases_rejected(self):
+        with self.assertRaisesRegex(Hold,"PUBLIC_GIT_REPOSITORY"):
+            safe_path(Path(__file__).resolve().parents[2] / "models" / "cbb" / "alias.csv")
+        with tempfile.TemporaryDirectory() as tmp:
+            public_link=Path(tmp)/"link-to-public"
+            public_link.symlink_to(Path(__file__).resolve().parents[2],target_is_directory=True)
+            with self.assertRaisesRegex(Hold,"PUBLIC_GIT_REPOSITORY"):
+                safe_path(public_link/"some.csv")
+
+    def test_private_receipt_and_projection_mode_0600(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kw=fixtures(tmp)
+            for label in ("ratings","map","hca"):
+                for key in ("raw","manifest"):
+                    self.assertEqual(Path(kw[label+"_"+key]).stat().st_mode & 0o077,0)
+            result=project_scheduled(**kw)
+            self.assertEqual(result["projected_rows"],1)
+            self.assertEqual(Path(kw["output_path"]).stat().st_mode & 0o077,0)
+
+    def test_output_directory_must_not_be_world_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kw=fixtures(tmp)
+            exposed=Path(tmp)/"exposed"
+            exposed.mkdir()
+            exposed.chmod(0o755)
+            kw["output_path"]=exposed/"board.json"
+            with self.assertRaisesRegex(Hold,"DIRECTORY_PERMISSIONS_TOO_BROAD"):
+                project_scheduled(**kw)
+            self.assertFalse(kw["output_path"].exists())
+
+    def test_failed_fsync_rolls_back_partial_private_csv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/"input.csv"
+            write_csv(source,raw_ratings())
+            output=Path(tmp)/"new_private"
+            with patch("torvik_cbbd_pregame_bridge.os.fsync",side_effect=OSError("synthetic fsync failure")):
+                with self.assertRaisesRegex(OSError,"synthetic fsync failure"):
+                    archive_csv(source_path=source,private_dir=output,
+                                kind="TORVIK_RATINGS",season=2027,clock=lambda:DATA_TIME)
+            self.assertEqual(list(output.iterdir()),[])
+
     def test_full_prospective_projection_is_score_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             kw=fixtures(tmp)
