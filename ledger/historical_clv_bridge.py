@@ -167,12 +167,30 @@ def load_csv(path: Path, role: str) -> tuple[list[Quote], str]:
     if len(raw) > 20_000_000 or not raw:
         raise Blocked("EMPTY_OR_OVERSIZE_CSV")
     try:
-        reader = csv.DictReader(raw.decode("utf-8-sig").splitlines())
-        if not reader.fieldnames or len(reader.fieldnames) != len(set(reader.fieldnames)) or not set(FIELDS).issubset(reader.fieldnames):
+        from io import StringIO
+        content = raw.decode("utf-8-sig")
+        # The header/record count must not be changed by silent treatment of
+        # blank records. A blank line can hide a lost quoted selection.
+        physical_records = list(csv.reader(StringIO(content, newline=""), strict=True))
+        if any(not record for record in physical_records):
+            raise Blocked("EMPTY_CSV_RECORD")
+        reader = csv.DictReader(StringIO(content, newline=""),
+                                restkey="__UNEXPECTED_CSV_EXTRA__", strict=True)
+        if (not reader.fieldnames or
+            len(reader.fieldnames) != len(set(reader.fieldnames)) or
+            not set(FIELDS).issubset(reader.fieldnames)):
             raise Blocked("MISSING_OR_DUPLICATE_CSV_HEADERS")
-        parsed = [parse_quote(r, role) for r in reader]
+        parsed = []
+        for line, row in enumerate(reader, 2):
+            if "__UNEXPECTED_CSV_EXTRA__" in row or None in row:
+                raise Blocked("CSV_EXTRA_FIELDS_ROW_" + str(line))
+            if any(v is None for v in row.values()):
+                raise Blocked("CSV_TRUNCATED_ROW_" + str(line))
+            parsed.append(parse_quote(row, role))
     except UnicodeError as exc:
         raise Blocked("NON_UTF8_CSV") from exc
+    except csv.Error as exc:
+        raise Blocked("MALFORMED_CSV_RECORD") from exc
     if not parsed:
         raise Blocked("NO_QUOTE_ROWS")
     seen = set()
