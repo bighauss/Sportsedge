@@ -165,5 +165,60 @@ class CaptureCycleTests(unittest.TestCase):
             self.capture(payload=payload)
         self.assertFalse(self.private.exists())
 
+    def test_default_transport_delegates_to_secure_upstream_opener(self):
+        from sportsedge.odds import prospective_clv_cycle as module
+        with patch.object(module, "capture", side_effect=ValueError("intercepted")) as called:
+            with self.assertRaisesRegex(ValueError,"intercepted"):
+                module.capture_cycle("NFL",self.private,EVENT_ID,"TAKE",key=KEY)
+        self.assertIsNone(called.call_args.kwargs["opener"])
+
+    def test_close_one_hour_early_preserves_original_but_not_close_csv(self):
+        result=self.capture(phase="CLOSE",payload=provider_payload(minutes_to_kickoff=60))
+        self.assertEqual(result["state"],"BLOCK_CLOSE_CAPTURE_OUTSIDE_T_MINUS_10M")
+        self.assertTrue((self.private/result["original_json_filename"]).is_file())
+        self.assertTrue((self.private/result["original_manifest_filename"]).is_file())
+        self.assertIsNone(result["normalized_csv_filename"])
+        self.assertIsNone(result["normalized_csv_sha256"])
+        self.assertEqual(list(self.private.glob("*.close.csv")),[])
+        self.assertEqual(result["normalized_two_sided_selection_rows"],0)
+        self.assertEqual(result["official_counted"],0)
+
+    def test_close_at_t_minus_ten_minutes_is_valid(self):
+        result=self.capture(phase="CLOSE",payload=provider_payload(minutes_to_kickoff=10))
+        self.assertEqual(result["state"],"PAPER_0U_PROSPECTIVE_CAPTURE_NOT_ORIGINAL_BOOK_AUTHENTICATED")
+        self.assertEqual(result["normalized_two_sided_selection_rows"],2)
+        self.assertTrue((self.private/result["normalized_csv_filename"]).exists())
+
+    def test_close_after_event_start_blocks_but_does_not_destroy_original(self):
+        result=self.capture(phase="CLOSE",payload=provider_payload(minutes_to_kickoff=-1))
+        self.assertEqual(result["state"],"BLOCK_CLOSE_CAPTURE_OUTSIDE_T_MINUS_10M")
+        self.assertTrue((self.private/result["original_json_filename"]).is_file())
+        self.assertIsNone(result["normalized_csv_filename"])
+        self.assertEqual(result["approved_stake_u"],0)
+
+    def test_private_lexical_symlink_from_public_checkout_blocks_before_fetch(self):
+        from sportsedge.odds import prospective_clv_cycle as module
+        checkout=self.private.parent/"fake-public-checkout"
+        checkout.mkdir()
+        private=self.private
+        private.mkdir()
+        (checkout/"archive-link").symlink_to(private,target_is_directory=True)
+        called=[]
+        def opener(*args,**kwargs):
+            called.append(True)
+            raise AssertionError("Never access provider for unsafe path")
+        with patch.object(module,"REPO_ROOT",checkout):
+            with self.assertRaisesRegex(ValueError,"PRIVATE_CAPTURE_PATH_IS_PUBLIC_CHECKOUT"):
+                capture_cycle("NFL",checkout/"archive-link",EVENT_ID,"CLOSE",
+                              key=KEY,opener=opener)
+        self.assertFalse(called)
+
+    def test_allowed_near_kickoff_has_no_fake_wager_or_authentication(self):
+        result=self.capture(phase="CLOSE",payload=provider_payload(minutes_to_kickoff=5))
+        self.assertFalse(result["original_books_independently_authenticated"])
+        self.assertFalse(result["provider_quote_clock_externally_attested"])
+        self.assertEqual(result["official_counted"],0)
+        self.assertEqual(result["approved_stake_u"],0)
+
 if __name__ == "__main__":
     unittest.main()
