@@ -71,6 +71,12 @@ The output is **exclusive-create**, mode `0600`, flush/fsync and best-effort rol
 
 The output includes local byte hashes and the denominator/exclusion census and always says `PAPER_HOLD_0U`, `approved_stake_u=0`. The `margin_3_frequency`/`margin_7_frequency` fields preserve the positive home-margin direction. New `abs_margin_3_frequency`/`abs_margin_7_frequency` fields count both home and away exact-key outcomes. No key-number frequency is hard-coded as a fair price.
 
+### Numeric-exponent and size hardening (R3)
+
+The CLI now rejects even *syntactically valid* JSON numbers whose exponents overflow Python floating-point range (for example, `1e9999`), including values nested in unused fields. Default Python JSON parsing otherwise silently converts such values to infinity. This complements the existing rejection of nonstandard `NaN`/`Infinity` literals and duplicate object keys.
+
+Each original JSON input must be nonempty and no larger than 50 MB. Size is checked before reading the file and again after reading to detect a changed or unexpectedly oversized input; excess data is never truncated. Oversized or malformed source inputs produce no research output, no model result and no stake. Existing create-only 0600 and point-in-time source protections are retained.
+
 ## Validation still required
 
 The empirical residual distribution can be *overconfident or miscalibrated*. Period-specific effects, opponents, home/away differences and score ceilings are not learned here. The simulated score grid is not a possession/drive-level football simulation and contains no learned player correlations. Before public probability display or wagering, perform rolling seasons, leave-out future observations, probability scoring/calibration, a market-only fair-probability benchmark, proper exact-line and book-specific push settlement, and timestamp-authenticated original quotes. Explicitly test whether this residual method improves over simple Gaussian, market-only and opponent-aware alternatives. Failure must remain visible. Follow GitHub issue #10 gates A–E for official promotion.
