@@ -111,6 +111,16 @@ class TrainingOnlyFitter(unittest.TestCase):
         self.assertEqual(x["blocked_reasons"]["DUPLICATE_EVENT_ALL_COPIES_QUARANTINED"],2)
         self.assertEqual(x["status"],"BLOCK_DISPERSION_FIT")
 
+    def test_malformed_unhashable_sport_fails_closed_without_crash(self):
+        for invalid in ([], {}, ["CBB"]):
+            with self.subTest(invalid=invalid):
+                rows=records(self.base)
+                rows[0]["sport"]=invalid
+                report=self.fit(rows)
+                self.assertEqual(report["status"],"BLOCK_DISPERSION_FIT")
+                self.assertEqual(report["blocked_rows"],1)
+                self.assertIn("MIXED_SPORT_IN_TRAINING_LEDGER",report["blocked_reasons"])
+
     def test_mixed_frozen_model_hashes_block_even_if_scores_valid(self):
         rows=records(self.base)
         rows[1]["model_sha256"]="sha256:"+"c"*64
