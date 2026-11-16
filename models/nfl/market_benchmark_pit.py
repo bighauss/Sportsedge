@@ -26,6 +26,8 @@ MARKETS = frozenset({
 })
 FIELDS = frozenset({
     "sport", "game_id", "home_id", "away_id", "market", "selection",
+    "period", "provider_event_id", "provider_market_id",
+    "provider_outcome_id", "provider_opposite_outcome_id", "quote_receipt_id",
     "book", "home_spread_or_total_line", "american_taken",
     "american_opposite", "model_p_win", "model_p_push", "model_p_loss",
     "model_sha256", "model_forecast_sha256", "provider_quote_sha256",
@@ -77,12 +79,20 @@ def _validate(raw, *, freshness_seconds):
         raise ValueError("MARKET_EVALUATION_SCHEMA_MISMATCH")
     if raw["sport"] != "NFL" or raw["market"] not in MARKETS:
         raise ValueError("UNSUPPORTED_SPORT_OR_MARKET")
-    for field in ("game_id", "home_id", "away_id", "book"):
+    if raw["period"] != "FG":
+        raise ValueError("EXPLICIT_FULL_GAME_PERIOD_REQUIRED")
+    for field in (
+        "game_id", "home_id", "away_id", "book",
+        "provider_event_id", "provider_market_id",
+        "provider_outcome_id", "provider_opposite_outcome_id", "quote_receipt_id",
+    ):
         value = raw[field]
         if not isinstance(value, str) or not value.strip():
             raise ValueError("EVENT_OR_BOOK_ID_MISSING:"+field)
     if raw["home_id"] == raw["away_id"]:
         raise ValueError("INVALID_HOME_AWAY_MAPPING")
+    if raw["provider_outcome_id"] == raw["provider_opposite_outcome_id"]:
+        raise ValueError("SAME_PROVIDER_OUTCOME_ID_BOTH_SIDES")
     market = raw["market"]
     selection = raw["selection"]
     if selection not in (
@@ -153,6 +163,12 @@ def _validate(raw, *, freshness_seconds):
         -1.0 if outcome == "L" else 0.0)
     return {
         "game_id": raw["game_id"],
+        "period": raw["period"],
+        "provider_event_id": raw["provider_event_id"],
+        "provider_market_id": raw["provider_market_id"],
+        "provider_outcome_id": raw["provider_outcome_id"],
+        "provider_opposite_outcome_id": raw["provider_opposite_outcome_id"],
+        "quote_receipt_id": raw["quote_receipt_id"],
         "market": market,
         "book": raw["book"],
         "selection": selection,
@@ -250,8 +266,10 @@ def evaluate_market_rows(rows, *, freshness_seconds=300):
         try:
             row = _validate(raw, freshness_seconds=freshness_seconds)
             # Same recorded outcome/market/line/side/decision is one row.
-            key = (row["game_id"],row["market"],row["book"],row["selection"],
-                   row["line"],row["decision_utc"])
+            key = (row["game_id"], row["period"], row["market"], row["book"],
+                   row["provider_event_id"], row["provider_market_id"],
+                   row["provider_outcome_id"], row["selection"],
+                   row["line"], row["quote_receipt_id"])
             if key in seen:
                 raise ValueError("DUPLICATE_SAME_MARKET_OUTCOME_PRICE")
             seen.add(key)
