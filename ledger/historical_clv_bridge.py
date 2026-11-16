@@ -17,6 +17,19 @@ from pathlib import Path
 SOURCES = frozenset({"BESTBOOK", "ACTION_NETWORK", "COVERS", "SCORES_AND_ODDS", "DIRECT_BOOK"})
 KINDS = frozenset({"MONEYLINE", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP", "ATTD", "FIRST_TD", "TD_2PLUS", "FIRST_BASKET", "NRFI", "YRFI", "OTHER"})
 SPORTS = frozenset({"NFL", "CFB", "CBB", "NBA", "MLB", "NHL", "PGA"})
+OPPOSITE_SIDES = {
+    "MONEYLINE": frozenset({"HOME", "AWAY"}),
+    "SPREAD": frozenset({"HOME", "AWAY"}),
+    "TOTAL": frozenset({"OVER", "UNDER"}),
+    "TEAM_TOTAL": frozenset({"OVER", "UNDER"}),
+    "PLAYER_PROP": frozenset({"OVER", "UNDER"}),
+    "ATTD": frozenset({"YES", "NO"}),
+    "FIRST_TD": frozenset({"YES", "NO"}),
+    "TD_2PLUS": frozenset({"YES", "NO"}),
+    "FIRST_BASKET": frozenset({"YES", "NO"}),
+    "NRFI": frozenset({"YES", "NO"}),
+    "YRFI": frozenset({"YES", "NO"}),
+}
 FIELDS = ("source", "source_url", "sport", "event_id", "source_event_id", "source_market_id", "mapping_version", "book", "market_kind", "period", "settlement", "selection_id", "opposite_selection_id", "line", "opposite_line", "player_id", "team_id", "stat", "price_american", "opposite_price_american", "observed_at_utc", "captured_at_utc", "kickoff_utc")
 REQUIRED = set(FIELDS) - {"line", "opposite_line", "player_id", "team_id", "stat", "source_market_id"}
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -117,13 +130,18 @@ def parse_quote(row: dict[str, str], role: str) -> Quote:
         raise Blocked("CANONICAL_CROSSWALK_VERSION_REQUIRED")
     if r["selection_id"] == r["opposite_selection_id"]:
         raise Blocked("IDENTICAL_OPPOSING_SELECTIONS")
+    expected = OPPOSITE_SIDES.get(r["market_kind"])
+    if expected is not None and {r["selection_id"], r["opposite_selection_id"]} != expected:
+        raise Blocked("INVALID_OPPOSITE_MARKET_SIDES")
     if r["market_kind"] == "MONEYLINE" and (r["line"] not in ("", "0") or r["opposite_line"] not in ("", "0")):
         raise Blocked("MONEYLINE_HAS_HANDICAP")
     if r["market_kind"] in {"ATTD", "FIRST_TD", "TD_2PLUS", "FIRST_BASKET", "NRFI", "YRFI"} and (r["line"] or r["opposite_line"]):
         raise Blocked("CATEGORICAL_MARKET_HAS_LINE")
     if r["market_kind"] in {"SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"} and (not r["line"] or not r["opposite_line"]):
         raise Blocked("BOTH_MARKET_LINES_REQUIRED")
-    line, other_line = normalize_line(r["line"]), normalize_line(r["opposite_line"])
+    # Some exports use moneyline 0 and others blank; those are one market.
+    line, other_line = ("", "") if r["market_kind"] == "MONEYLINE" else (
+        normalize_line(r["line"]), normalize_line(r["opposite_line"]))
     if r["market_kind"] == "SPREAD" and Decimal(line) != -Decimal(other_line):
         raise Blocked("SPREAD_OPPOSITE_SIGN_ERROR")
     if r["market_kind"] in {"TOTAL", "TEAM_TOTAL", "PLAYER_PROP"} and line != other_line:
@@ -186,24 +204,37 @@ def compare(takes: list[Quote], history: list[Quote], max_close_seconds: int = 6
             close = candidates[0]
             if close.source != taken.source:
                 status = "CROSS_SOURCE_REFERENCE_ONLY"
-            elif (close.source_event_id != taken.source_event_id or close.source_market_id != taken.source_market_id
+            elif (not taken.source_market_id or not close.source_market_id or
+                  close.source_event_id != taken.source_event_id or close.source_market_id != taken.source_market_id
                   or close.mapping_version != taken.mapping_version):
                 status = "PROVIDER_MARKET_CROSSWALK_UNVERIFIED"
             elif close.captured >= close.kickoff:
                 status = "RETROSPECTIVE_HISTORY_UNVERIFIED"
+            elif not (taken.captured < close.captured):
+                status = "CLOSE_ARCHIVED_BEFORE_TAKE"
             else:
                 status = "SAME_SOURCE_STRUCTURAL_PAPER"
+        # Research-only reference delta is available for rejected provenance
+        # states, but the dedicated CLV field is NULL unless the source path,
+        # original pregame archive and exact source market agree.
+        delta = str((close.no_vig_probability - taken.no_vig_probability) * 100) if close else None
+        valid_structural_close = status == "SAME_SOURCE_STRUCTURAL_PAPER"
         out.append({
             "status": status, "sport": taken.sport, "event_id": taken.event_id,
             "book": clean_book(taken.book), "market_kind": taken.kind,
             "period": taken.period, "selection_id": taken.selection_id,
             "line": taken.line, "player_id": taken.player_id,
             "taken_source": taken.source, "taken_observed_utc": taken.observed.isoformat(),
+            "taken_price_american": taken.price,
+            "taken_opposite_price_american": taken.opposite_price,
             "taken_novig_probability": str(taken.no_vig_probability),
             "closing_source": close.source if close else None,
             "close_observed_utc": close.observed.isoformat() if close else None,
+            "close_price_american": close.price if close else None,
+            "close_opposite_price_american": close.opposite_price if close else None,
             "close_novig_probability": str(close.no_vig_probability) if close else None,
-            "clv_probability_points": str((close.no_vig_probability - taken.no_vig_probability)*100) if close else None,
+            "clv_probability_points": delta if valid_structural_close else None,
+            "reference_delta_probability_points": delta if close and not valid_structural_close else None,
             "captured_close_post_kickoff": close.captured >= close.kickoff if close else None,
             "source_authenticated": False, "official_counted": 0, "approved_stake_u": 0,
             "warning": "Provider timestamps, market mapping and original sportsbook quote authenticity are unverified",
@@ -218,12 +249,15 @@ def run(taken_path: Path, history_paths: list[Path]) -> dict:
         all_history.extend(rows)
         manifests.append({"file_name": path.name, "sha256": digest, "rows": len(rows)})
     matches = compare(takes, all_history)
+    counts = {status: sum(r["status"] == status for r in matches) for status in sorted({r["status"] for r in matches})}
     return {
-        "schema": "sportsedge-historical-clv-reference-v1",
+        "schema": "sportsedge-historical-clv-reference-v2",
         "state": "PAPER_0U_UNAUTHENTICATED",
         "taken_sha256": taken_sha, "history_files": manifests,
         "take_rows": len(takes), "history_rows": len(all_history),
         "comparable_rows": sum(r["clv_probability_points"] is not None for r in matches),
+        "reference_only_rows": sum(r["reference_delta_probability_points"] is not None for r in matches),
+        "status_counts": counts,
         "official_counted": 0, "approved_stake_u": 0, "matches": matches,
     }
 
