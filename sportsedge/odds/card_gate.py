@@ -15,6 +15,8 @@ from .evidence import (DualSourceDecision, PITBinding, QuoteReceipt,
                        evaluate_dual_source, utc)
 from .storage import EvidenceChain
 from .independent_chain_contract import inspect as inspect_independent_chain, ChainHold
+from .completeness_gate import evaluate as evaluate_completeness, CompletenessError
+from research.edge.forward_holdout_contract import evaluate as evaluate_forward, Hold
 
 
 def _numeric_identity(value, expected):
@@ -77,6 +79,9 @@ def gate_candidate(
     closing_observations=(),
     chain_primary: dict | None = None,
     chain_secondary: dict | None = None,
+    completeness_archive: dict | None = None,
+    forward_freeze: dict | None = None,
+    forward_rows: list | None = None,
 ) -> dict:
     now = utc(decision_at_utc, "decision")
     # Never accept self-asserted provenance from user-provided candidate fields.
@@ -173,6 +178,27 @@ def gate_candidate(
             reasons.append("INDEPENDENT_CHAIN:" + str(exc))
         except (TypeError, ValueError, KeyError, AttributeError) as exc:
             reasons.append("INDEPENDENT_CHAIN_RUNTIME_ERROR:" + type(exc).__name__)
+    # Research-only checks; their output never authorizes a stake.
+    if completeness_archive is None:
+        reasons.append("COMPLETENESS_EVIDENCE_MISSING")
+    else:
+        try:
+            coverage = evaluate_completeness(completeness_archive)
+            if coverage.get("failures"):
+                reasons.append("COMPLETENESS_INCOMPLETE")
+            if coverage.get("status") != "PAPER_0U_COMPLIANT_INVENTORY":
+                reasons.append("COMPLETENESS_NOT_FULLY_ACCOUNTED")
+        except (CompletenessError, TypeError, ValueError, KeyError, AttributeError) as exc:
+            reasons.append("COMPLETENESS_INVALID:" + str(exc))
+    if forward_freeze is None or forward_rows is None:
+        reasons.append("FORWARD_HOLDOUT_EVIDENCE_MISSING")
+    else:
+        try:
+            forward = evaluate_forward(forward_freeze, forward_rows)
+            if forward.get("status") != "PAPER_0U_UNATTESTED_FORWARD_RESEARCH":
+                reasons.append("FORWARD_HOLDOUT_INVALID_STATUS")
+        except (Hold, TypeError, ValueError, KeyError, AttributeError) as exc:
+            reasons.append("FORWARD_HOLDOUT_INVALID:" + str(exc))
     pit_problems = ()
     if pit is None:
         reasons.append("PIT_PACKAGE_MISSING")
