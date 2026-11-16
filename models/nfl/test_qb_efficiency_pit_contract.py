@@ -16,6 +16,13 @@ class TestQBIntake(unittest.TestCase):
         r=row();r["dropbacks"]=120
         self.assertFalse(validate([r])["rows"][0]["eligible_for_threshold_analysis"])
         self.assertTrue(validate([r],minimum_dropbacks=100)["rows"][0]["eligible_for_threshold_analysis"])
+    def test_only_preregistered_100_or_150_dropback_cutoffs_allowed(self):
+        for bad in (1, 99, 101, 149, 151, 0, -1, True, 100.0, "100"):
+            with self.subTest(value=bad), self.assertRaisesRegex(
+                ValueError, "INVALID_THRESHOLD"
+            ):
+                validate([row()], minimum_dropbacks=bad)
+
     def test_reject_future_source(self):
         r=row();r["source_available_utc"]="2026-11-16T17:01:00Z"
         with self.assertRaisesRegex(ValueError,"LOOKAHEAD"):validate([r])
