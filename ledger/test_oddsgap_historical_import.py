@@ -5,6 +5,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from ledger.oddsgap_historical_import import Blocked, export, ingest, SPORT_KEYS
@@ -185,6 +186,22 @@ class Tests(unittest.TestCase):
         self.assertEqual(json.loads((self.root/"normalized_history.csv.audit.json").read_text())["official_counted"],0)
         with self.assertRaisesRegex(Blocked,"CREATE_ONLY"):
             export(p,out)
+
+    def test_failed_audit_sidecar_write_removes_new_csv(self):
+        p=save(self.root)
+        out=self.root/"normalized_history.csv"
+        audit=out.with_name(out.name+".audit.json")
+        from ledger import oddsgap_historical_import as module
+        real_open=module.os.open
+        def fail_audit(path, flags, mode=0o777):
+            if Path(path) == audit:
+                raise OSError("injected audit creation failure")
+            return real_open(path, flags, mode)
+        with patch.object(module.os, "open", side_effect=fail_audit):
+            with self.assertRaisesRegex(OSError, "injected audit"):
+                export(p,out)
+        self.assertFalse(out.exists(), "orphan CSV must not survive without audit")
+        self.assertFalse(audit.exists())
 
     def test_retrospective_history_is_reference_not_an_official_clv(self):
         rows,_=ingest(save(self.root))
