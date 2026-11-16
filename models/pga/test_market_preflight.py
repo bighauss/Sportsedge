@@ -46,6 +46,14 @@ class TestPgaPreflight(unittest.TestCase):
     def test_distinct_capture_times_remain_separate(self):
         result=preflight([row(),row(captured_utc="2026-11-15T13:00:00Z")])
         self.assertEqual(len(result["accepted"]),2)
+    def test_generator_input_cannot_bypass_admission_or_duplicates(self):
+        items = [row(odds_american="+2500"), row(odds_american="+2300")]
+        listed = preflight(items)
+        streamed = preflight(iter(items))
+        self.assertEqual(streamed, listed)
+        self.assertEqual(len(streamed["accepted"]), 0)
+        self.assertEqual(len(streamed["blocked"]), 2)
+
     def test_missing_and_malformed(self):
         self.assertEqual(len(preflight([None,{},row(captured_utc="2026-11-15T12:00:00")])["blocked"]),3)
 

@@ -120,6 +120,28 @@ class PaperLedgerTests(unittest.TestCase):
         with self.assertRaises(Blocked):append_ledger(db,y)
         self.assertEqual(verify_chain(db),1)
 
+    def test_same_market_identity_new_pick_id_is_not_double_counted(self):
+        first=grade_bundle(self.path)
+        db=self.root/"private.sqlite"
+        append_ledger(db,first)
+        second={**first,"pick_id":"DIFFERENT-PICK-ID"}
+        with self.assertRaisesRegex(Blocked,"Canonical selection already recorded"):
+            append_ledger(db,second)
+        self.assertEqual(verify_chain(db),1)
+
+    def test_append_refuses_existing_corrupted_chain(self):
+        first=grade_bundle(self.path)
+        db=self.root/"private.sqlite"
+        append_ledger(db,first)
+        with sqlite3.connect(db) as conn:
+            conn.execute("UPDATE ledger SET payload='{}' WHERE pick_id=?",(first["pick_id"],))
+        second={**first,"pick_id":"SECOND-PICK-ID",
+                "selection_identity":list(first["selection_identity"])+["other-market"]}
+        with self.assertRaisesRegex(Blocked,"chain damaged"):
+            append_ledger(db,second)
+        with sqlite3.connect(db) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM ledger").fetchone()[0],1)
+
     def test_tampered_ledger_chain_caught(self):
         x=grade_bundle(self.path)
         db=self.root/"private.sqlite"
