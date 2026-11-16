@@ -8,7 +8,7 @@ from verify_code_freezes import FreezeViolation, git_blob_digest, verified_file
 
 class PinnedCodeTest(unittest.TestCase):
     def test_git_blob_known_example(self):
-        self.assertEqual(git_blob_digest(b"test\\n"), "9daeafb9864cf43055ae93beb0afd6c7d144bfa4")
+        self.assertEqual(git_blob_digest(b"test\n"), "9daeafb9864cf43055ae93beb0afd6c7d144bfa4")
 
     def test_reject_changed_code(self):
         with tempfile.TemporaryDirectory() as td:
