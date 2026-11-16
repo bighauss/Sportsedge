@@ -83,7 +83,7 @@
       "market_blend": 0.7
     },
     "overlay_path": "research/risk/strict_v21_v22.py",
-    "overlay_git_blob_sha1": "03a0931ae6f5428ce912f4158d8acbfc21",
+    "overlay_git_blob_sha1": "03a0931ae6f5428ce912f4158d8fdbab4d236d6f",
     "note": "Actual v2.2 addendum proposes NO per-game unit cap; v2.1 2u/game is stricter. Overlay additionally blocks >12-point model/market gaps and caps dog ML >=+200 at 0.25u. All diagnostic-only PAPER."
   },
   "initial_inspected_commit": "d9399409a86d63346b7fe0597c415fd406fd97fe"
