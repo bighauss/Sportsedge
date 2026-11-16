@@ -93,8 +93,8 @@ class NFLPrequentialProbabilityTests(unittest.TestCase):
         hist, lines=fixtures()
         before=run(hist,lines)
         updated=deepcopy(hist)
-        updated[60]["final_home"]=99
-        updated[60]["final_away"]=0
+        updated[60]["final_home"]=0
+        updated[60]["final_away"]=99
         after=run(updated,lines)
         own_a=before["event_ledger"][60]["market_diagnostics"]["MONEYLINE"]
         own_b=after["event_ledger"][60]["market_diagnostics"]["MONEYLINE"]
