@@ -1,0 +1,37 @@
+name: CBB men's actual halves and research settlement
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/allmarkets_research.py'
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/period_share_fit.py'
+      - 'sportsedge/markets/cli.py'
+      - 'sportsedge/markets/test_cbb_real_halves.py'
+      - 'sportsedge/markets/test_period_share_fit.py'
+      - 'docs/markets/TRAIN_ONLY_PERIOD_SHARES.md'
+      - '.github/workflows/cbb-real-halves.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/allmarkets_research.py'
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/period_share_fit.py'
+      - 'sportsedge/markets/cli.py'
+      - 'sportsedge/markets/test_cbb_real_halves.py'
+      - 'sportsedge/markets/test_period_share_fit.py'
+      - 'docs/markets/TRAIN_ONLY_PERIOD_SHARES.md'
+      - '.github/workflows/cbb-real-halves.yml'
+  workflow_dispatch:
+jobs:
+  half-settlement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: CBB two-half scoring, odds, full slate, legacy research regression
+        run: |
+          python -m unittest -v sportsedge.markets.test_cbb_real_halves sportsedge.markets.test_period_share_fit sportsedge.markets.test_allmarkets_research sportsedge.markets.test_scenario_lineage sportsedge.markets.test_edge_discovery sportsedge.markets.test_cli sportsedge.markets.test_run_it_research sportsedge.markets.test_slate_orchestrator

@@ -1,8 +1,8 @@
 """Train-only regulation-period shares for five-sport RUN IT research.
 
-Only NFL/CFB/NBA regulation quarters and MLB regulation innings are
-representable by the current score simulator. Men's CBB is TWO halves;
-inventing four quarter shares from two halves is forbidden.
+NFL/CFB/NBA regulation quarters, MLB regulation innings, and NCAA
+men's CBB actual first/second halves are supported. Inventing four CBB
+quarter shares from two halves is forbidden.
 
 This code never authenticates an original statistical source, certifies a
 distribution, infers game line value, updates model weights or stakes money.
@@ -26,6 +26,7 @@ PERIODS = {
     "NFL": ("Q1", "Q2", "Q3", "Q4"),
     "CFB": ("Q1", "Q2", "Q3", "Q4"),
     "NBA": ("Q1", "Q2", "Q3", "Q4"),
+    "CBB": ("H1", "H2"),
     "MLB": tuple("I" + str(i) for i in range(1, 10)),
 }
 FIT_VERSION = "SPORTSEDGE_REGULATION_PERIOD_SHARES_TRAIN_ONLY_R1"
@@ -125,8 +126,6 @@ def fit_period_shares(raw, *, sport, fit_asof_utc,
     This is a deterministic *training-data-only* proportion estimate. It does
     NOT estimate period variance or validate conditional game simulation.
     """
-    if sport == "CBB":
-        raise ValueError("CBB_MENS_HALVES_CANNOT_BE_FOUR_QUARTERS")
     if sport not in PERIODS:
         raise ValueError("UNSUPPORTED_PERIOD_SHARE_SPORT")
     cutoff = _clock(fit_asof_utc, "PERIOD_FIT_ASOF")
