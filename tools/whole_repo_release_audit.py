@@ -101,7 +101,15 @@ def audit(repo: Path, *, matrix: dict, freeze: dict,
         elif parsed_matrix_date < asof:
             blockers.append("MATRIX_ASOF_NOT_CURRENT")
 
-    release = inspect_matrix(matrix)
+    try:
+        release = inspect_matrix(matrix)
+    except (TypeError, ValueError, KeyError) as exc:
+        # The standalone sweep can raise on unhashable nested identifiers;
+        # a certification check must retain a reason-coded blocked verdict.
+        release = {
+            "status": "BLOCK",
+            "issues": ["MALFORMED_MARKET_MATRIX:" + type(exc).__name__],
+        }
     if release.get("status") != "PAPER_0U_SAFE_MATRIX" or release.get("issues"):
         blockers.append("RELEASE_MATRIX_UNSAFE_OR_INCOMPLETE")
 
