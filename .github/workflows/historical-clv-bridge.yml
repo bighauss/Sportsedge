@@ -4,6 +4,8 @@ on:
     paths:
       - 'ledger/historical_clv_bridge.py'
       - 'ledger/test_historical_clv_bridge.py'
+      - 'ledger/oddsgap_historical_import.py'
+      - 'ledger/test_oddsgap_historical_import.py'
       - 'ledger/HISTORICAL_CLV_BRIDGE_README.md'
       - '.github/workflows/historical-clv-bridge.yml'
   push:
@@ -11,6 +13,8 @@ on:
     paths:
       - 'ledger/historical_clv_bridge.py'
       - 'ledger/test_historical_clv_bridge.py'
+      - 'ledger/oddsgap_historical_import.py'
+      - 'ledger/test_oddsgap_historical_import.py'
       - 'ledger/HISTORICAL_CLV_BRIDGE_README.md'
       - '.github/workflows/historical-clv-bridge.yml'
 permissions:
@@ -25,4 +29,4 @@ jobs:
         with:
           python-version: '3.12'
       - name: Fail-closed historical CLV contracts (no live calls)
-        run: python -m unittest discover -s ledger -p 'test_historical_clv_bridge.py' -v
+        run: python -m unittest discover -s ledger -p 'test_historical_clv_bridge.py' -v && python -m unittest ledger.test_oddsgap_historical_import -v
