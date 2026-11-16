@@ -297,7 +297,7 @@ class ForecastReceiptTests(unittest.TestCase):
         files=list(self.registry.glob("forecast-receipt-*.json"))
         self.assertEqual(len(files),1)
         self.assertEqual(files[0].stat().st_mode & 0o777,0o600)
-        self.assertTrue(any(b"FileExistsError" in err for _,err in outputs))
+        self.assertTrue(any(b"OUTPUT_MUST_BE_NEW" in err for _,err in outputs))
 
     def test_nested_json_exponent_overflow_refused(self):
         with self.assertRaisesRegex(ValueError,"INVALID_OR_AMBIGUOUS_JSON"):
