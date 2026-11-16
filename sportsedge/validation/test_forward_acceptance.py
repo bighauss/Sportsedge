@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from sportsedge.validation.forward_acceptance import analyze, report_file
+from sportsedge.validation.forward_acceptance import analyze, report_file, REPO_ROOT
 
 UTC=timezone.utc
 BASE=datetime(2026,11,10,17,tzinfo=UTC)
@@ -183,6 +183,47 @@ class AuditContract(unittest.TestCase):
             self.assertEqual(source.read_bytes(),original)
             self.assertTrue(r["input_sha256"].startswith("sha256:"))
             with self.assertRaises(FileExistsError):report_file(source,out)
+
+    def test_public_checkout_input_is_refused_before_parsing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.json"
+            # Existing public repo file is intentionally NOT evidence JSON;
+            # privacy failure must precede parsing or recording its hash.
+            source = REPO_ROOT / "sportsedge" / "validation" / "forward_acceptance.py"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_PATH_REQUIRED:manifest"):
+                report_file(source, out)
+            self.assertFalse(out.exists())
+
+    def test_public_checkout_report_is_refused_before_creation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "original.json"
+            source.write_text(json.dumps(fixture(0, 0, 0)))
+            output = REPO_ROOT / "sportsedge" / "validation" / "do_not_create_gate10.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_PATH_REQUIRED:report"):
+                report_file(source, output)
+            self.assertFalse(output.exists())
+
+    def test_symlink_into_public_checkout_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            alias = Path(tmp) / "repo_alias"
+            try:
+                alias.symlink_to(REPO_ROOT, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                self.skipTest("directory symlinks unavailable")
+            out = Path(tmp) / "audit.json"
+            with self.assertRaisesRegex(ValueError, "PRIVATE_EVIDENCE_PATH_REQUIRED:manifest"):
+                report_file(alias / "sportsedge" / "validation" / "forward_acceptance.py", out)
+            self.assertFalse(out.exists())
+
+    def test_private_report_created_with_restrictive_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src, out = root / "raw.json", root / "audit.json"
+            src.write_text(json.dumps(fixture(0, 0, 0)))
+            report_file(src, out)
+            self.assertEqual(out.stat().st_mode & 0o777, 0o600)
+            with self.assertRaises(FileExistsError):
+                report_file(src, out)
 
     def test_duplicate_manifest_json_key_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
