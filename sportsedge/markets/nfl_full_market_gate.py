@@ -7,7 +7,7 @@ The source SHA protects local bytes, NOT publisher authenticity.
 """
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
@@ -88,7 +88,11 @@ def audit(rows,forecasts,*,decision_utc,max_quote_age_s=300,
     gap=dec(max_score_gap)
     if not 0<gap<=10:
         raise ValueError("UNSAFE_GAP_THRESHOLD")
-    output=[]; seen=set(); groups=defaultdict(list)
+    # A contradictory first copy is just as unreliable as the later copy.
+    # Count every claimed original quote ID before processing any market row.
+    quote_counts=Counter((r.get("event_id"),r.get("quote_id"))
+                         for r in rows if isinstance(r,dict))
+    output=[]; groups=defaultdict(list)
     for index,row in enumerate(rows):
         if not isinstance(row,dict) or not REQUIRED.issubset(row) or set(row)-REQUIRED-OPTIONAL:
             raise ValueError("UNEXPECTED_OR_MISSING_QUOTE_FIELDS")
@@ -126,8 +130,7 @@ def audit(rows,forecasts,*,decision_utc,max_quote_age_s=300,
         if (now-observed).total_seconds()>max_quote_age_s:
             reasons.add("STALE_PRICE_RECAPTURE")
         qkey=(event,row["quote_id"])
-        if qkey in seen: reasons.add("DUPLICATE_QUOTE_ID")
-        seen.add(qkey)
+        if quote_counts[qkey]>1: reasons.add("DUPLICATE_QUOTE_ID")
         canonical=key(row)
         if kind!="PLAYER_PROP_XPLUS": groups[canonical].append((index,side,observed))
         if kind in PLAYER:
@@ -210,7 +213,12 @@ def audit(rows,forecasts,*,decision_utc,max_quote_age_s=300,
                        "canonical_key":list(canonical),"reasons":reasons})
     for group in groups.values():
         for i,side,time in group:
-            opposite=[t for j,s,t in group if j!=i and s==OPPOSITE[side]]
+            if "DUPLICATE_QUOTE_ID" in output[i]["reasons"]:
+                output[i]["reasons"].add("DUPLICATE_QUOTE_CANNOT_ESTABLISH_TWO_SIDED_PAIR")
+                continue
+            opposite=[t for j,s,t in group
+                      if j!=i and s==OPPOSITE[side]
+                      and "DUPLICATE_QUOTE_ID" not in output[j]["reasons"]]
             if not opposite: output[i]["reasons"].add("NO_MATCHED_TWO_SIDED_QUOTE")
             elif all(abs((time-t).total_seconds())>max_pair_skew_s for t in opposite):
                 output[i]["reasons"].add("OPPOSITE_QUOTE_SNAPSHOT_TOO_FAR_APART")
