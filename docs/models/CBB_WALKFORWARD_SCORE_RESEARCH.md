@@ -11,7 +11,7 @@ Each element contains:
 
 Keep all blocked, pending, losing, and no-quote game rows. This module quarantines every duplicate season+game_id, even the first copy. Complete pairs are required within a supplied market. A malformed quote is withheld from market benchmarks but does NOT invalidate an otherwise frozen score forecast.
 
-Never put provider originals, captures, credentials or private evaluation reports into the PUBLIC GitHub repository. CLI path safety resolves symlinks and rejects source/output paths inside the public repo, even from nested working directories. The report is create-only and never overwrites earlier reports. Duplicate JSON object keys and NaN/Infinity inputs fail closed.
+Never put provider originals, captures, credentials or private evaluation reports into the PUBLIC GitHub repository. CLI checks BOTH lexical and symlink-resolved public checkout paths for source/output; the source JSON must be a mode-0600 private regular file, and the report destination must be in a mode-0700 private directory (created if missing). Report bytes are exclusively created mode-0600 via O_EXCL (O_NOFOLLOW where available), flushed and fsynced, with an attempted partial-file rollback on any write failure. This prevents a permissive 0644 default umask leak and never overwrites earlier reports. Duplicate JSON object keys and NaN/Infinity inputs fail closed. Source timestamp/hash fields still require independent external attestation; file permissions alone prove no authenticity.
 
 ## Run in a private workspace
 
