@@ -80,9 +80,14 @@ def _id(value, label):
 
 
 def _path(raw, label, *, allow_model=False):
-    if type(raw) is not str or not raw.strip():
+    # CLI args are strings; programmatic callers may supply pathlib.Path.
+    # Do not let an arbitrary object's stringification bypass path checks.
+    if not isinstance(raw, (str, os.PathLike)):
         raise Blocked("MISSING_PATH:" + label)
-    lexical = Path(os.path.abspath(raw))
+    source = os.fspath(raw)
+    if not isinstance(source, str) or not source.strip() or "\x00" in source:
+        raise Blocked("MISSING_PATH:" + label)
+    lexical = Path(os.path.abspath(source))
     resolved = lexical.resolve()
     if not allow_model and (lexical == ROOT or ROOT in lexical.parents
                             or resolved == ROOT or ROOT in resolved.parents):
