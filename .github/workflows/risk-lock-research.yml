@@ -32,6 +32,8 @@ jobs:
         run: python research/freezes/verify_code_freezes.py
       - name: Code freeze adversarial tests
         run: python -m unittest discover -s research/freezes -p 'test_*.py' -v
+      - name: G-18 derived 496 from original board regression
+        run: python -m unittest discover -s research/audit -p 'test_reconstruct_g18_496_from_board.py' -v
       - name: Core + offered odds inventory tests
         run: python -m unittest sportsedge.odds.test_completeness_gate -v
       - name: Daily release safety sweep tests
