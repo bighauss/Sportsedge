@@ -98,9 +98,8 @@ class PeriodWalkforwardTest(unittest.TestCase):
             self.assertNotEqual(fold["holdout_n"],0)
         # Any same-start 30-event cohort must occur wholly in ONE holdout.
         spans=[f for f in out["folds"]
-               if f["holdout_start_utc"]<=shared.isoformat()<
-                  f["holdout_last_start_utc"] or
-                  f["holdout_start_utc"]==shared.isoformat()]
+               if f["holdout_start_utc"]<=shared.isoformat()<=
+                  f["holdout_last_start_utc"]]
         self.assertTrue(spans)
         self.assertGreaterEqual(spans[0]["holdout_n"],30)
 
