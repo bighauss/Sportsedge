@@ -167,8 +167,13 @@ def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spre
        "requested_books":list(bookmakers),"requested_event_id":event_id,
        "original_source_chain_certified":False,
        "matched_clv_triplets":0,"official_counted":0,"approved_stake_u":0}
-    with (root/(base+".manifest.json")).open('x',encoding='utf-8') as f:
-        json.dump(summary,f,indent=2,sort_keys=True,allow_nan=False);f.write('\n')
+    manifest=root/(base+".manifest.json")
+    manifest_fd=os.open(manifest,flags,0o600)
+    with os.fdopen(manifest_fd,'w',encoding='utf-8') as f:
+        json.dump(summary,f,indent=2,sort_keys=True,allow_nan=False)
+        f.write('\n')
+        f.flush()
+        os.fsync(f.fileno())
     return summary
 
 
