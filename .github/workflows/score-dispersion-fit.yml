@@ -1,0 +1,31 @@
+name: Train-only score dispersion and RUN IT research replay
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/score_dispersion_fit.py'
+      - 'sportsedge/markets/test_score_dispersion_fit.py'
+      - 'sportsedge/markets/cli.py'
+      - 'docs/markets/TRAIN_ONLY_SCORE_DISPERSION.md'
+      - '.github/workflows/score-dispersion-fit.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/score_dispersion_fit.py'
+      - 'sportsedge/markets/test_score_dispersion_fit.py'
+      - 'sportsedge/markets/cli.py'
+      - 'docs/markets/TRAIN_ONLY_SCORE_DISPERSION.md'
+      - '.github/workflows/score-dispersion-fit.yml'
+  workflow_dispatch:
+jobs:
+  research-fit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail-closed training source and pricing replay synthetic suite
+        run: |
+          python -m unittest -v sportsedge.markets.test_score_dispersion_fit sportsedge.markets.test_edge_discovery sportsedge.markets.test_scenario_lineage sportsedge.markets.test_cli sportsedge.markets.test_run_it_research

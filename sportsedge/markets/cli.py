@@ -23,6 +23,7 @@ from .allmarkets_research import Market,PriceReceipt
 from .projection_bridge import TeamProjection, from_claude_sport, from_nfl_ridge
 from .pit_source_manifest import verify_model_feature_manifest
 from .projection_distribution import DistributionInput,generate_score_scenarios
+from .score_dispersion_fit import fit_score_residuals, private_path, MAX_BYTES as MAX_FIT_BYTES
 from .player_forecast_intake import ingest_player_forecast_csv
 from .run_it_research import MarketCandidate,run_research_board
 from .source_ingestion import SOURCES
@@ -88,9 +89,9 @@ def _quote(data:dict|None)->PriceReceipt|None:
 
 
 def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
-    _only_keys(payload,{"projection","projection_ref","distribution","markets","player_file",
-                        "roster_ids","event_team_ids","simulation_count",
-                        "simulation_seed"},"root")
+    _only_keys(payload,{"projection","projection_ref","distribution","dispersion_fit_ref",
+                        "markets","player_file","roster_ids","event_team_ids",
+                        "simulation_count","simulation_seed"},"root")
     if ("projection" in payload)==("projection_ref" in payload):
         raise ValueError("EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED")
     pit_manifest_audit=None
@@ -136,12 +137,49 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
             "model_sha256","feature_sha256","asof_utc"},"projection")
         q=dict(p);q["asof_utc"]=_iso(q["asof_utc"])
         projection=TeamProjection(**q)
-    dispersion=_only_keys(payload["distribution"],{
-        "sport","sd_margin","sd_total","period_shares","model_sha256",
-        "training_end_utc","status"},"distribution")
-    dd=dict(dispersion)
-    dd["training_end_utc"]=_iso(dd["training_end_utc"])
-    dd["period_shares"]=tuple(dd["period_shares"])
+    fitted_dispersion=None
+    if "dispersion_fit_ref" in payload:
+        # Only fit the residual widths from the actual, prior-to-forecast
+        # saved result ledger. Period shares are still explicit UNCALIBRATED
+        # inputs; real PIT/forward calibration and provider auth remain open.
+        ref=_only_keys(payload["dispersion_fit_ref"],
+            {"path","raw_sha256","fit_asof_utc"},"dispersion_fit_ref")
+        settings=_only_keys(payload["distribution"],
+            {"sport","period_shares","status"},"fitted_distribution")
+        if settings["sport"] != projection.sport:
+            raise ValueError("DISPERSION_FIT_SPORT_MISMATCH")
+        if _iso(ref["fit_asof_utc"])>=projection.asof_utc:
+            raise ValueError("DISPERSION_FIT_AFTER_PROJECTION_FREEZE")
+        source=Path(ref["path"])
+        if source.is_symlink():
+            raise ValueError("DISPERSION_FIT_SOURCE_SYMLINK_REFUSED")
+        source=private_path(ref["path"])
+        if not source.is_file() or not 0<source.stat().st_size<=MAX_FIT_BYTES:
+            raise ValueError("DISPERSION_FIT_SOURCE_MISSING_OR_TOO_LARGE")
+        original=source.read_bytes()
+        actual_digest="sha256:"+sha256(original).hexdigest()
+        if ref["raw_sha256"]!=actual_digest:
+            raise ValueError("DISPERSION_FIT_ORIGINAL_LEDGER_HASH_MISMATCH")
+        fitted_dispersion=fit_score_residuals(
+            original,sport=projection.sport,cutoff_utc=ref["fit_asof_utc"])
+        if fitted_dispersion["status"]!="TRAIN_ONLY_WIDTHS_READY_RESEARCH_NOT_CALIBRATED":
+            raise ValueError("DISPERSION_TRAINING_CENSUS_INCOMPLETE_OR_LEAKED")
+        if fitted_dispersion["training_model_sha256"]!=projection.model_sha256:
+            raise ValueError("DISPERSION_TRAINING_MODEL_MISMATCH")
+        dd={"sport":projection.sport,
+            "sd_margin":fitted_dispersion["sd_margin"],
+            "sd_total":fitted_dispersion["sd_total"],
+            "period_shares":tuple(settings["period_shares"]),
+            "model_sha256":fitted_dispersion["fitter_model_sha256"],
+            "training_end_utc":_iso(ref["fit_asof_utc"]),
+            "status":settings["status"]}
+    else:
+        dispersion=_only_keys(payload["distribution"],{
+            "sport","sd_margin","sd_total","period_shares","model_sha256",
+            "training_end_utc","status"},"distribution")
+        dd=dict(dispersion)
+        dd["training_end_utc"]=_iso(dd["training_end_utc"])
+        dd["period_shares"]=tuple(dd["period_shares"])
     distribution=DistributionInput(**dd)
     roster=frozenset(payload.get("roster_ids",()))
     if any(not isinstance(p,str) or not p.strip() for p in roster):
@@ -183,6 +221,15 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     results["input_version"]="SPORTSEDGE_FIVE_SPORT_RESEARCH_CLI_V1"
     results["generated_at_utc"]=datetime.now(timezone.utc).isoformat()
     results["generator_unvalidated"]=True
+    results["dispersion_fit_status"]=(
+        fitted_dispersion["status"] if fitted_dispersion else "NOT_TRAINED_FROM_LEDGER")
+    results["dispersion_fit_source_sha256"]=(
+        fitted_dispersion["source_file_sha256"] if fitted_dispersion else None)
+    results["dispersion_fit_accepted_n"]=(
+        fitted_dispersion["accepted_rows"] if fitted_dispersion else 0)
+    results["dispersion_fit_model_sha256"]=(
+        fitted_dispersion["fitter_model_sha256"] if fitted_dispersion else None)
+    results["period_share_calibration_verified"]=False
     results["pit_file_manifest_status"]=(
         pit_manifest_audit.status if pit_manifest_audit else "NOT_CHECKED")
     results["pit_file_hash"]=(
