@@ -1,0 +1,24 @@
+name: NFL discrete score PIT synthetic research
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/discrete_score_pit.py'
+      - 'models/nfl/test_discrete_score_pit.py'
+      - 'models/nfl/DISCRETE_SCORE_README.md'
+      - '.github/workflows/nfl-discrete-score-pit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discrete-score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic NFL score ties pushes and PIT cutoff
+        run: python -m unittest discover -s models/nfl -p 'test_discrete_score_pit.py' -v
+      - name: Compile discrete score research module
+        run: python -m py_compile models/nfl/discrete_score_pit.py

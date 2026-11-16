@@ -1,0 +1,192 @@
+"""Research-only empirical discrete NFL scoring regression tests."""
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+import unittest
+
+from discrete_score_pit import score_distribution
+
+SHA = "sha256:" + "b" * 64
+
+
+def iso(t):
+    return t.isoformat().replace("+00:00", "Z")
+
+
+def fixtures(n=60):
+    kickoff = datetime(2026, 12, 1, 21, tzinfo=timezone.utc)
+    target = {
+        "game_id": "target", "home_id": "CHI", "away_id": "GB",
+        "kickoff_utc": iso(kickoff),
+        "forecast_asof_utc": iso(kickoff - timedelta(hours=3)),
+        "source_observed_utc": iso(kickoff - timedelta(hours=4)),
+        "model_sha256": SHA, "projected_home": 20.0, "projected_away": 20.0,
+    }
+    outcomes = [(24,21), (27,20), (21,21), (17,24)]
+    history = []
+    for i in range(n):
+        past_start = kickoff - timedelta(days=2 + i)
+        home, away = outcomes[i%4]
+        history.append({
+            "game_id": f"old_{i}", "home_id": "CHI", "away_id": "GB",
+            "kickoff_utc": iso(past_start),
+            "forecast_asof_utc": iso(past_start - timedelta(hours=3)),
+            "source_observed_utc": iso(past_start - timedelta(hours=4)),
+            "model_sha256": SHA,
+            "projected_home": 20.0, "projected_away": 20.0,
+            "final_utc": iso(past_start + timedelta(hours=4)),
+            "result_available_utc": iso(past_start + timedelta(hours=6)),
+            "final_home": home, "final_away": away,
+        })
+    lines = {
+        "game_id": "target",
+        "observed_at_utc": iso(kickoff - timedelta(hours=4)),
+        "home_spread": -3.0,
+        "game_total": 45.0,
+        "home_team_total": 24.0,
+        "away_team_total": 21.0,
+    }
+    return target, history, lines
+
+
+class DiscreteNFLPITTests(unittest.TestCase):
+    def test_exact_margin_key_numbers_and_tie_mass(self):
+        target, hist, lines = fixtures()
+        out = score_distribution(target, hist, lines=lines)
+        self.assertEqual(out["status"], "PAPER_HOLD_0U")
+        self.assertEqual(out["approved_stake_u"], 0)
+        self.assertEqual(out["census"]["eligible_prior_residual_pairs"], 60)
+        self.assertEqual(out["score_diagnostics"]["margin_3_frequency"], .25)
+        self.assertEqual(out["score_diagnostics"]["margin_7_frequency"], .25)
+        self.assertEqual(out["markets"]["MONEYLINE"]["home_win"], .5)
+        self.assertEqual(out["markets"]["MONEYLINE"]["tie"], .25)
+        self.assertEqual(out["markets"]["MONEYLINE"]["away_win"], .25)
+        self.assertEqual(out["markets"]["MONEYLINE"]["settlement_rule"],
+                         "3_WAY_RESULTS_ONLY_NO_2_WAY_TIE_ASSUME")
+
+    def test_push_aware_spread_total_and_team_totals(self):
+        target, hist, lines = fixtures()
+        out = score_distribution(target, hist, lines=lines)
+        spread = out["markets"]["SPREAD"]
+        self.assertEqual(spread["line"], -3)
+        self.assertEqual(spread["over_or_home_cover"], .25)
+        self.assertEqual(spread["push"], .25)
+        self.assertEqual(spread["under_or_away_cover"], .5)
+        total = out["markets"]["GAME_TOTAL"]
+        self.assertEqual(total["line"], 45)
+        self.assertEqual((total["over_or_home_cover"], total["push"],
+                          total["under_or_away_cover"]), (.25, .25, .5))
+        self.assertEqual(out["markets"]["HOME_TEAM_TOTAL"]["push"], .25)
+        self.assertEqual(out["markets"]["AWAY_TEAM_TOTAL"]["push"], .5)
+
+    def test_missing_market_lines_are_not_claimed_not_offered(self):
+        t,h,_ = fixtures()
+        out = score_distribution(t,h)
+        self.assertEqual(out["markets"]["SPREAD"]["status"], "NOT_CAPTURED")
+        self.assertEqual(out["markets"]["GAME_TOTAL"]["status"], "NOT_CAPTURED")
+        self.assertIn("FIRST_TD", out["markets"])
+        self.assertEqual(out["markets"]["FIRST_TD"]["status"], "NO_MODEL")
+        self.assertNotIn("expected_value", out)
+
+    def test_future_results_do_not_enter_past_prediction(self):
+        target, history, lines = fixtures()
+        original = score_distribution(target, history, lines=lines)
+        later = deepcopy(history[0])
+        later["game_id"] = "future_heldout"
+        later["kickoff_utc"] = "2026-12-02T20:00:00Z"
+        later["forecast_asof_utc"] = "2026-12-02T18:00:00Z"
+        later["source_observed_utc"] = "2026-12-02T17:00:00Z"
+        later["final_utc"] = "2026-12-03T00:00:00Z"
+        later["result_available_utc"] = "2026-12-03T02:00:00Z"
+        later["final_home"], later["final_away"] = 100, 0
+        modified = score_distribution(target, history + [later], lines=lines)
+        self.assertEqual(original["markets"], modified["markets"])
+        self.assertEqual(modified["census"]["excluded_outcome_unavailable_at_forecast"], 1)
+
+    def test_late_report_is_excluded_even_for_earlier_game(self):
+        t,h,l = fixtures()
+        original = score_distribution(t,h,lines=l)
+        h[0]["result_available_utc"] = "2026-12-03T02:00:00Z"
+        alt = score_distribution(t,h,lines=l)
+        self.assertEqual(alt["census"]["eligible_prior_residual_pairs"], 59)
+        self.assertNotEqual(original["markets"]["MONEYLINE"]["home_win"],
+                            alt["markets"]["MONEYLINE"]["home_win"])
+
+    def test_version_changes_not_mixed_in_pool(self):
+        t,h,l = fixtures()
+        h[0]["model_sha256"] = "sha256:" + "c"*64
+        out = score_distribution(t,h,lines=l)
+        self.assertEqual(out["census"]["excluded_different_model_version"], 1)
+        self.assertEqual(out["census"]["eligible_prior_residual_pairs"], 59)
+
+    def test_history_below_threshold_yields_no_numbers(self):
+        t,h,l = fixtures(31)
+        out = score_distribution(t,h,lines=l,min_history=50)
+        self.assertNotIn("score_diagnostics", out)
+        self.assertEqual(out["markets"]["MONEYLINE"]["status"], "NO_MODEL")
+        self.assertEqual(out["markets"]["SPREAD"]["status"], "NO_MODEL")
+
+    def test_duplicate_or_self_event_blocks_instead_of_counting_twice(self):
+        t,h,l = fixtures()
+        with self.assertRaisesRegex(ValueError, "SELF_EVENT_OR_DUPLICATE"):
+            score_distribution(t,h+[deepcopy(h[0])],lines=l)
+        h[0]["game_id"] = t["game_id"]
+        with self.assertRaisesRegex(ValueError, "SELF_EVENT_OR_DUPLICATE"):
+            score_distribution(t,h,lines=l)
+
+    def test_frozen_forecast_after_game_start_rejected(self):
+        t,h,l = fixtures()
+        t["forecast_asof_utc"] = t["kickoff_utc"]
+        with self.assertRaisesRegex(ValueError, "FROZEN_FORECAST_AFTER"):
+            score_distribution(t,h,lines=l)
+
+    def test_late_or_cross_event_market_line_rejected(self):
+        t,h,l = fixtures()
+        l["observed_at_utc"] = t["kickoff_utc"]
+        with self.assertRaisesRegex(ValueError, "MARKET_LINES_AFTER"):
+            score_distribution(t,h,lines=l)
+        l["observed_at_utc"] = t["source_observed_utc"]
+        l["game_id"] = "different"
+        with self.assertRaisesRegex(ValueError, "MARKET_EVENT_ID_MISMATCH"):
+            score_distribution(t,h,lines=l)
+
+    def test_missing_or_invalid_score_and_nonfinite_forecast(self):
+        t,h,l = fixtures()
+        h[0]["final_home"] = "24"
+        with self.assertRaisesRegex(ValueError, "INVALID_FINAL_SCORE"):
+            score_distribution(t,h,lines=l)
+        t,h,l=fixtures()
+        t["projected_home"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "NONFINITE_NUMERIC"):
+            score_distribution(t,h,lines=l)
+
+    def test_result_chronology_required(self):
+        t,h,l = fixtures()
+        h[0]["final_utc"] = h[0]["kickoff_utc"]
+        with self.assertRaisesRegex(ValueError, "POSTGAME_OUTCOME_TIME_ORDER"):
+            score_distribution(t,h,lines=l)
+
+    def test_no_zero_fill_for_missing_history_field(self):
+        t,h,l = fixtures()
+        h[0].pop("final_away")
+        with self.assertRaisesRegex(ValueError, "BAD_HISTORICAL_FORECAST_SCHEMA"):
+            score_distribution(t,h,lines=l)
+
+    def test_min_history_threshold_and_line_bound(self):
+        t,h,l = fixtures()
+        with self.assertRaisesRegex(ValueError, "MINIMUM_RESIDUAL_HISTORY"):
+            score_distribution(t,h,lines=l,min_history=20)
+        l["game_total"] = 999
+        with self.assertRaisesRegex(ValueError, "MARKET_LINE_OUT_OF_REASONABLE_RANGE"):
+            score_distribution(t,h,lines=l)
+
+    def test_false_production_claims_not_present(self):
+        t,h,l = fixtures()
+        out = score_distribution(t,h,lines=l)
+        self.assertEqual(out["official_counted"], 0)
+        self.assertEqual(out["source_authentication"], "NOT_INDEPENDENTLY_ATTESTED")
+        self.assertEqual(out["calibration"], "UNVERIFIED_EMPIRICAL_RESIDUALS")
+        self.assertFalse(out["markets"]["SPREAD"]["source_authentication"])
+
+
+if __name__=="__main__":
+    unittest.main()
