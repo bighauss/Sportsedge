@@ -120,9 +120,12 @@ def _parse_final(final, p):
     if final.get("game_id") != p["id"] or final.get("season") != p["season"] or final.get("home_team_id") != p["home"] or final.get("away_team_id") != p["away"]:
         raise Blocked("FINAL_IDENTITY_MISMATCH")
     _hash(final.get("sha256"), "final.sha256")
+    if final.get("status") != "FINAL" or final.get("period") != "FG_INCL_OT":
+        raise Blocked("FINAL_SETTLEMENT_STATUS_OR_PERIOD_INVALID")
     published = _time(final.get("published_utc"), "final.published_utc")
-    if published <= p["tip"]:
-        raise Blocked("FINAL_RELEASE_NOT_AFTER_TIP")
+    captured = _time(final.get("captured_utc"), "final.captured_utc")
+    if not p["tip"] < published <= captured:
+        raise Blocked("FINAL_RELEASE_OR_CAPTURE_CLOCK_INVALID")
     h = _integer(final.get("home_score"), "final.home_score", 0, 250)
     a = _integer(final.get("away_score"), "final.away_score", 0, 250)
     if h == a:
@@ -218,13 +221,14 @@ def _paired_ci(values):
     return [mu-radius, mu+radius]
 
 
-def _summarize_pairs(pairs):
+def _summarize_pairs(pairs, metric):
     if not pairs:
-        return dict(n=0, model_mae=None, market_mae=None, improvement=None, event_ci95=None)
-    return dict(n=len(pairs),
-                model_mae=mean(x[0] for x in pairs),
-                market_mae=mean(x[1] for x in pairs),
-                improvement=mean(x[1]-x[0] for x in pairs),
+        return dict(n=0, metric=metric, model_average=None, market_average=None,
+                    improvement_market_minus_model=None, event_ci95=None)
+    return dict(n=len(pairs), metric=metric,
+                model_average=mean(x[0] for x in pairs),
+                market_average=mean(x[1] for x in pairs),
+                improvement_market_minus_model=mean(x[1]-x[0] for x in pairs),
                 event_ci95=_paired_ci([x[1]-x[0] for x in pairs]))
 
 
@@ -252,28 +256,31 @@ def audit(rows, *, min_prior=30, max_quote_age_hours=24):
         by_season[v["season"]].append(v)
     paired = defaultdict(list)
     season_totals = defaultdict(lambda: {"n_evaluated":0,"n_eligible":0})
-    train_sizes = []
     for season, records in sorted(by_season.items()):
         # Strict earlier publication time, not simply earlier tipoff.
         releases = sorted(records,key=lambda x:(x["published"],x["id"]))
         predictions = sorted(records,key=lambda x:(x["freeze"],x["id"]))
         ix = 0
-        training_margin_residuals = []
+        n = 0
+        residual_mean = 0.0
+        residual_m2 = 0.0
         for p in predictions:
             while ix < len(releases) and releases[ix]["published"] < p["freeze"]:
                 t = releases[ix]
-                training_margin_residuals.append(t["margin"]-t["margin_p"])
+                resid = t["margin"]-t["margin_p"]
+                n += 1
+                delta = resid-residual_mean
+                residual_mean += delta/n
+                residual_m2 += delta*(resid-residual_mean)
                 ix += 1
             out = all_reports[p["input_index"]]
             season_totals[season]["n_eligible"] += 1
-            n = len(training_margin_residuals)
             if n < min_prior:
                 out["evaluation_status"] = "INSUFFICIENT_PRIOR_PUBLISHED_FINALS"
                 out["train_n"] = n
                 continue
             out["evaluation_status"] = "WALK_FORWARD_SCORED_PAPER_0U"
             out["train_n"] = n
-            train_sizes.append(n)
             season_totals[season]["n_evaluated"] += 1
             m_err = abs(p["margin"]-p["margin_p"])
             t_err = abs(p["total"]-p["total_p"])
@@ -289,11 +296,10 @@ def audit(rows, *, min_prior=30, max_quote_age_hours=24):
                     market_err = abs(p["total"]-q["total"])
                     paired["total"].append((t_err, market_err))
                     out["total_line_abs_error"] = market_err
-                if "ml" in q and n>=2 and stdev(training_margin_residuals) > 1e-9:
-                    # Research-only test distribution, not validated betting fair odds.
-                    resid_mean = mean(training_margin_residuals)
-                    resid_sd = stdev(training_margin_residuals)
-                    mp = min(1-1e-12,max(1e-12,_normal_cdf((p["margin_p"]+resid_mean)/resid_sd)))
+                if "ml" in q and n>=2 and residual_m2/(n-1) > 1e-18:
+                    # Strictly earlier released outcomes only; research distribution.
+                    resid_sd = math.sqrt(residual_m2/(n-1))
+                    mp = min(1-1e-12,max(1e-12,_normal_cdf((p["margin_p"]+residual_mean)/resid_sd)))
                     bp = min(1-1e-12,max(1e-12,q["ml"]))
                     y = int(p["margin"]>0)
                     paired["moneyline"].append(((mp-y)**2,(bp-y)**2))
@@ -308,9 +314,9 @@ def audit(rows, *, min_prior=30, max_quote_age_hours=24):
         "walkforward_evaluated_n": len(scored),
         "model_margin_mae": mean(r["model_margin_abs_error"] for r in scored) if scored else None,
         "model_total_mae": mean(r["model_total_abs_error"] for r in scored) if scored else None,
-        "paired_spread": _summarize_pairs(paired["spread"]),
-        "paired_total": _summarize_pairs(paired["total"]),
-        "paired_ml_brier": _summarize_pairs(paired["moneyline"]),
+        "paired_spread": _summarize_pairs(paired["spread"], "MAE_MARGIN_POINTS"),
+        "paired_total": _summarize_pairs(paired["total"], "MAE_TOTAL_POINTS"),
+        "paired_ml_brier": _summarize_pairs(paired["moneyline"], "MONEYLINE_BRIER"),
         "per_season": {str(k):v for k,v in sorted(season_totals.items())},
         "rows": all_reports,
         "warnings": [
