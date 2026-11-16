@@ -1,0 +1,15 @@
+name: seven-sport authorized offline export contract (synthetic)
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  capture-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m compileall -q sportsedge/odds/seven_sport_authorized_export.py
+      - run: python -m unittest sportsedge.odds.test_seven_sport_authorized_export -v
