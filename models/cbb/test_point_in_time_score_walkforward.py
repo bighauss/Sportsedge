@@ -84,6 +84,16 @@ class CBBWalkforwardTests(unittest.TestCase):
         rows[0]["prediction"]["season"]=2027
         self.assertIn("SEASON_END_YEAR_DOES_NOT_MATCH",audit(rows)["rows"][0]["reason"])
 
+    def test_final_published_pre_forecast_but_captured_later_does_not_train(self):
+        rows=slate()
+        # Source claims the score was published on day 29, but the archive
+        # did not acquire it until after day 31's freeze.
+        rows[29]["final"]["captured_utc"]=rows[31]["final"]["captured_utc"]
+        r=audit(rows,min_prior=30)
+        self.assertEqual(r["walkforward_evaluated_n"],1)
+        self.assertEqual(r["rows"][30]["evaluation_status"],"INSUFFICIENT_PRIOR_PUBLISHED_FINALS")
+        self.assertEqual(r["rows"][31]["train_n"],30)
+
     def test_future_source_is_blocked(self):
         rows=slate()
         rows[0]["prediction"]["source_clock_consistent_not_authenticated"]["home"]["captured_utc"]=rows[0]["prediction"]["tipoff_utc"]
