@@ -223,6 +223,16 @@ def compare(takes: list[Quote], history: list[Quote], max_close_seconds: int = 6
                 status = "RETROSPECTIVE_HISTORY_UNVERIFIED"
             elif not (taken.captured < close.captured):
                 status = "CLOSE_ARCHIVED_BEFORE_TAKE"
+            # The observed TAKE price must still have been fresh when it was
+            # actually archived. Otherwise a stale quote can create false CLV.
+            elif (taken.captured - taken.observed).total_seconds() > 300:
+                status = "TAKE_QUOTE_STALE_AT_CAPTURE"
+            # An observation captured later can still describe market prices
+            # that existed before the actual TAKE archival time.
+            elif close.observed <= taken.captured:
+                status = "CLOSE_OBSERVED_BEFORE_TAKE_CAPTURE"
+            elif (close.captured - close.observed).total_seconds() > 300:
+                status = "CLOSE_QUOTE_STALE_AT_CAPTURE"
             else:
                 status = "SAME_SOURCE_STRUCTURAL_PAPER"
         # Research-only reference delta is available for rejected provenance

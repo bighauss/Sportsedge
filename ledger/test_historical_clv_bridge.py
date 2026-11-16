@@ -160,9 +160,9 @@ class Tests(unittest.TestCase):
             captured_at_utc="2026-11-16T01:17:30Z")
         close=q("HISTORY",observed_at_utc="2026-11-16T01:18:00Z",
             captured_at_utc="2026-11-16T01:18:00Z")
-        # An actual close cannot be acquired before TAKE was archived,
-        # but later observed market time is fine; this path is valid.
-        self.assertEqual(compare([take],[close])[0]["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+        # A quote observed hours before the TAKE archive is stale even if a
+        # later close looks structurally matched.
+        self.assertEqual(compare([take],[close])[0]["status"],"TAKE_QUOTE_STALE_AT_CAPTURE")
         before=q("HISTORY",observed_at_utc="2026-11-16T01:16:00Z",
             captured_at_utc="2026-11-16T01:16:00Z")
         r=compare([take],[before])[0]
@@ -246,6 +246,74 @@ class Tests(unittest.TestCase):
             observed_at_utc=t,captured_at_utc=t)
         result=compare([q()],[a,b])[0]
         self.assertEqual(result["status"],"AMBIGUOUS_LAST_CLOSE")
+
+    def test_close_price_precedes_actual_take_capture(self):
+        take=q(observed_at_utc="2026-11-16T01:11:59Z",
+               captured_at_utc="2026-11-16T01:12:00Z")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:11:59Z",
+                captured_at_utc="2026-11-16T01:13:00Z",
+                price_american="-125",opposite_price_american="+105")
+        # Equal observed timestamps are not later close observations.
+        result=compare([take],[close])[0]
+        self.assertEqual(result["status"],"NO_EXACT_MATCHED_CLOSE")
+
+    def test_later_observed_close_still_before_take_capture(self):
+        take=q(observed_at_utc="2026-11-16T01:12:00Z",
+               captured_at_utc="2026-11-16T01:16:00Z")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:15:00Z",
+                captured_at_utc="2026-11-16T01:17:00Z",
+                price_american="-125",opposite_price_american="+105")
+        r=compare([take],[close])[0]
+        self.assertEqual(r["status"],"CLOSE_OBSERVED_BEFORE_TAKE_CAPTURE")
+        self.assertIsNone(r["clv_probability_points"])
+        self.assertIsNotNone(r["reference_delta_probability_points"])
+
+    def test_take_stale_by_301_seconds(self):
+        take=q(observed_at_utc="2026-11-16T01:12:00Z",
+               captured_at_utc="2026-11-16T01:17:01Z")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:18:00Z",
+                captured_at_utc="2026-11-16T01:18:01Z")
+        r=compare([take],[close])[0]
+        self.assertEqual(r["status"],"TAKE_QUOTE_STALE_AT_CAPTURE")
+        self.assertIsNone(r["clv_probability_points"])
+
+    def test_take_exact_300_seconds_is_still_structurally_paper(self):
+        take=q(observed_at_utc="2026-11-16T01:12:01Z",
+               captured_at_utc="2026-11-16T01:17:01Z")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:18:00Z",
+                captured_at_utc="2026-11-16T01:18:01Z")
+        r=compare([take],[close])[0]
+        self.assertEqual(r["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+        self.assertIsNotNone(r["clv_probability_points"])
+
+    def test_close_stale_by_301_seconds(self):
+        take=q(observed_at_utc="2026-11-16T01:10:00Z",
+               captured_at_utc="2026-11-16T01:10:01Z")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:12:00Z",
+                captured_at_utc="2026-11-16T01:17:01Z",
+                price_american="-125",opposite_price_american="+105")
+        r=compare([take],[close])[0]
+        self.assertEqual(r["status"],"CLOSE_QUOTE_STALE_AT_CAPTURE")
+        self.assertIsNone(r["clv_probability_points"])
+
+    def test_close_exact_300_seconds_is_still_structurally_paper(self):
+        take=q(observed_at_utc="2026-11-16T01:10:00Z",
+               captured_at_utc="2026-11-16T01:10:01Z")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:12:00Z",
+                captured_at_utc="2026-11-16T01:17:00Z")
+        r=compare([take],[close])[0]
+        self.assertEqual(r["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+
+    def test_latest_stale_same_source_does_not_cherry_pick_older(self):
+        take=q()
+        old=q("HISTORY",observed_at_utc="2026-11-16T01:11:00Z",
+              captured_at_utc="2026-11-16T01:11:01Z")
+        newer=q("HISTORY",observed_at_utc="2026-11-16T01:14:00Z",
+                captured_at_utc="2026-11-16T01:19:01Z")
+        r=compare([take],[old,newer])[0]
+        self.assertEqual(r["status"],"CLOSE_QUOTE_STALE_AT_CAPTURE")
+        self.assertEqual(r["close_observed_utc"],newer.observed.isoformat())
+        self.assertIsNone(r["clv_probability_points"])
 
 if __name__ == "__main__":
     unittest.main()
