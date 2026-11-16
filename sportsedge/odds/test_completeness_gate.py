@@ -227,6 +227,11 @@ class CompletenessTests(unittest.TestCase):
                 "captured_utc": "2026-11-16T21:00:01Z"})
         self.assertEqual(evaluate(s)["failures"], [])
 
+    def test_stale_original_quote_not_counted_as_fresh(self):
+        s = sample()
+        s["events"][0]["quotes"][0]["original_observed_utc"] = "2026-11-16T20:50:00Z"
+        self.assertIn("STALE_ORIGINAL_QUOTE_GT_300S", reasons(s))
+
     def test_after_start_exclusion_rejected(self):
         s = sample()
         q = s["events"][0]["quotes"].pop()
