@@ -82,7 +82,7 @@ def project(game, home, away, league, hca=None, *, max_age_hours=None):
     if type(game.get("neutral")) is not bool:
         raise Blocked("EXPLICIT_NEUTRAL_BOOL_REQUIRED")
     if max_age_hours is not None:
-        _num(max_age_hours, "max_age_hours", 0.001, 24 * 366)
+        max_age_hours = _num(max_age_hours, "max_age_hours", 0.001, 24 * 366)
     manifests = {}
     for key, record, expected_id in (("home", home, home_id),
                                      ("away", away, away_id),
@@ -158,7 +158,7 @@ def research_board(items, *, max_age_hours=None):
     ids = [(item.get("game") or {}).get("game_id")
            if isinstance(item, dict) and isinstance(item.get("game"), dict) else None
            for item in items]
-    counts = Counter(gid for gid in ids if isinstance(gid, str) and gid.strip())
+    counts = Counter(gid.strip() for gid in ids if isinstance(gid, str) and gid.strip())
     results = []
     for index, item in enumerate(items):
         game = item.get("game") if isinstance(item, dict) else None
@@ -166,7 +166,7 @@ def research_board(items, *, max_age_hours=None):
         try:
             if not isinstance(gid, str) or not gid.strip():
                 raise Blocked("GAME_ID_REQUIRED")
-            if counts[gid] > 1:
+            if counts[gid.strip()] > 1:
                 raise Blocked("DUPLICATE_GAME_ID")
             outcome = project(game, item.get("home"), item.get("away"),
                               item.get("league"), item.get("hca"),
