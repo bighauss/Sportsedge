@@ -1,0 +1,39 @@
+name: Train-only score covariance and research tail checks
+on:
+  push:
+    paths:
+      - 'sportsedge/markets/score_dispersion_fit.py'
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/cli.py'
+      - 'sportsedge/markets/test_score_covariance_fit.py'
+      - 'docs/markets/TRAIN_ONLY_SCORE_COVARIANCE.md'
+      - '.github/workflows/score-covariance-fit.yml'
+  pull_request:
+    paths:
+      - 'sportsedge/markets/score_dispersion_fit.py'
+      - 'sportsedge/markets/projection_distribution.py'
+      - 'sportsedge/markets/cli.py'
+      - 'sportsedge/markets/test_score_covariance_fit.py'
+      - 'docs/markets/TRAIN_ONLY_SCORE_COVARIANCE.md'
+      - '.github/workflows/score-covariance-fit.yml'
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Covariance source fit, tail dependence, scenario replay and risk guard
+        run: |
+          python -m unittest -v \
+            sportsedge.markets.test_score_covariance_fit \
+            sportsedge.markets.test_score_dispersion_fit \
+            sportsedge.markets.test_period_share_fit \
+            sportsedge.markets.test_scenario_lineage \
+            sportsedge.markets.test_cli \
+            sportsedge.markets.test_edge_discovery
