@@ -15,6 +15,7 @@ from math import floor, isfinite
 from pathlib import Path
 
 from score_walkforward_pit import utc, private_evidence_path, create_private_output
+from feature_snapshot_bridge_pit import strict_original_json, private_evidence_path, create_private_output
 from feature_snapshot_bridge_pit import strict_original_json
 
 HASH_PREFIX = "sha256:"
@@ -251,6 +252,28 @@ def score_distribution(target, history, *, lines=None, min_history=50):
     return output
 
 
+def _reject_nonfinite_numbers(value):
+    """Block out-of-range JSON exponent floats even in unused source fields."""
+    if isinstance(value, float) and not isfinite(value):
+        raise ValueError("NONFINITE_JSON_NUMBER")
+    if isinstance(value, list):
+        for item in value:
+            _reject_nonfinite_numbers(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _reject_nonfinite_numbers(item)
+
+
+def _read_original_json(path):
+    """Load unchanged private raw bytes; refuse duplicate keys and NaN/Infinity."""
+    raw = path.read_bytes()
+    if not raw or len(raw) > 50_000_000:
+        raise ValueError("ORIGINAL_JSON_EMPTY_OR_OVERSIZE")
+    result = strict_original_json(raw)
+    _reject_nonfinite_numbers(result)
+    return result, HASH_PREFIX + sha256(raw).hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", required=True, help="frozen pregame forecast JSON")
@@ -259,34 +282,36 @@ def main():
     parser.add_argument("--min-history", type=int, default=50)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
-    # Validate ALL lexical and symlink-resolved locations before reading any
-    # private source bytes. Only keep SHA of the exact bytes we just decoded:
-    # double-reading each input would permit a hash/data mismatch under race.
-    input_paths = {
+
+    # Validate ALL paths (including symlink aliases and lexical public-repo
+    # paths) before reading source bytes or creating any output artifact.
+    paths = {
         "target": private_evidence_path(args.target),
         "history": private_evidence_path(args.history),
     }
     if args.lines:
-        input_paths["lines"] = private_evidence_path(args.lines)
+        paths["lines"] = private_evidence_path(args.lines)
     private_evidence_path(args.out)
-    inputs = {kind: path.read_bytes() for kind, path in input_paths.items()}
-    raw_target = strict_original_json(inputs["target"])
-    raw_history = strict_original_json(inputs["history"])
-    raw_line = strict_original_json(inputs["lines"]) if args.lines else None
-    result = score_distribution(raw_target, raw_history,
-                                lines=raw_line, min_history=args.min_history)
+
+    target, target_sha = _read_original_json(paths["target"])
+    history, history_sha = _read_original_json(paths["history"])
+    lines, lines_sha = (
+        _read_original_json(paths["lines"]) if "lines" in paths else (None, None)
+    )
+    result = score_distribution(target, history,
+                                lines=lines, min_history=args.min_history)
     result["local_input_sha256"] = {
-        "target": HASH_PREFIX + sha256(inputs["target"]).hexdigest(),
-        "history": HASH_PREFIX + sha256(inputs["history"]).hexdigest(),
-        "lines": HASH_PREFIX + sha256(inputs["lines"]).hexdigest()
-                 if args.lines else None,
+        "target": target_sha,
+        "history": history_sha,
+        "lines": lines_sha,
     }
-    payload = (json.dumps(result, sort_keys=True, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    payload = (json.dumps(result, sort_keys=True, indent=2, allow_nan=False)
+               + "\n").encode("utf-8")
+    # 0600, exclusive-create, fsync + rollback on partial I/O failure.
     create_private_output(args.out, payload)
     print(json.dumps({"status": result["status"], "out": args.out,
                       "eligible_residuals": result["census"]["eligible_prior_residual_pairs"],
                       "approved_stake_u": 0}, sort_keys=True))
-
 
 if __name__ == "__main__":
     main()
