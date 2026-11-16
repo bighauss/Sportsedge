@@ -100,8 +100,9 @@ def is_protected(path):
         "tools/test_agent_change_governance.py",
     } or path.startswith((
         "models/", "research/risk/", "research/freezes/",
-        "sportsedge/odds/", ".github/workflows/",
-        "research/ai_governance/",
+        "sportsedge/odds/", "sportsedge/markets/",
+        "sportsedge/validation/", "research/edge/",
+        ".github/workflows/", "research/ai_governance/",
     )))
 
 
