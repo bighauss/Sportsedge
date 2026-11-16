@@ -1,0 +1,27 @@
+name: Private observability source-to-result bridge (synthetic)
+on:
+  pull_request:
+    paths:
+      - 'integrations/observability/private_source_bridge.py'
+      - 'integrations/observability/test_private_source_bridge.py'
+      - 'docs/research/PRIVATE_OBSERVABILITY_BRIDGE.md'
+      - '.github/workflows/private-observability-bridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/observability/private_source_bridge.py'
+      - 'integrations/observability/test_private_source_bridge.py'
+      - '.github/workflows/private-observability-bridge.yml'
+permissions:
+  contents: read
+jobs:
+  private-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m py_compile integrations/observability/private_source_bridge.py integrations/observability/test_private_source_bridge.py
+      - run: python -m unittest integrations.observability.test_private_source_bridge -v
