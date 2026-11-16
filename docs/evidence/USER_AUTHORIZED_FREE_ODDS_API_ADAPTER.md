@@ -37,6 +37,23 @@ This creates three **private, create-only, 0600** files per call: untouched prov
 
 Use one actual `source_event_id` from that catalog in the two-phase capture commands below. No team-name matching or invented IDs; do not put the API key on the command line, in a GitHub Action, in a commit, or in a public issue. A documented zero-cost endpoint still requires the user's own provider API key; a site listing events does not authenticate upstream book odds or establish a wager.
 
+## Preflight free-tier credit budget without reducing the research denominator
+
+The provider's documented base model charges roughly **one credit per requested market per bookmaker region**, with up to 10 selected bookmakers counting as one region. This is a **cost estimate**, not a guarantee of the owner's actual credits or provider response. For default `h2h spreads totals`, two books and two captures (TAKE and CLOSE), the estimate is **6 credits per game**. A 500-credit allotment could therefore cover at most **83 complete two-snapshot games** on those markets before reserve/other usage. That is not full daily multi-sport coverage.
+
+After obtaining a **fresh** private event catalog from the preceding discovery command, use the actual manifest filename and the owner's currently reported remaining credit balance:
+
+```sh
+python -m sportsedge.odds.quota_capture_plan \
+  /private/sportsedge-original-odds/events_NFL_ACTUAL.manifest.json \
+  --output /private/sportsedge-original-odds/nfl_capture_plan.json \
+  --credits-remaining 500 --reserve-credits 20
+```
+
+Replace 500 with the *actual* provider-reported balance and choose a deliberate safety reserve; never guess usage or present it as confirmed. The planner reads the original SHA-verified event manifest and CSV catalog privately, requires a catalog captured within the preceding hour by default, and writes a create-only 0600 JSON plan. It includes **every discovered event** (including already-started and too-close games), provider-native IDs, TAKE/CLOSE target UTC times and per-event estimated cost. **If the complete eligible event population exceeds the credit budget, the planner blocks the entire proposed slate instead of silently selecting early games or profitable-looking picks.** The original denominator stays visible. Restrict markets only by an explicitly selected separate research protocol; do not report a reduced sample as all-markets coverage.
+
+A successful plan has state `PAPER_0U_FULL_ELIGIBLE_CATALOG_PLAN_ONLY`. It does **not** execute or schedule requests, validate independent sportsbook prices, reserve credits with the vendor, place real bets, or certify CLV/EV. Run the subsequent per-event TAKE/CLOSE commands only in an authorized local runtime, with provider rate limits and the true current quota respected.
+
 ## One-command capture + normalization (private runtime)
 
 On a machine you control, after you have legally provisioned the provider API key in the environment, capture a genuine provider event ID at TAKE time and once again within ten minutes before kickoff at CLOSE time. These commands **do not run on ChatGPT's servers, GitHub Actions, or in the background**: you or an authorized local task scheduler must invoke them at the actual clock times.
@@ -84,4 +101,4 @@ PGA **Majors outrights** are addressed by a separate provider-specific path, not
 
 The provider's documented free tier has **500 credits/month**, current odds only. Its historical odds endpoint is paid; this source cannot retroactively fill pre-kickoff prices that were never saved. Budget polling frequency to the rate and credit allowance shown by the genuine provider response. Never store API keys in code, chat, CI, GitHub or manifests.
 
-**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle sportsedge.odds.test_event_discovery -v` (synthetic only).
+**Tests:** `python -m unittest sportsedge.odds.test_free_odds_aggregator_intake sportsedge.odds.test_the_odds_api_clv_export sportsedge.odds.test_prospective_clv_cycle sportsedge.odds.test_event_discovery sportsedge.odds.test_quota_capture_plan -v` (synthetic only).
