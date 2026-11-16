@@ -226,25 +226,53 @@ def render(card,root):
     return "\n".join(out)
 
 
+def private_output_path(candidate):
+    """Never publish private model/odds evidence into the public checkout.
+
+    Symlink-aware and anchored to this module's repository root, not CWD.
+    Existing files are never replaced, including an existing symlink.
+    """
+    destination=Path(candidate)
+    if destination.is_symlink():
+        raise InvalidCard("Refusing symlinked card destination")
+    resolved=destination.resolve()
+    repo=Path(__file__).resolve().parents[2]
+    if resolved==repo or repo in resolved.parents:
+        raise InvalidCard("Cards must be rendered outside the public repository")
+    if destination.exists():
+        raise InvalidCard("Existing card evidence cannot be overwritten")
+    return destination
+
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("card_json",type=Path)
     p.add_argument("output",type=Path)
     a=p.parse_args()
+    if a.output.suffix.lower() not in (".svg",".png"):
+        raise InvalidCard("Only .svg or .png outputs supported")
+    output=private_output_path(a.output)
     root=a.card_json.resolve().parent
+    repo=Path(__file__).resolve().parents[2]
+    if a.card_json.resolve()==repo or repo in a.card_json.resolve().parents:
+        raise InvalidCard("Private source card JSON must not live in public GitHub")
     card=json.loads(a.card_json.read_text(encoding="utf-8"))
     markup=render(card,root)
-    a.output.parent.mkdir(parents=True,exist_ok=True)
-    if a.output.suffix.lower()==".svg":
-        a.output.write_text(markup,encoding="utf-8")
-    elif a.output.suffix.lower()==".png":
+    rendered=None
+    if output.suffix.lower()==".png":
         try:import cairosvg
         except ImportError as e:
             raise InvalidCard("PNG requires optional CairoSVG: pip install cairosvg") from e
-        cairosvg.svg2png(bytestring=markup.encode(),write_to=str(a.output),
-                        output_width=W,output_height=H)
-    else:raise InvalidCard("Only .svg or .png outputs supported")
-    print(json.dumps({"status":"RESEARCH_ONLY","output":str(a.output),
+        # Generate the whole PNG before opening the destination: failed raster
+        # conversion must not create a misleading partial research card.
+        rendered=cairosvg.svg2png(bytestring=markup.encode(),
+                                 output_width=W,output_height=H)
+    output.parent.mkdir(parents=True,exist_ok=True)
+    # Binary exclusive-create also protects against another writer between
+    # the existence preflight and actual output. Never overwrite old cards.
+    with output.open("xb") as handle:
+        handle.write(rendered if rendered is not None else markup.encode("utf-8"))
+    print(json.dumps({"status":"RESEARCH_ONLY","output":str(output),
                       "ranked_rows":len(card["plays"]),"automatic_bet_placement":False}))
 
 

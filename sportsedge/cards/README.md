@@ -74,6 +74,17 @@ banner or separate notes. ALL RESEARCH EV fields are model estimates
 and not measured returns. Do not use this graphic to solicit actual
 stakes while Issue #10 live price/source/calibration gates are open.
 
+## Private, create-only artifact rule
+
+The CLI rejects card JSON or destination paths inside the public SportsEdge
+repository, even if run from a nested working directory. Use private input
+and output folders only, not a checkout path. A prior SVG/PNG is **never**
+overwritten: both formats use exclusive creation; a symlink destination or an
+already-existing output blocks. PNG rasterization completes in memory before
+creating the final file, so a failed conversion does not leave a plausible
+partial artifact. Keep source and rendered cards private unless separately
+authorized to publish a redacted research graphic.
+
 ## Current integration status
 
 - Synthetic renderer/test suite is in main CI.
