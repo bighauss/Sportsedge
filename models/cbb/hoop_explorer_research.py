@@ -74,7 +74,7 @@ def season_year(value, name):
     return int(value)
 
 
-def metadata(manifest, raw, kind, freeze_utc, tipoff_utc):
+def metadata(manifest, raw, kind, freeze_utc, tipoff_utc, *, exploratory=False):
     if not isinstance(manifest, dict):
         raise Blocked("MANIFEST_REQUIRED")
     if manifest.get("provider") != "hoop_explorer":
@@ -93,18 +93,19 @@ def metadata(manifest, raw, kind, freeze_utc, tipoff_utc):
         raise Blocked("SOURCE_SHA256_REQUIRED")
     if manifest["sha256"].lower() != sha:
         raise Blocked("EXPORT_HASH_MISMATCH")
-    freeze = clock(freeze_utc, "freeze_utc")
-    tip = clock(tipoff_utc, "tipoff_utc")
-    through = clock(manifest.get("data_through_utc"), "data_through_utc")
-    published = clock(manifest.get("published_utc"), "published_utc")
-    captured = clock(manifest.get("captured_utc"), "captured_utc")
-    if not (through <= published <= captured <= freeze < tip):
-        raise Blocked("LOOKAHEAD_OR_SOURCE_CLOCK_ORDER")
     season = season_year(manifest.get("season"), "manifest.season")
-    # Prior-season player baselines are valid for a future matchup if their
-    # actual source timestamps precede the freeze; future seasons never are.
-    if season > tip.year + int(tip.month >= 8):
-        raise Blocked("SOURCE_SEASON_AFTER_GAME_SEASON")
+    if exploratory is not True:
+        freeze = clock(freeze_utc, "freeze_utc")
+        tip = clock(tipoff_utc, "tipoff_utc")
+        through = clock(manifest.get("data_through_utc"), "data_through_utc")
+        published = clock(manifest.get("published_utc"), "published_utc")
+        captured = clock(manifest.get("captured_utc"), "captured_utc")
+        if not (through <= published <= captured <= freeze < tip):
+            raise Blocked("LOOKAHEAD_OR_SOURCE_CLOCK_ORDER")
+        # Prior-season player baselines are valid for a future matchup if
+        # the actual source timestamps precede the freeze.
+        if season > tip.year + int(tip.month >= 8):
+            raise Blocked("SOURCE_SEASON_AFTER_GAME_SEASON")
     columns = manifest.get("columns")
     if not isinstance(columns, dict) or not REQUIRED[kind].issubset(columns):
         raise Blocked("REQUIRED_EXPLICIT_COLUMN_MAP_MISSING")
@@ -134,13 +135,14 @@ def read_rows(raw, fmt):
     return rows, set().union(*(set(x) for x in rows)) if rows else set()
 
 
-def load_export(export_path, manifest_path, *, kind, freeze_utc, tipoff_utc,
-                archive_dir=None):
+def load_export(export_path, manifest_path, *, kind, freeze_utc=None, tipoff_utc=None,
+                archive_dir=None, exploratory=False):
     raw = Path(export_path).read_bytes()
     if not raw or len(raw) > MAX_BYTES:
         raise Blocked("EXPORT_EMPTY_OR_TOO_LARGE")
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    sha, season, columns = metadata(manifest, raw, kind, freeze_utc, tipoff_utc)
+    sha, season, columns = metadata(manifest, raw, kind, freeze_utc, tipoff_utc,
+                                    exploratory=exploratory)
     rows, available = read_rows(raw, manifest["format"])
     if not rows or not set(columns.values()).issubset(available):
         raise Blocked("MISSING_MAPPED_EXPORT_FIELDS")
@@ -187,11 +189,14 @@ def load_export(export_path, manifest_path, *, kind, freeze_utc, tipoff_utc,
         archive = str(destination)
     evidence = {"provider": "hoop_explorer", "scope_id": manifest["scope_id"],
                 "season": season, "source_url": manifest["source_url"], "sha256": sha,
-                "captured_utc": manifest["captured_utc"],
-                "published_utc": manifest["published_utc"],
-                "data_through_utc": manifest["data_through_utc"],
+                "captured_utc": manifest.get("captured_utc"),
+                "published_utc": manifest.get("published_utc"),
+                "data_through_utc": manifest.get("data_through_utc"),
                 "access_basis_user_asserted": manifest["access_basis"],
-                "clock_consistent_not_source_authenticated": True,
+                "clock_consistent_not_source_authenticated": not exploratory,
+                "point_in_time_admissible": False,
+                "provenance_status": ("UNVERIFIED_EXPLORATORY_NO_PIT" if exploratory
+                                      else "USER_CLOCK_COHERENT_NOT_AUTHENTICATED"),
                 "archive_path": archive, "rows": len(normalized), "kind": kind}
     if kind == "lineup":
         evidence["disjoint_partition_user_asserted"] = (
@@ -305,7 +310,7 @@ def research_report(players, player_evidence, *, target_player_id,
         "official": False, "stake_u": 0, "pricing_enabled": False,
         "model_weights_modified": False,
         "source_authenticated": False,
-        "caveat": "User export and manifest do not prove historical point-in-time availability",
+        "caveat": "User export and manifest do not prove historical point-in-time availability; exploratory mode cannot be used for pregame or historical pricing",
         "evidence": [player_evidence] + ([lineup_evidence] if lineup_evidence else []),
         "similar_players": similar_players(players, target_player_id),
         "roster_fit": roster_fit(players, role_profile) if role_profile else None,
@@ -333,8 +338,10 @@ def main(argv=None):
     p.add_argument("--role-profile", help="JSON with explicit target statistical profile")
     p.add_argument("--prior-net", type=float)
     p.add_argument("--pad-k", type=float)
-    p.add_argument("--freeze-utc", required=True)
-    p.add_argument("--tipoff-utc", required=True)
+    p.add_argument("--freeze-utc")
+    p.add_argument("--tipoff-utc")
+    p.add_argument("--exploratory", action="store_true",
+                   help="No historical as-of assertion: unverified data, descriptive research only")
     p.add_argument("--archive-dir")
     p.add_argument("--out", required=True)
     args = p.parse_args(argv)
@@ -342,10 +349,12 @@ def main(argv=None):
         p.error("lineups export and manifest must be supplied together")
     if args.lineups_export and not args.team_id:
         p.error("lineup analysis requires --team-id")
+    if not args.exploratory and (not args.freeze_utc or not args.tipoff_utc):
+        p.error("pregame research requires --freeze-utc and --tipoff-utc")
     players, pe = load_export(
         args.players_export, args.players_manifest, kind="player",
         freeze_utc=args.freeze_utc, tipoff_utc=args.tipoff_utc,
-        archive_dir=args.archive_dir)
+        archive_dir=args.archive_dir, exploratory=args.exploratory)
     lineups, le = None, None
     if args.lineups_export:
         lineups, le = load_export(
