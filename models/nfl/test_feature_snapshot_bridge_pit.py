@@ -2,10 +2,11 @@
 from copy import deepcopy
 import unittest
 import tempfile
+import json
 from pathlib import Path
 from unittest.mock import patch
 
-from feature_snapshot_bridge_pit import snapshots, main
+from feature_snapshot_bridge_pit import snapshots, main, strict_original_json
 from score_walkforward_pit import REPO_ROOT
 from score_walkforward_pit import walkforward
 
@@ -104,6 +105,47 @@ class ExactEPAFeatureBridgeTests(unittest.TestCase):
         rate["status"] = "PRODUCTION"
         with self.assertRaisesRegex(ValueError, "RATINGS_STATUS_NOT_RESEARCH"):
             snapshots(rate, [event()], ratings_sha256=HASH)
+
+    def test_strict_raw_json_rejects_nested_duplicate_fields(self):
+        for payload in (
+            b'{"status":"PAPER_HOLD_0U","status":"OFFICIAL"}',
+            b'{"units":{"pass":{"epa":1,"epa":2}}}',
+            b'[{"game_id":"g1","game_id":"g2"}]',
+        ):
+            with self.subTest(raw=payload):
+                with self.assertRaisesRegex(ValueError, "DUPLICATE_JSON_KEY"):
+                    strict_original_json(payload)
+
+    def test_strict_raw_json_rejects_nonfinite_numbers(self):
+        for literal in (b"NaN", b"Infinity", b"-Infinity"):
+            with self.subTest(literal=literal):
+                with self.assertRaisesRegex(ValueError, "NONFINITE_JSON_LITERAL"):
+                    strict_original_json(b'{"value":' + literal + b'}')
+
+    def test_bridge_cli_rejects_duplicate_rating_and_event_keys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            private = Path(directory)
+            rating_path, event_path, output_path = (
+                private / "ratings.json", private / "events.json",
+                private / "features.csv")
+            event_path.write_text(json.dumps([event()]), encoding="utf-8")
+            for content, expected in (
+                ('{"status":"PAPER_HOLD_0U","status":"OFFICIAL"}', "DUPLICATE_JSON_KEY"),
+                ('{"status":"PAPER_HOLD_0U","raw_value":NaN}', "NONFINITE_JSON_LITERAL"),
+            ):
+                rating_path.write_text(content, encoding="utf-8")
+                argv = ["feature_snapshot_bridge_pit.py", "--ratings", str(rating_path),
+                        "--events", str(event_path), "--out", str(output_path)]
+                with patch("sys.argv", argv), self.assertRaisesRegex(ValueError, expected):
+                    main()
+                self.assertFalse(output_path.exists())
+            rating_path.write_text(json.dumps(ratings()), encoding="utf-8")
+            event_path.write_text('[{"game_id":"g1","game_id":"g2"}]', encoding="utf-8")
+            argv = ["feature_snapshot_bridge_pit.py", "--ratings", str(rating_path),
+                    "--events", str(event_path), "--out", str(output_path)]
+            with patch("sys.argv", argv), self.assertRaisesRegex(ValueError, "DUPLICATE_JSON_KEY"):
+                main()
+            self.assertFalse(output_path.exists())
 
     def test_bridge_cli_refuses_public_source_and_destination(self):
         with tempfile.TemporaryDirectory() as directory:
