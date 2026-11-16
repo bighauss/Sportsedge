@@ -24,10 +24,12 @@ class BestBookSlateError(ValueError):
 
 
 def _utc(value, field):
-    if not isinstance(value, str) or not value.endswith("Z"):
-        raise BestBookSlateError("EXACT_UTC_Z_REQUIRED:" + field)
+    if not isinstance(value, str) or not (
+            value.endswith("Z") or value.endswith("+00:00")):
+        raise BestBookSlateError("EXACT_UTC_OFFSET_REQUIRED:" + field)
     try:
-        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+        parsed = datetime.fromisoformat(
+            value[:-1] + "+00:00" if value.endswith("Z") else value)
     except ValueError:
         raise BestBookSlateError("INVALID_UTC:" + field) from None
     if parsed.utcoffset() != timedelta(0):
