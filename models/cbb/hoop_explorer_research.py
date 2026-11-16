@@ -233,8 +233,7 @@ def roster_fit(players, role_profile):
     desired = role_profile["targets"]
     if len(desired) < 3 or not set(desired).issubset(SCALES):
         raise Blocked("ROLE_REQUIRES_THREE_VALID_FEATURES")
-    for k, v in desired.items():
-        num(v, f"target.{k}", *LIMITS[k])
+    desired = {k: num(v, f"target.{k}", *LIMITS[k]) for k, v in desired.items()}
     results = []
     for p in players:
         distance = _distance(p, desired, desired, len(desired))
@@ -295,6 +294,10 @@ def research_report(players, player_evidence, *, target_player_id,
     if lineups is not None and (lineup_evidence is None or team_id is None
                                 or prior_net is None or pad_k is None):
         raise Blocked("LINEUP_EVIDENCE_TEAM_PRIOR_AND_K_REQUIRED")
+    if lineups is not None:
+        target = [p for p in players if p["player_id"] == target_player_id]
+        if len(target) != 1 or target[0]["team_id"] != team_id:
+            raise Blocked("LINEUP_TARGET_PLAYER_TEAM_IDENTITY_MISMATCH")
     return {
         "status": "PAPER_NON_COUNTED_RESEARCH_ONLY", "sport": "CBB",
         "official": False, "stake_u": 0, "pricing_enabled": False,
