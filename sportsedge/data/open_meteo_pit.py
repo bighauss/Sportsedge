@@ -78,12 +78,21 @@ def _no_const(value):
     raise ForecastSourceError("NONFINITE_JSON_LITERAL")
 
 
+def _finite_float(text):
+    # JSON accepts exponential numbers such as 1e999; Python may silently
+    # overflow those to Infinity even when parse_constant rejects NaN.
+    number = float(text)
+    if not math.isfinite(number):
+        raise ForecastSourceError("NONFINITE_JSON_EXPONENT")
+    return number
+
+
 def _json(raw, label):
     if not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_BYTES:
         raise ForecastSourceError("ORIGINAL_BYTES_MISSING_OR_OVERSIZED:" + label)
     try:
         obj = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict,
-                         parse_constant=_no_const)
+                         parse_constant=_no_const, parse_float=_finite_float)
     except (UnicodeError, json.JSONDecodeError, RecursionError):
         raise ForecastSourceError("INVALID_JSON:" + label) from None
     if not isinstance(obj, dict):
