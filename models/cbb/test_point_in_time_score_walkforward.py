@@ -32,7 +32,9 @@ def make(i=0, season=2026, *, quote=True):
         "final": {
             "game_id":game_id, "season":season,
             "home_team_id":"H1", "away_team_id":"A1",
-            "sha256":H, "published_utc":fmt(start+timedelta(hours=3)),
+            "sha256":H, "status":"FINAL", "period":"FG_INCL_OT",
+            "published_utc":fmt(start+timedelta(hours=3)),
+            "captured_utc":fmt(start+timedelta(hours=4)),
             "home_score":73+i%7, "away_score":69+i%5
         }
     }
@@ -98,6 +100,15 @@ class CBBWalkforwardTests(unittest.TestCase):
         rows=[make()]
         rows[0]["final"]["away_team_id"]="OTHER"
         self.assertIn("FINAL_IDENTITY_MISMATCH",audit(rows)["rows"][0]["reason"])
+
+
+    def test_final_status_and_capture_clock_required(self):
+        rows=[make()]
+        rows[0]["final"]["status"]="HALFTIME"
+        self.assertIn("FINAL_SETTLEMENT_STATUS",audit(rows)["rows"][0]["reason"])
+        rows=[make()]
+        rows[0]["final"]["captured_utc"]=rows[0]["prediction"]["freeze_utc"]
+        self.assertIn("FINAL_RELEASE_OR_CAPTURE_CLOCK",audit(rows)["rows"][0]["reason"])
 
     def test_pending_final_retained(self):
         rows=[make()]
