@@ -103,6 +103,21 @@ class ProspectiveArchiveTests(unittest.TestCase):
         self.assertEqual(m["captured_asset_count"], len(ALLOWED))
         self.assertEqual({o["asset_id"] for o in m["asset_receipts"]}, set(ALLOWED))
 
+    def test_pbp_in_default_five_source_public_archive_still_unauthenticated(self):
+        self.assertIn("NFL_PBP_2026", ALLOWED)
+        self.assertEqual(len(ALLOWED), 5)
+        _, manifest = self.run_archive(
+            assets=ALLOWED,
+            event_id="TEST_FUTURE_GAME",
+            event_start_utc="2026-11-17T01:15:00Z",
+        )
+        self.assertTrue(manifest["collected_before_declared_event"])
+        self.assertEqual(manifest["captured_asset_count"], 5)
+        self.assertFalse(manifest["event_identity_source_authenticated"])
+        self.assertFalse(manifest["point_in_time_feature_admissible_for_betting"])
+        self.assertIn("NFL_PBP_2026", {r["asset_id"] for r in manifest["asset_receipts"]})
+        self.assertEqual(manifest["approved_stake_u"], 0)
+
     def test_dup_asset_and_unregistered_rejected(self):
         for assets in (("NFL_WEEKLY_2026",)*2, ("UNKNOWN",)):
             with self.subTest(assets=assets), self.assertRaises(ValueError):
