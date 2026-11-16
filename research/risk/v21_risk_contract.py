@@ -6,8 +6,8 @@ from zoneinfo import ZoneInfo
 
 D=Decimal
 CT=ZoneInfo("America/Chicago")
-RULES='SPORTSEDGE_RISK_2026_11_15_LOCK_V1'
-CAP_DAY=D('5');CAP_GAME=D('1');CAP_THEME=D('3')
+RULES='RUN_IT_V2_1_MANDATORY_RESTORATION_20261115'
+CAP_DAY=D('5');CAP_GAME=D('2');CAP_THEME=D('3')
 
 def dec(value):
     if value is None or isinstance(value,bool):raise ValueError('missing number')
