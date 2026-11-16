@@ -182,6 +182,21 @@ class GovernanceTests(unittest.TestCase):
                 with self.assertRaisesRegex(GovernanceError, "LEAST_PRIVILEGE"):
                     self.evaluate(d)
 
+    def test_exact_types_for_boolean_permission_and_numeric_golden_fields(self):
+        for key in ("secrets_read", "production_deploy", "market_release"):
+            d = base_manifest()
+            d["permissions"][key] = 0
+            with self.assertRaisesRegex(GovernanceError, "LEAST_PRIVILEGE"):
+                self.evaluate(d)
+        d = base_manifest()
+        d["golden"]["cases"] = 9.0
+        with self.assertRaisesRegex(GovernanceError, "GOLDEN_PIN"):
+            self.evaluate(d)
+        d = base_manifest()
+        d["release_claims"]["official_counted"] = False
+        with self.assertRaisesRegex(GovernanceError, "PROMOTION_CLAIM"):
+            self.evaluate(d)
+
     def test_owner_approval_or_external_eval_cannot_be_asserted(self):
         for field, value in (
             ("external_review_state", "APPROVED"),
