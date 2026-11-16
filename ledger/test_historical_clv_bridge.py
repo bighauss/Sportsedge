@@ -110,5 +110,88 @@ class Tests(unittest.TestCase):
             self.assertEqual(result["comparable_rows"],0)
             self.assertEqual(len(result["matches"]),1)
 
+    def test_cross_source_has_reference_delta_but_no_clv(self):
+        history=q("HISTORY",source="ACTION_NETWORK",source_url="https://www.actionnetwork.com/",
+            observed_at_utc="2026-11-16T01:17:00Z",
+            captured_at_utc="2026-11-16T01:17:00Z",
+            price_american="-125",opposite_price_american="+105")
+        r=compare([q()],[history])[0]
+        self.assertEqual(r["status"],"CROSS_SOURCE_REFERENCE_ONLY")
+        self.assertIsNone(r["clv_probability_points"])
+        self.assertGreater(float(r["reference_delta_probability_points"]),0)
+    def test_retroactive_history_has_reference_delta_but_no_clv(self):
+        history=q("HISTORY",observed_at_utc="2026-11-16T01:17:00Z",
+            captured_at_utc="2026-11-18T01:17:00Z",
+            price_american="-125",opposite_price_american="+105")
+        r=compare([q()],[history])[0]
+        self.assertEqual(r["status"],"RETROSPECTIVE_HISTORY_UNVERIFIED")
+        self.assertIsNone(r["clv_probability_points"])
+        self.assertIsNotNone(r["reference_delta_probability_points"])
+    def test_missing_market_id_remains_unverified_reference(self):
+        history=q("HISTORY",source_market_id="",observed_at_utc="2026-11-16T01:17:00Z",
+            captured_at_utc="2026-11-16T01:17:00Z",
+            price_american="-125",opposite_price_american="+105")
+        r=compare([q(source_market_id="")],[history])[0]
+        self.assertEqual(r["status"],"PROVIDER_MARKET_CROSSWALK_UNVERIFIED")
+        self.assertIsNone(r["clv_probability_points"])
+    def test_invalid_opposing_side_on_total(self):
+        with self.assertRaisesRegex(Blocked,"INVALID_OPPOSITE_MARKET_SIDES"):
+            q(opposite_selection_id="HOME")
+    def test_invalid_opposing_side_on_moneyline(self):
+        with self.assertRaisesRegex(Blocked,"INVALID_OPPOSITE_MARKET_SIDES"):
+            q(market_kind="MONEYLINE",selection_id="OVER",opposite_selection_id="UNDER",
+              line="",opposite_line="")
+    def test_invalid_opposing_side_on_attd(self):
+        with self.assertRaisesRegex(Blocked,"INVALID_OPPOSITE_MARKET_SIDES"):
+            q(market_kind="ATTD",selection_id="HOME",opposite_selection_id="AWAY",
+              line="",opposite_line="")
+    def test_moneyline_blank_and_zero_aliases_match(self):
+        take=q(market_kind="MONEYLINE",selection_id="HOME",opposite_selection_id="AWAY",
+            line="",opposite_line="")
+        close=q("HISTORY",market_kind="MONEYLINE",selection_id="HOME",opposite_selection_id="AWAY",
+            line="0",opposite_line="0",observed_at_utc="2026-11-16T01:17:00Z",
+            captured_at_utc="2026-11-16T01:17:00Z",
+            price_american="-125",opposite_price_american="+105")
+        r=compare([take],[close])[0]
+        self.assertEqual(r["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+        self.assertGreater(float(r["clv_probability_points"]),0)
+    def test_same_source_earlier_archival_clock_rejected(self):
+        take=q(observed_at_utc="2026-11-15T20:00:00Z",
+            captured_at_utc="2026-11-16T01:17:30Z")
+        close=q("HISTORY",observed_at_utc="2026-11-16T01:18:00Z",
+            captured_at_utc="2026-11-16T01:18:00Z")
+        # An actual close cannot be acquired before TAKE was archived,
+        # but later observed market time is fine; this path is valid.
+        self.assertEqual(compare([take],[close])[0]["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+        before=q("HISTORY",observed_at_utc="2026-11-16T01:16:00Z",
+            captured_at_utc="2026-11-16T01:16:00Z")
+        r=compare([take],[before])[0]
+        self.assertEqual(r["status"],"CLOSE_ARCHIVED_BEFORE_TAKE")
+        self.assertIsNone(r["clv_probability_points"])
+    def test_counts_do_not_upgrade_unverified_reference_to_clv(self):
+        with tempfile.TemporaryDirectory() as d:
+            take=Path(d)/"take.csv";hist=Path(d)/"hist.csv"
+            with take.open("w",newline="") as f:
+                writer=csv.DictWriter(f,fieldnames=FIELDS);writer.writeheader();writer.writerow(BASE)
+            row={**BASE,"source":"ACTION_NETWORK","source_url":"https://www.actionnetwork.com/",
+                 "observed_at_utc":"2026-11-16T01:18:00Z",
+                 "captured_at_utc":"2026-11-16T01:18:00Z",
+                 "price_american":"-125","opposite_price_american":"+105"}
+            with hist.open("w",newline="") as f:
+                writer=csv.DictWriter(f,fieldnames=FIELDS);writer.writeheader();writer.writerow(row)
+            result=run(take,[hist])
+            self.assertEqual(result["comparable_rows"],0)
+            self.assertEqual(result["reference_only_rows"],1)
+            self.assertEqual(result["status_counts"]["CROSS_SOURCE_REFERENCE_ONLY"],1)
+            self.assertIsNone(result["matches"][0]["clv_probability_points"])
+    def test_original_structural_clv_retained(self):
+        history=q("HISTORY",observed_at_utc="2026-11-16T01:17:00Z",
+            captured_at_utc="2026-11-16T01:17:00Z",
+            price_american="-125",opposite_price_american="+105")
+        r=compare([q()],[history])[0]
+        self.assertEqual(r["status"],"SAME_SOURCE_STRUCTURAL_PAPER")
+        self.assertIsNotNone(r["clv_probability_points"])
+        self.assertIsNone(r["reference_delta_probability_points"])
+
 if __name__ == "__main__":
     unittest.main()
