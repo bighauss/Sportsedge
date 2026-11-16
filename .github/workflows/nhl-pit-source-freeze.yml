@@ -1,0 +1,27 @@
+name: NHL original source PIT freeze research
+on:
+  pull_request:
+    paths:
+      - 'models/nhl/nhl_pit_snapshot_contract.py'
+      - 'models/nhl/test_nhl_pit_snapshot_contract.py'
+      - 'models/nhl/NHL_PIT_SOURCE_FREEZE.md'
+      - '.github/workflows/nhl-pit-source-freeze.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/nhl/nhl_pit_snapshot_contract.py'
+      - 'models/nhl/test_nhl_pit_snapshot_contract.py'
+      - '.github/workflows/nhl-pit-source-freeze.yml'
+permissions:
+  contents: read
+jobs:
+  original-source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m compileall -q models/nhl
+      - run: python -m unittest models.nhl.test_nhl_pit_snapshot_contract -v
