@@ -117,6 +117,11 @@ def evaluate(archive):
             failures.append({"event_id": eid, "reason": "QUOTE_OR_EXCLUSION_LIST_MISSING"})
             continue
         keys, fulfilled = set(), set()
+        # Preserve the full original offered-outcome census. One source
+        # disposition per exact book/market/period/side/line is mandatory:
+        # accepting the first of two prices or a price plus NOT_OFFERED
+        # makes coverage depend on input order and silently hides conflicts.
+        original_disposition_counts = Counter()
         for item in catalog:
             key = _key(item)
             if key in keys:
@@ -124,6 +129,8 @@ def evaluate(archive):
             keys.add(key)
         for q in quotes:
             key = _key(q)
+            if key in keys:
+                original_disposition_counts[key] += 1
             if key not in keys:
                 failures.append({"event_id": eid, "market": key, "reason": "QUOTE_NOT_IN_INVENTORY"})
                 continue
@@ -134,6 +141,8 @@ def evaluate(archive):
                 failures.append({"event_id": eid, "market": key, "reason": str(exc)})
         for exclusion in exclusions:
             key = _key(exclusion)
+            if key in keys:
+                original_disposition_counts[key] += 1
             if key not in keys:
                 failures.append({"event_id": eid, "market": key, "reason": "EXCLUSION_NOT_IN_INVENTORY"})
                 continue
@@ -146,6 +155,16 @@ def evaluate(archive):
                 failures.append({"event_id": eid, "market": key, "reason": "EXCLUSION_TIMESTAMP_INVALID"})
                 continue
             fulfilled.add(key)
+        for key in sorted(original_disposition_counts):
+            if original_disposition_counts[key] > 1:
+                failures.append({
+                    "event_id": eid, "market": key,
+                    "reason": "DUPLICATE_OR_CONFLICTING_SOURCE_DISPOSITION",
+                    "original_disposition_rows": original_disposition_counts[key],
+                })
+                # Do not count any of the conflicting copies as accounting for
+                # this market, even if one valid row was processed first.
+                fulfilled.discard(key)
         for key in sorted(keys - fulfilled):
             failures.append({"event_id": eid, "market": key, "reason": "OFFERED_MARKET_UNACCOUNTED_FOR"})
         for family in sorted(CORE):
