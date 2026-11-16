@@ -324,7 +324,7 @@ class GovernanceTests(unittest.TestCase):
         self.assertEqual(len(calls),1)
 
     def test_first_governed_pr_manifest_self_check(self):
-        manifest_path = GOLDEN_PATH.parents[1] / (
+        manifest_path = GOLDEN_PATH.parents[2] / (
             "docs/governance/changes/pr-268.json"
         )
         d = parse(manifest_path.read_bytes())
