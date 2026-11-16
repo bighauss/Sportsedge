@@ -38,6 +38,7 @@ class NHLSourceFreeze(unittest.TestCase):
         for role, raw in self.raw.items():
             path = self.root / (role.lower() + ".txt")
             path.write_bytes(raw)
+            path.chmod(0o600)
             sources.append({
                 "role": role, "path": str(path),
                 "sha256": h(raw), "provider": "CLAIMED_FEED",
@@ -91,6 +92,7 @@ class NHLSourceFreeze(unittest.TestCase):
         with self.assertRaisesRegex(m.Blocked, "SOURCE_NOT_A_FILE"):
             m.assess(self.manifest)
         path.write_bytes(b"")
+        path.chmod(0o600)
         with self.assertRaisesRegex(m.Blocked, "SOURCE_EMPTY_OR_TOO_LARGE"):
             m.assess(self.manifest)
 
@@ -158,6 +160,7 @@ class NHLSourceFreeze(unittest.TestCase):
             ('{"schema":NaN}', "NONFINITE_JSON"),
         ):
             original.write_text(body)
+            original.chmod(0o600)
             with self.assertRaisesRegex(m.Blocked, expected):
                 m.report_file(original, output)
             self.assertFalse(output.exists())
@@ -173,6 +176,7 @@ class NHLSourceFreeze(unittest.TestCase):
         manifest = self.root / "manifest.json"
         output = self.root / "report.json"
         manifest.write_text(json.dumps(self.manifest))
+        manifest.chmod(0o600)
         with redirect_stdout(StringIO()) as capture:
             self.assertEqual(m.main([str(manifest), "--report", str(output)]), 0)
         self.assertIn("PAPER_0U", capture.getvalue())
@@ -189,6 +193,58 @@ class NHLSourceFreeze(unittest.TestCase):
             m.report_file(Path(m.__file__), self.root / "out.json")
         with self.assertRaisesRegex(m.Blocked, "SOURCE_INSIDE_PUBLIC_REPOSITORY"):
             m.report_file(self.root / "MODEL.txt", Path(m.__file__).parent / "out.json")
+
+    def test_original_private_source_requires_owner_file_0600(self):
+        source=Path(self.row("TEAM_XG")["path"])
+        source.chmod(0o644)
+        with self.assertRaisesRegex(m.Blocked,"PRIVATE_ORIGINAL_OWNER_0600_REQUIRED"):
+            m.assess(self.manifest)
+        source.chmod(0o600)
+        self.assertEqual(m.assess(self.manifest)["approved_stake_u"],0)
+
+    def test_private_parent_directory_must_be_owner_0700(self):
+        self.root.chmod(0o755)
+        with self.assertRaisesRegex(m.Blocked,"PRIVATE_PARENT_OWNER_0700_REQUIRED"):
+            m.assess(self.manifest)
+        self.root.chmod(0o700)
+        self.assertEqual(m.assess(self.manifest)["approved_stake_u"],0)
+
+    def test_private_source_symlink_alias_and_parent_symlink_denied(self):
+        source=Path(self.row("TEAM_XG")["path"])
+        alias=self.root/"team_link.txt"
+        alias.symlink_to(source)
+        self.row("TEAM_XG")["path"]=str(alias)
+        with self.assertRaisesRegex(m.Blocked,"SYMLINKED_ORIGINAL_SOURCE_REFUSED"):
+            m.assess(self.manifest)
+        self.row("TEAM_XG")["path"]=str(source)
+        outside=self.root/"nested"
+        outside.mkdir(mode=0o700)
+        nested=outside/"original.csv"
+        nested.write_bytes(source.read_bytes())
+        nested.chmod(0o600)
+        parent_link=self.root/"parent_link"
+        parent_link.symlink_to(outside,target_is_directory=True)
+        self.row("TEAM_XG")["path"]=str(parent_link/"original.csv")
+        with self.assertRaisesRegex(m.Blocked,"SYMLINKED_ORIGINAL_SOURCE_REFUSED"):
+            m.assess(self.manifest)
+
+    def test_lineup_json_exponent_overflow_with_valid_original_sha_blocked(self):
+        altered=json.dumps(self.lineup)[:-1]+', "unused_nested":{"x":1e999}}'
+        path=Path(self.row("LINEUP")["path"])
+        path.write_text(altered)
+        path.chmod(0o600)
+        self.row("LINEUP")["sha256"]=h(path.read_bytes())
+        with self.assertRaisesRegex(m.Blocked,"NONFINITE_JSON"):
+            m.assess(self.manifest)
+
+    def test_manifest_json_exponent_overflow_cannot_create_private_report(self):
+        original=self.root/"manifest.json"
+        output=self.root/"report.json"
+        original.write_text('{"schema":"x","nested":{"unused":1e999}}')
+        original.chmod(0o600)
+        with self.assertRaisesRegex(m.Blocked,"NONFINITE_JSON"):
+            m.report_file(original,output)
+        self.assertFalse(output.exists())
 
     def test_source_file_swap_detected_on_second_read(self):
         original = m._bytes
