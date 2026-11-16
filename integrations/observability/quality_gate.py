@@ -228,34 +228,40 @@ def _quality_metrics(valid):
 def inspect(rows):
     if not isinstance(rows, list):
         raise Blocked("ROWS_MUST_BE_LIST")
-    reasons = Counter()
-    decisions = Counter()
-    outputs = []
-    valid = []
+    output = []
+    parsed_rows = []
     for i, row in enumerate(rows):
-        token = _row_hash(row)
-        item = {"input_index": i, "row_digest_prefix": token, "status": "BLOCKED",
-                "official": False, "stake_u": 0}
+        item = {"input_index": i, "row_digest_prefix": _row_hash(row),
+                "status": "BLOCKED", "official": False, "stake_u": 0}
         try:
             parsed = inspect_one(row)
-            # Retain EVERY repeated selection, do not silently deduplicate.
-            # Include capture time so identical observations are duplicates;
-            # separate quote times remain distinct receipts, not independent wagers.
-            key = parsed["fingerprint"] + (parsed["captured"],)
-            decisions[key] += 1
-            if decisions[key] > 1:
-                raise Blocked("DUPLICATE_CAPTURED_SELECTION")
+            parsed_rows.append(parsed)
             item.update(status="RESEARCH_ONLY_CLOCK_CHECKED",
                         issue="NOT_PROVIDER_AUTHENTICATED",
                         market=parsed["market"], sport=parsed["sport"])
             if parsed["clv_reason"]:
                 item["close_status"] = parsed["clv_reason"]
-            valid.append(parsed)
         except (Blocked, KeyError, TypeError, ValueError, OverflowError) as exc:
-            reason = str(exc).splitlines()[0][:100]
-            reasons[reason] += 1
-            item["reason"] = reason
-        outputs.append(item)
+            parsed_rows.append(None)
+            item["reason"] = str(exc).splitlines()[0][:100]
+        output.append(item)
+
+    # A selection decision is unique across different capture snapshots.
+    # Do not accept the first copy and suppress later ones: ALL copies remain
+    # blocked so nothing leaked into denominator or descriptive calibration.
+    counts = Counter(p["fingerprint"] for p in parsed_rows if p is not None)
+    valid = []
+    for item, parsed in zip(output, parsed_rows):
+        if parsed is None:
+            continue
+        if counts[parsed["fingerprint"]] > 1:
+            item["status"] = "BLOCKED"
+            item["reason"] = "DUPLICATE_SELECTION_ALL_COPIES_QUARANTINED"
+            item.pop("issue", None)
+            item.pop("close_status", None)
+            continue
+        valid.append(parsed)
+    reasons = Counter(x.get("reason") for x in output if x["status"] == "BLOCKED")
     stats = _quality_metrics(valid)
     return {"schema": "SPORTSEDGE_OBSERVABILITY_V1",
             "status": "RESEARCH_ONLY_NOT_ADMISSION",
@@ -263,7 +269,7 @@ def inspect(rows):
             "official": False, "stake_u": 0, "pricing_enabled": False,
             "input_rows": len(rows), "clock_consistent_rows": len(valid),
             "blocked_rows": len(rows)-len(valid), "reasons": dict(sorted(reasons.items())),
-            "metrics": stats, "rows": outputs,
+            "metrics": stats, "rows": output,
             "scope_warning": "No bookmaker/source attestation, no no-vig or calibrated odds; never claim official EV/CLV certification."}
 
 
