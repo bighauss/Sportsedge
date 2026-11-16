@@ -140,8 +140,14 @@ def parse(rows):
             stratum=(r["market"] if mode=="LEGACY_UNATTESTED" else
                      "|".join((r["sport"].strip().upper(),_market_token(r["market"]),
                                _book_id(r["book"]),_period_id(r["period"]),
-                               r["settlement"].strip().casefold())))
-            good.append((stratum,p,q,int(r["outcome"]),profit,r["event_id"]))
+                               r["settlement"].strip().casefold(),
+                               _line(r.get("line")),
+                               str(r.get("player_id") or "").strip().casefold(),
+                               str(r.get("team_id") or "").strip().casefold(),
+                               str(r.get("stat") or "").strip().casefold())))
+            event=(r["event_id"] if mode=="LEGACY_UNATTESTED" else
+                   r["sport"].strip().upper()+":"+r["event_id"])
+            good.append((stratum,p,q,int(r["outcome"]),profit,event))
         except (ValueError,TypeError,KeyError) as e:blocked.append({"row":i,"reason":str(e)})
     return good,blocked
 def bucket(x):
@@ -184,6 +190,7 @@ def audit(rows):
         groups[(m,bucket(p-q),"model_above" if p>q else "model_below_or_equal")].append(row)
         cal[(m,min(9,int(p*10)))].append(row)
     return {"status":"RESEARCH_ONLY_NOT_VALIDATED_EV","accepted":len(valid),"blocked":blocked,
+        "blocked_reason_counts":dict(Counter(x["reason"] for x in blocked)),
         "market_identity_note":"Extended source rows require sport, book, period, settlement and exact line/subject when applicable. Legacy rows are not price-authenticated; repeated decisions across snapshots and mixed identity copies are quarantined.",
         "overall":stats(valid),
         "disagreement":[{"market":m,"bucket":b,"direction":d,**stats(v)} for (m,b,d),v in sorted(groups.items())],
