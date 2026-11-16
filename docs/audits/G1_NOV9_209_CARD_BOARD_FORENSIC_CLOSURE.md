@@ -29,8 +29,10 @@ or the reconstructed retrospective census as a substitute.
    pregame handoff. This authenticates the *file snapshot*, **not** individual
    prices' provider origin or quote observation times.
 3. Each printed model probability is separately compared with the exact
-   two-sided no-vig probability from the paired original board. Its printed
-   EV is checked with an appropriate separate-rounding interval.
+   two-sided no-vig probability from the paired original board. Printed EV
+   is checked against model p with a separate-rounding interval **only for
+   binary-settled markets**. First-half ML remains **UNRESOLVED** without
+   original p_win/p_loss/p_push draws (details below).
 4. The 248 original quote pairs have positive overround (approximately
    3.64%–7.82%) and no monotonic inverse probability ladders. This is a
    mathematical sanity check, not proof the odds existed at DraftKings.
@@ -40,6 +42,34 @@ or the reconstructed retrospective census as a substitute.
 6. Historical original **V1** card projections omitted a home-court term.
    Subsequent V2 corrected a separate input, but neither original V1
    probability nor saved price is retroactively replaced.
+
+## First-half moneyline push convention — source-code verified
+
+I recovered the original `sportsedge.py` from Drive file
+`13ntxjdZEzMiU255SR19kCnNNEkBlqmov`, saved at
+**2026-11-10 02:11:38Z**, before the original board and card.
+
+The original source's `diff()` uses halftime home minus away score;
+`wl()` computes unconditional `pw=P(win)`, `pl=P(loss)`.
+`emit()` then prints `model_p = cond(pw,pl)=pw/(pw+pl)` while computing
+`ev = pw * payout(odds) - pl`. **The printed p excludes halftime ties**,
+while EV is unconditional. Thus `printed p * decimal_odds - 1` is NOT a
+valid EV check when halftime ties can push; a difference does not prove
+an arithmetic defect.
+
+For the two apparent discrepancies outside naive rounding:
+- 1H **Rice ML +575**, printed p **24.1%**, printed EV **+60.3%**,
+  naive binary EV **+62.675%**; the displayed values correspond to
+  approximately **3.8%** pushes (approximate due rounding).
+- 1H **Portland ML +190**, printed p **40.0%**, printed EV **+15.2%**,
+  naive binary EV **+16.0%**; approximately **5.0%** pushes.
+
+These are **inferred consistency checks**, not recovered actual push
+frequencies; exact verification requires the original 40,000-simulation
+win/loss/tie draws or original full-precision w,l aggregates.
+The new audit returns `ev_math_check=PUSH_AWARE_1H_ML_ORIGINAL_WIN_LOSS_DRAWS_REQUIRED`
+and `ev_arithmetic_consistent_with_display_rounding=null`, never
+misclassifying this as a confirmed arithmetic error.
 
 ## Grading provenance limit — important correction
 
