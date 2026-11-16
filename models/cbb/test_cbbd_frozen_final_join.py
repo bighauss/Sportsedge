@@ -291,6 +291,16 @@ class StrictCBBJoinTests(unittest.TestCase):
                     provider_manifest=None, ledger_path=root/"new.json",
                     audit_path=root/"new_audit.json")
 
+    def test_truncated_derived_rows_rejected_even_with_original_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw, manifest, report_path = originals_from_capture(root)
+            derived = json.loads(report_path.read_text())
+            self.assertEqual(len(derived["rows"]), derived["row_count"])
+            derived["rows"].pop()  # Keep forged row_count unchanged
+            with self.assertRaisesRegex(Hold, "CBBD_ORIGINAL_ROW_CENSUS_MISMATCH"):
+                verify_provider_originals(derived, raw, manifest)
+
     def test_edited_final_score_rejected_against_original_raw(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
