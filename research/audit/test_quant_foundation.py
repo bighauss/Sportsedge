@@ -57,4 +57,41 @@ class TestFoundation(unittest.TestCase):
         r=paper_ledger([dict(BASE, result_source='')])
         self.assertEqual(r['qualified_graded_n'],0)
         self.assertEqual(len(r['unverifiable']),1)
+class OddsFormatsAndQuality(unittest.TestCase):
+    def test_decimal_fractional(self):
+        from quant_foundation import odds_in_format
+        self.assertAlmostEqual(odds_in_format('2.5','decimal')[1],.4)
+        self.assertAlmostEqual(odds_in_format('3/2','fractional')[0],2.5)
+        self.assertAlmostEqual(ev_per_dollar(.45,.05,'3/2',odds_format='fractional'),.175)
+        self.assertAlmostEqual(devig_two_way('1.91','1.91',format_a='decimal',format_b='decimal')['no_vig_a'],.5)
+    def test_format_invalid(self):
+        from quant_foundation import odds_in_format
+        with self.assertRaises(ValueError):odds_in_format('1.0','decimal')
+        with self.assertRaises(ValueError):odds_in_format('0/1','fractional')
+        with self.assertRaises(ValueError):odds_in_format('+100','auto')
+    def test_half_win_half_loss_settlement(self):
+        from quant_foundation import settlement_ev
+        self.assertAlmostEqual(settlement_ev({'HW':.5,'HL':.5},+150),.125)
+        with self.assertRaises(ValueError):settlement_ev({'W':.8,'L':.1},-110)
+    def test_quarter_line_splits(self):
+        from quant_foundation import quarter_line_probabilities,settlement_ev
+        p=quarter_line_probabilities([2,3,4],2.25,'over')
+        self.assertEqual(p,{'W':2/3,'L':0,'P':0,'HW':0,'HL':1/3})
+        self.assertAlmostEqual(settlement_ev(p,+100),.5)
+        with self.assertRaises(ValueError):quarter_line_probabilities([2],2.5,'over')
+    def test_quarter_continuous_sample_refused(self):
+        from quant_foundation import quarter_line_probabilities
+        with self.assertRaisesRegex(ValueError,'INTEGER_OUTCOMES'):
+            quarter_line_probabilities([2.3],2.25,'over')
+    def test_game_id_conflicts_retained(self):
+        r=audit_rows([dict(BASE),dict(BASE,game_start_utc='2026-11-16T19:20:00-06:00')])
+        self.assertEqual(r['retained_rows'],2)
+        self.assertTrue(any('EVENT_ID_KICKOFF_CONFLICT' in x['code'] for x in r['issues']))
+    def test_outlier_review_retains_every_row(self):
+        records=[dict(BASE,event_id=f'E{i}',actual_stat=str(i%3+10)) for i in range(25)]
+        records[-1]['actual_stat']='100000'
+        r=audit_rows(records)
+        self.assertEqual(r['retained_rows'],25)
+        self.assertTrue(any(x['code']=='ROBUST_STAT_OUTLIER_REVIEW' for x in r['issues']))
+
 if __name__=='__main__':unittest.main()
