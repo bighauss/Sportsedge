@@ -9,19 +9,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
-from urllib.request import urlopen
 
-from sportsedge.odds.free_odds_aggregator_intake import capture, SPORTS
-from sportsedge.odds.the_odds_api_clv_export import write_export
+from sportsedge.odds.free_odds_aggregator_intake import capture, SPORTS, utc
+from sportsedge.odds.the_odds_api_clv_export import write_export, load_evidence
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PHASES = frozenset({"TAKE", "CLOSE"})
 
 
 def private_root(location: Path) -> Path:
-    root = Path(location).resolve()
-    if root == REPO_ROOT or REPO_ROOT in root.parents:
+    lexical = Path(os.path.abspath(os.fspath(location)))
+    root = lexical.resolve()
+    if any(p == REPO_ROOT or REPO_ROOT in p.parents for p in (lexical, root)):
         raise ValueError("PRIVATE_CAPTURE_PATH_IS_PUBLIC_CHECKOUT")
     return root
 
@@ -35,11 +36,13 @@ def capture_cycle(
     markets: tuple[str, ...] = ("h2h", "spreads", "totals"),
     bookmakers: tuple[str, ...] = ("draftkings", "fanduel"),
     key: str | None = None,
-    opener=urlopen,
+    opener=None,
 ):
     """Capture only a genuine provider event ID via documented v4 HTTP GET.
 
-    The capture is local and carries no arbitrary provider endpoint selection.
+    Default opener=None is deliberate: it delegates to the upstream capture
+    client's secure no-redirect opener. Never pass urllib.urlopen as a default:
+    that silently bypasses protections against key-bearing query redirects.
     Original response JSON remains unchanged and hash-verified by converter.
     """
     root = private_root(private_dir)
@@ -65,8 +68,40 @@ def capture_cycle(
     manifest = root / (stem + ".manifest.json")
     if not manifest.is_file() or not manifest.resolve().is_relative_to(root):
         raise ValueError("ORIGINAL_PROVIDER_MANIFEST_MISSING")
-    # CLOSE is an archived snapshot role. Downstream comparison still requires
-    # an exact observed close inside its own 10-minute event-start window.
+    # CLOSE is a near-kickoff *capture*, not just an arbitrarily labeled file.
+    # Keep the original response and hash manifest for evidence even when a
+    # premature/late collection fails the CLOSE window. Do not emit a CLOSE CSV
+    # (nor silently relabel it as TAKE) outside 0 < seconds_to_start <= 600.
+    if phase == "CLOSE":
+        _, events, captured, _ = load_evidence(manifest)
+        if len(events) != 1:
+            raise ValueError("CLOSE_REQUIRES_SINGLE_PROVIDER_EVENT")
+        kickoff = utc(events[0].get("commence_time"))
+        seconds_to_start = (kickoff - captured).total_seconds()
+        if not 0 < seconds_to_start <= 600:
+            return {
+                "schema": "sportsedge-prospective-clv-cycle-v1",
+                "state": "BLOCK_CLOSE_CAPTURE_OUTSIDE_T_MINUS_10M",
+                "sport": sport,
+                "phase": phase,
+                "event_id_provider_native": event_id,
+                "original_json_filename": raw_name,
+                "original_manifest_filename": manifest.name,
+                "normalized_csv_filename": None,
+                "normalized_audit_filename": None,
+                "original_raw_sha256": info["original_raw_sha256"],
+                "normalized_csv_sha256": None,
+                "provider_credits_remaining": info["provider_remaining_credits"],
+                "raw_provider_outcomes_returned": info["outcomes_returned"],
+                "normalized_two_sided_selection_rows": 0,
+                "market_groups_quarantined_by_reason": {
+                    "CLOSE_CAPTURE_OUTSIDE_T_MINUS_10M": 1,
+                },
+                "original_books_independently_authenticated": False,
+                "provider_quote_clock_externally_attested": False,
+                "official_counted": 0,
+                "approved_stake_u": 0,
+            }
     normalized_file = root / (stem + "." + phase.lower() + ".csv")
     exported = write_export(manifest, normalized_file, "TAKE" if phase == "TAKE" else "HISTORY")
     return {
