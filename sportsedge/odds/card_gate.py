@@ -14,6 +14,7 @@ from research.risk.v22_policy_guard import assess as assess_v22, VERSION as HIST
 from .evidence import (DualSourceDecision, PITBinding, QuoteReceipt,
                        evaluate_dual_source, utc)
 from .storage import EvidenceChain
+from .independent_chain_contract import inspect as inspect_independent_chain, ChainHold
 
 
 def _numeric_identity(value, expected):
@@ -74,6 +75,8 @@ def gate_candidate(
     chain: EvidenceChain | None = None,
     ledger=(),
     closing_observations=(),
+    chain_primary: dict | None = None,
+    chain_secondary: dict | None = None,
 ) -> dict:
     now = utc(decision_at_utc, "decision")
     # Never accept self-asserted provenance from user-provided candidate fields.
@@ -157,6 +160,19 @@ def gate_candidate(
             primary.receipt_id == secondary.receipt_id):
         binding_problems.append("DUPLICATED_PRIMARY_SECONDARY_RECEIPT_ID")
     reasons.extend(binding_problems)
+    # Separate research-only original-source claims. Never derive these from
+    # bookmaker logos, quote objects, or untrusted candidate flags.
+    if chain_primary is None or chain_secondary is None:
+        reasons.append("INDEPENDENT_CHAIN_EVIDENCE_MISSING")
+    else:
+        try:
+            inspect_independent_chain(
+                chain_primary, chain_secondary,
+                decision_utc=now.isoformat().replace("+00:00", "Z"))
+        except ChainHold as exc:
+            reasons.append("INDEPENDENT_CHAIN:" + str(exc))
+        except (TypeError, ValueError, KeyError, AttributeError) as exc:
+            reasons.append("INDEPENDENT_CHAIN_RUNTIME_ERROR:" + type(exc).__name__)
     pit_problems = ()
     if pit is None:
         reasons.append("PIT_PACKAGE_MISSING")
