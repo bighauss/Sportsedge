@@ -9,7 +9,7 @@
 4. It enumerates **filtered candidate lineups** (CPT + 5 FLEX, at most $50k, both teams) from players above a mean-point floor and with at least $46k spent, then ranks up to 4,000 per objective on shared sims. The reported optimal-lineup rates are conditional on this shortlist, **not** the true best-lineup probability over all DK-legal combinations.
 
 ## Audit limitations
-The simulator makes passing TDs in a separate step from completed passes, and models defensive takeaways and scoring events approximately. The resulting distribution is research-only and may misstate tails and player correlations. Kicker missed field goals score zero under official DK Showdown rules; the earlier negative-point penalty was a bug fixed by this review. Do not use this model to claim verified DFS profitability or betting value.
+The simulator generates passing TDs on simulated completions, but is still an attempt-level approximation rather than an ordered possession-level game; defensive takeaways, scoring and late-game strategy remain approximate. The resulting distribution is research-only and may misstate tails and player correlations. Kicker missed field goals score zero under official DK Showdown rules; the earlier negative-point penalty was a bug fixed by this review. Do not use this model to claim verified DFS profitability or betting value.
 
 ## Run
 ```
@@ -43,4 +43,4 @@ Missing from this free file: **pass attempts, rush attempts, targets, snaps, rou
 - Roles: Rotowire last-4-weeks roles, ESPN/StatsCrew 2026, SI (Burrow 298.3 ypg, 23 TD, 74%)
 
 ## Sim result (20k)
-PIT 22.0 vs CIN 26.5, total 48.4. CIN wins 57.8%, covers -3.5 at 51.7%, and goes over 49.5 at 45.0%. Paper only.
+The committed canonical 20,000-simulation, seed-7 artifact currently reports PIT 22.17 vs CIN 26.77 (total 48.94), Cincinnati win probability 58.4%, -3.5 cover 51.9%, over 49.5 45.6%. These are unvalidated model estimates, not current sportsbook odds, contest EV or a betting edge.
