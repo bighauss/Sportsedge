@@ -186,16 +186,27 @@ def load_csv(path: Path, role: str) -> tuple[list[Quote], str]:
 def compare(takes: list[Quote], history: list[Quote], max_close_seconds: int = 600) -> list[dict]:
     if not 1 <= max_close_seconds <= 3600:
         raise Blocked("INVALID_CLOSE_WINDOW")
+    # Index once: a complete multi-sport history can contain many thousands of
+    # quotes and scanning the entire history for every TAKE is unnecessarily slow.
+    indexed = {}
+    for quote in history:
+        indexed.setdefault(quote.identity, []).append(quote)
     seen_takes, out = set(), []
     for taken in takes:
         if taken.identity in seen_takes:
             raise Blocked("DUPLICATE_CANONICAL_TAKE")
         seen_takes.add(taken.identity)
-        exact = [q for q in history if q.identity == taken.identity and
+        exact = [q for q in indexed.get(taken.identity, ()) if
                  taken.observed < q.observed < taken.kickoff and
                  0 < (taken.kickoff - q.observed).total_seconds() <= max_close_seconds]
-        latest = max((q.observed for q in exact), default=None)
-        candidates = [q for q in exact if q.observed == latest]
+        # A later price from a *different* capture chain is a reference, not the
+        # closing snapshot of the TAKE source. Prefer that source's latest quote.
+        # If that latest same-source quote fails integrity, DO NOT cherry-pick an
+        # older same-source price or cross-source substitute to manufacture CLV.
+        same_source = [q for q in exact if q.source == taken.source]
+        eligible_pool = same_source if same_source else exact
+        latest = max((q.observed for q in eligible_pool), default=None)
+        candidates = [q for q in eligible_pool if q.observed == latest]
         if len(candidates) > 1:
             status, close = "AMBIGUOUS_LAST_CLOSE", None
         elif not candidates:
