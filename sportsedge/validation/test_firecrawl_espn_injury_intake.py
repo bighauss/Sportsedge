@@ -171,6 +171,16 @@ class FirecrawlEspnEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(InjuryEvidenceError, "COUNT_CONFLICT"):
             self.inspect(d)
 
+    def test_boolean_player_counts_refused_as_not_integer(self):
+        d = deepcopy(self.data)
+        d["data"]["alexandria"][0]["data"]["player_count"] = True
+        with self.assertRaisesRegex(InjuryEvidenceError, "INVALID_SOURCE_COUNT"):
+            self.inspect(d)
+        d = deepcopy(self.data)
+        d["data"]["alexandria"][0]["data"]["teams"][0]["count"] = True
+        with self.assertRaisesRegex(InjuryEvidenceError, "INVALID_SOURCE_COUNT"):
+            self.inspect(d)
+
     def test_same_athlete_duplicate_rejected(self):
         d = deepcopy(self.data)
         people = d["data"]["alexandria"][0]["data"]["teams"][0]["injuries"]
