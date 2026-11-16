@@ -10,6 +10,21 @@ The output reports projected *research-only* team scores and margins, plus walk-
 
 The supplied snapshots and their timestamps are caller assertions. To claim genuine historical pregame predictions, an independent archive must prove the bytes and source publication time were available before each forecast cutoff. Downloading today and backdating `forecast_asof_utc` is prohibited.
 
+## Exact-ID EPA snapshot adapter
+
+Use `feature_snapshot_bridge_pit.py` to turn a saved upstream EPA ratings JSON into score-model CSV features without fuzzy team lookup or silently inserted zeros. Provide a JSON **list** of events with `game_id`, `home_team`, `away_team`, `kickoff_utc` and `forecast_asof_utc` using exact IDs from the rating source. The adapter requires the rating source observation, rating calculation and event freeze all to precede kickoff; one rating artifact can populate only games for which all four offensive/defense feature families exist.
+
+```sh
+python models/nfl/feature_snapshot_bridge_pit.py \
+  --ratings /private/nfl_epa_ratings_paper.json \
+  --events /private/verified_matchups.json \
+  --out /private/archived_nfl_pregame_features.csv
+
+python -m unittest discover -s models/nfl -p 'test_feature_snapshot_bridge_pit.py' -v
+```
+
+The adapter computes the local rating-artifact SHA256 and writes a *new* CSV. It cannot authenticate claimed archive dates and is **not** an invitation to backdate a present-day rating artifact. Store the artifact and input events with independent observation receipts before kickoff.
+
 ## Exact input schemas
 
 `--features` CSV: exactly one row per real game, captured before that game's kickoff, with **these exact columns and no odds/results**:
