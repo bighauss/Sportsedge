@@ -13,11 +13,23 @@ import datetime as dt
 import hashlib
 import json
 import os
+import math
 from collections import Counter
 from pathlib import Path
 
 from quant_foundation import when
 from quant_evidence import digest_ok, market_census
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def require_private_path(value):
+    """A source or output must not resolve inside this public repository."""
+    resolved = Path(value).resolve()
+    if resolved == REPO_ROOT or REPO_ROOT in resolved.parents:
+        raise ValueError('PRIVATE_CAPTURE_PATH_INSIDE_PUBLIC_REPO')
+    return resolved
+
 
 
 def quota_decision(now_utc: str, observed_calls: list[str], *, max_hour: int,
@@ -28,12 +40,18 @@ def quota_decision(now_utc: str, observed_calls: list[str], *, max_hour: int,
     Never makes a network call. Rejects future/naive counter times.
     """
     now = when(now_utc)
+    # Reject NaN/Infinity and bools. Otherwise a NaN cache age bypasses the
+    # stale-cache gate and a fractional quota silently changes rate limits.
+    if any(type(n) is not int for n in (max_hour, max_day, min_cache_seconds)):
+        raise ValueError('INVALID_QUOTA_POLICY')
     if max_hour < 1 or max_day < 1 or min_cache_seconds < 0:
         raise ValueError('INVALID_QUOTA_POLICY')
-    if cache_age_seconds is not None and cache_age_seconds < 0:
-        raise ValueError('INVALID_CACHE_AGE')
-    if cache_age_seconds is not None and cache_age_seconds <= min_cache_seconds:
-        return {'allowed': False, 'code': 'USE_CACHE'}
+    if cache_age_seconds is not None:
+        if (isinstance(cache_age_seconds, bool)
+                or not isinstance(cache_age_seconds, (int,float))
+                or not math.isfinite(cache_age_seconds)
+                or cache_age_seconds < 0):
+            raise ValueError('INVALID_CACHE_AGE')
     within_hour = within_day = 0
     for value in observed_calls:
         tick = when(value)
@@ -42,6 +60,8 @@ def quota_decision(now_utc: str, observed_calls: list[str], *, max_hour: int,
         diff = (now-tick).total_seconds()
         within_hour += diff < 3600
         within_day += diff < 86400
+    if cache_age_seconds is not None and cache_age_seconds <= min_cache_seconds:
+        return {'allowed': False, 'code': 'USE_CACHE'}
     if within_day >= max_day:
         return {'allowed': False, 'code': 'DAY_QUOTA_EXHAUSTED'}
     if within_hour >= max_hour:
@@ -55,11 +75,24 @@ def manifest_for_capture(source: bytes, *, asof_utc: str,
     if claim_source_authenticated:
         raise ValueError('CANNOT_ASSERT_PROVIDER_AUTHENTICITY_FROM_FILE')
     stamp = when(asof_utc)
-    if not provider or not provider.strip():
+    if not isinstance(provider,str) or not provider.strip():
         raise ValueError('SOURCE_PROVIDER_MISSING')
-    rows = list(csv.DictReader(source.decode('utf-8-sig').splitlines()))
+    if not isinstance(source,bytes) or not source or len(source)>20_000_000:
+        raise ValueError('INVALID_SOURCE_BYTES')
+    try:
+        reader = csv.DictReader(source.decode('utf-8-sig').splitlines())
+        fields = reader.fieldnames or []
+        if len(fields)!=len(set(fields)):
+            raise ValueError('DUPLICATE_CAPTURE_CSV_HEADERS')
+        rows = list(reader)
+    except UnicodeError as exc:
+        raise ValueError('NON_UTF8_CAPTURE') from exc
+    except csv.Error as exc:
+        raise ValueError('MALFORMED_CAPTURE_CSV') from exc
     if not rows:
         raise ValueError('EMPTY_CAPTURE')
+    if any(None in row for row in rows):
+        raise ValueError('CAPTURE_CSV_EXTRA_FIELDS')
     flagged = []
     for rownum, row in enumerate(rows, 2):
         try:
@@ -89,6 +122,7 @@ def manifest_for_capture(source: bytes, *, asof_utc: str,
 def write_create_only(path: str | Path, record: dict) -> None:
     """Create-only file. Owner must store in a private, access-controlled tree."""
     target = Path(path)
+    require_private_path(target)
     if target.is_symlink() or target.parent.is_symlink():
         raise ValueError('SYMLINK_PATH_REFUSED')
     data = (json.dumps(record, sort_keys=True, indent=2, allow_nan=False)+'\n').encode('utf-8')
@@ -110,6 +144,8 @@ def main(argv=None) -> int:
     p.add_argument('--provider', required=True)
     p.add_argument('--manifest', required=True)
     args = p.parse_args(argv)
+    require_private_path(args.input_csv)
+    require_private_path(args.manifest)
     source = Path(args.input_csv).read_bytes()
     manifest = manifest_for_capture(source, asof_utc=args.asof_utc,
                                     provider=args.provider)
