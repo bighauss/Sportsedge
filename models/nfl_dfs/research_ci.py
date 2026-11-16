@@ -14,6 +14,8 @@ RESEARCH_SUITES = (
     "models/test_ledger_grades_to_audit_csv.py",
     "models/nfl_dfs/test_usage_share_features.py",
     "models/nfl_dfs/test_market_walkforward.py",
+    "models/nfl_dfs/test_historical_coverage_preflight.py",
+    "models/nfl_dfs/test_verify_canonical_outputs.py",
     "ledger/test_close_snapshot_archive.py",
     "models/nba/test_minutes_candidate.py",
     "models/nba/test_anchor_evaluator.py",
