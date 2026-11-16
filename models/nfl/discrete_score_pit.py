@@ -18,6 +18,7 @@ from score_walkforward_pit import utc, private_evidence_path, create_private_out
 from feature_snapshot_bridge_pit import strict_original_json
 
 HASH_PREFIX = "sha256:"
+MAX_ORIGINAL_JSON_BYTES = 50_000_000
 FORECAST_KEYS = frozenset({
     "game_id", "home_id", "away_id", "kickoff_utc", "forecast_asof_utc",
     "source_observed_utc", "model_sha256", "projected_home", "projected_away",
@@ -251,6 +252,34 @@ def score_distribution(target, history, *, lines=None, min_history=50):
     return output
 
 
+def _refuse_json_numeric_overflow(value):
+    """Reject JSON 1e999-style overflow, including in otherwise unused fields.
+
+    json.loads normally converts a huge *valid* exponent to float('inf')
+    without invoking parse_constant; standard NaN/Infinity literals are
+    already rejected by strict_original_json.
+    """
+    if isinstance(value, float) and not isfinite(value):
+        raise ValueError("NONFINITE_JSON_NUMBER_OVERFLOW")
+    if isinstance(value, dict):
+        for item in value.values():
+            _refuse_json_numeric_overflow(item)
+    elif isinstance(value, list):
+        for item in value:
+            _refuse_json_numeric_overflow(item)
+
+
+def _load_original_bytes(path):
+    """Bound raw-size before read and recheck after read for racing files."""
+    size = path.stat().st_size
+    if size <= 0 or size > MAX_ORIGINAL_JSON_BYTES:
+        raise ValueError("ORIGINAL_JSON_EMPTY_OR_OVERSIZE")
+    raw = path.read_bytes()
+    if not raw or len(raw) > MAX_ORIGINAL_JSON_BYTES:
+        raise ValueError("ORIGINAL_JSON_EMPTY_OR_OVERSIZE")
+    return raw
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", required=True, help="frozen pregame forecast JSON")
@@ -269,10 +298,13 @@ def main():
     if args.lines:
         input_paths["lines"] = private_evidence_path(args.lines)
     private_evidence_path(args.out)
-    inputs = {kind: path.read_bytes() for kind, path in input_paths.items()}
+    inputs = {kind: _load_original_bytes(path)
+              for kind, path in input_paths.items()}
     raw_target = strict_original_json(inputs["target"])
     raw_history = strict_original_json(inputs["history"])
     raw_line = strict_original_json(inputs["lines"]) if args.lines else None
+    for source in (raw_target, raw_history, raw_line):
+        _refuse_json_numeric_overflow(source)
     result = score_distribution(raw_target, raw_history,
                                 lines=raw_line, min_history=args.min_history)
     result["local_input_sha256"] = {

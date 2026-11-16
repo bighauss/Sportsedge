@@ -329,5 +329,42 @@ class DiscreteScorePrivateArchiveTests(unittest.TestCase):
         self.assertEqual(out["approved_stake_u"], 0)
 
 
+    def test_extreme_json_exponent_rejected_before_schema_validation(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            original = files["target"].read_bytes()
+            files["target"].write_bytes(b'{"unused":{"nested":1e9999}}')
+            with self.assertRaisesRegex(ValueError,
+                                        "NONFINITE_JSON_NUMBER_OVERFLOW"):
+                self._run(files)
+            self.assertFalse(files["out"].exists())
+            self.assertNotEqual(original, files["target"].read_bytes())
+
+    def test_extreme_numeric_exponent_in_market_line_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            raw = files["lines"].read_bytes()
+            self.assertIn(b'"home_spread": -3.0', raw)
+            files["lines"].write_bytes(
+                raw.replace(b'"home_spread": -3.0', b'"home_spread": 1e9999'))
+            with self.assertRaisesRegex(ValueError,
+                                        "NONFINITE_JSON_NUMBER_OVERFLOW"):
+                self._run(files)
+            self.assertFalse(files["out"].exists())
+
+    def test_source_size_limit_and_empty_file_are_fail_closed(self):
+        with tempfile.TemporaryDirectory(prefix="sportsedge-dscore-") as tmp:
+            files = self._fixture_files(tmp)
+            with patch("discrete_score_pit.MAX_ORIGINAL_JSON_BYTES", 100):
+                with self.assertRaisesRegex(ValueError,
+                                            "ORIGINAL_JSON_EMPTY_OR_OVERSIZE"):
+                    self._run(files)
+            files["lines"].write_bytes(b"")
+            with self.assertRaisesRegex(ValueError,
+                                        "ORIGINAL_JSON_EMPTY_OR_OVERSIZE"):
+                self._run(files)
+            self.assertFalse(files["out"].exists())
+
+
 if __name__=="__main__":
     unittest.main()
