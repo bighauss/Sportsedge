@@ -209,6 +209,35 @@ class PeriodShareTests(unittest.TestCase):
             self.assertNotEqual(x["period_fit_model_sha256"],y["period_fit_model_sha256"])
             self.assertNotEqual(x["scenario_spec_sha256"],y["scenario_spec_sha256"])
 
+    def test_prior_score_width_and_period_fit_can_feed_same_research_run(self):
+        from sportsedge.markets.test_score_dispersion_fit import (
+            records as score_records, encode as encode_scores,
+        )
+        period_raw=encode(self.rows)
+        score_raw=encode_scores(score_records(self.now-timedelta(days=35)))
+        with tempfile.TemporaryDirectory() as d:
+            period=Path(d)/"periods.jsonl"
+            score=Path(d)/"scores.jsonl"
+            period.write_bytes(period_raw)
+            score.write_bytes(score_raw)
+            p=self._private_manifest(period,period_raw)
+            p["distribution"]={"sport":"NFL","status":"UNCALIBRATED_RESEARCH"}
+            p["dispersion_fit_ref"]={
+                "path":str(score),
+                "raw_sha256":"sha256:"+sha256(score_raw).hexdigest(),
+                "fit_asof_utc":self.cutoff,
+            }
+            result=run_from_manifest(p)
+            self.assertEqual(result["dispersion_fit_accepted_n"],56)
+            self.assertEqual(result["period_fit_accepted_n"],56)
+            self.assertEqual(result["dispersion_fit_status"],
+                "TRAIN_ONLY_WIDTHS_READY_RESEARCH_NOT_CALIBRATED")
+            self.assertEqual(result["period_fit_status"],
+                "TRAIN_ONLY_PERIOD_SHARES_RESEARCH_UNCALIBRATED")
+            self.assertFalse(result["period_share_calibration_verified"])
+            self.assertEqual(result["approved_stake_u"],0)
+            self.assertIsNone(result["card"])
+
     def test_caller_supplied_manual_shares_disallowed_with_fit_reference(self):
         raw=encode(self.rows)
         with tempfile.TemporaryDirectory() as d:
