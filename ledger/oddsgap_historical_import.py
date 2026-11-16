@@ -257,12 +257,22 @@ def export(manifest: Path, destination: Path):
     raw = buff.getvalue().encode("utf-8")
     report["normalized_csv_sha256"] = sha256(raw).hexdigest()
     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for path, payload in ((destination, raw), (audit, (json.dumps(report, indent=2, sort_keys=True) + "\n").encode("utf-8"))):
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        with os.fdopen(os.open(path, flags, 0o600), "wb") as fd:
-            fd.write(payload)
-            fd.flush()
-            os.fsync(fd.fileno())
+    created = []
+    try:
+        for path, payload in ((destination, raw), (audit, (json.dumps(report, indent=2, sort_keys=True) + "\n").encode("utf-8"))):
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(path, flags, 0o600)
+            created.append(path)
+            with os.fdopen(descriptor, "wb") as fd:
+                fd.write(payload)
+                fd.flush()
+                os.fsync(fd.fileno())
+    except BaseException:
+        # Never leave an orphan usable CSV if its audit sidecar cannot be saved.
+        # Only unlink files this invocation created, never pre-existing evidence.
+        for path in reversed(created):
+            path.unlink(missing_ok=True)
+        raise
     return report
 
 
