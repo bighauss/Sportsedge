@@ -41,13 +41,27 @@ def gate_candidate(
         reasons.append("DUAL_SOURCE_GATE_BLOCKED")
     if primary is None:
         reasons.append("PRIMARY_RECEIPT_MISSING")
+    pit_problems = ()
     if pit is None:
         reasons.append("PIT_PACKAGE_MISSING")
     elif primary is not None:
-        reasons.extend(pit.check(primary))
-    reasons.extend("V21:" + x for x in v21.get("flags", ()))
-    state = "BLOCK" if dual.state == "BLOCK" or pit is None or (
-        primary is not None and pit.check(primary)
+        pit_problems = pit.check(primary)
+        reasons.extend(pit_problems)
+    v21_flags = v21.get("flags", ())
+    if not isinstance(v21_flags, (list, tuple)) or any(
+        not isinstance(flag, str) or not flag for flag in v21_flags
+    ):
+        v21_flags = ("INVALID_V21_DIAGNOSTIC_FLAGS",)
+    reasons.extend("V21:" + flag for flag in v21_flags)
+    # A diagnostic object marked PAPER can still contain mandatory blocking
+    # flags. Never promote a candidate from BLOCK to paper-card eligibility
+    # merely because the v2.1 diagnostic never proposes an approved stake.
+    v21_blocked = bool(v21_flags) or v21.get("status") != "PAPER_0U"
+    if v21_blocked:
+        reasons.append("V21_POLICY_BLOCKED")
+    state = "BLOCK" if (
+        dual.state != "RESEARCH_ONLY" or primary is None or pit is None
+        or bool(pit_problems) or v21_blocked
     ) else "PAPER_0U"
     report = {
         "status": state, "card": None, "approved_stake_u": 0,
