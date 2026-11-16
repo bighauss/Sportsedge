@@ -137,7 +137,10 @@ def _exact_document(raw, marker, selection, fields):
     if doc.get("schema") != marker or doc.get("selection") != selection:
         raise BridgeHold("ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH")
     for name, value in fields.items():
-        if doc.get(name) != value:
+        original_value = doc.get(name)
+        # JSON bool/int and int/float compare equal in Python; receipts must
+        # preserve their original JSON scalar types as well as their values.
+        if type(original_value) is not type(value) or original_value != value:
             raise BridgeHold("ORIGINAL_RECEIPT_CONTENT_MISMATCH:" + name)
 
 
