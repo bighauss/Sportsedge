@@ -10,12 +10,14 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from hashlib import sha256
 import json
+import math
 import os
+import ssl
 from pathlib import Path
 import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, quote
-from urllib.request import Request, urlopen
+from urllib.request import Request, HTTPRedirectHandler, HTTPSHandler, build_opener
 
 # Exact provider-advertised v4 sport keys. PGA Majors outrights use a different
 # multiway settlement contract and are not normalized by this game-lines intake.
@@ -33,6 +35,33 @@ MARKET_RE = re.compile(r"[a-z][a-z0-9_]{1,55}\Z")
 EVENT_RE = re.compile(r"[a-zA-Z0-9_-]{8,100}\Z")
 BASE = "https://api.the-odds-api.com/v4/sports/"
 MAX_BYTES=20_000_000
+REPOSITORY_ROOT=Path(__file__).resolve().parents[2]
+
+
+def private_archive_root(destination):
+    """Reject both syntactic and symlink-resolved public checkout paths.
+
+    Validate BEFORE a credit-consuming provider request, independent of CWD.
+    """
+    lexical=Path(os.path.abspath(destination))
+    resolved=lexical.resolve()
+    if (lexical==REPOSITORY_ROOT or REPOSITORY_ROOT in lexical.parents
+            or resolved==REPOSITORY_ROOT or REPOSITORY_ROOT in resolved.parents):
+        raise ValueError("RAW_ODDS_ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPO")
+    return resolved
+
+
+class _RejectRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # The Odds API uses ?apiKey=...; never follow a redirect to a
+        # different host which could receive this credential.
+        raise ValueError("AGGREGATOR_REDIRECT_REFUSED")
+
+
+def _secure_open(request, timeout):
+    opener=build_opener(_RejectRedirect(), HTTPSHandler(context=ssl.create_default_context()))
+    return opener.open(request, timeout=timeout)
+
 
 
 def utc(s):
@@ -51,11 +80,19 @@ def strict_json(raw):
             if k in out:raise ValueError("DUPLICATE_PROVIDER_JSON_KEY")
             out[k]=v
         return out
-    return json.loads(raw.decode("utf-8"),object_pairs_hook=pairs)
+    def nonfinite(text):
+        raise ValueError("NONFINITE_PROVIDER_JSON_NUMBER")
+    def finite_float(text):
+        value=float(text)
+        if not math.isfinite(value):
+            raise ValueError("NONFINITE_PROVIDER_JSON_NUMBER")
+        return value
+    return json.loads(raw.decode("utf-8"),object_pairs_hook=pairs,
+                      parse_constant=nonfinite,parse_float=finite_float)
 
 
 def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spreads","totals"),
-            bookmakers=("draftkings","fanduel"), opener=urlopen):
+            bookmakers=("draftkings","fanduel"), opener=None):
     if sport not in SPORTS:raise ValueError("SPORT_NOT_ALLOWED")
     api_key=key or os.environ.get("SPORTSEDGE_ODDS_API_KEY")
     if not api_key or not KEY_RE.fullmatch(api_key):
@@ -66,6 +103,8 @@ def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spre
         raise ValueError("MARKETS_INVALID_OR_DUPLICATED")
     if not bookmakers or len(set(bookmakers))!=len(bookmakers) or any(x not in BOOKS for x in bookmakers):
         raise ValueError("BOOKS_INVALID_OR_DUPLICATED")
+    # Reject public checkout output BEFORE any outbound API request or quota use.
+    root=private_archive_root(destination)
     # Only documented read-only v4 endpoints. No guessed or restricted DK URL.
     path = SPORTS[sport]+("/events/"+quote(event_id,safe="")+"/odds" if event_id else "/odds")
     safe_url=BASE+path
@@ -74,7 +113,12 @@ def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spre
     req=Request(safe_url+"?"+urlencode(params),headers={"Accept":"application/json",
                 "User-Agent":"SportsEdge-UserAuthorized-Research/1.0"})
     try:
-        with opener(req,timeout=25) as response:
+        with (opener or _secure_open)(req,timeout=25) as response:
+            # Also reject a redirected final URL from custom, authorized transports.
+            if hasattr(response,"geturl") and response.geturl()!=req.full_url:
+                raise ValueError("AGGREGATOR_REDIRECT_REFUSED")
+            if hasattr(response,"status") and response.status != 200:
+                raise ValueError("AGGREGATOR_UNEXPECTED_HTTP_STATUS")
             raw=response.read(MAX_BYTES+1)
             headers=response.headers
     except HTTPError as err:
@@ -122,7 +166,10 @@ def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spre
                     if isinstance(odds,bool) or not isinstance(odds,int) or abs(odds)<100 or abs(odds)>1000000:
                         raise ValueError("INVALID_AGGREGATOR_AMERICAN_ODDS")
                     point=o.get('point')
-                    if point is not None and (isinstance(point,bool) or not isinstance(point,(int,float))):
+                    if point is not None and (
+                        isinstance(point,bool) or not isinstance(point,(int,float))
+                        or not math.isfinite(point)
+                    ):
                         raise ValueError("INVALID_AGGREGATOR_POINT")
                     identity=(ev['id'],book['key'],m['key'],o['name'],o.get('description'),point)
                     if identity in seen:raise ValueError("DUPLICATE_AGGREGATOR_OUTCOME")
@@ -132,9 +179,6 @@ def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spre
                     if last_update is None or (now-last_update).total_seconds()>300:
                         stale_or_missing+=1
     digest="sha256:"+sha256(raw).hexdigest()
-    root=Path(destination).resolve();cwd=Path.cwd().resolve()
-    if root==cwd or cwd in root.parents:
-        raise ValueError("RAW_ODDS_ARCHIVE_MUST_BE_OUTSIDE_PUBLIC_REPO")
     root.mkdir(mode=0o700,parents=True,exist_ok=True)
     base="aggregator_"+sport+"_"+now.strftime("%Y%m%dT%H%M%S%fZ")+"_"+digest[7:23]
     archive=root/(base+".json")
