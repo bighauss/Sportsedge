@@ -99,6 +99,8 @@ def quarter_line_probabilities(draws: list[float], line: float, side: str) -> di
     if (not draws or side.casefold() not in ('over','under') or
             not math.isfinite(line) or any(not math.isfinite(x) for x in draws)):
         raise ValueError('INVALID_QUARTER_LINE_INPUT')
+    if any(not float(x).is_integer() for x in draws):
+        raise ValueError('QUARTER_SPLIT_REQUIRES_INTEGER_OUTCOMES')
     if round(line*4) != line*4 or round(line*4) % 2 != 1:
         raise ValueError('NOT_QUARTER_LINE')
     low = math.floor(line*2)/2

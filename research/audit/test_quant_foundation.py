@@ -79,6 +79,10 @@ class OddsFormatsAndQuality(unittest.TestCase):
         self.assertEqual(p,{'W':2/3,'L':0,'P':0,'HW':0,'HL':1/3})
         self.assertAlmostEqual(settlement_ev(p,+100),.5)
         with self.assertRaises(ValueError):quarter_line_probabilities([2],2.5,'over')
+    def test_quarter_continuous_sample_refused(self):
+        from quant_foundation import quarter_line_probabilities
+        with self.assertRaisesRegex(ValueError,'INTEGER_OUTCOMES'):
+            quarter_line_probabilities([2.3],2.25,'over')
     def test_game_id_conflicts_retained(self):
         r=audit_rows([dict(BASE),dict(BASE,game_start_utc='2026-11-16T19:20:00-06:00')])
         self.assertEqual(r['retained_rows'],2)

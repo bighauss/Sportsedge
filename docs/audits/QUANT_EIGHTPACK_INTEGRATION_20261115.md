@@ -8,7 +8,7 @@
 - `research/audit/quant_evidence.py`: pregame frozen-prediction **replay**, qualifications census, per-market P/L and Brier/log loss, 5-point probability calibration, matched upstream no-vig baseline only when paired receipt fields supplied, Wilson intervals, deterministic **event-clustered** ROI intervals, original-odds drawdown, exact opposite-side/line/book/time **no-vig arithmetic** checks, duplicate canonical-bet prevention, bias slices, paired frozen-feature ablation and all-inventory market refusal reason display.
 - `research/audit/quant_walkforward_baseline.py`: no-lookahead release-aware **naive binary baseline** (Beta(1,1) posterior win rate), segments exact markets/lines and scores future forecasts, includes pushes/invalid rows in census; never refits v5.
 - `research/audit/quant_capture_preflight.py`: offline create-only manifest of existing private input bytes; row-level pre-kickoff and identity checks, SHA256, source labeling; **never** asserts a hash authenticates a sportsbook. Includes in-memory quota/cache decision policy for admins, not a live network collector.
-- `.github/workflows/quant-eightpack.yml`: no-network Python 3.11 CI for module compilation and 41 synthetic tests (checked locally before PR).
+- `.github/workflows/quant-eightpack.yml`: no-network Python 3.11 CI for module compilation and 42 synthetic tests (checked locally before PR).
 - Original architecture/variable hypothesis and source guide: `docs/audits/SPORTSEDGE_EIGHT_PROMPTS_README.md`.
 
 ## Usage with private files
