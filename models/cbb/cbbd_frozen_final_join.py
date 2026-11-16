@@ -213,7 +213,9 @@ def verify_provider_originals(finals, provider_raw, provider_manifest):
         raise Hold("CBBD_ORIGINAL_BYTE_HASH_MISMATCH")
     provider_rows = decoded(raw)
     if len(provider_rows) != man.get("returned_rows") or \
-       len(provider_rows) != finals.get("row_count"):
+       len(provider_rows) != finals.get("row_count") or \
+       not isinstance(finals.get("rows"), list) or \
+       len(provider_rows) != len(finals["rows"]):
         raise Hold("CBBD_ORIGINAL_ROW_CENSUS_MISMATCH")
     observed = man.get("local_observed_utc")
     if observed != finals.get("local_observed_utc"):
