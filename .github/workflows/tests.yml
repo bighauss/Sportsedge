@@ -15,7 +15,7 @@ jobs:
         run: python -m unittest -v test_guard_probability_safety.py
       - name: PGA point-in-time market preflight
         working-directory: models/pga
-        run: python -m unittest -v test_market_preflight.py test_tournament_sim.py test_snapshot_gate.py test_forward_eval.py test_odds_provider_adapter.py
+        run: python -m unittest -v test_market_preflight.py test_tournament_sim.py test_snapshot_gate.py test_forward_eval.py test_odds_provider_adapter.py test_live_odds_capture.py
       - name: MLB
         working-directory: models/mlb
         run: python make_samples.py && python test_sportsedge_mlb_model.py
