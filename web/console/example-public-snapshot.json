@@ -1,0 +1,608 @@
+{
+  "schema_version": "sportsedge-public-research-v1",
+  "generated_at_utc": "2026-11-15T00:00:00Z",
+  "synthetic": true,
+  "markets": [
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Moneyline",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Spread",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Game total",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Team total",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Halves / quarters",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Alternate lines",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Passing props",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Rushing props",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "Receiving props",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "TD / first TD / 2+ TD",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "NFL",
+      "event_id": "DEMO-NFL-001",
+      "event_label": "Sample Away vs Sample Home",
+      "family": "SGP / specials",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-01T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "Moneyline",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "Spread",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "Game total",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "Team total",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "Halves / quarters",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "Alternate lines",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "Player props",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "TD / specials",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CFB",
+      "event_id": "DEMO-CFB-001",
+      "event_label": "Demo College A vs Demo College B",
+      "family": "SGP",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-02T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "Moneyline",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "Spread",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "Game total",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "Team total",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "First half",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "Alternate lines",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "Player props",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "First basket / specials",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "CBB",
+      "event_id": "DEMO-CBB-001",
+      "event_label": "Demo College C vs Demo College D",
+      "family": "SGP",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-03T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "Moneyline",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "Spread",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "Game total",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "Team total",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "Halves / quarters",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "Alternate lines",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "Player props",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "First basket",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "NBA",
+      "event_id": "DEMO-NBA-001",
+      "event_label": "Demo City A vs Demo City B",
+      "family": "SGP",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-04T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Moneyline",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Run line",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Game total",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Team total",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Innings",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Alternate lines",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Pitcher props",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Hitter props",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "Home run / specials",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "MLB",
+      "event_id": "DEMO-MLB-001",
+      "event_label": "Demo Baseball A vs Demo Baseball B",
+      "family": "SGP",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2027-04-01T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Moneyline",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Puck line",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Game total",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Team total",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Period markets",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Alternate lines",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Skater props",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Goalie props",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "Goal scorer / specials",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "NHL",
+      "event_id": "DEMO-NHL-001",
+      "event_label": "Demo Hockey A vs Demo Hockey B",
+      "family": "SGP",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-05T01:00:00Z"
+    },
+    {
+      "sport": "PGA",
+      "event_id": "DEMO-PGA-001",
+      "event_label": "Demo Golf Event",
+      "family": "Outright",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-06T13:00:00Z"
+    },
+    {
+      "sport": "PGA",
+      "event_id": "DEMO-PGA-001",
+      "event_label": "Demo Golf Event",
+      "family": "First-round leader",
+      "state": "NO_MODEL",
+      "reason": "SYNTHETIC EXAMPLE — no validated model; no real quote or prediction",
+      "event_start_utc": "2026-12-06T13:00:00Z"
+    },
+    {
+      "sport": "PGA",
+      "event_id": "DEMO-PGA-001",
+      "event_label": "Demo Golf Event",
+      "family": "Top finishes",
+      "state": "NO_INPUTS",
+      "reason": "SYNTHETIC EXAMPLE — missing inputs; no real quote or prediction",
+      "event_start_utc": "2026-12-06T13:00:00Z"
+    },
+    {
+      "sport": "PGA",
+      "event_id": "DEMO-PGA-001",
+      "event_label": "Demo Golf Event",
+      "family": "Matchups",
+      "state": "UNSUPPORTED",
+      "reason": "SYNTHETIC EXAMPLE — not supported; no real quote or prediction",
+      "event_start_utc": "2026-12-06T13:00:00Z"
+    },
+    {
+      "sport": "PGA",
+      "event_id": "DEMO-PGA-001",
+      "event_label": "Demo Golf Event",
+      "family": "Round markets",
+      "state": "NO_PROVENANCE",
+      "reason": "SYNTHETIC EXAMPLE — no provenance; no real quote or prediction",
+      "event_start_utc": "2026-12-06T13:00:00Z"
+    },
+    {
+      "sport": "PGA",
+      "event_id": "DEMO-PGA-001",
+      "event_label": "Demo Golf Event",
+      "family": "Player props / specials",
+      "state": "NOT_CAPTURED",
+      "reason": "SYNTHETIC EXAMPLE — not captured; no real quote or prediction",
+      "event_start_utc": "2026-12-06T13:00:00Z"
+    }
+  ],
+  "sources": [
+    {
+      "name": "DraftKings",
+      "state": "NOT_CONNECTED",
+      "note": "No authenticated provider connection in this browser"
+    },
+    {
+      "name": "Independent secondary book",
+      "state": "NOT_CONNECTED",
+      "note": "No second authenticated source connected"
+    },
+    {
+      "name": "BestBook.app",
+      "state": "UNVERIFIED",
+      "note": "Website/link only; no licensed live feed or timestamp proof"
+    },
+    {
+      "name": "Research model inputs",
+      "state": "UNVERIFIED",
+      "note": "No source publication-time attestation"
+    }
+  ],
+  "independent_verification": false,
+  "official_count": 0,
+  "approved_stake_u": 0
+}
