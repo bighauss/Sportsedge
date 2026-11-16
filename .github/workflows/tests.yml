@@ -10,8 +10,12 @@ jobs:
           python-version: "3.12"
       - name: Syntax check (stdlib)
         run: python -m compileall -q models sportsedge
-      - name: Paper result and no-vig CLV ledger (synthetic)
-        run: python -m unittest sportsedge.validation.test_paper_ledger
+      - name: Shared model-market probability guard regression
+        working-directory: models/common
+        run: python -m unittest -v test_guard_probability_safety.py
+      - name: PGA point-in-time market preflight
+        working-directory: models/pga
+        run: python -m unittest -v test_market_preflight.py
       - name: MLB
         working-directory: models/mlb
         run: python make_samples.py && python test_sportsedge_mlb_model.py
@@ -29,4 +33,4 @@ jobs:
         run: python test_cbb.py
       - name: NFL DFS (Showdown and point-in-time replay)
         working-directory: models/nfl_dfs
-        run: python test_showdown_mc.py && python test_public_nfl_gamelogs.py && python test_item4.py && python test_weekly_game_inputs.py
+        run: python test_showdown_mc.py && python test_public_nfl_gamelogs.py && python test_item4.py && python test_weekly_game_inputs.py && python test_markets.py
