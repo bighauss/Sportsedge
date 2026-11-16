@@ -95,6 +95,36 @@ class G18Tests(unittest.TestCase):
                    json.dumps({GAME:{**FINAL, 'away_1h': None}}).encode())
         self.assertEqual(r['row_audit'][0]['status'], 'HALFTIME_NOT_SUPPLIED')
 
+    def test_duplicate_csv_header_is_not_silently_overwritten(self):
+        raw = b'game,pick,price,pick\\nMississippi Valley @ Washington,Washington Under 82.5,-110,Washington Over 82.5\\n'
+        raw = raw.replace(b'\\n', b'\n')
+        with self.assertRaisesRegex(InvalidRecord, 'ORIGINAL_PICKS_SCHEMA_REQUIRED'):
+            replay(raw, json.dumps({GAME: FINAL}).encode())
+
+    def test_duplicate_final_json_key_is_rejected(self):
+        # The duplicate second home result must not overwrite the first.
+        raw = ('{"Mississippi Valley @ Washington":{"away":64,"home":77,"home":200,'
+               '"away_1h":33,"home_1h":43}}').encode()
+        with self.assertRaisesRegex(InvalidRecord, 'DUPLICATE_FINAL_JSON_KEY'):
+            replay(csv_bytes(['Washington Under 82.5']), raw)
+
+    def test_invalid_price_quarantined_and_original_row_retained(self):
+        raw = csv_bytes(['Washington Under 82.5'])
+        broken = raw.replace(b'-110', b'-99')
+        report = replay(broken, json.dumps({GAME: FINAL}).encode())
+        self.assertEqual(report['counts']['total_rows'], 1)
+        self.assertEqual(report['counts']['unresolved'], 1)
+        self.assertEqual(report['counts'].get('graded', 0), 0)
+        self.assertEqual(report['row_audit'][0]['price'], '-99')
+        self.assertEqual(report['row_audit'][0]['status'], 'UNRESOLVED:INVALID_OR_MISSING_AMERICAN_PRICE')
+        self.assertFalse(report['row_audit'][0]['changed'])
+
+    def test_missing_price_quarantined(self):
+        raw = csv_bytes(['Washington Under 82.5']).replace(b'-110', b'')
+        report = replay(raw, json.dumps({GAME: FINAL}).encode())
+        self.assertEqual(report['counts']['unresolved'], 1)
+        self.assertEqual(len(report['row_audit']), 1)
+
     def test_create_only_output(self):
         with tempfile.TemporaryDirectory() as d:
             picks = Path(d)/'picks.csv'; finals = Path(d)/'finals.json';out = Path(d)/'report.json'
