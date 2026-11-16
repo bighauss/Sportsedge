@@ -28,6 +28,26 @@ class InvalidRecord(ValueError):
     pass
 
 
+def _reject_duplicate_json_keys(pairs):
+    unique = {}
+    for key, value in pairs:
+        if key in unique:
+            raise InvalidRecord('DUPLICATE_FINAL_JSON_KEY:' + key)
+        unique[key] = value
+    return unique
+
+
+def _validate_american_price(price):
+    # Retain bad rows, but never silently grade a malformed priced selection.
+    if not isinstance(price, str) or not re.fullmatch(r'[+-]?[0-9]{3,6}', price.strip()):
+        raise InvalidRecord('INVALID_OR_MISSING_AMERICAN_PRICE')
+    value = int(price.strip())
+    if not 100 <= abs(value) <= 100000:
+        raise InvalidRecord('INVALID_OR_MISSING_AMERICAN_PRICE')
+    return value
+
+
+
 def _d(value: str) -> Decimal:
     try:
         n = Decimal(str(value))
@@ -125,13 +145,16 @@ def replay(picks_bytes: bytes, finals_bytes: bytes, *, expected_picks_sha256: st
         raise InvalidRecord('FINALS_DIGEST_MISMATCH')
     try:
         text = picks_bytes.decode('utf-8-sig')
-        finals = json.loads(finals_bytes.decode('utf-8'))
+        finals = json.loads(finals_bytes.decode('utf-8'), object_pairs_hook=_reject_duplicate_json_keys)
+    except InvalidRecord:
+        raise
     except (UnicodeError, ValueError) as e:
         raise InvalidRecord('CORRUPT_SOURCE_FORMAT') from e
     if not isinstance(finals, dict):
         raise InvalidRecord('FINALS_MAP_REQUIRED')
     rd = csv.DictReader(io.StringIO(text, newline=''))
-    if not rd.fieldnames or not {'game', 'pick', 'price'}.issubset(rd.fieldnames):
+    if (not rd.fieldnames or len(rd.fieldnames) != len(set(rd.fieldnames)) or
+            not {'game', 'pick', 'price'}.issubset(rd.fieldnames)):
         raise InvalidRecord('ORIGINAL_PICKS_SCHEMA_REQUIRED')
     records: list[dict] = []
     counts = Counter()
@@ -142,6 +165,7 @@ def replay(picks_bytes: bytes, finals_bytes: bytes, *, expected_picks_sha256: st
         try:
             if None in row or not row.get('game') or not row.get('pick'):
                 raise InvalidRecord('MALFORMED_ROW')
+            _validate_american_price(row.get('price'))
             family, _, _, _ = parse_selection(row['game'], row['pick'])
             item['family'] = family
             if row['game'] not in finals:
