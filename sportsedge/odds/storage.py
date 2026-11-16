@@ -10,6 +10,7 @@ import fcntl
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 
 ALLOWED = frozenset({
@@ -18,6 +19,30 @@ ALLOWED = frozenset({
     "pit_status", "v21_status", "approved_stake_u", "official_counted",
 })
 ZERO = "0" * 64
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def private_log_directory(value):
+    """Refuse checkout-relative and symlinked checkout paths before mkdir."""
+    lexical = Path(os.path.abspath(value))
+    resolved = lexical.resolve()
+    if (lexical == REPOSITORY_ROOT or REPOSITORY_ROOT in lexical.parents
+            or resolved == REPOSITORY_ROOT or REPOSITORY_ROOT in resolved.parents):
+        raise ValueError("RESEARCH_LOG_MUST_BE_PRIVATE_OUTSIDE_PUBLIC_REPO")
+    return resolved
+
+
+def _unique_json_pairs(pairs):
+    out = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError("BROKEN_CHAIN_DUPLICATE_JSON_KEY")
+        out[key] = value
+    return out
+
+
+def _reject_nonfinite(token):
+    raise ValueError("BROKEN_CHAIN_NONFINITE_NUMBER")
 
 
 def canonical(record: dict) -> bytes:
@@ -31,7 +56,7 @@ def record_hash(body: dict) -> str:
 
 class EvidenceChain:
     def __init__(self, directory: str | Path):
-        root = Path(directory).resolve()
+        root = private_log_directory(directory)
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path = root / "research_decisions.jsonl"
         if self.path.is_symlink():
@@ -45,8 +70,15 @@ class EvidenceChain:
             return 0, prev, rows
         for idx, line in enumerate(raw.splitlines(), 1):
             try:
-                row = json.loads(line.decode("utf-8"))
-            except (ValueError, UnicodeError) as exc:
+                row = json.loads(line.decode("utf-8"),
+                                 object_pairs_hook=_unique_json_pairs,
+                                 parse_constant=_reject_nonfinite)
+            except ValueError as exc:
+                if str(exc) in ("BROKEN_CHAIN_DUPLICATE_JSON_KEY",
+                                "BROKEN_CHAIN_NONFINITE_NUMBER"):
+                    raise
+                raise ValueError("BROKEN_CHAIN_JSON") from exc
+            except UnicodeError as exc:
                 raise ValueError("BROKEN_CHAIN_JSON") from exc
             if (not isinstance(row, dict)
                 or set(row) != {"seq", "previous_sha256", "payload", "record_sha256"}):
@@ -55,6 +87,9 @@ class EvidenceChain:
                 raise ValueError("BROKEN_CHAIN_ORDER")
             if not isinstance(row["payload"], dict) or not set(row["payload"]).issubset(ALLOWED):
                 raise ValueError("BROKEN_CHAIN_PAYLOAD")
+            if any(name not in row["payload"] for name in
+                   ("decision_id", "asof_utc", "approved_stake_u", "official_counted")):
+                raise ValueError("BROKEN_CHAIN_REQUIRED_AUDIT_FIELDS")
             if row["payload"].get("approved_stake_u") != 0 or row["payload"].get("official_counted") != 0:
                 raise ValueError("BET_PROMOTION_NOT_ALLOWED_IN_RESEARCH_LOG")
             head = record_hash({k: row[k] for k in ("seq", "previous_sha256", "payload")})
@@ -71,6 +106,8 @@ class EvidenceChain:
             raise ValueError("REFUSE_SYMLINK_EVIDENCE_LOG")
         if not self.path.exists():
             return 0, ZERO
+        if stat.S_IMODE(self.path.stat().st_mode) & 0o077:
+            raise ValueError("RESEARCH_LOG_FILE_PERMISSIONS_TOO_OPEN")
         n, head, _ = self._verify(self.path.read_bytes())
         return n, head
 
@@ -86,6 +123,8 @@ class EvidenceChain:
         flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(self.path, flags, 0o600)
         try:
+            if stat.S_IMODE(os.fstat(fd).st_mode) & 0o077:
+                raise ValueError("RESEARCH_LOG_FILE_PERMISSIONS_TOO_OPEN")
             fcntl.flock(fd, fcntl.LOCK_EX)
             with os.fdopen(fd, "r+b", closefd=False) as f:
                 raw = f.read()
