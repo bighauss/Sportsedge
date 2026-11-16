@@ -1,0 +1,34 @@
+name: Tag approved policy-lock commit
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'RISK_POLICY.md'
+
+permissions:
+  contents: write
+
+jobs:
+  tag-locked-policy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag policy commit once and refuse retarget
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Effective date: 2026-11-15' RISK_POLICY.md
+          grep -Fq 'No silent changes. Any future change requires explicit PR + version bump.' RISK_POLICY.md
+          T=risk-policy-lock-2026-11-15
+          if git show-ref --tags --verify --quiet "refs/tags/$T"; then
+            old="$(git rev-list -n 1 "$T")"
+            test "$old" = "$GITHUB_SHA" || { echo "Policy tag already exists at a different commit; refuse retarget"; exit 1; }
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$T" "$GITHUB_SHA" -m "SportsEdge stricter per-game policy 2026-11-15"
+            git push origin "refs/tags/$T"
+          fi
