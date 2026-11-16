@@ -5,7 +5,7 @@
 ## Scope and rule lock
 
 - Enumerate NFL, CFB, CBB, NBA, MLB, NHL and PGA concurrently.
-- **RUN IT v2.1 mandatory restoration** is the current binding documented risk contract: quarter-Kelly diagnostic, 5u/day, 2u/game, 3u/theme, T−90, repricing, lineup/prop floors and immutable evidence footer. A purported v2.2 configuration is **not an adopted replacement** in this audit; a new rules version requires an explicit owner-approved versioned release, fresh regression tests and no retrospective card rewrites.
+- **The root `RISK_POLICY.md` strictest-of-v2.1/v2.2 lock** is the current binding research-policy contract (`SPORTSEDGE_STRICT_V21_V22_20261115_R1`, merged PR #189): quarter-Kelly diagnostic, 5u/day, **2u/game**, 3u/theme, missing-half shrink/LOW, >12pp gap hold, +200 ML 0.25u diagnostic cap, T−90 and lineage safeguards. Pure v2.2's no-game-cap override conflicts with the stricter lock and is **not adopted**. Historical v2.1 records retain original frozen labels; a new prospective matrix requires the current exact locked ID. Any future risk change needs explicit owner signoff and unseen testing, not a silent manifest label.
 - Existing frozen v5 model and historical prices, forecasts and grades are unchanged. 0u until every per-market A–E gate and signed owner promotion clears.
 - Market inventory is not inferred from the files in the repository. Missing/unsupported markets and zero-evidence families must be explicitly declared; a report may only say **declared**, never **complete**.
 - A shared capture service does not close Gate A across all sports. Every independently admitted sport/market/period must show contemporaneous, authenticated, same-identity DK and independent original book evidence, as required by Issue #10. A BestBook display of DK is not a second upstream source.
@@ -22,7 +22,7 @@ Top-level input must have exactly these fields:
 
     {
       "schema": "sportsedge-seven-sport-market-gates-v1",
-      "rules_version": "RUN_IT_V2_1_MANDATORY_RESTORATION_20261115",
+      "rules_version": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
       "markets": [
         {
           "sport": "NFL",
@@ -53,13 +53,13 @@ Use distinct market_key for lines, player stats, periods or settlement variants 
 | NHL | Integrate xG/goalie/TOI model as a separately gated scoring kernel; distinguish regulation vs overtime settlement | Confirmed goalie status, independent Poisson/overdispersion checks |
 | PGA | Freeze DataGolf adapter only after permitted authorization (or use an approved public alternative); tournament/round joint-simulation and WD/dead-heat rules | Player/field/tee-time source rights, real time-stamped field, tournament-forward calibration |
 | CLV / Gate D | Reuse merged #181/#184 capture-plan/receipt reconciliation and build authentic exact-line TAKE/CLOSE links | 200 settled comparable triples, no backfilled close assumptions |
-| Safety / Gate E | Test owner-v2.1 rule-version drift, source/lineup locks, across-sports exposure and card release veto | 100 real guard-clean cards and separately signed owner approval |
+| Safety / Gate E | Test the exact stricter-of-v2.1/v2.2 policy-version drift, source/lineup locks, across-sports exposure and card release veto | 100 real guard-clean cards and separately signed owner approval |
 
 Each independent PR should contain its own fixtures, tests, source hashes, rollback/failure description, unchanged v5 digest and PAPER/0u assertion. Claim lanes first on Issue #57; one branch per disjoint code area, never simultaneously edit one shared file without handoff.
 
 ## Release precedence
 
-1. Bind and lock a rules version (v2.1 is current); do not allow a user-supplied policy string to create a new executable sizing policy.
+1. Bind and lock a rules version (strictest-of-v2.1/v2.2 R1 is current); do not allow a user-supplied policy string to create a new executable sizing policy.
 2. Independently collect original pregame quote and model/roster receipts **before** the event; archive rejections as well as successes.
 3. Freeze each sport kernel; then register market-family/period-specific chronological calibration folds before their outcomes.
 4. Join genuine same-identity TAKE/CLOSE and final settlements; do not substitute historical regenerated prices.
