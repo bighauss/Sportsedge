@@ -19,6 +19,7 @@ from sportsedge.odds.storage import EvidenceChain
 from .allmarkets_research import (
     Market, SimulationBatch, PriceReceipt, price_market, _time
 )
+from .edge_discovery import evaluate_signal, shortlist_signals
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,9 @@ def run_research_board(
     rows=[]
     for c in candidates:
         priced=price_market(batch,c.market,c.dk_quote,c.dk_other_side,now)
+        # Preserve the underlying simulated probabilities and book comparison;
+        # no EV certification or betting admission is implied by this signal.
+        signal=evaluate_signal(priced,c.market,c.dk_quote,c.dk_other_side)
         dual=DualSourceDecision(
             "BLOCK",("PROVIDER_PROVENANCE_NOT_INDEPENDENTLY_AUTHENTICATED",
                      "SECONDARY_INDEPENDENT_BOOK_NOT_VERIFIED"),
@@ -97,6 +101,7 @@ def run_research_board(
             "market":c.market.identity(),
             "research_state":priced["status"],
             "research_reasons":priced["reasons"],
+            "edge_signal":signal,
             "raw_ev_unverified":priced.get("raw_ev_unverified"),
             "blended_ev_unverified":priced.get("blended_ev_unverified"),
             "guard_state":guard["status"],
@@ -113,6 +118,10 @@ def run_research_board(
         "model_sha256":batch.model_sha256,"feature_sha256":batch.feature_sha256,
         "submitted_candidates":len(candidates),
         "v21_ran_for_all_candidates":True,
+        "guard_checked_count":len(rows),
         "evidence_log_requested":chain is not None,
+        "research_shortlist":shortlist_signals(
+            (i,c.market,rows[i]["edge_signal"]) for i,c in enumerate(candidates)),
+        "research_shortlist_is_verified_edges":False,
         "rows":rows,"official_counted":0,"approved_stake_u":0,"card":None,
     }
