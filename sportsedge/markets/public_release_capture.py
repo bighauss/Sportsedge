@@ -17,7 +17,8 @@ import os
 import re
 import sys
 
-from .source_ingestion import parse_snapshot_bytes
+from .source_ingestion import parse_snapshot_bytes, SourceReceipt
+from .nfl_pbp_streaming import scan_pbp_gzip
 
 REPO="nflverse/nflverse-data"
 REPOSITORY_ROOT=Path(__file__).resolve().parents[2]
@@ -94,7 +95,21 @@ def capture_public_release(asset_id:str, destination:Path | str, *,
         raise ValueError("PROVIDER_RELEASE_DATE_MISSING") from exc
     if claimed_updated>now:
         raise ValueError("FUTURE_DATED_PROVIDER_RELEASE")
-    receipt,rows=parse_snapshot_bytes(metadata["source_id"],raw,claimed_updated,now)
+    if asset_id == "NFL_PBP_2026":
+        # Large PBP CSV is validated as a bounded gzip stream. Do not
+        # materialize tens of thousands of 372-column rows or assume the
+        # generic small-CSV 80MB decompressed budget covers the full season.
+        header, row_count = scan_pbp_gzip(raw)
+        receipt = SourceReceipt(
+            metadata["source_id"], now, claimed_updated, digest,
+            len(raw), row_count, header,
+        )
+        scan_mode = "BOUNDED_STREAMING_GZIP_CSV"
+    else:
+        receipt, _ = parse_snapshot_bytes(
+            metadata["source_id"], raw, claimed_updated, now,
+        )
+        scan_mode = "GENERIC_CSV_OR_GZIP"
     dest.mkdir(mode=0o700,parents=True,exist_ok=True)
     final=dest / (metadata["asset_id"]+"_"+digest.split(":")[1][:16]+".csv.gz")
     flags=os.O_CREAT|os.O_EXCL|os.O_WRONLY|getattr(os,"O_NOFOLLOW",0)
@@ -113,6 +128,7 @@ def capture_public_release(asset_id:str, destination:Path | str, *,
         "original_bytes_sha256":receipt.sha256_raw,
         "provider_digest":metadata["provider_digest"],
         "size":receipt.bytes_length,"rows":receipt.record_count,
+        "source_schema_scan_mode":scan_mode,
         "provider_updated_at_claim":metadata["updated_at"],
         "retrieved_at_utc":now.isoformat(),
         "actual_data_coverage_checked":False,
