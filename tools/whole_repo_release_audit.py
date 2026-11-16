@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+import math
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -48,8 +50,22 @@ def parse_unique_json(raw: bytes):
     def nonfinite(raw_value):
         raise ValueError("NONFINITE_JSON:" + raw_value)
 
+    def finite_float(raw_value):
+        # JSON exponent syntax may overflow/underflow Python float silently.
+        # Do not allow nonfinite or rounded-to-zero audit evidence.
+        try:
+            exact = Decimal(raw_value)
+            value = float(raw_value)
+        except (InvalidOperation, ValueError, OverflowError) as exc:
+            raise ValueError("NONFINITE_JSON:" + raw_value) from exc
+        if not math.isfinite(value):
+            raise ValueError("NONFINITE_JSON:" + raw_value)
+        if value == 0 and exact != 0:
+            raise ValueError("UNDERFLOW_JSON:" + raw_value)
+        return value
+
     return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
-                      parse_constant=nonfinite)
+                      parse_constant=nonfinite, parse_float=finite_float)
 
 
 def audit(repo: Path, *, matrix: dict, freeze: dict,
