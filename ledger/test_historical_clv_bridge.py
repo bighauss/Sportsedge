@@ -315,5 +315,60 @@ class Tests(unittest.TestCase):
         self.assertEqual(r["close_observed_utc"],newer.observed.isoformat())
         self.assertIsNone(r["clv_probability_points"])
 
+    def test_excess_csv_fields_rejected_not_silently_discarded(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"extra.csv"
+            with path.open("w",newline="") as f:
+                w=csv.writer(f);w.writerow(FIELDS)
+                w.writerow([BASE[k] for k in FIELDS]+["EXTRA_PRICE"])
+            with self.assertRaisesRegex(Blocked,"CSV_EXTRA_FIELDS"):
+                load_csv(path,"TAKE")
+
+    def test_truncated_csv_row_rejected_with_reason(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"short.csv"
+            with path.open("w",newline="") as f:
+                w=csv.writer(f);w.writerow(FIELDS)
+                w.writerow([BASE[k] for k in FIELDS][:-1])
+            with self.assertRaisesRegex(Blocked,"CSV_TRUNCATED_ROW"):
+                load_csv(path,"TAKE")
+
+    def test_blank_middle_csv_row_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"blank.csv"
+            with path.open("w",newline="") as f:
+                w=csv.writer(f);w.writerow(FIELDS)
+                f.write("\n")
+                w.writerow([BASE[k] for k in FIELDS])
+            with self.assertRaisesRegex(Blocked,"EMPTY_CSV_RECORD"):
+                load_csv(path,"TAKE")
+
+    def test_malformed_quoted_csv_record_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"malformed.csv"
+            path.write_bytes((','.join(FIELDS)+'\n"unfinished quote\n').encode())
+            with self.assertRaisesRegex(Blocked,"MALFORMED_CSV_RECORD"):
+                load_csv(path,"TAKE")
+
+    def test_valid_utf8_csv_with_quoted_text_is_still_accepted(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"quoted.csv"
+            content={**BASE, "event_id":'event,source-2026'}
+            with path.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=FIELDS)
+                w.writeheader()
+                w.writerow(content)
+            parsed,digest=load_csv(path,"TAKE")
+            self.assertEqual(len(parsed),1)
+            self.assertEqual(parsed[0].event_id,'event,source-2026')
+            self.assertEqual(digest,hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_non_utf8_csv_returns_blocked_not_unicode_crash(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"bytes.csv"
+            path.write_bytes(b'\xff\xfe')
+            with self.assertRaisesRegex(Blocked,"NON_UTF8_CSV"):
+                load_csv(path,"TAKE")
+
 if __name__ == "__main__":
     unittest.main()
