@@ -68,5 +68,19 @@
     "path": "engine/sportsedge_v5.py",
     "git_blob_sha1": "e7f282e2ece2506227fed1681aab9c33607e50bc",
     "original_sha256": "72ccaad75b066315f31137f40556321b7057a28119760a6a0b1c2e28da78e02f"
+  },
+  "risk_contract": {
+    "path": "research/risk/v21_risk_contract.py",
+    "git_blob_sha1": "f9758c771e1f4f482c5cad889c1883b5626ce9ae",
+    "limits": {
+      "daily_u": 5,
+      "game_u": 2,
+      "theme_u": 3,
+      "quarter_kelly": 0.25,
+      "initial_min_u": 0.25,
+      "initial_max_u": 1.5,
+      "model_blend": 0.3,
+      "market_blend": 0.7
+    }
   }
 }
