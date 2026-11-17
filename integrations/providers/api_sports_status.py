@@ -45,6 +45,8 @@ def probe_status(*, key: str | None = None, opener=urlopen, now=None) -> dict:
             if not isinstance(data.get("response"), dict):
                 raise ProviderStatusError("PROVIDER_STATUS_RESPONSE_MISSING")
             captured = (now or (lambda: datetime.now(timezone.utc)))()
+            if not isinstance(captured, datetime):
+                raise ProviderStatusError("CAPTURE_CLOCK_INVALID")
             if captured.tzinfo is None or captured.utcoffset() != timezone.utc.utcoffset(captured):
                 raise ProviderStatusError("CAPTURE_CLOCK_NOT_UTC")
             return {
