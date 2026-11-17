@@ -58,3 +58,13 @@ class AdditionalStatusTests(unittest.TestCase):
                     2026, 11, 17, tzinfo=timezone(timedelta(hours=-6))
                 ),
             )
+
+    def test_malformed_clock_callback_fails_closed(self):
+        for bad_clock in ("not-a-datetime", None, 123):
+            with self.subTest(clock=bad_clock):
+                with self.assertRaisesRegex(ProviderStatusError, "CAPTURE_CLOCK_INVALID"):
+                    probe_status(
+                        key="secret",
+                        opener=lambda *a, **k: FakeResponse(b'{"response":{}}'),
+                        now=lambda value=bad_clock: value,
+                    )
