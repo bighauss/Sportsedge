@@ -159,60 +159,24 @@ class PrivateBridgeTests(unittest.TestCase):
         self.assertIn("ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH", report["rows"][0]["reason"])
 
     def test_original_selection_boolean_cannot_equal_integer(self):
-        # A JSON boolean is not the integer event identity in original bytes.
-        original = self.attempt["originals"]["take"]
-        body = json.loads(Path(original["path"]).read_text())
-        body["selection"]["event_id"] = 1
-        self.attempt["selection"]["event_id"] = True
-        # Keep other original selections consistent with claimed selection so
-        # this specifically probes the take-original nested equality.
-        for key in ("forecast", "close", "outcome"):
-            ref = self.attempt["originals"][key]
-            doc = json.loads(Path(ref["path"]).read_text())
-            doc["selection"]["event_id"] = True
-            raw = json.dumps(doc).encode()
-            Path(ref["path"]).write_bytes(raw)
-            ref["sha256"] = digest(raw)
-            if key == "forecast":
-                self.attempt["model"]["forecast_sha256"] = digest(raw)
-            elif key == "close":
-                self.attempt["close"]["sha256"] = digest(raw)
-            else:
-                self.attempt["outcome"]["sha256"] = digest(raw)
-        raw = json.dumps(body).encode()
-        Path(original["path"]).write_bytes(raw)
-        original["sha256"] = digest(raw)
-        self.attempt["take"]["sha256"] = digest(raw)
-        _, report = transform(self.raw(self.attempt))
-        self.assertIn("ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH",
-                      report["rows"][0]["reason"])
+        # Directly isolate original-byte selection binding before downstream
+        # canonical-ID validation, which may independently reject the claim.
+        from integrations.observability.private_source_bridge import _exact_document
+        raw = json.dumps({"schema": "TEST", "selection": {"event_id": 1}}).encode()
+        with self.assertRaisesRegex(BridgeHold, "ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH"):
+            _exact_document(raw, "TEST", {"event_id": True}, {})
 
     def test_original_selection_float_cannot_equal_integer(self):
-        # Nested numeric representation must be exact even when Python == agrees.
-        original = self.attempt["originals"]["take"]
-        body = json.loads(Path(original["path"]).read_text())
-        body["selection"]["line"] = 1
-        self.attempt["selection"]["line"] = 1.0
-        for key in ("forecast", "close", "outcome"):
-            ref = self.attempt["originals"][key]
-            doc = json.loads(Path(ref["path"]).read_text())
-            doc["selection"]["line"] = 1.0
-            raw = json.dumps(doc).encode()
-            Path(ref["path"]).write_bytes(raw)
-            ref["sha256"] = digest(raw)
-            if key == "forecast":
-                self.attempt["model"]["forecast_sha256"] = digest(raw)
-            elif key == "close":
-                self.attempt["close"]["sha256"] = digest(raw)
-            else:
-                self.attempt["outcome"]["sha256"] = digest(raw)
-        raw = json.dumps(body).encode()
-        Path(original["path"]).write_bytes(raw)
-        original["sha256"] = digest(raw)
-        self.attempt["take"]["sha256"] = digest(raw)
-        _, report = transform(self.raw(self.attempt))
-        self.assertIn("ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH",
-                      report["rows"][0]["reason"])
+        from integrations.observability.private_source_bridge import _exact_document
+        raw = json.dumps({"schema": "TEST", "selection": {"line": 1}}).encode()
+        with self.assertRaisesRegex(BridgeHold, "ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH"):
+            _exact_document(raw, "TEST", {"line": 1.0}, {})
+
+    def test_nested_list_boolean_cannot_equal_integer(self):
+        from integrations.observability.private_source_bridge import _exact_document
+        raw = json.dumps({"schema": "TEST", "selection": {"ids": [1]}}).encode()
+        with self.assertRaisesRegex(BridgeHold, "ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH"):
+            _exact_document(raw, "TEST", {"ids": [True]}, {})
 
     def test_forged_quote_clock_fails_without_regenerating_original(self):
         self.attempt["take"]["captured_utc"] = "2026-11-15T17:32:00Z"
