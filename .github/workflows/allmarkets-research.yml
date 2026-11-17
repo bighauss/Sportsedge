@@ -32,5 +32,7 @@ jobs:
         run: python -m unittest sportsedge.markets.test_cli -v
       - name: Verify five-sport slate reconciliation and blocked-market inventory
         run: python -m unittest sportsedge.markets.test_slate_orchestrator -v
+      - name: Fail-closed independent projection receipt coverage (seven sports)
+        run: python -m unittest sportsedge.markets.test_independent_projection_gate -v
       - name: Verify old v5 intake/policy and all-sport quote math tests
         run: python -m unittest research.audits.test_multisport_quote_ev_regressions sportsedge.odds.test_issue10_offline -q
