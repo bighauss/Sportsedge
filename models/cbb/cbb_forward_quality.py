@@ -175,6 +175,12 @@ def audit_full_cbb_board(rows, *, expected_attempted_rows):
             block_all("MISSING_OR_DUPLICATE_MIRRORED_SIDE_ALL_COPIES")
             continue
         a,b=items
+        if pair[2]=="SPREAD":
+            la=Decimal(rows[a["index"]]["market"][5])
+            lb=Decimal(rows[b["index"]]["market"][5])
+            if la != -lb:
+                block_all("SPREAD_MIRROR_LINE_NOT_OPPOSITE")
+                continue
         if (a["take"]!=b["opposite"] or b["take"]!=a["opposite"] or
             a["taken"]!=b["taken"] or a["forecast_sig"]!=b["forecast_sig"] or
             a["take_sig"]!=b["take_sig"] or
