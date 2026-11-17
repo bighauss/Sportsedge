@@ -143,24 +143,56 @@ def screen_cbb_disagreement(signal: dict | None, *, availability: dict | None) -
 
 
 def cbb_direction_diagnostic(rows: list[dict]) -> dict:
-    """Inspect candidate shortlist directions without inventing balanced picks."""
-    counts = Counter()
-    for x in rows:
-        if x.get("quality_state") != "RESEARCH_SCREEN_ONLY":
+    """One model-favored direction per paired market, including quarantines.
+
+    Uses the signed no-vig gap, never mirrors both sides into the denominator.
+    This diagnoses concentration but does not reverse, fit, or balance picks.
+    """
+    favored = {}
+    for row in rows:
+        market = row.get("market", ())
+        signal = row.get("edge_signal") or row.get("quarantined_signal")
+        if not signal or len(market) != 10 or market[0] != "CBB":
             continue
-        market = x.get("market", ())
-        if len(market) < 6 or market[0] != "CBB":
-            continue
-        kind, side, line = market[2], market[4], market[5]
-        if kind in ("TOTAL", "TEAM_TOTAL"):
-            counts["OVER" if side == "OVER" else "UNDER"] += 1
-        elif kind == "SPREAD":
-            try:
-                value = float(line)
-            except (TypeError, ValueError):
+        try:
+            gap = float(signal["model_minus_market_pp"])
+            if not math.isfinite(gap) or gap <= 0:
                 continue
-            counts["UNDERDOG" if value > 0 else "FAVORITE" if value < 0 else "PICKEM"] += 1
-    total = sum(counts.values())
-    return {"direction_counts":dict(sorted(counts.items())), "n":total,
-            "one_sided_warning":total >= 10 and any(n/total >= .85 for n in counts.values()),
+            kind, line = market[2], market[5]
+            normalized = str(abs(float(line))) if kind == "SPREAD" else line
+        except (TypeError, ValueError, KeyError):
+            continue
+        pair = (*market[:4], normalized, *market[6:])
+        if pair not in favored or gap > favored[pair][0]:
+            favored[pair] = (gap, market, signal,
+                            row.get("quality_state") == "QUARANTINED_PAPER_CBB")
+    counts = Counter()
+    quarantined = 0
+    for gap, market, signal, held in favored.values():
+        kind, side, line = market[2], market[4], market[5]
+        if held:
+            quarantined += 1
+        if kind in ("TOTAL", "TEAM_TOTAL"):
+            counts[side] += 1
+        elif kind == "SPREAD":
+            x = float(line)
+            counts["UNDERDOG" if x > 0 else "FAVORITE" if x < 0 else "PICKEM"] += 1
+        elif kind == "ML":
+            odds = signal.get("quoted_american_unverified")
+            if type(odds) is int:
+                counts["UNDERDOG" if odds > 0 else "FAVORITE"] += 1
+    count = sum(counts.values())
+    # Separate side and totals. A card with five unders and five underdogs
+    # is two unanimous directions, not a spurious 50/50 combined sample.
+    side_count = counts["FAVORITE"] + counts["UNDERDOG"]
+    total_count = counts["OVER"] + counts["UNDER"]
+    warning = any(
+        n >= 10 and max(a, b) / n >= .85
+        for n, a, b in ((side_count, counts["FAVORITE"], counts["UNDERDOG"]),
+                        (total_count, counts["OVER"], counts["UNDER"]))
+    )
+    return {"direction_counts": dict(sorted(counts.items())), "n": count,
+            "unique_model_favored_markets":len(favored),
+            "quarantined_model_favored_markets":quarantined,
+            "one_sided_warning":warning,
             "warning_is_not_fitted_bias_correction":True}
