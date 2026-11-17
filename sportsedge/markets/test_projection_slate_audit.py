@@ -19,7 +19,7 @@ def make_receipt(source_slate, priced_slate):
     generated = freeze + timedelta(seconds=1)
     published = freeze - timedelta(seconds=60)
     return {
-        "market_identity": market,
+        "market_identity": list(market),
         "forecast": {
             "origin": "SPORTSEDGE_INDEPENDENT",
             "model_sha256": event["research_model_sha256"],
