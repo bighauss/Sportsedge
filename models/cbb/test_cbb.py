@@ -70,6 +70,36 @@ def main():
     assert "HCA +3.5" in n1 and "away travel/b2b -0.75" in n1 and "Star Beta out" in n1, n1
     assert "altitude" in n2 and "Guard Gamma questionable" in n2, n2
     assert 100 < p1["total"] < 190 and 100 < p2["total"] < 190
+    # Identity regression: identical names across teams must never bind by first match.
+    twin = {
+        "Alpha": [{"player": "Twin", "team": "Alpha", "player_id": "a-1"}],
+        "Beta": [{"player": "Twin", "team": "Beta", "player_id": "b-1"}],
+        "BYU": [{"player": "Outside", "team": "BYU", "player_id": "c-1"}],
+    }
+    game = {"home": "Alpha", "away": "Beta"}
+    found, why = m.resolve_prop_player(game, {"player": "Twin"}, twin)
+    assert found is None and why == "AMBIGUOUS_PROP_PLAYER"
+    found, why = m.resolve_prop_player(game, {"player": "Twin", "team": "Alpha"}, twin)
+    assert found["player_id"] == "a-1" and why is None
+    found, why = m.resolve_prop_player(game, {"player": "Twin", "player_id": "b-1"}, twin)
+    assert found["team"] == "Beta" and why is None
+    found, why = m.resolve_prop_player(game, {"player": "Outside"}, twin)
+    assert found is None and why == "PROP_PLAYER_NOT_ON_EVENT_ROSTER"
+    found, why = m.resolve_prop_player(game, {"player": "Twin", "team": "BYU"}, twin)
+    assert found is None and why == "PROP_TEAM_NOT_IN_EVENT"
+    found, why = m.resolve_prop_player(game, {"player": "Twin", "player_id": "missing"}, twin)
+    assert found is None and why == "PROP_PLAYER_NOT_ON_EVENT_ROSTER"
+    # Same-name ambiguity is also quarantined by the card runner, not silently priced.
+    with open(inputs["players"], newline="") as pf:
+        existing = list(csv.DictReader(pf))
+    dup = dict(existing[0]); dup["team"] = "Beta"
+    w("players", existing + [dup])
+    alt = m.run_card(inputs, out_dir=tempfile.mkdtemp())
+    assert any("AMBIGUOUS_PROP_PLAYER:C1:Star Alpha" in x for x in alt["dropped"])
+    assert not any(r["bet"].startswith("Star Alpha") for r in alt["rows"])
+    # Restore source fixture for any following test runs.
+    w("players", existing)
+
     # odds math
     assert abs(m.am_to_dec(-110) - 1.909090909) < 1e-6 and m.am_to_dec(150) == 2.5
     assert abs(m.novig(-110, -110) - 0.5) < 1e-9
