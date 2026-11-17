@@ -1,5 +1,4 @@
 """Synthetic contract tests; never evidence of real provider access or +EV."""
-import copy
 import unittest
 
 from sportsedge.markets.independent_projection_gate import audit_projection, census
@@ -124,6 +123,15 @@ class TestIndependentProjectionGate(unittest.TestCase):
         self.assert_blocked(row, "CORRELATED_EVENT_DISTRIBUTION_MISSING")
         row["forecast"]["joint_distribution_sha256"] = C
         self.assertTrue(audit_projection(row)["research_projection_usable"])
+
+    def test_malformed_identity_and_feature_roles_block_without_crash(self):
+        row = candidate()
+        row["market"]["sport"] = ["NFL"]
+        self.assert_blocked(row, "UNKNOWN_SPORT_OR_EVENT")
+        self.assertEqual(census([row])["submitted"], 1)
+        row = candidate()
+        row["forecast"]["feature_sources"][0]["kind"] = ["SPORTSBOOK_ODDS"]
+        self.assert_blocked(row, "BOOKMAKER_OR_FOREIGN_FORECAST_FEATURE_FORBIDDEN")
 
     def test_census_keeps_every_rejected_candidate_in_denominator(self):
         row1, row2, row3 = candidate("NFL"), candidate("NBA"), candidate("CBB")
