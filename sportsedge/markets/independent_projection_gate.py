@@ -78,7 +78,12 @@ def _utc(value: object) -> datetime | None:
 
 
 def _unit(value: object) -> bool:
-    return type(value) in (float, int) and math.isfinite(value) and 0 <= value <= 1
+    if type(value) not in (float, int):
+        return False
+    try:
+        return math.isfinite(float(value)) and 0 <= value <= 1
+    except (OverflowError, ValueError):
+        return False
 
 
 def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = None) -> dict:
@@ -160,7 +165,11 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
         block("MODEL_WIN_PUSH_PROBABILITIES_INVALID")
     if "projected_mean" in forecast:
         mean = forecast["projected_mean"]
-        if type(mean) not in (int, float) or not math.isfinite(mean):
+        try:
+            finite_mean = type(mean) in (int, float) and math.isfinite(float(mean))
+        except (OverflowError, ValueError):
+            finite_mean = False
+        if not finite_mean:
             block("PROJECTED_MEAN_INVALID")
 
     if isinstance(family, str):
@@ -169,7 +178,7 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
             if sport == "PGA":
                 if (type(player_id) is not str or not player_id or
                         not isinstance(frozen_roster, dict) or
-                        player_id not in frozen_roster):
+                        frozen_roster.get(player_id) != event_id):
                     block("PGA_FROZEN_FIELD_ID_UNBOUND")
             elif (type(player_id) is not str or not player_id or
                     type(team_id) is not str or not team_id or
@@ -185,7 +194,7 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
             if (type(ids) is not list or len(ids) != count or
                     any(type(i) is not str or not i for i in ids) or
                     len(set(ids)) != count or not isinstance(frozen_roster, dict)
-                    or any(i not in frozen_roster for i in ids)):
+                    or any(frozen_roster.get(i) != event_id for i in ids)):
                 block("PGA_MATCHUP_FROZEN_FIELD_UNBOUND")
         if family == "SGP":
             legs = market.get("leg_ids")
@@ -199,7 +208,7 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
             block("ORDERED_SCORING_EVENTS_MISSING")
         if family in COUNT_FAMILIES and not _sha(forecast.get("count_distribution_sha256")):
             block("MULTI_EVENT_COUNT_DISTRIBUTION_MISSING")
-    if period != "FG" and period in PERIODS and not _sha(forecast.get("period_distribution_sha256")):
+    if type(period) is str and period != "FG" and period in PERIODS and not _sha(forecast.get("period_distribution_sha256")):
         block("INDEPENDENT_PERIOD_DISTRIBUTION_MISSING")
 
     return {
