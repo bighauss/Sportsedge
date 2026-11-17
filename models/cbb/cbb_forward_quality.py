@@ -108,9 +108,10 @@ def _validate(row):
     feature_pub=_time(row.get("feature_published_utc"))
     feature_obs=_time(row.get("feature_captured_utc"))
     freeze=_time(row.get("forecast_frozen_utc"))
+    take_published=_time(row.get("take_published_utc"))
     taken=_time(row.get("take_observed_utc"))
     start=_time(row.get("event_start_utc"))
-    if not feature_pub<=feature_obs<=freeze<=taken<start:
+    if not feature_pub<=feature_obs<=freeze<=take_published<=taken<start:
         raise Blocked("LOOKAHEAD_OR_LATE_TAKE")
     if type(row.get("selected")) is not bool:
         raise Blocked("ORIGINAL_SELECTION_BOOLEAN_REQUIRED")
@@ -124,13 +125,16 @@ def _validate(row):
         if not start<pub<=obs:
             raise Blocked("PREMATURE_FINAL_OR_MISSING_RECEIPT")
     close=None
-    fields=("close_american","close_opposite_american","close_observed_utc","close_source_sha256")
+    fields=("close_american","close_opposite_american","close_published_utc",
+            "close_observed_utc","close_source_sha256")
     if any(row.get(k) is not None for k in fields):
         if not all(row.get(k) is not None for k in fields):
             raise Blocked("PARTIAL_CLOSE_NOT_REPAIRED")
         _hash(row["close_source_sha256"])
         close=(_price(row["close_american"]),_price(row["close_opposite_american"]),
                _time(row["close_observed_utc"]))
+        if not take_published<=_time(row["close_published_utc"])<=close[2]:
+            raise Blocked("CLOSE_RELEASE_AFTER_OBSERVATION")
         if not taken<=close[2]<start or (start-close[2]).total_seconds()>3600:
             raise Blocked("STALE_OR_LATE_CLOSE")
     return dict(pair=pair,side=side,model_p=p,take=take,opposite=opposite,
