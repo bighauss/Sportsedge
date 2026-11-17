@@ -12,6 +12,7 @@ def pair(event="E",delta=0,selected=False,close=False,grade=True):
         "feature_published_utc":"2026-11-16T16:00:00Z",
         "feature_captured_utc":"2026-11-16T16:30:00Z",
         "forecast_frozen_utc":"2026-11-16T17:00:00Z",
+        "take_published_utc":"2026-11-16T17:00:30Z",
         "take_observed_utc":"2026-11-16T17:01:00Z",
         "event_start_utc":"2026-11-16T20:00:00Z",
         "final_published_utc":"2026-11-16T22:00:00Z" if grade else None,
@@ -28,6 +29,7 @@ def pair(event="E",delta=0,selected=False,close=False,grade=True):
         if close:
             x.update(close_american=-115 if side=="OVER" else -105,
                      close_opposite_american=-105 if side=="OVER" else -115,
+                     close_published_utc="2026-11-16T19:39:00Z",
                      close_observed_utc="2026-11-16T19:40:00Z",
                      close_source_sha256=H)
         rows.append(x)
