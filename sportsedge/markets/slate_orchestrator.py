@@ -32,6 +32,7 @@ from .cli import (
 from .allmarkets_research import SPORTS, PERIODS
 from .bestbook_slate_overlay import apply_bestbook_public_reference
 from .weather_slate_overlay import attach_weather_references, load_triplets
+from .projection_slate_audit import attach_independent_projection_audit
 
 # These sports are schedule/inventory ONLY. The five-sport pricing kernel does
 # not price NHL/PGA markets and must never be invoked for them.
@@ -61,7 +62,7 @@ FAMILIES = {
 }
 ALLOWED_ROOT = frozenset({
     "schema", "slate_id", "slate_date_ct", "sports",
-    "expected_events", "event_inputs",
+    "expected_events", "event_inputs", "projection_evidence",
 })
 EXPECTED_KEYS = frozenset({"sport", "event_id", "start_utc"})
 INPUT_KEYS = frozenset({"sport", "event_id", "manifest"})
@@ -191,7 +192,10 @@ def _simple_reason(exc):
 
 
 def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=None, weather_triplets=None):
-    _exact(manifest, ALLOWED_ROOT, "root")
+    if not isinstance(manifest, dict):
+        raise ValueError("INVALID_SLATE_FIELDS:root")
+    _exact({k:v for k,v in manifest.items() if k!="projection_evidence"},
+           ALLOWED_ROOT-{"projection_evidence"}, "root")
     if manifest["schema"] != SCHEMA:
         raise ValueError("UNSUPPORTED_SLATE_SCHEMA")
     slate_id=manifest["slate_id"]
@@ -335,6 +339,8 @@ def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=No
                     status="PAPER_0U_RESEARCH_ONLY",
                     reasons=["QUOTES_AND_MODEL_NOT_INDEPENDENTLY_AUTHENTICATED",
                              "V21_AND_ISSUE10_RELEASE_GATES_STILL_OPEN"],
+                    research_model_sha256=result.get("model_sha256"),
+                    research_feature_sha256=result.get("feature_sha256"),
                     model_method=result.get("model_projection_method"),
                     pit_status=result.get("pit_file_manifest_status"),
                     research_rows=rows,
@@ -390,7 +396,11 @@ def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=No
     # only after every existing price/model/risk decision has finished.
     if weather_triplets is not None:
         result=attach_weather_references(result,weather_triplets,now_utc=when)
-    return result
+    # Pure post-pricing annotation: original research signals remain PAPER/0u.
+    # Absent independent receipts are BLOCKED individually; never infer our
+    # probabilities from the DK price or a third-party forecast.
+    return attach_independent_projection_audit(
+        result, manifest.get("projection_evidence", []))
 
 
 def main(argv=None):
