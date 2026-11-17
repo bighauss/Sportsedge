@@ -122,7 +122,30 @@ class TestIndependentProjectionGate(unittest.TestCase):
         row = candidate(family="SGP")
         self.assert_blocked(row, "CORRELATED_EVENT_DISTRIBUTION_MISSING")
         row["forecast"]["joint_distribution_sha256"] = C
+        self.assert_blocked(row, "SGP_EXACT_LEG_IDENTITIES_REQUIRED")
+        row["market"]["leg_ids"] = ["NFL:event:ml", "NFL:event:total"]
         self.assertTrue(audit_projection(row)["research_projection_usable"])
+
+    def test_sport_specific_market_and_period_require_valid_contract(self):
+        row = candidate("CBB", period="1Q")
+        self.assert_blocked(row, "SPORT_PERIOD_UNSUPPORTED")
+        row = candidate("NBA", family="FIRST_TD")
+        self.assert_blocked(row, "SPORT_MARKET_FAMILY_UNSUPPORTED")
+        row = candidate("MLB", family="UNKNOWN_MARKET")
+        self.assert_blocked(row, "SPORT_MARKET_FAMILY_UNSUPPORTED")
+
+    def test_pga_field_binding_not_a_fake_team_assignment(self):
+        row = candidate("PGA", family="OUTRIGHT")
+        row["market"]["player_id"] = "golfer-1"
+        self.assert_blocked(row, "PGA_FROZEN_FIELD_ID_UNBOUND")
+        self.assertTrue(audit_projection(row, {"golfer-1": "field-1"})["research_projection_usable"])
+        row = candidate("PGA", family="THREE_BALL")
+        row["forecast"]["joint_distribution_sha256"] = C
+        self.assert_blocked(row, "PGA_MATCHUP_FROZEN_FIELD_UNBOUND")
+        row["market"]["participant_ids"] = ["golfer-1", "golfer-2", "golfer-3"]
+        self.assertTrue(audit_projection(row, {
+            "golfer-1": "field-1", "golfer-2": "field-1", "golfer-3": "field-1",
+        })["research_projection_usable"])
 
     def test_malformed_identity_and_feature_roles_block_without_crash(self):
         row = candidate()
