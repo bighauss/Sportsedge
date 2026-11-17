@@ -839,6 +839,8 @@ def render_markdown(rows, context):
         for i, r in enumerate([x for x in rows if x["type"] == typ], 1):
             fire = " 🔥" if r["stars"] >= 4 else ""
             who = r.get("player") or r["game"]
+            if r.get("book"):
+                who += " [" + r["book"] + "]"
             ln = "" if r["line"] is None or r["market"] in ("ML", "F5_ML", "NRFI") else f" {r['line']:+g}" if r["market"] == "RL" else f" {r['line']:g}"
             play = f"{who} {MARKET_NAMES.get(r['market'])} {r['selection']}{ln}{fire}"
             out.append(f"| {i} | {play} | {r['price']:+d} | {r['model_p']:.1%} / {r['p_blend']:.1%} | "
