@@ -158,6 +158,26 @@ class PrivateBridgeTests(unittest.TestCase):
         _, report = transform(self.raw(self.attempt))
         self.assertIn("ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH", report["rows"][0]["reason"])
 
+    def test_original_selection_boolean_cannot_equal_integer(self):
+        # Directly isolate original-byte selection binding before downstream
+        # canonical-ID validation, which may independently reject the claim.
+        from integrations.observability.private_source_bridge import _exact_document
+        raw = json.dumps({"schema": "TEST", "selection": {"event_id": 1}}).encode()
+        with self.assertRaisesRegex(BridgeHold, "ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH"):
+            _exact_document(raw, "TEST", {"event_id": True}, {})
+
+    def test_original_selection_float_cannot_equal_integer(self):
+        from integrations.observability.private_source_bridge import _exact_document
+        raw = json.dumps({"schema": "TEST", "selection": {"line": 1}}).encode()
+        with self.assertRaisesRegex(BridgeHold, "ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH"):
+            _exact_document(raw, "TEST", {"line": 1.0}, {})
+
+    def test_nested_list_boolean_cannot_equal_integer(self):
+        from integrations.observability.private_source_bridge import _exact_document
+        raw = json.dumps({"schema": "TEST", "selection": {"ids": [1]}}).encode()
+        with self.assertRaisesRegex(BridgeHold, "ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH"):
+            _exact_document(raw, "TEST", {"ids": [True]}, {})
+
     def test_forged_quote_clock_fails_without_regenerating_original(self):
         self.attempt["take"]["captured_utc"] = "2026-11-15T17:32:00Z"
         _, report = transform(self.raw(self.attempt))
