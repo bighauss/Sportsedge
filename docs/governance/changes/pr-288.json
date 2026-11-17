@@ -3,10 +3,7 @@
   "pr_number": 288,
   "base_commit": "e552761d4474c58cd4f5f204b8af4a0cae123ea0",
   "protected_paths": [
-    ".github/workflows/api-sports-status-offline.yml",
-    "integrations/providers/api_sports_status.py",
-    "integrations/providers/test_api_sports_status.py",
-    "integrations/providers/test_api_sports_status_failure_modes.py"
+    ".github/workflows/api-sports-status-offline.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
   "change_summary": "Read-only bounded API-SPORTS football account-status metadata probe, eight offline adversarial tests, and explicit CI invocation; no sportsbook original odds, no credential access, no live provider call.",
@@ -26,7 +23,7 @@
   },
   "baseline": {
     "metric": "authenticated original bookmaker quote receipts",
-    "before": 0,
+    "before": null,
     "unit": "verified receipts",
     "source_state": "UNKNOWN"
   },
