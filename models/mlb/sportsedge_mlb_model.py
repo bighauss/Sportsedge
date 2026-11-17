@@ -643,11 +643,48 @@ MARKET_NAMES = {"ML": "Moneyline", "RL": "Run line", "TOTAL": "Total", "TT_AWAY"
                 "K": "Pitcher Ks", "OUTS": "Pitcher outs", "HITS": "Hits", "TB": "Total bases", "HR": "Home run"}
 
 
+def preflight_game_inputs(inp, game):
+    """Structural lineup/starter guard; does not authenticate source timestamps.
+
+    A price must not be presented from a fabricated league-average starter or
+    a partial/duplicate batting order. Confirmation still needs Gate B receipts.
+    """
+    problems = []
+    gid = game["game_id"]
+    pitchers, batters = inp.get("pitchers", {}), inp.get("batters", {})
+    lineups = inp.get("lineups", [])
+    for side in ("away", "home"):
+        team = game[side]
+        starter_id = str(game.get(side + "_sp_id") or "").strip()
+        starter = pitchers.get(starter_id)
+        if not starter_id or not starter:
+            problems.append(side.upper() + "_STARTER_MISSING")
+        elif starter.get("team") and starter["team"] != team:
+            problems.append(side.upper() + "_STARTER_TEAM_MISMATCH")
+        entries = [r for r in lineups if r.get("game_id") == gid and r.get("team") == team]
+        try:
+            slots = [int(r["slot"]) for r in entries]
+        except (KeyError, ValueError, TypeError):
+            slots = []
+        ids = [str(r.get("player_id") or "").strip() for r in entries]
+        if sorted(slots) != list(range(1, 10)) or len(set(ids)) != 9:
+            problems.append(side.upper() + "_LINEUP_NOT_NINE_DISTINCT_SLOTS")
+        for player_id in ids:
+            b = batters.get(player_id)
+            if not player_id or not b:
+                problems.append(side.upper() + "_BATTER_ID_NOT_FOUND")
+            elif b.get("team") and b["team"] != team:
+                problems.append(side.upper() + "_BATTER_TEAM_MISMATCH")
+    return sorted(set(problems))
+
+
 def _pair_game_odds(odds_rows, gid):
     rows = [r for r in odds_rows if r["game_id"] == gid]
     pairs = {}
     for r in rows:
-        key = (r["market"], abs(_num(r.get("line"), 0) or 0))
+        # Opposing prices MUST originate from the same book as well as line.
+        key = (r["market"], abs(_num(r.get("line"), 0) or 0),
+               str(r.get("book") or "").strip().upper())
         pairs.setdefault(key, []).append(r)
     # A pair must be complementary and have one captured price per selection.
     # Equal prices or equal row counts do not establish a valid two-sided book.
@@ -689,11 +726,15 @@ def run_card(inputs, out_dir=None, min_ev=0.0):
     card, context = [], []
     for g in inp["games"]:
         gid = g["game_id"]
+        problems = preflight_game_inputs(inp, g)
+        if problems:
+            context.append(f"**{g['away']} @ {g['home']}** UNPRICED_MISSING_INPUT: " + ",".join(problems))
+            continue
         proj = project_game(inp, g)
         f, proj_vals, extra = price_game(proj, g)
         context.append(_context_line(g, proj, extra))
         # --- game markets
-        for (mkt, _), sides in _pair_game_odds(inp["odds"], gid).items():
+        for (mkt, _line, quote_book), sides in _pair_game_odds(inp["odds"], gid).items():
             if len(sides) != 2:
                 continue
             imp = [implied(s["price"]) for s in sides]
@@ -704,7 +745,7 @@ def run_card(inputs, out_dir=None, min_ev=0.0):
                 if p is None:
                     continue
                 row = {"game_id": gid, "game": f"{g['away']}@{g['home']}", "type": "game", "market": mkt,
-                       "selection": s["selection"], "line": line, "price": int(float(s["price"])),
+                       "book": quote_book, "selection": s["selection"], "line": line, "price": int(float(s["price"])),
                        "projection": proj_vals.get(mkt), "signal_side": ""}
                 # Models report P(win | no push); carry push mass separately.
                 if mkt in ("RL", "F5_ML"):
@@ -738,6 +779,7 @@ def run_card(inputs, out_dir=None, min_ev=0.0):
             for sel, p, nvp, price in (("over", p_over, nv_over, po["over_price"]),
                                        ("under", 1 - p_over, nv_under, po["under_price"])):
                 row = {"game_id": gid, "game": f"{g['away']}@{g['home']}", "type": "prop", "market": po["market"],
+                       "book": str(po.get("book") or "").strip().upper(),
                        "selection": sel, "line": line, "price": int(float(price)), "player": label,
                        "projection": round(blend_mean, 2), "model_mean": round(mmean, 2),
                        "market_mean": round(mkt_mean, 2), "signal_side": sigside}
@@ -771,7 +813,7 @@ def _context_line(g, proj, extra):
             f"Pen pitches L3: {g['away']} {h['bp_p3']:.0f}, {g['home']} {a['bp_p3']:.0f}")
 
 
-CSV_COLS = ["rank", "stars", "game", "type", "market", "player", "selection", "line", "price", "projection",
+CSV_COLS = ["rank", "stars", "game", "type", "market", "book", "player", "selection", "line", "price", "projection",
             "model_p", "nv_p", "p_blend", "ev_raw", "ev_blend", "stack_flag"]
 
 
@@ -781,7 +823,7 @@ def write_csv(rows, path):
         w.writerow(CSV_COLS)
         for i, r in enumerate(rows, 1):
             w.writerow([i, r["stars"], r["game"], r["type"], MARKET_NAMES.get(r["market"], r["market"]),
-                        r.get("player", ""), r["selection"], r["line"], r["price"],
+                        r.get("book", ""), r.get("player", ""), r["selection"], r["line"], r["price"],
                         "" if r["projection"] is None else round(r["projection"], 2),
                         round(r["model_p"], 4), round(r["nv_p"], 4), round(r["p_blend"], 4),
                         round(r["ev_raw"], 4), round(r["ev_blend"], 4), r["stack_flag"]])
