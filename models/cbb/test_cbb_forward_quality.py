@@ -82,6 +82,54 @@ class TestForwardQuality(unittest.TestCase):
         self.assertEqual(out["paired_graded_markets"],1)
         self.assertIn("BOTH_MIRRORED_SIDES_SELECTED_NO_ROI_COUNT",out["rows"][0]["selection_warning"])
 
+    def test_selected_close_tracks_presented_side_not_best_side(self):
+        rows=pair(close=True)
+        rows[1]["selected"]=True  # UNDER, although model prefers OVER
+        out=audit_full_cbb_board(rows,expected_attempted_rows=2)
+        self.assertLess(out["selected_close_no_vig_shift_pp_mean_research"],0)
+        self.assertGreater(out["best_side_close_no_vig_shift_pp_mean_research"],0)
+        self.assertEqual(out["selected_close_coverage"],1)
+        self.assertAlmostEqual(out["selected_model_brier"],.45**2)
+
+    def test_missing_and_blocked_closes_stay_in_selected_denominator(self):
+        rows=pair("A",selected=True,close=True)+pair("B",selected=True)
+        bad=pair("C",selected=True);bad[0]["feature_sha256"]=""
+        rows+=bad
+        out=audit_full_cbb_board(rows,expected_attempted_rows=len(rows))
+        self.assertEqual(out["selected_attempted_rows"],3)
+        self.assertEqual(out["selected_matched_close_rows"],1)
+        self.assertAlmostEqual(out["selected_close_coverage"],1/3)
+        self.assertEqual(out["selected_scored_count"],2)
+
+    def test_event_weighting_and_direction_strata(self):
+        rows=pair("A",selected=True)+pair("A",delta=.2,selected=True)+pair("B",delta=-.2,selected=True)
+        for r in rows[2:4]:r["market"][5]="151.5"
+        out=audit_full_cbb_board(rows,expected_attempted_rows=6)
+        self.assertAlmostEqual(out["selected_event_weighted_model_brier"],((.45**2+.25**2)/2+.65**2)/2)
+        self.assertEqual(out["selected_unique_events"],2)
+        self.assertEqual(out["selected_direction_diagnostics"][0]["direction"],"OVER")
+        self.assertEqual(out["selected_direction_diagnostics"][0]["graded_rows"],3)
+
+    def test_no_selected_data_is_null_not_zero_edge(self):
+        out=audit_full_cbb_board(pair(),expected_attempted_rows=2)
+        self.assertIsNone(out["selected_close_coverage"])
+        self.assertIsNone(out["selected_model_brier"])
+        self.assertIsNone(out["selected_close_no_vig_shift_pp_mean_research"])
+
+    def test_ambiguous_selected_pair_cannot_supply_close_evidence(self):
+        rows=pair(selected=True,close=True);rows[1]["selected"]=True
+        out=audit_full_cbb_board(rows,expected_attempted_rows=2)
+        self.assertEqual(out["selected_attempted_rows"],2)
+        self.assertEqual(out["selected_matched_close_rows"],0)
+        self.assertEqual(out["selected_close_coverage"],0)
+
+    def test_unsettled_selection_can_have_close_but_not_brier(self):
+        rows=pair(selected=True,close=True,grade=False)
+        out=audit_full_cbb_board(rows,expected_attempted_rows=2)
+        self.assertEqual(out["selected_close_coverage"],1)
+        self.assertIsNone(out["selected_model_brier"])
+        self.assertEqual(out["counted_forward_rows"],0)
+
     def test_expected_full_board_denominator_must_match(self):
         with self.assertRaisesRegex(Blocked,"CENSUS_MISMATCH"):
             audit_full_cbb_board(pair(),expected_attempted_rows=3)

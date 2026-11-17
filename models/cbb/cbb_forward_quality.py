@@ -144,6 +144,32 @@ def _validate(row):
                 take_sig=row["take_source_sha256"],raw_ev=p*_decimal_odds(take)-1)
 
 
+def _direction(item, row):
+    kind=item["pair"][2]
+    if kind=="SPREAD":
+        line=Decimal(row["market"][5])
+        return "UNDERDOG" if line>0 else "FAVORITE" if line<0 else "PICKEM"
+    if kind=="ML":
+        return "UNDERDOG" if item["take"]>item["opposite"] else "FAVORITE" if item["take"]<item["opposite"] else "PICKEM"
+    return item["side"]
+
+
+def _score_summary(records):
+    # Each event contributes equally to the event-weighted diagnostic.
+    events=defaultdict(list)
+    for event,p,m,y in records:
+        events[event].append(((p-y)**2,(m-y)**2))
+    return {
+        "graded_rows":len(records), "unique_events":len(events),
+        "model_brier":mean((p-y)**2 for _,p,m,y in records) if records else None,
+        "market_brier":mean((m-y)**2 for _,p,m,y in records) if records else None,
+        "predicted":mean(p for _,p,m,y in records) if records else None,
+        "observed":mean(y for _,p,m,y in records) if records else None,
+        "event_weighted_model_brier":mean(mean(x[0] for x in v) for v in events.values()) if events else None,
+        "event_weighted_market_brier":mean(mean(x[1] for x in v) for v in events.values()) if events else None,
+    }
+
+
 def audit_full_cbb_board(rows, *, expected_attempted_rows):
     if (not isinstance(rows,list) or type(expected_attempted_rows) is not int or
             expected_attempted_rows!=len(rows)):
@@ -169,6 +195,8 @@ def audit_full_cbb_board(rows, *, expected_attempted_rows):
             entry["reason"]=str(exc)
         ledger.append(entry)
     scored=[];chosen=[];selected_returns=[];moves=[];extremes=[];direction=Counter()
+    selected_scores=[];selected_moves=[];selected_groups=defaultdict(list)
+    selected_attempted=sum(isinstance(r,dict) and r.get("selected") is True for r in rows)
     for pair,items in groups.items():
         def block_all(reason):
             for item in items:
@@ -227,16 +255,38 @@ def audit_full_cbb_board(rows, *, expected_attempted_rows):
         if len(selected)>1:
             for x in selected:
                 ledger[x["index"]]["selection_warning"]="BOTH_MIRRORED_SIDES_SELECTED_NO_ROI_COUNT"
-        elif selected and selected[0]["outcome"] is not None:
+        elif selected:
             x=selected[0]
-            selected_returns.append(_decimal_odds(x["take"])-1 if x["outcome"] else -1)
+            selected_m=m if x is canonical else 1-m
+            if x["outcome"] is not None:
+                selected_returns.append(_decimal_odds(x["take"])-1 if x["outcome"] else -1)
+                record=(pair[1],x["model_p"],selected_m,x["outcome"])
+                selected_scores.append(record)
+                selected_groups[(pair[2],pair[3],_direction(x,rows[x["index"]]))].append(record)
+            if x["close"] is not None:
+                close_m=_implied(x["close"][0])/(_implied(x["close"][0])+_implied(x["close"][1]))
+                selected_moves.append((close_m-selected_m)*100)
         if best["close"] is not None:
             p_close=_implied(best["close"][0])/(
                 _implied(best["close"][0])+_implied(best["close"][1]))
             moves.append((p_close-best_m)*100)
     model=mean(x[1] for x in scored) if scored else None
     market=mean(x[2] for x in scored) if scored else None
+    selected_summary=_score_summary(selected_scores)
     return {
+        "selected_attempted_rows":selected_attempted,
+        "selected_unique_events":selected_summary["unique_events"],
+        "selected_model_brier":selected_summary["model_brier"],
+        "selected_no_vig_market_brier":selected_summary["market_brier"],
+        "selected_event_weighted_model_brier":selected_summary["event_weighted_model_brier"],
+        "selected_event_weighted_market_brier":selected_summary["event_weighted_market_brier"],
+        "selected_matched_close_rows":len(selected_moves),
+        "selected_close_coverage":len(selected_moves)/selected_attempted if selected_attempted else None,
+        "selected_close_no_vig_shift_pp_mean_research":mean(selected_moves) if selected_moves else None,
+        "selected_direction_diagnostics":[
+            {"market_kind":kind,"period":period,"direction":label,**_score_summary(records)}
+            for (kind,period,label),records in sorted(selected_groups.items())],
+        "market_devig_method":"PROPORTIONAL_RESEARCH_NOT_POWER_V1",
         "state":"PAPER_0U_RESEARCH_UNAUTHENTICATED","input_rows":len(rows),
         "output_rows":len(ledger),
         "row_states":dict(sorted(Counter(x["state"] for x in ledger).items())),
@@ -260,6 +310,9 @@ def audit_full_cbb_board(rows, *, expected_attempted_rows):
             "EVENT_DEPENDENT_MARKETS_NOT_INDEPENDENT_TRIALS",
             "NO_FITTED_PLAYER_AVAILABILITY_COEFFICIENTS",
             "NO_AUTO_CALIBRATION_OR_PROMOTION",
+            "SELECTED_CLOSE_COVERAGE_INCLUDES_BLOCKED_SELECTED_INPUT_ROWS",
+            "CLOSE_SHIFT_IS_SAME_LINE_PROBABILITY_POINTS_NOT_EXECUTED_RETURN",
+            "DIRECTION_STRATA_DESCRIPTIVE_NOT_CAUSAL_OR_REFIT_EVIDENCE",
         ],
     }
 
