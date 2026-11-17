@@ -105,14 +105,14 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
         block("UNKNOWN_SPORT_OR_EVENT")
     if type(family) is not str or FAMILY.fullmatch(family) is None:
         block("UNKNOWN_MARKET_FAMILY")
-    elif sport in SPORTS and not (
+    elif type(sport) is str and sport in SPORTS and not (
         family in SPORT_FAMILIES[sport] or
         (family.startswith("PLAYER_PROP:") and "PLAYER_PROP" in SPORT_FAMILIES[sport])
     ):
         block("SPORT_MARKET_FAMILY_UNSUPPORTED")
     if type(period) is not str or period not in PERIODS:
         block("UNKNOWN_PERIOD")
-    elif sport in SPORTS and period not in PERIODS_BY_SPORT[sport]:
+    elif type(sport) is str and sport in SPORTS and period not in PERIODS_BY_SPORT[sport]:
         block("SPORT_PERIOD_UNSUPPORTED")
     if type(market.get("settlement_id")) is not str or not market["settlement_id"].strip():
         block("MARKET_SETTLEMENT_UNKNOWN")
@@ -205,7 +205,7 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
     return {
         "status": "BLOCK" if reasons else "PAPER_0U_MODEL_PROJECTION_UNVERIFIED",
         "reasons": reasons if reasons else ["MODEL_ORIGINALITY_AND_CALIBRATION_NOT_EXTERNALLY_VERIFIED"],
-        "sport": sport if sport in SPORTS else None,
+        "sport": sport if type(sport) is str and sport in SPORTS else None,
         "event_id": event_id if type(event_id) is str else None,
         "market_family": family if type(family) is str else None,
         "period": period if type(period) is str else None,
