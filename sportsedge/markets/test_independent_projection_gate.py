@@ -49,7 +49,7 @@ class TestIndependentProjectionGate(unittest.TestCase):
                 roster = None
                 if sport == "PGA":
                     row["market"]["player_id"] = "golfer-1"
-                    roster = {"golfer-1": "field-1"}
+                    roster = {"golfer-1": "synthetic-event-1"}
                 out = audit_projection(row, roster)
                 self.assertEqual(out["status"], "PAPER_0U_MODEL_PROJECTION_UNVERIFIED")
                 self.assertTrue(out["research_projection_usable"])
@@ -95,6 +95,17 @@ class TestIndependentProjectionGate(unittest.TestCase):
             row["forecast"]["p_push"] = push
             with self.subTest(win=win, push=push):
                 self.assert_blocked(row, "MODEL_WIN_PUSH_PROBABILITIES_INVALID")
+
+    def test_pathological_json_numbers_and_period_types_block(self):
+        row = candidate()
+        row["forecast"]["p_win"] = 10 ** 1000
+        self.assert_blocked(row, "MODEL_WIN_PUSH_PROBABILITIES_INVALID")
+        row = candidate()
+        row["forecast"]["projected_mean"] = 10 ** 1000
+        self.assert_blocked(row, "PROJECTED_MEAN_INVALID")
+        row = candidate()
+        row["market"]["period"] = ["4Q"]
+        self.assert_blocked(row, "UNKNOWN_PERIOD")
 
     def test_player_prop_needs_stat_and_independent_frozen_roster(self):
         row = candidate(sport="NBA", family="PLAYER_PROP:POINTS")
@@ -143,13 +154,13 @@ class TestIndependentProjectionGate(unittest.TestCase):
         row = candidate("PGA", family="OUTRIGHT")
         row["market"]["player_id"] = "golfer-1"
         self.assert_blocked(row, "PGA_FROZEN_FIELD_ID_UNBOUND")
-        self.assertTrue(audit_projection(row, {"golfer-1": "field-1"})["research_projection_usable"])
+        self.assertTrue(audit_projection(row, {"golfer-1": "synthetic-event-1"})["research_projection_usable"])
         row = candidate("PGA", family="THREE_BALL")
         row["forecast"]["joint_distribution_sha256"] = C
         self.assert_blocked(row, "PGA_MATCHUP_FROZEN_FIELD_UNBOUND")
         row["market"]["participant_ids"] = ["golfer-1", "golfer-2", "golfer-3"]
         self.assertTrue(audit_projection(row, {
-            "golfer-1": "field-1", "golfer-2": "field-1", "golfer-3": "field-1",
+            "golfer-1": "synthetic-event-1", "golfer-2": "synthetic-event-1", "golfer-3": "synthetic-event-1",
         })["research_projection_usable"])
 
     def test_malformed_identity_and_feature_roles_block_without_crash(self):
