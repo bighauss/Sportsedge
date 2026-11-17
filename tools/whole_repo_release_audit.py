@@ -109,6 +109,8 @@ def audit(repo: Path, *, matrix: dict, freeze: dict,
     matrix_date = matrix.get("asof_date_ct")
     try:
         parsed_matrix_date = date.fromisoformat(matrix_date)
+        if parsed_matrix_date.isoformat() != matrix_date:
+            raise ValueError("NONCANONICAL_MATRIX_DATE")
     except (ValueError, TypeError):
         blockers.append("MATRIX_ASOF_INVALID")
     else:
