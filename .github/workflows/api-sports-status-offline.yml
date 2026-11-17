@@ -1,0 +1,19 @@
+name: API-SPORTS status offline contract
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  api-sports-status-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run API-SPORTS status contract and failure-mode tests
+        run: |
+          python -m unittest -v integrations.providers.test_api_sports_status integrations.providers.test_api_sports_status_failure_modes
