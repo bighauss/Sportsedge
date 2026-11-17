@@ -1,0 +1,68 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 287,
+  "base_commit": "49baa06ce3a427024b61764e645f1d6984c210f6",
+  "protected_paths": [
+    ".github/workflows/cbb-forward-quality.yml",
+    "models/cbb/cbb_forward_quality.py",
+    "models/cbb/test_cbb_forward_quality.py",
+    "sportsedge/markets/cbb_quality_gate.py",
+    "sportsedge/markets/run_it_research.py",
+    "sportsedge/markets/test_cbb_quality_gate.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/192",
+  "change_summary": "Fail-closed CBB PIT availability integration, bidirectional extreme-disagreement research quarantine, exact mirrored market Brier/CLV research diagnostics, test and workflow; frozen v5 and official risk untouched.",
+  "assumptions": [
+    "Original authorized pregame roster, sportsbook source and final receipts are not independently authenticated by this PR.",
+    "The shape-valid roster input is not a fitted CBB availability or point-impact model.",
+    "All one-sided selection bias and forward Brier comparisons remain unverified PAPER / 0u research.",
+    "No model weights or historical decision records are modified; market-specific A-E gates remain open."
+  ],
+  "agent_identity": "ChatGPT GPT-6 CBB engineering lane",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Counted original CBB forward rows beating no-vig market Brier",
+    "before": null,
+    "unit": "authenticated forward decisions",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest sportsedge.markets.test_cbb_quality_gate sportsedge.markets.test_run_it_research",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "49baa06ce3a427024b61764e645f1d6984c210f6",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest sportsedge.markets.test_run_it_research"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
