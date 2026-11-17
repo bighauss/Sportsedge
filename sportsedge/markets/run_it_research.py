@@ -20,7 +20,10 @@ from .allmarkets_research import (
     Market, SimulationBatch, PriceReceipt, price_market, _time
 )
 from .edge_discovery import evaluate_signal, shortlist_signals
-from .cbb_quality_gate import screen_cbb_disagreement, cbb_direction_diagnostic
+from .cbb_quality_gate import (
+    CBBBlocked, audit_cbb_availability, screen_cbb_disagreement,
+    cbb_direction_diagnostic,
+)
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,22 @@ def run_research_board(
     now=_time(decision_at_utc)
     if len({x.market.identity() for x in candidates})!=len(candidates):
         raise ValueError("DUPLICATE_BET_ON_SAME_CARD")
+    # Do not trust a caller-provided "state": only raw event, roster and
+    # observations can pass the structural PIT preflight. No external source
+    # attestation or injury-effect fit is asserted by the preflight.
+    cbb_receipt=None
+    if batch.sport=="CBB":
+        try:
+            if not isinstance(cbb_availability,dict) or set(cbb_availability)!={
+                "event","roster","observations"}:
+                raise CBBBlocked("RAW_CBB_AVAILABILITY_INPUT_REQUIRED")
+            cbb_receipt=audit_cbb_availability(**cbb_availability)
+            if cbb_receipt["event_id"]!=batch.event_id:
+                raise CBBBlocked("CBB_AVAILABILITY_EVENT_ID_MISMATCH")
+        except (CBBBlocked,TypeError,KeyError,ValueError) as exc:
+            cbb_receipt={"state":"BLOCK","problems":[{"reason":str(exc)}],
+                         "independent_source_attested":False,
+                         "may_change_frozen_projection":False}
     rows=[]
     for c in candidates:
         priced=price_market(batch,c.market,c.dk_quote,c.dk_other_side,now)
@@ -76,7 +95,7 @@ def run_research_board(
         quarantined_signal=None
         if batch.sport=="CBB":
             allowed,quality_reasons=screen_cbb_disagreement(
-                signal,availability=cbb_availability)
+                signal,availability=cbb_receipt)
             quality_state=("RESEARCH_SCREEN_ONLY" if allowed else
                            "QUARANTINED_PAPER_CBB")
             if not allowed:
@@ -148,8 +167,9 @@ def run_research_board(
             (i,c.market,rows[i]["edge_signal"]) for i,c in enumerate(candidates)),
         "research_shortlist_is_verified_edges":False,
         "cbb_availability_state":(
-            cbb_availability.get("state","INVALID") if isinstance(cbb_availability,dict)
-            else "MISSING") if batch.sport=="CBB" else None,
+            cbb_receipt["state"] if batch.sport=="CBB" else None),
+        "cbb_availability_problems":(
+            cbb_receipt.get("problems",[]) if batch.sport=="CBB" else None),
         "cbb_direction_diagnostic":(
             cbb_direction_diagnostic(rows) if batch.sport=="CBB" else None),
         "rows":rows,"official_counted":0,"approved_stake_u":0,"card":None,
