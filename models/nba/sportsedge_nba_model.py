@@ -243,44 +243,65 @@ def price_game_market(r, proj):
 
 # ----------------------------- props -----------------------------------------
 def project_players(data, projs):
-    """minutes redistribution for injured players, blowout cut, usage bump"""
+    """Calculate each player separately for each event; never key only by name.
+
+    Original minutes/usage math remains unchanged. Structural matching is not
+    authentication of player roster status or source-publication time.
+    """
     out = {}
     by_team = {}
     for p in data["players"]:
         by_team.setdefault(p["team"], []).append(dict(p))
-    inj = {r["player"]: INJ_PROB.get(r["status"].upper(), 0) for r in data["injuries"]}
-    for team, plist in by_team.items():
-        proj = next((x for x in projs.values() if team in (x["home"], x["away"])), None)
-        if not proj:
-            continue
-        for p in plist:
-            p["min"] = _num(p["minutes"]) * (1 - inj.get(p["player"], 0))
-            p["use"] = _num(p["usage"])
-        for miss in plist:
-            lost = _num(miss["minutes"]) - miss["min"]
-            if lost <= 0:
+    # An injury on one team must not affect a same-name player on another.
+    inj = {(r["team"], r["player"]): INJ_PROB.get(r["status"].upper(), 0)
+           for r in data["injuries"]}
+    for gid, proj in projs.items():
+        for team in (proj["home"], proj["away"]):
+            if team not in by_team:
                 continue
-            mates = [q for q in plist if q is not miss and inj.get(q["player"], 0) < 1]
-            same = [q for q in mates if q["pos"] == miss["pos"]]
-            # 60% of lost minutes to same position, 40% to everyone (all if no same-pos)
-            for grp, share in ((same, SAME_POS_SHARE if same else 0), (mates, 1 - (SAME_POS_SHARE if same else 0))):
-                tot = sum(_num(q["minutes"]) for q in grp) or 1
-                for q in grp:
-                    q["min"] = min(MAX_MIN, q["min"] + lost * share * _num(q["minutes"]) / tot)
-            lost_use = miss["use"] * lost / max(_num(miss["minutes"]), 1)
-            tu = sum(q["use"] for q in mates) or 1
-            for q in mates:   # usage bump is per-minute, applied while sharing floor
-                q["use"] += lost_use * q["use"] / tu * 0.5
-        spread = abs(proj["margin"])
-        cut = min(BLOWOUT_CAP, max(0, spread - BLOWOUT_SPREAD) * BLOWOUT_CUT_PER_PT)
-        opp = proj["away"] if team == proj["home"] else proj["home"]
-        team_pace = regress(_num(data["teams"][team]["pace"]), _num(data["teams"][team]["games"]), LG_PACE)
-        for p in plist:
-            if _num(p["starter"]):
-                p["min"] *= 1 - cut
-            p["opp"], p["pace_f"], p["blowout_cut"] = opp, proj["pace"] / team_pace, cut
-            out[p["player"]] = p
+            plist = [dict(p) for p in by_team[team]]
+            for p in plist:
+                p["min"] = _num(p["minutes"]) * (1 - inj.get((team, p["player"]), 0))
+                p["use"] = _num(p["usage"])
+            for miss in plist:
+                lost = _num(miss["minutes"]) - miss["min"]
+                if lost <= 0:
+                    continue
+                mates = [q for q in plist if q is not miss
+                         and inj.get((team, q["player"]), 0) < 1]
+                same = [q for q in mates if q["pos"] == miss["pos"]]
+                # Retain the original 60/40 minutes and 0.5 usage redistribution.
+                for grp, share in ((same, SAME_POS_SHARE if same else 0),
+                                   (mates, 1 - (SAME_POS_SHARE if same else 0))):
+                    tot = sum(_num(q["minutes"]) for q in grp) or 1
+                    for q in grp:
+                        q["min"] = min(MAX_MIN, q["min"] + lost * share * _num(q["minutes"]) / tot)
+                lost_use = miss["use"] * lost / max(_num(miss["minutes"]), 1)
+                tu = sum(q["use"] for q in mates) or 1
+                for q in mates:
+                    q["use"] += lost_use * q["use"] / tu * 0.5
+            spread = abs(proj["margin"])
+            cut = min(BLOWOUT_CAP, max(0, spread - BLOWOUT_SPREAD) * BLOWOUT_CUT_PER_PT)
+            opp = proj["away"] if team == proj["home"] else proj["home"]
+            team_pace = regress(_num(data["teams"][team]["pace"]),
+                                _num(data["teams"][team]["games"]), LG_PACE)
+            for p in plist:
+                if _num(p["starter"]):
+                    p["min"] *= 1 - cut
+                p["opp"], p["pace_f"], p["blowout_cut"] = opp, proj["pace"] / team_pace, cut
+                key = (gid, team, p["player"], str(p.get("player_id") or "").strip())
+                # Duplicated same-subject roster entries are ambiguous, not last-write wins.
+                out[key] = None if key in out else p
+    # Backwards-compatible alias only for a uniquely resolved player in one event.
+    by_name = {}
+    for key, p in out.items():
+        if p is not None:
+            by_name.setdefault(p["player"], []).append(p)
+    for name, matches in by_name.items():
+        if len(matches) == 1:
+            out[name] = matches[0]
     return out
+
 
 def prop_mean(p, stat, posdef):
     pd = posdef.get((p["opp"], p["pos"]), {})
@@ -297,10 +318,29 @@ def prop_sd(stat, mean):
     a, b = PROP_SD[stat]
     return a + b * mean
 
+def resolve_prop_player(prop, players):
+    """Require exactly one bound event/team/player/optional stable-ID tuple."""
+    event = str(prop.get("game_id") or "")
+    name = str(prop.get("player") or "").strip()
+    team = str(prop.get("team") or "").strip()
+    player_id = str(prop.get("player_id") or "").strip()
+    if not event or not (name or player_id):
+        return None
+    matches = [
+        p for key, p in players.items()
+        if isinstance(key, tuple) and len(key) == 4 and p is not None
+        and key[0] == event
+        and (not team or key[1] == team)
+        and (not name or key[2] == name)
+        and (not player_id or key[3] == player_id)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def price_props(data, players):
     rows = []
     for r in data["props"]:
-        p = players.get(r["player"])
+        p = resolve_prop_player(r, players)
         if not p or p["min"] <= 0:
             continue
         stat, line = r["stat"].upper(), _num(r["line"])
