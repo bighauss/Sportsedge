@@ -16,10 +16,30 @@ SPORTS = frozenset({"NFL", "CFB", "CBB", "NBA", "MLB", "NHL", "PGA"})
 SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
 IDENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
 FAMILY = re.compile(r"[A-Z][A-Z0-9_:]{0,63}\Z")
-PERIODS = frozenset({
-    "FG", "1H", "2H", "1Q", "2Q", "3Q", "4Q",
-    "1P", "2P", "3P", "F5", "1IN", "R1", "R2", "R3", "R4",
-})
+PERIODS_BY_SPORT = {
+    "NFL": frozenset({"FG", "1H", "2H", "1Q", "2Q", "3Q", "4Q"}),
+    "CFB": frozenset({"FG", "1H", "2H", "1Q", "2Q", "3Q", "4Q"}),
+    "CBB": frozenset({"FG", "1H", "2H"}),
+    "NBA": frozenset({"FG", "1H", "2H", "1Q", "2Q", "3Q", "4Q"}),
+    "MLB": frozenset({"FG", "F5", "1IN"}),
+    "NHL": frozenset({"FG", "1P", "2P", "3P"}),
+    "PGA": frozenset({"FG", "R1", "R2", "R3", "R4"}),
+}
+PERIODS = frozenset().union(*PERIODS_BY_SPORT.values())
+BASE = frozenset({"ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP", "DFS"})
+SPORT_FAMILIES = {
+    "NFL": BASE | {"ATTD", "FIRST_TD", "TD_2PLUS", "SGP"},
+    "CFB": BASE | {"ATTD", "FIRST_TD", "TD_2PLUS", "SGP"},
+    "CBB": BASE | {"FIRST_BASKET", "SGP"},
+    "NBA": BASE | {"FIRST_BASKET", "SGP"},
+    "MLB": BASE | {"NRFI", "YRFI", "SGP"},
+    "NHL": BASE | {"PERIOD_MARKET", "GOALIE_SAVES", "FIRST_GOAL", "SGP"},
+    "PGA": frozenset({"OUTRIGHT", "TOP5", "TOP10", "TOP20",
+                      "MAKE_CUT", "MISS_CUT", "MATCHUP", "THREE_BALL",
+                      "ROUND_LEADER", "FIRST_ROUND_LEADER", "ROUND_SCORE",
+                      "TOURNAMENT_SCORE", "BIRDIES", "BOGEYS", "EAGLES",
+                      "HOLE_IN_ONE", "DFS"}),
+}
 # Source roles describe the actual feature content, not the vendor name.
 # Original bookmaker prices and other services' finished predictions are not
 # independent model features even if the owner possesses a permitted copy.
@@ -85,8 +105,15 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
         block("UNKNOWN_SPORT_OR_EVENT")
     if type(family) is not str or FAMILY.fullmatch(family) is None:
         block("UNKNOWN_MARKET_FAMILY")
+    elif sport in SPORTS and not (
+        family in SPORT_FAMILIES[sport] or
+        (family.startswith("PLAYER_PROP:") and "PLAYER_PROP" in SPORT_FAMILIES[sport])
+    ):
+        block("SPORT_MARKET_FAMILY_UNSUPPORTED")
     if type(period) is not str or period not in PERIODS:
         block("UNKNOWN_PERIOD")
+    elif sport in SPORTS and period not in PERIODS_BY_SPORT[sport]:
+        block("SPORT_PERIOD_UNSUPPORTED")
     if type(market.get("settlement_id")) is not str or not market["settlement_id"].strip():
         block("MARKET_SETTLEMENT_UNKNOWN")
 
@@ -139,7 +166,12 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
     if isinstance(family, str):
         if family.startswith("PLAYER_PROP") or family in PLAYER_FAMILIES:
             player_id, team_id = market.get("player_id"), market.get("team_id")
-            if (type(player_id) is not str or not player_id or
+            if sport == "PGA":
+                if (type(player_id) is not str or not player_id or
+                        not isinstance(frozen_roster, dict) or
+                        player_id not in frozen_roster):
+                    block("PGA_FROZEN_FIELD_ID_UNBOUND")
+            elif (type(player_id) is not str or not player_id or
                     type(team_id) is not str or not team_id or
                     not isinstance(frozen_roster, dict) or
                     frozen_roster.get(player_id) != team_id):
@@ -147,6 +179,20 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
             if family.startswith("PLAYER_PROP") and (
                 type(market.get("stat")) is not str or not market["stat"]):
                 block("PLAYER_STAT_IDENTITY_MISSING")
+        if sport == "PGA" and family in ("MATCHUP", "THREE_BALL"):
+            ids = market.get("participant_ids")
+            count = 2 if family == "MATCHUP" else 3
+            if (type(ids) is not list or len(ids) != count or
+                    any(type(i) is not str or not i for i in ids) or
+                    len(set(ids)) != count or not isinstance(frozen_roster, dict)
+                    or any(i not in frozen_roster for i in ids)):
+                block("PGA_MATCHUP_FROZEN_FIELD_UNBOUND")
+        if family == "SGP":
+            legs = market.get("leg_ids")
+            if (type(legs) is not list or len(legs) < 2 or
+                    any(type(i) is not str or not i for i in legs) or
+                    len(set(legs)) != len(legs)):
+                block("SGP_EXACT_LEG_IDENTITIES_REQUIRED")
         if family in JOINT_FAMILIES and not _sha(forecast.get("joint_distribution_sha256")):
             block("CORRELATED_EVENT_DISTRIBUTION_MISSING")
         if family in ORDERED_FAMILIES and not _sha(forecast.get("ordered_events_sha256")):
