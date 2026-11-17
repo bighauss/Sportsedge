@@ -56,7 +56,9 @@ class TestCBBQuality(unittest.TestCase):
     def test_under_bias_diagnostic_does_not_force_balance(self):
         rows=[{"quality_state":"RESEARCH_SCREEN_ONLY",
                "market":("CBB","X"+str(i),"TOTAL","FG","UNDER",
-                         "148.5","","","","REGULATION")} for i in range(11)]
+                         "148.5","","","","REGULATION"),
+               "edge_signal":{"model_minus_market_pp":6.0}}
+              for i in range(11)]
         self.assertTrue(cbb_direction_diagnostic(rows)["one_sided_warning"])
 
     def test_run_it_fails_closed_without_raw_availability(self):
