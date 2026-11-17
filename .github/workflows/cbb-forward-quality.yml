@@ -1,0 +1,37 @@
+name: CBB availability and full-board forward quality
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/markets/cbb_quality_gate.py'
+      - 'sportsedge/markets/run_it_research.py'
+      - 'sportsedge/markets/test_cbb_quality_gate.py'
+      - 'models/cbb/cbb_forward_quality.py'
+      - 'models/cbb/test_cbb_forward_quality.py'
+      - '.github/workflows/cbb-forward-quality.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sportsedge/markets/cbb_quality_gate.py'
+      - 'sportsedge/markets/run_it_research.py'
+      - 'sportsedge/markets/test_cbb_quality_gate.py'
+      - 'models/cbb/cbb_forward_quality.py'
+      - 'models/cbb/test_cbb_forward_quality.py'
+      - '.github/workflows/cbb-forward-quality.yml'
+permissions:
+  contents: read
+jobs:
+  cbb-paper-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile new CBB modules and integration
+        run: python -m compileall -q models/cbb/cbb_forward_quality.py sportsedge/markets/cbb_quality_gate.py sportsedge/markets/run_it_research.py
+      - name: Test roster chronology, availability, bias screens, RUN IT integration
+        run: python -m unittest -v sportsedge.markets.test_cbb_quality_gate sportsedge.markets.test_run_it_research
+      - name: Test mirrored full-board forward diagnostics
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbb_forward_quality
