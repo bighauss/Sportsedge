@@ -20,6 +20,7 @@ from .allmarkets_research import (
     Market, SimulationBatch, PriceReceipt, price_market, _time
 )
 from .edge_discovery import evaluate_signal, shortlist_signals
+from .cbb_quality_gate import screen_cbb_disagreement, cbb_direction_diagnostic
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ def run_research_board(
     chain: EvidenceChain | None = None,
     ledger=(),
     closing_observations=(),
+    cbb_availability: dict | None = None,
 ) -> dict:
     """Every submitted candidate runs the recovered v2.1 guard.
 
@@ -69,6 +71,19 @@ def run_research_board(
         if signal is not None:
             signal["scenario_spec_sha256"]=batch.scenario_spec_sha256
             signal["scenario_generator_version"]=batch.scenario_generator_version
+        quality_state="NOT_CBB"
+        quality_reasons=[]
+        quarantined_signal=None
+        if batch.sport=="CBB":
+            allowed,quality_reasons=screen_cbb_disagreement(
+                signal,availability=cbb_availability)
+            quality_state=("RESEARCH_SCREEN_ONLY" if allowed else
+                           "QUARANTINED_PAPER_CBB")
+            if not allowed:
+                # Keep source-independent raw diagnostics in the full census;
+                # do not put doubted CBB edges into the ranked shortlist.
+                quarantined_signal=signal
+                signal=None
         dual=DualSourceDecision(
             "BLOCK",("PROVIDER_PROVENANCE_NOT_INDEPENDENTLY_AUTHENTICATED",
                      "SECONDARY_INDEPENDENT_BOOK_NOT_VERIFIED"),
@@ -105,6 +120,9 @@ def run_research_board(
             "research_state":priced["status"],
             "research_reasons":priced["reasons"],
             "edge_signal":signal,
+            "quarantined_signal":quarantined_signal,
+            "quality_state":quality_state,
+            "quality_reasons":quality_reasons,
             "scenario_spec_sha256":batch.scenario_spec_sha256,
             "raw_ev_unverified":priced.get("raw_ev_unverified"),
             "blended_ev_unverified":priced.get("blended_ev_unverified"),
@@ -129,5 +147,10 @@ def run_research_board(
         "research_shortlist":shortlist_signals(
             (i,c.market,rows[i]["edge_signal"]) for i,c in enumerate(candidates)),
         "research_shortlist_is_verified_edges":False,
+        "cbb_availability_state":(
+            cbb_availability.get("state","INVALID") if isinstance(cbb_availability,dict)
+            else "MISSING") if batch.sport=="CBB" else None,
+        "cbb_direction_diagnostic":(
+            cbb_direction_diagnostic(rows) if batch.sport=="CBB" else None),
         "rows":rows,"official_counted":0,"approved_stake_u":0,"card":None,
     }
