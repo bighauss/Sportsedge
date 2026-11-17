@@ -45,7 +45,12 @@ class TestIndependentProjectionGate(unittest.TestCase):
     def test_all_seven_sports_have_a_research_contract_not_certification(self):
         for sport in ("NFL", "CFB", "CBB", "NBA", "MLB", "NHL", "PGA"):
             with self.subTest(sport=sport):
-                out = audit_projection(candidate(sport=sport))
+                row = candidate(sport=sport, family="OUTRIGHT" if sport == "PGA" else "TOTAL")
+                roster = None
+                if sport == "PGA":
+                    row["market"]["player_id"] = "golfer-1"
+                    roster = {"golfer-1": "field-1"}
+                out = audit_projection(row, roster)
                 self.assertEqual(out["status"], "PAPER_0U_MODEL_PROJECTION_UNVERIFIED")
                 self.assertTrue(out["research_projection_usable"])
                 self.assertFalse(out["source_authenticated"])
