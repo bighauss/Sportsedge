@@ -132,15 +132,26 @@ def _identity(selection):
         raise BridgeHold("INVALID_SELECTION_IDENTITY") from exc
 
 
+def _json_exact(left, right):
+    """Compare JSON structures without Python's bool/int or int/float coercion."""
+    if type(left) is not type(right):
+        return False
+    if type(left) is dict:
+        return left.keys() == right.keys() and all(
+            _json_exact(left[key], right[key]) for key in left)
+    if type(left) is list:
+        return len(left) == len(right) and all(
+            _json_exact(a, b) for a, b in zip(left, right))
+    return left == right
+
+
 def _exact_document(raw, marker, selection, fields):
     doc = _json(raw)
-    if doc.get("schema") != marker or doc.get("selection") != selection:
+    if not _json_exact(doc.get("schema"), marker) or not _json_exact(
+            doc.get("selection"), selection):
         raise BridgeHold("ORIGINAL_SELECTION_OR_SCHEMA_MISMATCH")
     for name, value in fields.items():
-        original_value = doc.get(name)
-        # JSON bool/int and int/float compare equal in Python; receipts must
-        # preserve their original JSON scalar types as well as their values.
-        if type(original_value) is not type(value) or original_value != value:
+        if not _json_exact(doc.get(name), value):
             raise BridgeHold("ORIGINAL_RECEIPT_CONTENT_MISMATCH:" + name)
 
 
