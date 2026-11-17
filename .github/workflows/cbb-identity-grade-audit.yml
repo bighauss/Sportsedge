@@ -1,0 +1,34 @@
+name: CBB identity and read-only grade reconciliation
+on:
+  pull_request:
+    paths:
+      - 'models/cbb/sportsedge_cbb_model.py'
+      - 'models/cbb/test_cbb.py'
+      - 'research/audit/grade_reconciliation.py'
+      - 'research/audit/test_grade_reconciliation.py'
+      - '.github/workflows/cbb-identity-grade-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/cbb/sportsedge_cbb_model.py'
+      - 'models/cbb/test_cbb.py'
+      - 'research/audit/grade_reconciliation.py'
+      - 'research/audit/test_grade_reconciliation.py'
+      - '.github/workflows/cbb-identity-grade-audit.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile without changing model or history
+        run: python -m compileall -q models/cbb/sportsedge_cbb_model.py models/cbb/test_cbb.py research/audit/grade_reconciliation.py research/audit/test_grade_reconciliation.py
+      - name: CBB name, team and event binding tests
+        run: python models/cbb/test_cbb.py
+      - name: Independent grading and arithmetic tests
+        run: python -m unittest discover -v -s research/audit -p 'test_grade_reconciliation.py'

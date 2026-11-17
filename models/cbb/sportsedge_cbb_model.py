@@ -235,6 +235,31 @@ def project_prop(pl, stat, team_proj_pts, team_base_pts, opp, players_team):
         mean *= p3d / 34.0
     return mean
 
+def resolve_prop_player(game, prop, players):
+    """Fail-closed name/optional-ID lookup restricted to the exact event teams.
+
+    The standalone CSV model does not authenticate roster observations.
+    Never resolve a same-name player from a different game by first match.
+    """
+    teams = (game["home"], game["away"])
+    team_hint = (prop.get("team") or "").strip()
+    player_hint = (prop.get("player") or "").strip()
+    id_hint = (prop.get("player_id") or "").strip()
+    if team_hint and team_hint not in teams:
+        return None, "PROP_TEAM_NOT_IN_EVENT"
+    if not player_hint and not id_hint:
+        return None, "PROP_SUBJECT_MISSING"
+    matches = [
+        p for team in teams if not team_hint or team == team_hint
+        for p in players.get(team, [])
+        if (not player_hint or p.get("player") == player_hint)
+        and (not id_hint or str(p.get("player_id") or "").strip() == id_hint)
+    ]
+    if len(matches) != 1:
+        return None, "AMBIGUOUS_PROP_PLAYER" if matches else "PROP_PLAYER_NOT_ON_EVENT_ROSTER"
+    return matches[0], None
+
+
 def run_card(inputs, out_dir="."):
     teams = load_teams(inputs["teams"]); players = load_players(inputs.get("players"))
     games = read_csv(inputs["games"]); inj = {}
@@ -257,9 +282,14 @@ def run_card(inputs, out_dir="."):
             continue
         rows.append(dict(type="game", game_id=o["game_id"], bet=label, side=sd, line=line, price=o["price_american"], proj=pv, **pr))
     for p in props:
+        if p.get("game_id") not in projs:
+            dropped.append(f"PROP_EVENT_NOT_FOUND:{p.get('game_id')}:{p.get('player')}")
+            continue
         g, pj = projs[p["game_id"]]
-        pl = next((x for p_ in players.values() for x in p_ if x["player"] == p["player"]), None)
-        if not pl: continue
+        pl, reason = resolve_prop_player(g, p, players)
+        if reason:
+            dropped.append(f"{reason}:{p.get('game_id')}:{p.get('player')}")
+            continue
         out_names = {i["player"] for i in inj.get(pl["team"], []) if i.get("status", "").lower() == "out"}
         if pl["player"] in out_names: continue
         home_side = pl["team"] == g["home"]
