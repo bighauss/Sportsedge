@@ -81,7 +81,7 @@ class TestSlateProjectionOverlay(unittest.TestCase):
     def test_wrong_model_feature_hash_and_future_publication_rejected(self):
         f = fixture()
         row = make_receipt(f, run_slate(f))
-        row["forecast"]["model_sha256"] = HASH
+        row["forecast"]["model_sha256"] = "sha256:" + "f" * 64
         f["projection_evidence"] = [row]
         verdict = run_slate(f)["events"][0]["research_rows"][0]["independent_projection"]
         self.assertIn("PROJECTION_RECEIPT_NOT_BOUND_TO_PRICED_MODEL", verdict["reasons"])
