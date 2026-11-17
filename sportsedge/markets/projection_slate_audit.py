@@ -74,7 +74,8 @@ def attach_independent_projection_audit(result: dict, evidence: list[dict]) -> d
             if type(raw_key) is list and len(raw_key) == 4 and raw_key[2] == "SGP":
                 verdict = _reason("SGP_INVENTORY_ONLY_NO_POSTED_LEGS")
             else:
-                key = _record_key(raw_key)
+                # Internal Market.identity() is a tuple; JSON evidence is a list.
+                key = _record_key(list(raw_key) if type(raw_key) is tuple else raw_key)
                 if key[0:2] != (event["sport"], event["event_id"]):
                     raise ValueError("PROJECTION_RESEARCH_ROW_EVENT_MISMATCH")
                 entry = records.get(key)
