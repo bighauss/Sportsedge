@@ -1,0 +1,28 @@
+name: MLB starter lineup and original-book quote guard
+on:
+  pull_request:
+    paths:
+      - 'models/mlb/sportsedge_mlb_model.py'
+      - 'models/mlb/test_mlb_input_contract.py'
+      - '.github/workflows/mlb-input-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/mlb/sportsedge_mlb_model.py'
+      - 'models/mlb/test_mlb_input_contract.py'
+      - '.github/workflows/mlb-input-contract.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-mlb-input:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile without source calls
+        run: python -m compileall -q models/mlb/sportsedge_mlb_model.py models/mlb/test_mlb_input_contract.py
+      - name: Test structural starters, lineups, cross-book quotes
+        run: python -m unittest discover -v -s models/mlb -p 'test_mlb_input_contract.py'
