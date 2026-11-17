@@ -81,11 +81,11 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
         raise ValueError("MARKET_IDENTITY_REQUIRED")
     sport, event_id = market.get("sport"), market.get("event_id")
     family, period = market.get("family"), market.get("period")
-    if sport not in SPORTS or type(event_id) is not str or IDENT.fullmatch(event_id) is None:
+    if type(sport) is not str or sport not in SPORTS or type(event_id) is not str or IDENT.fullmatch(event_id) is None:
         block("UNKNOWN_SPORT_OR_EVENT")
     if type(family) is not str or FAMILY.fullmatch(family) is None:
         block("UNKNOWN_MARKET_FAMILY")
-    if period not in PERIODS:
+    if type(period) is not str or period not in PERIODS:
         block("UNKNOWN_PERIOD")
     if type(market.get("settlement_id")) is not str or not market["settlement_id"].strip():
         block("MARKET_SETTLEMENT_UNKNOWN")
@@ -118,7 +118,7 @@ def audit_projection(candidate: dict, frozen_roster: dict[str, str] | None = Non
         block("INDEPENDENT_FEATURE_RECEIPTS_MISSING")
     else:
         for row in source_rows:
-            if not isinstance(row, dict) or row.get("kind") not in FEATURE_KINDS:
+            if not isinstance(row, dict) or type(row.get("kind")) is not str or row.get("kind") not in FEATURE_KINDS:
                 block("BOOKMAKER_OR_FOREIGN_FORECAST_FEATURE_FORBIDDEN")
                 continue
             published = _utc(row.get("published_utc"))
@@ -184,7 +184,8 @@ def census(candidates: list[dict], roster_by_event: dict[tuple[str, str], dict[s
         market = item.get("market")
         if not isinstance(market, dict):
             raise ValueError("MARKET_IDENTITY_REQUIRED")
-        key = (market.get("sport"), market.get("event_id"))
+        sport, event_id = market.get("sport"), market.get("event_id")
+        key = (sport, event_id) if type(sport) is str and type(event_id) is str else None
         rows.append(audit_projection(item, roster_by_event.get(key)))
     reasons = Counter(code for row in rows for code in row["reasons"])
     return {
