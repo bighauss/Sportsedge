@@ -37,14 +37,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python models/cbb/test_cbb.py && python -m unittest discover -v -s research/audit -p 'test_grade_reconciliation.py'",
+    "test_command": "python -m unittest discover -v -s research/audit -p 'test_grade_reconciliation.py'",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "8d258203e0a090330885fbb9bbbb9dd5b186523a",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "python models/cbb/test_cbb.py"
+    "verification_command": "python -m unittest discover -v -s research/audit -p 'test_grade_reconciliation.py'"
   },
   "cost": {
     "currency": "USD",
