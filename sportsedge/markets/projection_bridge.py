@@ -103,12 +103,18 @@ def from_claude_sport(
         # Validate the schema even when there are no injury rows.
         import csv
         with open(feature_paths["injuries"], newline="", encoding="utf-8-sig") as injury_file:
-            headers=csv.DictReader(injury_file).fieldnames or []
-        normalized_headers=[h.strip().lower() if isinstance(h,str) else "" for h in headers]
-        if len(set(normalized_headers)) != len(normalized_headers):
-            raise ValueError("CBB_INJURY_SOURCE_DUPLICATE_HEADER")
-        if not {"team", "player", "status"}.issubset(set(normalized_headers)):
-            raise ValueError("CBB_INJURY_SOURCE_SCHEMA_INVALID")
+            reader=csv.DictReader(injury_file)
+            headers=reader.fieldnames or []
+            normalized_headers=[h.strip().lower() if isinstance(h,str) else "" for h in headers]
+            if len(set(normalized_headers)) != len(normalized_headers):
+                raise ValueError("CBB_INJURY_SOURCE_DUPLICATE_HEADER")
+            if not {"team", "player", "status"}.issubset(set(normalized_headers)):
+                raise ValueError("CBB_INJURY_SOURCE_SCHEMA_INVALID")
+            for row in reader:
+                normalized_row={k.strip().lower():v for k,v in row.items() if isinstance(k,str)}
+                if any(not isinstance(normalized_row.get(key),str) or not normalized_row[key].strip()
+                       for key in ("team", "player", "status")):
+                    raise ValueError("CBB_INJURY_SOURCE_ROW_INVALID")
     if sport=="CBB":
         from models.cbb import sportsedge_cbb_model as m
         games=m.read_csv(feature_paths.get("games"))
