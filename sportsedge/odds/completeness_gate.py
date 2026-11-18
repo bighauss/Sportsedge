@@ -73,6 +73,17 @@ def _key(row):
     values = tuple(row.get(k) for k in fields)
     if not all(isinstance(v, str) and v.strip() for v in values[:5]) or not isinstance(values[5], str):
         raise CompletenessError("MARKET_IDENTITY_MISSING")
+    # Non-ML numeric market rungs must be finite, canonical line identities.
+    # Do not let blank/NaN/overflow line text falsely satisfy an offered census.
+    family = values[2].upper()
+    if any(token in family for token in ("SPREAD", "TOTAL")):
+        from decimal import Decimal, InvalidOperation
+        try:
+            numeric_line = Decimal(values[5].strip())
+        except (InvalidOperation, ValueError):
+            raise CompletenessError("NUMERIC_MARKET_LINE_INVALID") from None
+        if not numeric_line.is_finite():
+            raise CompletenessError("NUMERIC_MARKET_LINE_INVALID")
     # A provider_market_id may cover multiple players/teams or alternate rungs.
     # Retain participant and settlement identity rather than collapsing them.
     extras = ("team_id", "player_id", "stat", "settlement")
