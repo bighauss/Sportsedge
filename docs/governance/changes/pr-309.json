@@ -3,10 +3,11 @@
   "pr_number": 309,
   "base_commit": "88fc69c90917cbb8b2bb696f5cf4fc78406c2fdf",
   "protected_paths": [
+    ".github/workflows/tests.yml",
     "sportsedge/markets/projection_bridge.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/239",
-  "change_summary": "CBB projection bridge now requires games, teams and injuries feature roles before hashing/projection, rather than silently assuming absent injury information means no injuries. Regression tests cover omitted injuries, omitted teams, zero-byte injury source and a declared header-only no-injuries export. Frozen v5 and recovered CBB model unchanged; PAPER/0u. The bridge also rejects malformed injury CSV headers before treating a zero-row export as no injuries. Duplicate injury CSV headers are now rejected before DictReader can overwrite status/identity fields. Rejects injury rows with missing team, player or status instead of interpreting them as valid availability observations. Rejects surplus injury CSV cells that csv.DictReader otherwise stores under a None key and the bridge previously discarded.",
+  "change_summary": "CBB projection bridge now requires games, teams and injuries feature roles before hashing/projection, rather than silently assuming absent injury information means no injuries. Regression tests cover omitted injuries, omitted teams, zero-byte injury source and a declared header-only no-injuries export. Frozen v5 and recovered CBB model unchanged; PAPER/0u. The bridge also rejects malformed injury CSV headers before treating a zero-row export as no injuries. Duplicate injury CSV headers are now rejected before DictReader can overwrite status/identity fields. Rejects injury rows with missing team, player or status instead of interpreting them as valid availability observations. Rejects surplus injury CSV cells that csv.DictReader otherwise stores under a None key and the bridge previously discarded. CI now executes the dedicated ten-case CBB PIT regression on PRs; the nine-case pinned synthetic governance golden fixture is a separate control.",
   "assumptions": [
     "Absent games, teams or injury-source paths mean unknown critical CBB input, not a valid complete projection.",
     "A header-only nonempty CSV can represent an explicitly captured no-injuries report, but file presence alone does not authenticate upstream source or timestamp.",
@@ -15,7 +16,8 @@
     "Injury CSV requires team, player and status headers even when zero rows are present; a random nonempty header is not an injury report.",
     "Repeated injury CSV header names, including case/whitespace-equivalent duplicates, are invalid even when all required columns exist.",
     "Nonempty injury rows require nonblank team/player/status; missing status is unknown, not no injury.",
-    "Injury CSV rows with more cells than their declared header are invalid and must not be silently truncated."
+    "Injury CSV rows with more cells than their declared header are invalid and must not be silently truncated.",
+    "The pinned nine-case synthetic governance fixture is distinct from the ten-case CBB PIT regression suite; both must pass independently."
   ],
   "agent_identity": "ChatGPT GPT-6 CBB engineering lane",
   "permissions": {
@@ -33,13 +35,13 @@
     "source_state": "UNKNOWN"
   },
   "golden": {
-    "sha256": null,
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
     "cases": 9,
     "suite": "SYNTHETIC_AGENT_SAFETY"
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python -m unittest tests.test_cbb_pit_injury_source_regression -v",
+    "test_command": "python -m unittest discover -s tests -p test_cbb_pit_injury_source_regression.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
