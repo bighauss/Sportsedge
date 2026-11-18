@@ -6,14 +6,15 @@
     "sportsedge/markets/projection_bridge.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/239",
-  "change_summary": "CBB projection bridge now requires games, teams and injuries feature roles before hashing/projection, rather than silently assuming absent injury information means no injuries. Regression tests cover omitted injuries, omitted teams, zero-byte injury source and a declared header-only no-injuries export. Frozen v5 and recovered CBB model unchanged; PAPER/0u. The bridge also rejects malformed injury CSV headers before treating a zero-row export as no injuries. Duplicate injury CSV headers are now rejected before DictReader can overwrite status/identity fields.",
+  "change_summary": "CBB projection bridge now requires games, teams and injuries feature roles before hashing/projection, rather than silently assuming absent injury information means no injuries. Regression tests cover omitted injuries, omitted teams, zero-byte injury source and a declared header-only no-injuries export. Frozen v5 and recovered CBB model unchanged; PAPER/0u. The bridge also rejects malformed injury CSV headers before treating a zero-row export as no injuries. Duplicate injury CSV headers are now rejected before DictReader can overwrite status/identity fields. Rejects injury rows with missing team, player or status instead of interpreting them as valid availability observations.",
   "assumptions": [
     "Absent games, teams or injury-source paths mean unknown critical CBB input, not a valid complete projection.",
     "A header-only nonempty CSV can represent an explicitly captured no-injuries report, but file presence alone does not authenticate upstream source or timestamp.",
     "The guard is scoped to CBB; existing CFB/NBA/MLB projection behavior is unchanged.",
     "Regression tests are synthetic; independent original source provenance, model calibration and real market release remain unverified.",
     "Injury CSV requires team, player and status headers even when zero rows are present; a random nonempty header is not an injury report.",
-    "Repeated injury CSV header names, including case/whitespace-equivalent duplicates, are invalid even when all required columns exist."
+    "Repeated injury CSV header names, including case/whitespace-equivalent duplicates, are invalid even when all required columns exist.",
+    "Nonempty injury rows require nonblank team/player/status; missing status is unknown, not no injury."
   ],
   "agent_identity": "ChatGPT GPT-6 CBB engineering lane",
   "permissions": {
@@ -32,7 +33,7 @@
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
-    "cases": 9,
+    "cases": 8,
     "suite": "SYNTHETIC_AGENT_SAFETY"
   },
   "evaluation": {
