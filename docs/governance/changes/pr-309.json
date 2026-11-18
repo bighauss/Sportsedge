@@ -6,9 +6,9 @@
     "sportsedge/markets/projection_bridge.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/239",
-  "change_summary": "CBB projection bridge now refuses an absent injury-source path rather than silently treating it as a verified no-injury snapshot. Test-first regressions cover missing and empty files. Frozen v5 and recovered CBB model untouched; all outputs remain PAPER/0u.",
+  "change_summary": "CBB projection bridge now requires games, teams and injuries feature roles before hashing/projection, rather than silently assuming absent injury information means no injuries. Regression tests cover omitted injuries, omitted teams, zero-byte injury source and a declared header-only no-injuries export. Frozen v5 and recovered CBB model unchanged; PAPER/0u.",
   "assumptions": [
-    "An absent injury-source path is unknown availability, not evidence of zero injuries.",
+    "Absent games, teams or injury-source paths mean unknown critical CBB input, not a valid complete projection.",
     "A header-only nonempty CSV can represent an explicitly captured no-injuries report, but file presence alone does not authenticate upstream source or timestamp.",
     "The guard is scoped to CBB; existing CFB/NBA/MLB projection behavior is unchanged.",
     "Regression tests are synthetic; independent original source provenance, model calibration and real market release remain unverified."
