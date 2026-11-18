@@ -104,7 +104,10 @@ def from_claude_sport(
         import csv
         with open(feature_paths["injuries"], newline="", encoding="utf-8-sig") as injury_file:
             headers=csv.DictReader(injury_file).fieldnames or []
-        if not {"team", "player", "status"}.issubset({h.strip().lower() for h in headers if h}):
+        normalized_headers=[h.strip().lower() if isinstance(h,str) else "" for h in headers]
+        if len(set(normalized_headers)) != len(normalized_headers):
+            raise ValueError("CBB_INJURY_SOURCE_DUPLICATE_HEADER")
+        if not {"team", "player", "status"}.issubset(set(normalized_headers)):
             raise ValueError("CBB_INJURY_SOURCE_SCHEMA_INVALID")
     if sport=="CBB":
         from models.cbb import sportsedge_cbb_model as m
