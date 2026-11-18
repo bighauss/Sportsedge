@@ -113,8 +113,6 @@ class CBBInjuryPITAdmissionTests(unittest.TestCase):
                 from_claude_sport("CBB", files, "g1", asof_utc=datetime(2026,11,18,tzinfo=timezone.utc))
 
     def test_noncanonical_injury_headers_fail_before_downstream_reader(self):
-        # The downstream CBB loader accesses literal row["team"] keys.
-        # Validator normalization alone must never admit differently cased keys.
         with tempfile.TemporaryDirectory() as tmp:
             files = {}
             rows = {
