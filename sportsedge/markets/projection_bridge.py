@@ -108,7 +108,9 @@ def from_claude_sport(
             normalized_headers=[h.strip().lower() if isinstance(h,str) else "" for h in headers]
             if len(set(normalized_headers)) != len(normalized_headers):
                 raise ValueError("CBB_INJURY_SOURCE_DUPLICATE_HEADER")
-            if not {"team", "player", "status"}.issubset(set(normalized_headers)):
+            # The downstream loader uses literal CSV keys, so admitting normalized
+            # aliases here would pass validation then fail or misread downstream.
+            if normalized_headers != headers or not {"team", "player", "status"}.issubset(set(headers)):
                 raise ValueError("CBB_INJURY_SOURCE_SCHEMA_INVALID")
             for row in reader:
                 # DictReader stores surplus CSV cells under None; refusing them
