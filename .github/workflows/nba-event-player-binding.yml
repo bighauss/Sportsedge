@@ -1,0 +1,28 @@
+name: NBA event-scoped player and injury identity
+on:
+  pull_request:
+    paths:
+      - 'models/nba/sportsedge_nba_model.py'
+      - 'models/nba/test_nba_event_identity.py'
+      - '.github/workflows/nba-event-player-binding.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/nba/sportsedge_nba_model.py'
+      - 'models/nba/test_nba_event_identity.py'
+      - '.github/workflows/nba-event-player-binding.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-nba-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile project and tests
+        run: python -m compileall -q models/nba/sportsedge_nba_model.py models/nba/test_nba_event_identity.py
+      - name: Exact-event and duplicate-player adversarial tests
+        run: python -m unittest discover -v -s models/nba -p 'test_nba_event_identity.py'
