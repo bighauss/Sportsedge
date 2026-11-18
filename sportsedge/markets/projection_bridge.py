@@ -111,6 +111,10 @@ def from_claude_sport(
             if not {"team", "player", "status"}.issubset(set(normalized_headers)):
                 raise ValueError("CBB_INJURY_SOURCE_SCHEMA_INVALID")
             for row in reader:
+                # DictReader stores surplus CSV cells under None; refusing them
+                # prevents a shifted injury status from being silently ignored.
+                if None in row:
+                    raise ValueError("CBB_INJURY_SOURCE_ROW_INVALID")
                 normalized_row={k.strip().lower():v for k,v in row.items() if isinstance(k,str)}
                 if any(not isinstance(normalized_row.get(key),str) or not normalized_row[key].strip()
                        for key in ("team", "player", "status")):
