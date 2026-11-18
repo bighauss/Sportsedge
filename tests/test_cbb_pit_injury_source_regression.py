@@ -82,6 +82,21 @@ class CBBInjuryPITAdmissionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "CBB_INJURY_SOURCE_DUPLICATE_HEADER"):
                 from_claude_sport("CBB", files, "g1", asof_utc=datetime(2026,11,18,tzinfo=timezone.utc))
 
+    def test_blank_injury_status_is_not_a_verified_no_injuries_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            files = {}
+            rows = {
+                "games": "game_id,home,away,neutral\ng1,Home,Away,1\n",
+                "teams": "team,games,adjoe,adjde,adj_t\nHome,1,105,105,67.5\nAway,1,105,105,67.5\n",
+                "injuries": "team,player,status\nHome,Player A,\n",
+            }
+            for role, content in rows.items():
+                p = Path(tmp) / (role + ".csv")
+                p.write_text(content, encoding="utf-8")
+                files[role] = str(p)
+            with self.assertRaisesRegex(ValueError, "CBB_INJURY_SOURCE_ROW_INVALID"):
+                from_claude_sport("CBB", files, "g1", asof_utc=datetime(2026,11,18,tzinfo=timezone.utc))
+
     def test_empty_injury_source_blocks_before_projection(self):
         with tempfile.TemporaryDirectory() as tmp:
             files = {}
