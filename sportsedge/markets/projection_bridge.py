@@ -90,6 +90,13 @@ def from_claude_sport(
     if sport not in ("CBB","CFB","NBA","MLB"):
         raise ValueError("SPORT_ADAPTER_NOT_AVAILABLE")
     _time(asof_utc)
+    if sport=="CBB":
+        # An omitted injury export must not be interpreted as confirmed no injuries.
+        # The file may contain only its header when the upstream source explicitly
+        # reports zero entries; PIT publication still requires separate evidence.
+        for role in ("games", "teams", "injuries"):
+            if not feature_paths.get(role):
+                raise ValueError("CBB_REQUIRED_FEATURE_ROLE_MISSING:"+role)
     features=sha_inputs(feature_paths)
     if sport=="CBB":
         from models.cbb import sportsedge_cbb_model as m
