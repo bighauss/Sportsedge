@@ -99,6 +99,14 @@ def from_claude_sport(
                 raise ValueError("CBB_REQUIRED_FEATURE_ROLE_MISSING:"+role)
     features=sha_inputs(feature_paths)
     if sport=="CBB":
+        # A nonempty arbitrary header is not a valid zero-injury export.
+        # Validate the schema even when there are no injury rows.
+        import csv
+        with open(feature_paths["injuries"], newline="", encoding="utf-8-sig") as injury_file:
+            headers=csv.DictReader(injury_file).fieldnames or []
+        if not {"team", "player", "status"}.issubset({h.strip().lower() for h in headers if h}):
+            raise ValueError("CBB_INJURY_SOURCE_SCHEMA_INVALID")
+    if sport=="CBB":
         from models.cbb import sportsedge_cbb_model as m
         games=m.read_csv(feature_paths.get("games"))
         g=next((g for g in games if g.get("game_id")==game_id),None)
