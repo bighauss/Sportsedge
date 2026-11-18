@@ -90,7 +90,37 @@ def from_claude_sport(
     if sport not in ("CBB","CFB","NBA","MLB"):
         raise ValueError("SPORT_ADAPTER_NOT_AVAILABLE")
     _time(asof_utc)
+    # An omitted critical role is unknown data, never a zero-injury report.
+    # A header-only injuries CSV is permitted as a declared zero-entry export;
+    # external publication and source authenticity require separate evidence.
+    if sport=="CBB":
+        for role in ("games", "teams", "injuries"):
+            if not feature_paths.get(role):
+                raise ValueError("CBB_REQUIRED_FEATURE_ROLE_MISSING:"+role)
     features=sha_inputs(feature_paths)
+    if sport=="CBB":
+        # A nonempty arbitrary header is not a valid zero-injury export.
+        # Validate the schema even when there are no injury rows.
+        import csv
+        with open(feature_paths["injuries"], newline="", encoding="utf-8-sig") as injury_file:
+            reader=csv.DictReader(injury_file)
+            headers=reader.fieldnames or []
+            normalized_headers=[h.strip().lower() if isinstance(h,str) else "" for h in headers]
+            if len(set(normalized_headers)) != len(normalized_headers):
+                raise ValueError("CBB_INJURY_SOURCE_DUPLICATE_HEADER")
+            # The downstream loader uses literal CSV keys, so admitting normalized
+            # aliases here would pass validation then fail or misread downstream.
+            if normalized_headers != headers or not {"team", "player", "status"}.issubset(set(headers)):
+                raise ValueError("CBB_INJURY_SOURCE_SCHEMA_INVALID")
+            for row in reader:
+                # DictReader stores surplus CSV cells under None; refusing them
+                # prevents a shifted injury status from being silently ignored.
+                if None in row:
+                    raise ValueError("CBB_INJURY_SOURCE_ROW_INVALID")
+                normalized_row={k.strip().lower():v for k,v in row.items() if isinstance(k,str)}
+                if any(not isinstance(normalized_row.get(key),str) or not normalized_row[key].strip()
+                       for key in ("team", "player", "status")):
+                    raise ValueError("CBB_INJURY_SOURCE_ROW_INVALID")
     if sport=="CBB":
         from models.cbb import sportsedge_cbb_model as m
         games=m.read_csv(feature_paths.get("games"))
