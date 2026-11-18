@@ -90,6 +90,11 @@ def from_claude_sport(
     if sport not in ("CBB","CFB","NBA","MLB"):
         raise ValueError("SPORT_ADAPTER_NOT_AVAILABLE")
     _time(asof_utc)
+    # A missing injury file is not evidence of zero injuries. Refuse CBB
+    # projections until a captured injury source (including a header-only
+    # verified no-injuries export) is supplied and included in the feature hash.
+    if sport=="CBB" and not feature_paths.get("injuries"):
+        raise ValueError("CBB_CRITICAL_INJURY_SOURCE_REQUIRED")
     features=sha_inputs(feature_paths)
     if sport=="CBB":
         from models.cbb import sportsedge_cbb_model as m
