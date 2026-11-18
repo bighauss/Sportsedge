@@ -24,6 +24,18 @@ class CBBInjuryPITAdmissionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "CBB_REQUIRED_FEATURE_ROLE_MISSING:teams"):
                 from_claude_sport("CBB", {"games": str(games)}, "g1", asof_utc=datetime(2026,11,18,tzinfo=timezone.utc))
 
+    def test_missing_games_role_blocks_before_projection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            teams = Path(tmp) / "teams.csv"
+            injuries = Path(tmp) / "injuries.csv"
+            teams.write_text("team,games,adjoe,adjde,adj_t\n", encoding="utf-8")
+            injuries.write_text("team,player,status,role\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "CBB_REQUIRED_FEATURE_ROLE_MISSING:games"):
+                from_claude_sport(
+                    "CBB", {"teams": str(teams), "injuries": str(injuries)}, "g1",
+                    asof_utc=datetime(2026, 11, 18, tzinfo=timezone.utc),
+                )
+
     def test_header_only_injury_export_is_accepted_as_declared_not_authenticated(self):
         with tempfile.TemporaryDirectory() as tmp:
             files = {}
