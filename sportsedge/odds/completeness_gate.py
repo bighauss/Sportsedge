@@ -126,8 +126,12 @@ def _recorded_quote(row, start):
         raise CompletenessError("POST_START_QUOTE")
     if (captured - observed).total_seconds() > 300:
         raise CompletenessError("STALE_ORIGINAL_QUOTE_GT_300S")
+    # Missing original receipt evidence cannot fulfill a quote inventory slot.
+    # A well-formed digest is still NOT proof of original provider bytes or rights.
     h = row.get("source_receipt_sha256")
-    if h is not None and (not isinstance(h, str) or not re.fullmatch(r"[a-f0-9]{64}", h)):
+    if h is None:
+        raise CompletenessError("ORIGINAL_RECEIPT_HASH_MISSING")
+    if not isinstance(h, str) or not re.fullmatch(r"[a-f0-9]{64}", h):
         raise CompletenessError("INVALID_SOURCE_RECEIPT_HASH")
 
 
