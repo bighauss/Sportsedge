@@ -149,13 +149,19 @@ class ShrinkageTests(unittest.TestCase):
 
     def test_fg_1h_report_separate_and_not_period_admission(self):
         rows=[row(i) for i in range(260)]
+        # First-half ML is deliberately disallowed: use no-push totals to
+        # exercise period slicing without silently treating 1H draws as losses.
         for i,x in enumerate(rows):
+            x['market_family']='TOTAL'
+            x['selection_side']='UNDER'
+            x['line']='150.5'
             if i%2:
                 x['period']='1H'
+                x['settlement']='FIRST_HALF_REGULATION'
         z=evaluate(rows,cutoff_utc=CUTOFF)
-        p=z['families']['ML']['period_slices']
+        p=z['families']['TOTAL']['period_slices']
         self.assertEqual(p['FG']['n']+p['1H']['n'],
-                         z['families']['ML']['holdout_n'])
+                         z['families']['TOTAL']['holdout_n'])
         self.assertGreater(p['FG']['unique_events'],0)
         self.assertGreater(p['1H']['unique_events'],0)
         self.assertEqual(p['FG']['status'],
