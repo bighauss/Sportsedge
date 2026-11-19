@@ -146,4 +146,33 @@ class ShrinkageTests(unittest.TestCase):
         e['settlement']='FIRST_HALF_REGULATION'
         self.assertEqual(len(admit([e])[0]),1)
 
+
+    def test_fg_1h_report_separate_and_not_period_admission(self):
+        rows=[row(i) for i in range(260)]
+        for i,x in enumerate(rows):
+            if i%2:
+                x['period']='1H'
+        z=evaluate(rows,cutoff_utc=CUTOFF)
+        p=z['families']['ML']['period_slices']
+        self.assertEqual(p['FG']['n']+p['1H']['n'],
+                         z['families']['ML']['holdout_n'])
+        self.assertGreater(p['FG']['unique_events'],0)
+        self.assertGreater(p['1H']['unique_events'],0)
+        self.assertEqual(p['FG']['status'],
+                         'INSUFFICIENT_UNIQUE_PERIOD_HOLDOUT_GAMES')
+        self.assertEqual(p['1H']['status'],
+                         'INSUFFICIENT_UNIQUE_PERIOD_HOLDOUT_GAMES')
+        self.assertIsNotNone(p['FG']['candidate']['brier'])
+        self.assertIsNotNone(p['1H']['market_close']['log_loss'])
+        self.assertEqual(z['approved_stake_u'],0)
+
+    def test_single_period_does_not_create_empty_period_scores(self):
+        rows=[row(i) for i in range(260)]
+        z=evaluate(rows,cutoff_utc=CUTOFF)
+        periods=z['families']['ML']['period_slices']
+        self.assertEqual(periods['1H']['unique_events'],0)
+        self.assertIsNone(periods['1H']['candidate']['brier'])
+        self.assertEqual(periods['1H']['status'],
+                         'INSUFFICIENT_UNIQUE_PERIOD_HOLDOUT_GAMES')
+
 if __name__=="__main__":unittest.main()
