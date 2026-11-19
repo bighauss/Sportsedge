@@ -191,7 +191,7 @@ def render(card,root):
         t(812,715,fmt_score(g["home_projection"]),size=63,weight=900,anchor="middle"),
         t(540,711,"TOTAL "+fmt_score(g["total_projection"]),size=24,weight=750,color=COLORS["muted"],anchor="middle"),
         t(68,831,"RANKED RESEARCH CARD",size=37,weight=850),
-        t(1010,832,"CT",size=26,color=COLORS["green"],anchor="end"),
+        t(1010,832,("MODEL "+card["source"]["model_sha256"][:8] if g["sport"]=="CBB" else "CT"),size=26,color=COLORS["green"],anchor="end"),
         '<rect x="64" y="866" width="952" height="72" rx="11" fill="#203544"/>',
         t(87,909,"#",size=26,weight=750,color=COLORS["muted"]),
         t(155,909,"PLAY",size=26,weight=750,color=COLORS["muted"]),
@@ -215,8 +215,15 @@ def render(card,root):
         out.append(t(594,y+20,("+" if price>0 else "")+str(price),size=27,weight=700,anchor="middle"))
         out.append(t(703,y+20,fmt_score(p["projection"]),size=26,weight=700,anchor="middle"))
         out.append(t(804,y+20,("%+.1f" % p["ev_estimate_pct"])+"%",size=26,weight=800,color=COLORS["green"],anchor="middle"))
-        out.append(t(990,y+17,"★"*p["stars"],size=18,weight=600,color=COLORS["amber"],anchor="end"))
-        out.append(t(990,y+48,("%.1f" % (p["win_probability"]*100))+"% Win",size=17,color=COLORS["muted"],anchor="end"))
+        if g["sport"]=="CBB":
+            # Raw-EV stars remain in the immutable source but are never
+            # displayed as independent confidence on an unvalidated card.
+            out.append(t(990,y+17,"UNRATED",size=17,weight=700,color=COLORS["amber"],anchor="end"))
+            out.append(t(990,y+48,("%.1f" % (p["win_probability"]*100))+"% MODEL",size=17,color=COLORS["muted"],anchor="end"))
+            out.append(t(155,y+68,"Quote "+utc(p["price_observed_utc"]).strftime("%Y-%m-%d %H:%M UTC"),size=15,color=COLORS["muted"]))
+        else:
+            out.append(t(990,y+17,"★"*p["stars"],size=18,weight=600,color=COLORS["amber"],anchor="end"))
+            out.append(t(990,y+48,("%.1f" % (p["win_probability"]*100))+"% Win",size=17,color=COLORS["muted"],anchor="end"))
     out.extend([
         '<path d="M68 1818H1010" stroke="#285b50" stroke-width="2"/>',
         t(68,1860,"RESEARCH ONLY • UNVALIDATED ESTIMATES • 0u",size=23,weight=670,color=COLORS["muted"]),
