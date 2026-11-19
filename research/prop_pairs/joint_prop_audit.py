@@ -19,12 +19,13 @@ SIDES = frozenset(("OVER", "UNDER", "YES", "NO"))
 UTC = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$")
 HASH = re.compile(r"^[a-f0-9]{64}$")
 LEG_FIELDS = frozenset(("player_id", "team_id", "market", "stat", "line", "side"))
-CLOCKS = ("model_fitted_until_utc", "forecast_utc", "tipoff_utc",
+CLOCKS = ("model_fitted_until_utc", "rules_effective_utc", "forecast_utc", "tipoff_utc",
           "a_published_utc", "a_captured_utc", "b_published_utc",
           "b_captured_utc", "final_published_utc", "final_captured_utc")
 REQUIRED = frozenset(("sport", "event_id", "period", "settlement", "a", "b",
                       "pa", "pb", "ya", "yb", "a_source_sha256",
-                      "b_source_sha256", "model_sha256", "final_sha256",
+                      "b_source_sha256", "model_sha256", "rules_sha256",
+                      "universe_sha256", "universe_complete_claim", "final_sha256",
                       *CLOCKS))
 OPTIONAL = frozenset(("joint_p",))
 
@@ -78,13 +79,17 @@ def _record(row):
     a, b = _leg(row["a"]), _leg(row["b"])
     if a == b:
         raise ValueError("SAME_SELECTION")
-    for k in ("a_source_sha256", "b_source_sha256", "model_sha256", "final_sha256"):
+    if row["universe_complete_claim"] is not True:
+        raise ValueError("FULL_ORIGINAL_SELECTION_UNIVERSE_REQUIRED")
+    for k in ("a_source_sha256", "b_source_sha256", "model_sha256", "rules_sha256",
+              "universe_sha256", "final_sha256"):
         if type(row[k]) is not str or not HASH.fullmatch(row[k]):
             raise ValueError("UNVERIFIED_SHA_SHAPE:" + k)
     times = {k: _clock(row[k]) for k in CLOCKS}
     f, tip = times["forecast_utc"], times["tipoff_utc"]
     if not (
         times["model_fitted_until_utc"] < f < tip
+        and times["rules_effective_utc"] <= f
         and times["a_published_utc"] <= times["a_captured_utc"] <= f
         and times["b_published_utc"] <= times["b_captured_utc"] <= f
         and tip < times["final_published_utc"] <= times["final_captured_utc"]
@@ -99,7 +104,8 @@ def _record(row):
     if jp is not None and not (max(0.0, pa + pb - 1.0) - 1e-12 <= jp <= min(pa, pb) + 1e-12):
         raise ValueError("INCOHERENT_JOINT_PROBABILITY")
     pair = tuple(sorted((a, b)))
-    scope = (row["sport"], row["period"], row["settlement"], pair)
+    scope = (row["sport"], row["period"], row["settlement"], pair,
+             row["model_sha256"], row["rules_sha256"])
     return scope, (row["sport"], row["event_id"], row["period"], row["settlement"]), (
         pa, pb, row["ya"] * row["yb"], jp, has_joint
     )
@@ -159,6 +165,8 @@ def evaluate(rows):
     return {
         "status": "PAPER_0U_CORRELATION_RESEARCH_UNAUTHENTICATED",
         "sport": scope[0], "period": scope[1], "settlement": scope[2],
+        "model_sha256": scope[4], "rules_sha256": scope[5],
+        "universe_coverage_authenticated": False,
         "games": n, "unique_events": len(seen), "pair": pair,
         "observed_joint_rate": mean(actual),
         "independence_expected_rate": mean(ind),
@@ -173,5 +181,5 @@ def evaluate(rows):
                            "EXPLORATORY_SAMPLE" if n < 100 else None),
         "source_authenticated": False, "certified": False,
         "official_counted": 0, "approved_stake_u": 0,
-        "warning": "Source clocks/hashes are unverified claims; no true PIT attestation, no market quotes, no joint distribution admission, no automatic correlation or betting certification."
+        "warning": "Source clocks/hashes and alleged universe completeness are unverified claims; no true PIT attestation, no market quotes, no joint distribution admission, no automatic correlation or betting certification."
     }
