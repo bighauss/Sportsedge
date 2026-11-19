@@ -57,5 +57,45 @@ class TransitionTests(unittest.TestCase):
             with self.assertRaisesRegex(FreezeViolation, 'HISTORICAL_BASELINE_BYTES_MISMATCH'):
                 check_provenance(Path('.'))
 
+
+    def test_first_introducing_commit_requires_original_in_every_parent(self):
+        """Adversarial proof: a later descendant and ambiguous merge fail."""
+        from verify_versioned_transition import BASELINE_COMMIT
+        sport, path, old, new, commit, pr = TRANSITIONS[0]
+        with patch('verify_versioned_transition.TRANSITIONS',
+                   ((sport, path, old, new, commit, pr),)):
+            def fake_hash(data):
+                return {b'old': old, b'new': new}.get(data, 'unrecognized')
+            def fixture(parent_contents):
+                parents = tuple(parent_contents)
+                def fake_git(repo, *args):
+                    if args[:2] == ('rev-list', '--parents'):
+                        return (commit + ' ' + ' '.join(parents)).encode('ascii')
+                    if args[0] == 'show':
+                        ref = args[1].split(':', 1)[0]
+                        if ref == BASELINE_COMMIT:
+                            return b'old'
+                        if ref == commit:
+                            return b'new'
+                        return parent_contents[ref]
+                    if args[:2] == ('merge-base', '--is-ancestor'):
+                        return b''
+                    raise AssertionError('unexpected git operation: ' + str(args))
+                return fake_git
+            with patch('verify_versioned_transition.git_blob_digest', side_effect=fake_hash):
+                with patch('verify_versioned_transition._git', side_effect=fixture({'parent1':b'old'})):
+                    check_provenance(Path('.'))
+                with patch('verify_versioned_transition._git', side_effect=fixture({'parent1':b'old','parent2':b'old'})):
+                    check_provenance(Path('.'))
+                with patch('verify_versioned_transition._git', side_effect=fixture({'parent1':b'new'})):
+                    with self.assertRaisesRegex(FreezeViolation, 'NOT_FIRST_INTRODUCING_COMMIT'):
+                        check_provenance(Path('.'))
+                with patch('verify_versioned_transition._git', side_effect=fixture({'parent1':b'old','parent2':b'new'})):
+                    with self.assertRaisesRegex(FreezeViolation, 'NOT_FIRST_INTRODUCING_COMMIT'):
+                        check_provenance(Path('.'))
+                with patch('verify_versioned_transition._git', side_effect=fixture({})):
+                    with self.assertRaisesRegex(FreezeViolation, 'PARENTS_UNVERIFIABLE'):
+                        check_provenance(Path('.'))
+
 if __name__ == '__main__':
     unittest.main()
