@@ -51,13 +51,12 @@ def sample(i=0):
 
 class PITAvailabilityTest(unittest.TestCase):
     def test_fit_only_prior_finals_and_score_unseen(self):
-        rows=[sample(i) for i in range(34)]
+        rows=[sample(i) for i in range(170)]
         frozen=copy.deepcopy(rows)
-        report=evaluate(rows,['SYNTH'],cutoff_utc='2026-10-24T00:00:00Z',
-                        min_train=10,min_holdout=5)
+        report=evaluate(rows,['SYNTH'],cutoff_utc='2027-01-21T00:00:00Z')
         self.assertEqual(report['status'],'SHADOW_COEFFICIENTS_FITTED_NO_PROMOTION')
-        self.assertGreater(report['train_n'],10)
-        self.assertGreater(report['holdout_n'],5)
+        self.assertGreaterEqual(report['train_n'],100)
+        self.assertGreaterEqual(report['holdout_n'],50)
         self.assertLess(report['heldout_candidate']['points_mae'],
                         report['historical_baseline']['points_mae'])
         self.assertLess(report['coeff_eff_own_absent'],0)
@@ -100,8 +99,7 @@ class PITAvailabilityTest(unittest.TestCase):
             parse_event(sample(),{'OTHER'})
 
     def test_no_historical_training_data_cannot_fit(self):
-        z=evaluate([sample(25)],['SYNTH'],cutoff_utc='2026-10-24T00:00:00Z',
-                   min_train=2,min_holdout=1)
+        z=evaluate([sample(25)],['SYNTH'],cutoff_utc='2026-10-24T00:00:00Z')
         self.assertEqual(z['status'],'RESEARCH_ONLY_NOT_ADMITTED')
         self.assertEqual(z['reason'],'INSUFFICIENT_PIT_TRAIN_OR_UNTOUCHED_HOLDOUT')
 
@@ -134,6 +132,16 @@ class PITAvailabilityTest(unittest.TestCase):
         q=paired_event_bootstrap(games,(-12.0,6.0))
         self.assertIsNone(q['interval_95'])
         self.assertEqual(q['unique_games'],12)
+
+
+    def test_operator_cannot_weaken_preregistered_minimums(self):
+        with self.assertRaisesRegex(Blocked, 'PREREGISTERED_100_TRAIN_AND_50_HOLDOUT_MINIMUMS'):
+            evaluate([sample(i) for i in range(40)], ['SYNTH'],
+                     cutoff_utc='2026-10-24T00:00:00Z',
+                     min_train=10, min_holdout=5)
+        with self.assertRaisesRegex(Blocked, 'PREREGISTERED_100_TRAIN_AND_50_HOLDOUT_MINIMUMS'):
+            evaluate([], ['SYNTH'], cutoff_utc='2026-10-24T00:00:00Z',
+                     min_train=100, min_holdout=49)
 
 if __name__ == '__main__':
     unittest.main()
