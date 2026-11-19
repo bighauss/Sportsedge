@@ -15,6 +15,8 @@ import os
 from pathlib import Path
 import re
 from statistics import mean
+from random import Random
+from collections import Counter
 
 REPO = Path(__file__).resolve().parents[2]
 UTC = re.compile(r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$')
@@ -162,6 +164,50 @@ def scores(events, coeff=None):
     return {'points_mae':round(mean(abs_err),6) if abs_err else None,
             'points_rmse':round(math.sqrt(mean(sq)),6) if sq else None}
 
+
+def paired_event_bootstrap(events, coeff, *, repeats=1000, seed=0):
+    """Paired game-cluster uncertainty; descriptive, not a release test.
+
+    Both team results stay in the same resampled game. A game with alternate
+    card legs never becomes additional independent statistical evidence.
+    """
+    n = len(events)
+    if n < 30:
+        return {'unique_games': n, 'interval_95': None,
+                'reason': 'INSUFFICIENT_30_UNIQUE_EVENTS'}
+    if type(repeats) is not int or repeats < 200 or repeats > 5000:
+        raise Blocked('BOOTSTRAP_REPLICATIONS_INVALID')
+    paired=[]
+    for e in events:
+        baseline=e['base']
+        candidate=predict(e,coeff)
+        actual=e['final']
+        paired.append((
+            sum(abs(p-y) for p,y in zip(baseline,actual)) / 2,
+            sum(abs(p-y) for p,y in zip(candidate,actual)) / 2,
+            sum((p-y)**2 for p,y in zip(baseline,actual)) / 2,
+            sum((p-y)**2 for p,y in zip(candidate,actual)) / 2))
+    rng=Random(seed)
+    mae_deltas=[];rmse_deltas=[]
+    for _ in range(repeats):
+        sample=[paired[rng.randrange(n)] for _ in range(n)]
+        mae_deltas.append(mean(x[0]-x[1] for x in sample))
+        rmse_deltas.append(
+            math.sqrt(mean(x[2] for x in sample)) -
+            math.sqrt(mean(x[3] for x in sample)))
+    def interval(values):
+        values.sort()
+        return [round(values[int(.025*(repeats-1))],6),
+                round(values[int(.975*(repeats-1))],6)]
+    return {'unique_games':n, 'bootstrap_repeats':repeats,
+            'delta_sign':'baseline_minus_candidate_positive_improves',
+            'mae_improvement':round(mean(x[0]-x[1] for x in paired),6),
+            'mae_improvement_95':interval(mae_deltas),
+            'rmse_improvement':round(
+                math.sqrt(mean(x[2] for x in paired))-
+                math.sqrt(mean(x[3] for x in paired)),6),
+            'rmse_improvement_95':interval(rmse_deltas)}
+
 def evaluate(rows, allowed_conferences, *, cutoff_utc, min_train=100, min_holdout=50):
     valid,rejected = admit(rows, allowed_conferences)
     cutoff=_time(cutoff_utc)
@@ -169,7 +215,8 @@ def evaluate(rows, allowed_conferences, *, cutoff_utc, min_train=100, min_holdou
     holdout=sorted([r for r in valid if r['forecast'] >= cutoff],key=lambda x:(x['forecast'],x['id']))
     excluded=len(valid)-len(train)-len(holdout)
     result={'status':'RESEARCH_ONLY_NOT_ADMITTED','original_rows':len(rows),
-            'rejected':rejected,'excluded_unreleased_at_cutoff':excluded,
+            'rejected':rejected, 'reject_counts':dict(Counter(r['reason'] for r in rejected)),
+            'excluded_unreleased_at_cutoff':excluded,
             'train_n':len(train),'holdout_n':len(holdout),'source_authenticated':False,
             'market_close_compared':False,'production_ready':False,
             'official_counted':0,'stake_u':0}
@@ -195,6 +242,7 @@ def evaluate(rows, allowed_conferences, *, cutoff_utc, min_train=100, min_holdou
                   prior_only_validation_n=len(validation),
                   historical_baseline=scores(holdout),
                   heldout_candidate=scores(holdout,coeff),
+                  paired_holdout_uncertainty=paired_event_bootstrap(holdout,coeff),
                   by_venue={v:{'n':sum(x['venue']==v for x in holdout),
                                'baseline':scores([x for x in holdout if x['venue']==v]),
                                'candidate':scores([x for x in holdout if x['venue']==v],coeff)}
