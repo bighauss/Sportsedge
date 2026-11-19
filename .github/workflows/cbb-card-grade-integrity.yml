@@ -1,0 +1,38 @@
+name: CBB paper card confidence and grading integrity
+on:
+  pull_request:
+    paths:
+      - 'research/audit/cbb_card_grading.py'
+      - 'research/audit/test_cbb_card_grading.py'
+      - 'sportsedge/cards/cbb_confidence_gate.py'
+      - 'sportsedge/cards/test_cbb_confidence_gate.py'
+      - '.github/workflows/cbb-card-grade-integrity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/audit/cbb_card_grading.py'
+      - 'research/audit/test_cbb_card_grading.py'
+      - 'sportsedge/cards/cbb_confidence_gate.py'
+      - 'sportsedge/cards/test_cbb_confidence_gate.py'
+      - '.github/workflows/cbb-card-grade-integrity.yml'
+permissions:
+  contents: read
+jobs:
+  research-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile without changing the historical model
+        run: python -m compileall -q research/audit/cbb_card_grading.py sportsedge/cards/cbb_confidence_gate.py
+      - name: Exact 32-row Nov 18 reconciliation and uppercase team names
+        working-directory: research/audit
+        run: python -m unittest -v test_cbb_card_grading
+      - name: CBB confidence labels, PIT arithmetic and PAPER-only output
+        working-directory: sportsedge/cards
+        run: python -m unittest -v test_cbb_confidence_gate
