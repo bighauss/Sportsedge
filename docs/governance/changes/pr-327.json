@@ -1,0 +1,65 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 327,
+  "base_commit": "166e23276fd3113d886f2fc1497d9e0841e073e8",
+  "protected_paths": [
+    ".github/workflows/cbb-card-grade-integrity.yml"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/322",
+  "change_summary": "Adds opt-in CBB read-only grade reconciliation adapter and paper-card confidence overlay with workflow regressions. Nov 18 32 delivered rows reconcile correctly; VMI/NJIT/UNC uppercase-leading tokens remain intact. Five-star EV-derived ratings are suppressed in new presentation overlays as unvalidated, with legacy score retained for audit. Private operative grader and Wave 3 renderer not yet wired. Does not change v5 or POWER_V1/Lane A probability/price logic, historic cards, existing graded results, risk gates, or bet eligibility.",
+  "assumptions": [
+    "The private operative_tools/grade_card.py and actual Wave 3 graphic emitter are not in this public repo and require separate integration; this PR does not claim that nightly grading/graphics have been patched.",
+    "Row-list reproduction from the user-uploaded Nov 18 report establishes arithmetic, not provider-authenticated odds or original wagers.",
+    "EV-derived five stars do not constitute independently calibrated prediction confidence and are suppressed on the new overlay until future acceptance evidence is established.",
+    "An optional simple two-sided no-vig diagnostic is not POWER_V1 de-vig methodology nor the separate uncertified v2.1 30/70 risk rule.",
+    "No real approved betting stakes, official counted results, forward calibration improvement or source authentication are asserted.",
+    "The pre-existing frozen standalone CBB model digest drift remains an unrelated real CI blocker and must never be repinned or suppressed silently."
+  ],
+  "agent_identity": "ChatGPT GPT-6 CBB evidence/presentation repair",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Five-star confidence and nightly-grade row grouping",
+    "before": null,
+    "unit": "CBB card display/grade records",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s sportsedge/cards -p test_cbb_confidence_gate.py -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "166e23276fd3113d886f2fc1497d9e0841e073e8",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s research/audit -p test_cbb_card_grading.py -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
