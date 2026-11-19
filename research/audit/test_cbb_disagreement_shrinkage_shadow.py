@@ -126,4 +126,24 @@ class ShrinkageTests(unittest.TestCase):
             evaluate([row(i) for i in range(260)],cutoff_utc=CUTOFF,
                      min_train=20,min_holdout=10)
 
+
+    def test_first_half_ml_tie_contract_is_not_binary(self):
+        e=row();e['period']='1H';e['settlement']='TWO_WAY_TIE_PUSH'
+        self.assertEqual(admit([e])[1][0]['reason'],
+            'UNMODELED_FIRST_HALF_MONEYLINE_DRAW_SETTLEMENT')
+        e['settlement']='THREE_WAY_DRAW_LOSES'
+        self.assertEqual(admit([e])[1][0]['reason'],
+            'UNMODELED_FIRST_HALF_MONEYLINE_DRAW_SETTLEMENT')
+
+    def test_period_settlement_must_be_explicit_and_match(self):
+        e=row();e['settlement']='UNKNOWN'
+        self.assertEqual(admit([e])[1][0]['reason'],
+            'MARKET_PERIOD_SETTLEMENT_CONTRACT_INVALID')
+        e=row();e['market_family']='TOTAL';e['selection_side']='UNDER'
+        e['line']='150.5';e['period']='1H';e['settlement']='INCLUDES_OT'
+        self.assertEqual(admit([e])[1][0]['reason'],
+            'MARKET_PERIOD_SETTLEMENT_CONTRACT_INVALID')
+        e['settlement']='FIRST_HALF_REGULATION'
+        self.assertEqual(len(admit([e])[0]),1)
+
 if __name__=="__main__":unittest.main()
