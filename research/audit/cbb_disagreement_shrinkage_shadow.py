@@ -61,7 +61,7 @@ def _row(r):
         line=r['line']
         if type(line) is not str or not re.fullmatch(r'[+-]?\d+\.5',line):
             raise Rejected('ONLY_NO_PUSH_HALF_POINT_LINE_SUPPORTED')
-        if r['selection_side'] not in ('HOME','AWAY') if r['market_family']=='SPREAD' else r['selection_side'] not in ('OVER','UNDER'):
+        if (r['market_family']=='SPREAD' and r['selection_side'] not in ('HOME','AWAY')) or (r['market_family']=='TOTAL' and r['selection_side'] not in ('OVER','UNDER')):
             raise Rejected('SELECTION_INCOMPATIBLE_WITH_MARKET')
     else:
         if r['selection_side'] not in ('HOME','AWAY'):
@@ -80,6 +80,7 @@ def _row(r):
             and times['model_features_published_utc']<=times['model_features_captured_utc']<=freeze
             and times['decision_quote_published_utc']<=times['decision_quote_captured_utc']<=freeze
             and times['close_quote_published_utc']<=times['close_quote_captured_utc']<tip
+            and freeze<=times['close_quote_captured_utc']
             and tip<times['final_published_utc']<=times['final_captured_utc']):
         raise Rejected('LOOKAHEAD_OR_INVALID_BOOK_OR_RESULT_CLOCKS')
     probs=tuple(_prob(r[k]) for k in ('p_model','p_prior','p_market_decision','p_market_close'))
