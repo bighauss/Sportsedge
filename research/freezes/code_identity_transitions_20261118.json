@@ -1,0 +1,35 @@
+{
+  "schema": "sportsedge-code-identity-transitions-v1",
+  "original_baseline_commit": "29c85365e27665f16ba378cf2c7fc9c81f5754c1",
+  "original_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
+  "owner_decision": "VERSIONED_RESEARCH_CANDIDATES_ONLY",
+  "frozen_engine_v5_unchanged": true,
+  "official_counted": 0,
+  "approved_stake_u": 0,
+  "candidates": [
+    {
+      "sport": "CBB",
+      "path": "models/cbb/sportsedge_cbb_model.py",
+      "original_git_blob_sha1": "f02dd29ef444f49cdf4560a86d5b8a517519081d",
+      "approved_candidate_git_blob_sha1": "8bbe83b7a17d184b3521094b40e00be66ba0f852",
+      "first_introducing_commit": "45f44c08d5e735bad842e64f336328d078b0765b",
+      "change_pr": 292
+    },
+    {
+      "sport": "MLB",
+      "path": "models/mlb/sportsedge_mlb_model.py",
+      "original_git_blob_sha1": "bdedf10c09c307ee51fcec0f7da32cb4fa7974b8",
+      "approved_candidate_git_blob_sha1": "3f630532e9ff499912bc06041906d3b7c11d9887",
+      "first_introducing_commit": "85adaf523dbc46b6a7839151d5593c1ceade2be9",
+      "change_pr": 293
+    },
+    {
+      "sport": "NBA",
+      "path": "models/nba/sportsedge_nba_model.py",
+      "original_git_blob_sha1": "0036cb9a2a7eff9fed9b175a0175a963d20e6b3e",
+      "approved_candidate_git_blob_sha1": "da0c1503af5ed9ad548d1458588505f695b749e5",
+      "first_introducing_commit": "098c92bfd538fbb664b1c8eccccf61779cabe2b2",
+      "change_pr": 294
+    }
+  ]
+}
