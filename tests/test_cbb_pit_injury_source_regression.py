@@ -43,6 +43,8 @@ class CBBInjuryPITAdmissionTests(unittest.TestCase):
                 "games": "game_id,home,away,neutral\ng1,Home,Away,1\n",
                 "teams": "team,games,adjoe,adjde,adj_t\nHome,1,105,105,67.5\nAway,1,105,105,67.5\n",
                 "injuries": "team,player,status,role\n",
+                "venue_registry": ("game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\n"
+                                   "g1,1,ESPN," + "a"*64 + ",2026-11-17T18:00:00Z,2026-11-17T19:00:00Z,2026-11-19T19:00:00Z\n"),
             }
             for role, content in rows.items():
                 p = Path(tmp) / (role + ".csv")
