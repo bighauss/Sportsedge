@@ -5,6 +5,7 @@
   "protected_paths": [
     ".github/workflows/cbb-venue-registry.yml",
     "sportsedge/markets/projection_bridge.py",
+    "sportsedge/markets/test_cli.py",
     "sportsedge/markets/test_projection_bridge.py",
     "sportsedge/validation/cbb_venue_registry.py"
   ],
@@ -15,7 +16,8 @@
     "A typed or well-shaped ESPN/CFBD CSV and SHA are only declared evidence; independent upstream source authentication is still open.",
     "Both explicit game and registry neutral flags must agree before CBB projection; missing or ambiguous records block, no hidden home assumption.",
     "Existing synthetic injury schema positive regression must supply a synthetic venue receipt without changing score formulas.",
-    "The expected result is provenance/integrity guard behavior, not improved forward accuracy or certifiable betting edge."
+    "The expected result is provenance/integrity guard behavior, not improved forward accuracy or certifiable betting edge.",
+    "The PIT source-manifest CLI direct CBB research fixture must include an independent venue role; the guard does not bypass upstream source verification."
   ],
   "agent_identity": "ChatGPT GPT-6 CBB venue integrity lane",
   "permissions": {
