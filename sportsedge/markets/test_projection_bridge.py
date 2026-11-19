@@ -19,7 +19,15 @@ class ProjectionBridgeAcceptance(unittest.TestCase):
     def test_cbb_existing_projection_not_old_card(self):
         from models.cbb import test_cbb
         paths=test_cbb.make_samples()
-        p=from_claude_sport("CBB",paths,"C1",asof_utc=ASOF)
+        # Synthetic venue evidence for the matching event; not provider proof.
+        with tempfile.TemporaryDirectory() as d:
+            venue=Path(d)/"venue_registry.csv"
+            venue.write_text(
+                "game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\\n"
+                "C1,0,ESPN," + "a"*64 +
+                ",2026-11-15T10:00:00Z,2026-11-15T11:00:00Z,2026-11-15T19:00:00Z\n")
+            paths["venue_registry"]=str(venue)
+            p=from_claude_sport("CBB",paths,"C1",asof_utc=ASOF)
         self.assertEqual((p.home_id,p.away_id),("Alpha","Beta"))
         self.assertGreater(p.expected_home,0)
         self.assertGreater(p.expected_away,0)
