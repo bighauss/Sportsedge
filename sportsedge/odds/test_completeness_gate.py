@@ -63,6 +63,37 @@ class CompletenessTests(unittest.TestCase):
              "period": "FG", "side": "OVER", "line": "61.5", "player_id": "GSIS-1", "stat": "REC_YDS"})
         self.assertIn("OFFERED_MARKET_UNACCOUNTED_FOR", reasons(s))
 
+    def test_missing_original_receipt_hash_is_not_fulfilled(self):
+        s = sample()
+        del s["events"][0]["quotes"][0]["source_receipt_sha256"]
+        z = evaluate(s)
+        self.assertIn("ORIGINAL_RECEIPT_HASH_MISSING", reasons(s))
+        self.assertIn("OFFERED_MARKET_UNACCOUNTED_FOR", reasons(s))
+        self.assertEqual(z["status"], "PAPER_0U_INCOMPLETE")
+        self.assertEqual(z["checks"][0]["accounted_count"], 5)
+        self.assertFalse(z["gate_a_authenticated"])
+
+    def test_null_original_receipt_hash_is_not_fulfilled(self):
+        s = sample()
+        s["events"][0]["quotes"][0]["source_receipt_sha256"] = None
+        self.assertIn("ORIGINAL_RECEIPT_HASH_MISSING", reasons(s))
+        self.assertEqual(evaluate(s)["checks"][0]["accounted_count"], 5)
+
+    def test_malformed_receipt_hash_is_rejected(self):
+        for bad in ("", "F"*64, "f"*63, "g"*64, 42, False):
+            with self.subTest(value=bad):
+                s = sample()
+                s["events"][0]["quotes"][0]["source_receipt_sha256"] = bad
+                self.assertIn("INVALID_SOURCE_RECEIPT_HASH", reasons(s))
+                self.assertEqual(evaluate(s)["checks"][0]["accounted_count"], 5)
+
+    def test_hash_format_alone_never_authenticates_original_book(self):
+        z = evaluate(sample())
+        self.assertEqual(z["status"], "PAPER_0U_COMPLIANT_INVENTORY")
+        self.assertFalse(z["gate_a_authenticated"])
+        self.assertEqual(z["approved_stake_u"], 0)
+        self.assertEqual(z["official_counted"], 0)
+
     def test_original_quote_after_capture_rejected(self):
         s = sample()
         s["events"][0]["quotes"][0]["original_observed_utc"] = "2026-11-16T22:00:00Z"
@@ -203,7 +234,8 @@ class CompletenessTests(unittest.TestCase):
             s["events"][0]["market_inventory"].append(row)
             s["events"][0]["quotes"].append({**row, "price_american": -110,
                 "original_observed_utc": "2026-11-16T21:00:00Z",
-                "captured_utc": "2026-11-16T21:00:01Z"})
+                "captured_utc": "2026-11-16T21:00:01Z",
+                "source_receipt_sha256": "f"*64})
         self.assertEqual(evaluate(s)["failures"], [])
 
     def test_player_prop_requires_ids(self):
@@ -224,7 +256,8 @@ class CompletenessTests(unittest.TestCase):
             s["events"][0]["market_inventory"].append(row)
             s["events"][0]["quotes"].append({**row, "price_american": -105,
                 "original_observed_utc": "2026-11-16T21:00:00Z",
-                "captured_utc": "2026-11-16T21:00:01Z"})
+                "captured_utc": "2026-11-16T21:00:01Z",
+                "source_receipt_sha256": "f"*64})
         self.assertEqual(evaluate(s)["failures"], [])
 
     def test_stale_original_quote_not_counted_as_fresh(self):
