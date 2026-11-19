@@ -123,11 +123,20 @@ def _score(items,key):
        'brier':round(mean((x[key]-x['outcome'])**2 for x in items),8),
        'log_loss':round(mean(_loss(x[key],x['outcome']) for x in items),8)}
 
-def _fit(train):
-    # This grid is declared before holdout; no unrestricted market blending.
+def _fit(train, validation):
+    """Choose fixed candidate grid ONLY on a later chronological validation set.
+
+    Historical train observations establish the eligible prior window; this
+    shrinkage family is a predeclared grid (no learned coefficients beyond
+    selection). The later, unseen final holdout is never consulted here.
+    """
+    if not train or not validation:
+        raise Rejected('NONEMPTY_CHRONOLOGICAL_INNER_FOLDS_REQUIRED')
+    if not max(x['final_captured'] for x in train) < min(x['forecast'] for x in validation):
+        raise Rejected('INNER_FIT_FINAL_NOT_PRIOR_TO_VALIDATION')
     return min(((a,b) for a in GRID_A for b in GRID_B),
        key=lambda ab:(mean(_loss(adjusted(x['p_model'],x['p_decision'],*ab),x['outcome'])
-                         for x in train),ab))
+                         for x in validation),ab))
 
 def _event_ci(items, candidate, baseline):
     by=defaultdict(list)
@@ -147,7 +156,7 @@ def evaluate(rows, *, cutoff_utc, min_train=PREREG_MIN_TRAIN,
             'source_authenticated':False,'close_only_evaluation':True,
             'market_release_certified':False,'official_counted':0,'approved_stake_u':0,
             'families':{}}
-    if type(min_train) is not int or min_train<20 or type(min_holdout) is not int or min_holdout<10:
+    if type(min_train) is not int or min_train<PREREG_MIN_TRAIN or type(min_holdout) is not int or min_holdout<PREREG_MIN_HOLDOUT:
         raise Rejected('MINIMUM_FOLD_SIZE_WEAK')
     grouped=defaultdict(list)
     for x in qualified:grouped[x['family']].append(x)
@@ -173,7 +182,7 @@ def evaluate(rows, *, cutoff_utc, min_train=PREREG_MIN_TRAIN,
         if (len({x['id'] for x in internal})<max(10,int(.6*min_train))):
             result['status']='INNER_FIT_OUTCOME_NOT_RELEASED_BEFORE_VALIDATION'
             continue
-        a,b=_fit(internal)
+        a,b=_fit(internal,validation)
         for x in heldout:
             x['p_candidate']=adjusted(x['p_model'],x['p_decision'],a,b)
         def brier(k):
@@ -181,6 +190,7 @@ def evaluate(rows, *, cutoff_utc, min_train=PREREG_MIN_TRAIN,
         c=brier('p_candidate')
         res={'status':'SHADOW_HOLDOUT_EVALUATED_NO_ADOPTION','fit_a':a,'fit_b':b,
              'inner_fit_n':len(internal),'inner_validation_n':len(validation),
+             'selection_basis':'CHRONOLOGICAL_VALIDATION_LOGLOSS_NOT_TRAINING',
              'inner_validation_candidate_brier':round(mean((adjusted(x['p_model'],x['p_decision'],a,b)-x['outcome'])**2 for x in validation),8),
              'candidate':_score(heldout,'p_candidate'),
              'prior_model':_score(heldout,'p_prior'),
