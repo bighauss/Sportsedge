@@ -209,6 +209,9 @@ def paired_event_bootstrap(events, coeff, *, repeats=1000, seed=0):
             'rmse_improvement_95':interval(rmse_deltas)}
 
 def evaluate(rows, allowed_conferences, *, cutoff_utc, min_train=100, min_holdout=50):
+    if (type(min_train) is not int or min_train < 100 or
+            type(min_holdout) is not int or min_holdout < 50):
+        raise Blocked('PREREGISTERED_100_TRAIN_AND_50_HOLDOUT_MINIMUMS')
     valid,rejected = admit(rows, allowed_conferences)
     cutoff=_time(cutoff_utc)
     train=sorted([r for r in valid if r['final_captured'] < cutoff],key=lambda x:(x['forecast'],x['id']))
