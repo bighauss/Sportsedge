@@ -94,7 +94,7 @@ def from_claude_sport(
     # A header-only injuries CSV is permitted as a declared zero-entry export;
     # external publication and source authenticity require separate evidence.
     if sport=="CBB":
-        for role in ("games", "teams", "injuries", "venue_registry"):
+        for role in ("games", "teams", "injuries"):
             if not feature_paths.get(role):
                 raise ValueError("CBB_REQUIRED_FEATURE_ROLE_MISSING:"+role)
     features=sha_inputs(feature_paths)
@@ -124,6 +124,8 @@ def from_claude_sport(
     if sport=="CBB":
         # Do not let the recovered standalone model silently default a missing
         # or malformed neutral flag to home-court points. Verify *before* it runs.
+        if not feature_paths.get("venue_registry"):
+            raise ValueError("CBB_REQUIRED_FEATURE_ROLE_MISSING:venue_registry")
         from sportsedge.validation.cbb_venue_registry import verify_cbb_venue
         verify_cbb_venue(feature_paths["games"], feature_paths["venue_registry"],
                          game_id, asof_utc)
