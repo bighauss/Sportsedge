@@ -167,5 +167,26 @@ class PhoneCardTests(unittest.TestCase):
         self.assertGreater((self.root/"demo.svg").stat().st_size,2500)
 
 
+    def test_cbb_paper_graphic_never_claims_five_star_confidence(self):
+        d=fixture()
+        d["game"]["sport"]="CBB"
+        d["plays"][0]["stars"]=5
+        original=copy.deepcopy(d)
+        svg=m.render(d,self.root)
+        self.assertEqual(d,original)
+        self.assertIn("UNRATED",svg)
+        self.assertNotIn("★★★★★",svg)
+        self.assertIn("MODEL "+H[:8],svg)
+        self.assertIn("Quote 2026-11-15 13:30 UTC",svg)
+        self.assertIn("% MODEL",svg)
+        self.assertIn("RESEARCH ONLY",svg)
+
+    def test_non_cbb_legacy_card_star_render_is_unchanged(self):
+        d=fixture()
+        svg=m.render(d,self.root)
+        self.assertIn("★★★",svg)
+        self.assertNotIn("UNRATED",svg)
+
+
 if __name__=="__main__":
     unittest.main()
