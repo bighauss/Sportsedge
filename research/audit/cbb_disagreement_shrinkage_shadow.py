@@ -93,7 +93,7 @@ def _row(r):
             and tip<times['final_published_utc']<=times['final_captured_utc']):
         raise Rejected('LOOKAHEAD_OR_INVALID_BOOK_OR_RESULT_CLOCKS')
     probs=tuple(_prob(r[k]) for k in ('p_model','p_prior','p_market_decision','p_market_close'))
-    return {'id':r['event_id'], 'family':r['market_family'],
+    return {'id':r['event_id'], 'family':r['market_family'], 'period':r['period'],
             'identity':(r['event_id'],r['market_family'],r['period'],r['selection_side'],r['settlement'],r['line']),
             'venue':r['venue'],'forecast':freeze,'final_captured':times['final_captured_utc'],
             'p_model':probs[0],'p_prior':probs[1],'p_decision':probs[2],'p_close':probs[3],
