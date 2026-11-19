@@ -17,7 +17,7 @@ import re
 from statistics import mean
 
 REPO = Path(__file__).resolve().parents[2]
-UTC = re.compile(r'^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?Z$')
+UTC = re.compile(r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$')
 SHA = re.compile(r'^[0-9a-f]{64}$')
 RIDGES = (0.01, 0.1, 1.0, 10.0, 100.0)  # preregistered before data fit
 EVENT_KEYS = frozenset('event_id season home_id away_id conference_id forecast_utc tip_utc torvik_pub_utc torvik_cap_utc availability_pub_utc availability_cap_utc final_pub_utc final_cap_utc torvik_sha256 availability_sha256 final_sha256 venue venue_verified availability_census_complete home_p away_p poss home_final away_final players'.split())
@@ -227,7 +227,7 @@ def main(argv=None):
     fd=os.open(output,flags,0o600)
     with os.fdopen(fd,'w') as f:
         json.dump(result,f,sort_keys=True,indent=2,allow_nan=False)
-        f.write('\\n')
+        f.write('\n')
         f.flush();os.fsync(f.fileno())
     print(json.dumps({k:result[k] for k in ('status','train_n','holdout_n','official_counted')},sort_keys=True))
 
