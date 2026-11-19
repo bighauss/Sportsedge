@@ -1,0 +1,40 @@
+name: CBB venue registry fail-closed preflight
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/validation/cbb_venue_registry.py'
+      - 'sportsedge/markets/projection_bridge.py'
+      - 'sportsedge/markets/test_projection_bridge.py'
+      - 'tests/test_cbb_pit_injury_source_regression.py'
+      - 'tests/test_cbb_venue_registry.py'
+      - '.github/workflows/cbb-venue-registry.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sportsedge/validation/cbb_venue_registry.py'
+      - 'sportsedge/markets/projection_bridge.py'
+      - 'sportsedge/markets/test_projection_bridge.py'
+      - 'tests/test_cbb_pit_injury_source_regression.py'
+      - 'tests/test_cbb_venue_registry.py'
+      - '.github/workflows/cbb-venue-registry.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-venue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile venue gate, bridge and adversarial tests
+        run: python -m compileall -q sportsedge/validation/cbb_venue_registry.py sportsedge/markets/projection_bridge.py tests/test_cbb_venue_registry.py tests/test_cbb_pit_injury_source_regression.py sportsedge/markets/test_projection_bridge.py
+      - name: Venue / source / duplicate / neutral-site regression
+        run: python -m unittest discover -v -s tests -p test_cbb_venue_registry.py
+      - name: Preserve existing injury source regression
+        run: python -m unittest discover -v -s tests -p test_cbb_pit_injury_source_regression.py
+      - name: Existing projection bridge model adapters
+        run: python -m unittest -v sportsedge.markets.test_projection_bridge
