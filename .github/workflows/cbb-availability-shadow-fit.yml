@@ -1,0 +1,31 @@
+name: CBB PIT availability modifier research-only
+on:
+  pull_request:
+    paths:
+      - 'research/audit/cbb_availability_shadow_fit.py'
+      - 'research/audit/test_cbb_availability_shadow_fit.py'
+      - '.github/workflows/cbb-availability-shadow-fit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/audit/cbb_availability_shadow_fit.py'
+      - 'research/audit/test_cbb_availability_shadow_fit.py'
+      - '.github/workflows/cbb-availability-shadow-fit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile strict shadow-only fitter
+        run: python -m compileall -q research/audit/cbb_availability_shadow_fit.py research/audit/test_cbb_availability_shadow_fit.py
+      - name: PIT source, shadow fit and chronological holdout adversarial regressions
+        run: python -m unittest discover -v -s research/audit -p test_cbb_availability_shadow_fit.py
