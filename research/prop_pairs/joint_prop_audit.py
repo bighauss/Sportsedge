@@ -4,7 +4,7 @@ import math
 def evaluate(rows):
     rows=list(rows)
     if not rows:
-        return {"status":"NO_DATA","games":0,"observed_joint_rate":None,"independence_expected_rate":None,"independence_brier":None,"joint_model_brier":None}
+        return {"status":"NO_DATA","games":0,"pair":None,"observed_joint_rate":None,"independence_expected_rate":None,"independence_brier":None,"joint_model_brier":None,"sample_warning":None,"certified":False,"approved_stake_u":0}
     seen=set(); pair=None; jp_present=None; obs=[]; ind=[]; joint=[]
     for r in rows:
         if not isinstance(r,dict): raise ValueError("INVALID_ROW")
