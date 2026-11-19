@@ -122,6 +122,13 @@ def from_claude_sport(
                        for key in ("team", "player", "status")):
                     raise ValueError("CBB_INJURY_SOURCE_ROW_INVALID")
     if sport=="CBB":
+        # Do not let the recovered standalone model silently default a missing
+        # or malformed neutral flag to home-court points. Verify *before* it runs.
+        if not feature_paths.get("venue_registry"):
+            raise ValueError("CBB_REQUIRED_FEATURE_ROLE_MISSING:venue_registry")
+        from sportsedge.validation.cbb_venue_registry import verify_cbb_venue
+        verify_cbb_venue(feature_paths["games"], feature_paths["venue_registry"],
+                         game_id, asof_utc)
         from models.cbb import sportsedge_cbb_model as m
         games=m.read_csv(feature_paths.get("games"))
         g=next((g for g in games if g.get("game_id")==game_id),None)
