@@ -23,6 +23,9 @@ class TestJointProps(unittest.TestCase):
             evaluate([self.row(joint_p=.8)])
     def test_no_data(self):
         self.assertEqual(evaluate([])["status"],"NO_DATA")
+        self.assertIs(evaluate([])["certified"],False)
+        self.assertEqual(evaluate([])["approved_stake_u"],0)
+        self.assertIsNone(evaluate([])["pair"])
     def test_alt_lines_not_mixed(self):
         with self.assertRaisesRegex(ValueError,"MIXED_PROP_PAIRS"):
             evaluate([self.row(),dict(self.row("g2"),a="p1:PTS:21.5:over")])
