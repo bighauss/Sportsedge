@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cbb_availability_shadow_fit import admit, evaluate, parse_event, predict, Blocked
+from cbb_availability_shadow_fit import admit, evaluate, parse_event, predict, paired_event_bootstrap, Blocked
 
 H = 'a'*64
 T = 'b'*64
@@ -118,6 +118,22 @@ class PITAvailabilityTest(unittest.TestCase):
         e=sample();e['players'].append(copy.deepcopy(e['players'][0]))
         with self.assertRaisesRegex(Blocked,'PLAYER_TEAM_OR_DUPLICATE_ID'):
             parse_event(e,{'SYNTH'})
+
+
+    def test_paired_game_bootstrap_does_not_count_team_rows_as_games(self):
+        games=[parse_event(sample(i), {'SYNTH'}) for i in range(45)]
+        uncertainty=paired_event_bootstrap(games,(-12.0,6.0),repeats=400,seed=5)
+        self.assertEqual(uncertainty['unique_games'],45)
+        self.assertGreater(uncertainty['mae_improvement_95'][0],0)
+        self.assertGreater(uncertainty['rmse_improvement_95'][0],0)
+        self.assertEqual(uncertainty,paired_event_bootstrap(
+            games,(-12.0,6.0),repeats=400,seed=5))
+
+    def test_low_game_count_has_no_spurious_confidence_interval(self):
+        games=[parse_event(sample(i), {'SYNTH'}) for i in range(12)]
+        q=paired_event_bootstrap(games,(-12.0,6.0))
+        self.assertIsNone(q['interval_95'])
+        self.assertEqual(q['unique_games'],12)
 
 if __name__ == '__main__':
     unittest.main()
