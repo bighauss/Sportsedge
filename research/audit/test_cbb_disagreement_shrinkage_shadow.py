@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from cbb_disagreement_shrinkage_shadow import admit,evaluate,adjusted
+from cbb_disagreement_shrinkage_shadow import admit,evaluate,adjusted,_fit,Rejected
 
 B=datetime(2026,1,1,12,tzinfo=timezone.utc)
 H='a'*64
@@ -104,5 +104,26 @@ class ShrinkageTests(unittest.TestCase):
         self.assertEqual(adjusted(p,q,0,0),p)
         self.assertLess(abs(adjusted(p,q,.5,10)-q),abs(p-q))
         self.assertGreater(adjusted(p,q,.5,10),q)
+
+
+    def test_inner_selection_is_validation_not_training_outcomes(self):
+        train,_=admit([row(i) for i in range(20)])
+        validation,_=admit([row(i) for i in range(30,46,2)])
+        for x in validation:
+            x['outcome']=1
+        winning=_fit(train,validation)
+        self.assertEqual(winning,(0.0,0.0))
+        inverted=copy.deepcopy(train)
+        for x in inverted:
+            x['outcome']=1-x['outcome']
+        self.assertEqual(winning,_fit(inverted,validation))
+        for x in validation:
+            x['outcome']=0
+        self.assertNotEqual(winning,_fit(train,validation))
+
+    def test_reject_weak_preregistered_sample_override(self):
+        with self.assertRaisesRegex(Rejected,'MINIMUM_FOLD_SIZE_WEAK'):
+            evaluate([row(i) for i in range(260)],cutoff_utc=CUTOFF,
+                     min_train=20,min_holdout=10)
 
 if __name__=="__main__":unittest.main()
