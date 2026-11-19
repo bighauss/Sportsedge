@@ -130,9 +130,9 @@ class CLIContract(unittest.TestCase):
             now=nowutc()
             stamp=lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")
             venue.write_text(
-                "game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\\n"
+                "game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\n"
                 "C1,0,ESPN," + "a"*64 +
-                f",{stamp(now-timedelta(hours=4))},{stamp(now-timedelta(hours=3))},{stamp(now+timedelta(hours=2))}\\n")
+                f",{stamp(now-timedelta(hours=4))},{stamp(now-timedelta(hours=3))},{stamp(now+timedelta(hours=2))}\n")
             paths["venue_registry"]=str(venue)
             p=manifest()
             p.pop("projection")
