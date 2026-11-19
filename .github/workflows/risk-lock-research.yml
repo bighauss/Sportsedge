@@ -25,13 +25,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # validate original baseline and PR #292 introducing commit
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Risk diagnostics
         run: python research/risk/test_v21_risk_contract.py
       - name: Seven code pin verification
-        run: python research/freezes/verify_code_freezes.py
+        run: python research/freezes/verify_versioned_transition.py
       - name: Code freeze adversarial tests
         run: python -m unittest discover -s research/freezes -p 'test_*.py' -v
       - name: G-18 derived 496 from original board regression
