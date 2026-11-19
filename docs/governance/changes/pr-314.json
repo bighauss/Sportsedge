@@ -1,14 +1,14 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 314,
-  "base_commit": "166e23276fd3113d886f2fc1497d9e0841e073e8",
+  "base_commit": "5b7bc5ac631279c6ee2d26735e528a26471359b7",
   "protected_paths": [
     ".github/workflows/tests.yml",
     "sportsedge/odds/completeness_gate.py",
     "sportsedge/odds/test_completeness_gate.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/307",
-  "change_summary": "Gate A quote completeness fails closed when source_receipt_sha256 is omitted or null instead of treating the quote as fulfilled. Malformed hashes also fail. Exact-format 64-hex hashes remain format checks only, not proof of original bytes, rights, custody, independent provider attestation, or pregame durable publication. Added synthetic regressions and a CI step. Frozen v5 and PAPER/0u policy unchanged.",
+  "change_summary": "Gate A quote completeness fails closed when source_receipt_sha256 is omitted or null instead of treating the quote as fulfilled. Malformed hashes also fail. Exact-format 64-hex hashes remain format checks only, not proof of original bytes, rights, custody, independent provider attestation, or pregame durable publication. Added synthetic regressions and a CI step. Frozen v5 and PAPER/0u policy unchanged. After versioned research code transition PR #321 merged, this PR was updated onto new main; declared governance base and rollback reflect the verified new base without modifying the historical Nov 15 freeze manifest.",
   "assumptions": [
     "A missing original receipt hash is unknown provenance, not a fulfilled quote.",
     "A 64-character lower-case hexadecimal digest validates shape only; no original provider bytes, chain of custody or sportsbook authorization are authenticated by this patch.",
@@ -43,7 +43,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "166e23276fd3113d886f2fc1497d9e0841e073e8",
+    "target_base_sha": "5b7bc5ac631279c6ee2d26735e528a26471359b7",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py"
   },
