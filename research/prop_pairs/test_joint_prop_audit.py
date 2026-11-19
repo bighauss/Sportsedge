@@ -23,6 +23,7 @@ def row(game="g1", **updates):
         "settlement": "INCLUDES_OT", "a": a, "b": b,
         "pa": 0.5, "pb": 0.5, "ya": 1, "yb": 1,
         "model_fitted_until_utc": t(B-timedelta(days=1)),
+        "rules_effective_utc": t(B-timedelta(days=2)),
         "a_published_utc": t(B-timedelta(hours=3)),
         "a_captured_utc": t(B-timedelta(hours=2)),
         "b_published_utc": t(B-timedelta(hours=3)),
@@ -31,7 +32,9 @@ def row(game="g1", **updates):
         "final_published_utc": t(B+timedelta(hours=7)),
         "final_captured_utc": t(B+timedelta(hours=8)),
         "a_source_sha256": "a"*64, "b_source_sha256": "b"*64,
-        "model_sha256": "c"*64, "final_sha256": "d"*64
+        "model_sha256": "c"*64, "rules_sha256": "e"*64,
+        "universe_sha256": "f"*64, "universe_complete_claim": True,
+        "final_sha256": "d"*64
     }
     original.update(updates)
     return original
@@ -132,6 +135,26 @@ class JointPropPITTests(unittest.TestCase):
         self.assertEqual(z["sample_warning"], "EXPLORATORY_SAMPLE")
         self.assertFalse(z["certified"])
         self.assertEqual(z["official_counted"], 0)
+
+    def test_no_retroactive_qualification_or_weak_universe(self):
+        e = row(rules_effective_utc=t(B+timedelta(minutes=1)))
+        with self.assertRaisesRegex(ValueError, "LOOKAHEAD"):
+            evaluate([e])
+        e = row(universe_complete_claim=False)
+        with self.assertRaisesRegex(ValueError, "FULL_ORIGINAL_SELECTION_UNIVERSE"):
+            evaluate([e])
+        e = row(universe_sha256="missing")
+        with self.assertRaisesRegex(ValueError, "UNVERIFIED_SHA_SHAPE"):
+            evaluate([e])
+
+    def test_no_mixed_model_or_rule_versions_in_one_pair_backtest(self):
+        e1 = row("g1")
+        e2 = row("g2", model_sha256="1"*64)
+        with self.assertRaisesRegex(ValueError, "MIXED_SPORT_PERIOD"):
+            evaluate([e1, e2])
+        e2 = row("g2", rules_sha256="2"*64)
+        with self.assertRaisesRegex(ValueError, "MIXED_SPORT_PERIOD"):
+            evaluate([e1, e2])
 
     def test_no_data_retains_denominator_and_no_authentication(self):
         z = evaluate([])
