@@ -4,18 +4,18 @@
   "base_commit": "166e23276fd3113d886f2fc1497d9e0841e073e8",
   "protected_paths": [
     ".github/workflows/risk-lock-research.yml",
-    "research/freezes/cbb_identity_transition_20261118.json",
+    "research/freezes/code_identity_transitions_20261118.json",
     "research/freezes/test_versioned_transition.py",
     "research/freezes/verify_versioned_transition.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/320",
-  "change_summary": "Record first-introducing CBB identity candidate separately while preserving the Nov 15 historical freeze bytes. Verify original and candidate source blobs plus git ancestry, all unrelated seven-sport and frozen-v5 pins; fail closed. Adds research-only tests and CI full history. No historical prediction, official edge, or price changes.",
+  "change_summary": "Preserve the Nov 15 original seven-sport freeze manifest while separately pinning verified CBB (#292), MLB (#293) and NBA (#294) source identities, first introducing commits and ancestry. Check all unrelated seven-sport, risk and frozen v5 pins. No source authentication, model refit, historic card change or betting release.",
   "assumptions": [
-    "PR 292 introduced the CBB exact-event identity safeguard in commit 45f44c08d5e735bad842e64f336328d078b0765b.",
-    "The original November 15 frozen manifest remains byte-identical and independently checks its source commit.",
-    "Git SHA-1 is source-code identity only, not source authenticity or witnessed pregame predictions.",
-    "Version transition does not authorize altered model formulas, stakes, or historical backfills.",
-    "PR #314 remains held until independently reviewed exact-head CI passes."
+    "Repo-wide exact-pin census identified exactly three stale Nov 15 code pins: CBB, MLB and NBA; all other source, risk and frozen-v5 code identities matched.",
+    "PRs #292, #293 and #294 made fail-closed identity, lineup and source-book safeguards, not fitted calibration changes.",
+    "The original immutable freeze manifest remains byte-identical; Git SHA-1 verifies code identity only, not point-in-time sports inputs.",
+    "Any unapproved additional code change remains a hard CI failure; historical records are not backfilled.",
+    "PR #314 remains blocked until exact-head tests and independent governance review pass."
   ],
   "agent_identity": "ChatGPT GPT-6 SportsEdge code freeze audit",
   "permissions": {
