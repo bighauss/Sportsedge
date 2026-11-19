@@ -208,7 +208,7 @@ def evaluate(rows, *, cutoff_utc, min_train=PREREG_MIN_TRAIN,
              'unshrunk_model':_score(heldout,'p_model'),
              'candidate_vs_prior_brier_event_cluster95':_event_ci(heldout,c,brier('p_prior')),
              'candidate_vs_close_brier_event_cluster95':_event_ci(heldout,c,brier('p_close')),
-             'gap_slices':{},'venues':{}}
+             'gap_slices':{},'venues':{},'period_slices':{}}
         for name,selector in {
             'gap_lt_5pp':lambda x:abs(x['p_model']-x['p_decision'])<.05,
             'gap_5_to_10pp':lambda x:.05<=abs(x['p_model']-x['p_decision'])<.1,
@@ -221,13 +221,30 @@ def evaluate(rows, *, cutoff_utc, min_train=PREREG_MIN_TRAIN,
                                     'prior':_score(slice_rows,'p_prior'),
                                     'close':_score(slice_rows,'p_close'),
                                     'unique_events':len({x['id'] for x in slice_rows})}
+        for period in sorted(PERIODS):
+            period_rows=[x for x in heldout if x['period']==period]
+            distinct=len({x['id'] for x in period_rows})
+            res['period_slices'][period]={
+                'n':len(period_rows), 'unique_events':distinct,
+                'status':('DESCRIPTIVE_UNADMITTED' if distinct>=min_holdout
+                          else 'INSUFFICIENT_UNIQUE_PERIOD_HOLDOUT_GAMES'),
+                'candidate':_score(period_rows,'p_candidate'),
+                'prior_model':_score(period_rows,'p_prior'),
+                'market_decision':_score(period_rows,'p_decision'),
+                'market_close':_score(period_rows,'p_close'),
+                'unshrunk_model':_score(period_rows,'p_model'),
+                'candidate_vs_prior_brier_event_cluster95':
+                    _event_ci(period_rows,c,brier('p_prior')),
+                'candidate_vs_close_brier_event_cluster95':
+                    _event_ci(period_rows,c,brier('p_close')),
+            }
         for venue in sorted(VENUES):
             these=[x for x in heldout if x['venue']==venue]
             res['venues'][venue]={'candidate':_score(these,'p_candidate'),
                                  'prior':_score(these,'p_prior'),
                                  'close':_score(these,'p_close')}
         result.update(res)
-    report['warning']='All source clock, venue, original odds and prior-model receipts are self-asserted. Close is eval-only. Event CIs descriptive; no multiple-test promotion decision or +EV claim.'
+    report['warning']='All source clock, venue, original odds and prior-model receipts are self-asserted. Period slices are descriptive only, not separate period admissions. Close is eval-only. Event CIs descriptive; no multiple-test promotion decision or +EV claim.'
     return report
 
 def _private_path(p):
