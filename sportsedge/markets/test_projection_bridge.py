@@ -23,7 +23,7 @@ class ProjectionBridgeAcceptance(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             venue=Path(d)/"venue_registry.csv"
             venue.write_text(
-                "game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\\n"
+                "game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\n"
                 "C1,0,ESPN," + "a"*64 +
                 ",2026-11-15T10:00:00Z,2026-11-15T11:00:00Z,2026-11-15T19:00:00Z\n")
             paths["venue_registry"]=str(venue)
