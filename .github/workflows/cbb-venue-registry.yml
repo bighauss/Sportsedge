@@ -5,6 +5,7 @@ on:
       - 'sportsedge/validation/cbb_venue_registry.py'
       - 'sportsedge/markets/projection_bridge.py'
       - 'sportsedge/markets/test_projection_bridge.py'
+      - 'sportsedge/markets/test_cli.py'
       - 'tests/test_cbb_pit_injury_source_regression.py'
       - 'tests/test_cbb_venue_registry.py'
       - '.github/workflows/cbb-venue-registry.yml'
@@ -14,6 +15,7 @@ on:
       - 'sportsedge/validation/cbb_venue_registry.py'
       - 'sportsedge/markets/projection_bridge.py'
       - 'sportsedge/markets/test_projection_bridge.py'
+      - 'sportsedge/markets/test_cli.py'
       - 'tests/test_cbb_pit_injury_source_regression.py'
       - 'tests/test_cbb_venue_registry.py'
       - '.github/workflows/cbb-venue-registry.yml'
@@ -38,3 +40,5 @@ jobs:
         run: python -m unittest discover -v -s tests -p test_cbb_pit_injury_source_regression.py
       - name: Existing projection bridge model adapters
         run: python -m unittest -v sportsedge.markets.test_projection_bridge
+      - name: Existing source-manifest CLI direct model smoke
+        run: python -m unittest -v sportsedge.markets.test_cli
