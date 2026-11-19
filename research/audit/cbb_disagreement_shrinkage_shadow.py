@@ -53,6 +53,15 @@ def _row(r):
         raise Rejected('MARKET_FAMILY_OR_PERIOD_UNSUPPORTED')
     if r['venue'] not in VENUES:
         raise Rejected('VENUE_UNVERIFIED')
+    # A first-half moneyline can push on a tie (two-way) or lose on a
+    # draw (three-way). This two-probability schema cannot certify the
+    # original market contract or a three-way no-vig denominator.
+    # Never interpret ties as ordinary binary losses.
+    if r['market_family']=='ML' and r['period']=='1H':
+        raise Rejected('UNMODELED_FIRST_HALF_MONEYLINE_DRAW_SETTLEMENT')
+    if (r['period']=='FG' and r['settlement']!='INCLUDES_OT') or (
+            r['period']=='1H' and r['settlement']!='FIRST_HALF_REGULATION'):
+        raise Rejected('MARKET_PERIOD_SETTLEMENT_CONTRACT_INVALID')
     if r['selection_side'] not in ('HOME','AWAY','OVER','UNDER'):
         raise Rejected('SELECTION_SIDE_UNSUPPORTED')
     if r['market_family']=='ML' and r['line']!='':
