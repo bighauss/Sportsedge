@@ -125,16 +125,25 @@ class CLIContract(unittest.TestCase):
         from models.cbb import test_cbb
         paths={k:v for k,v in test_cbb.make_samples().items()
                if k not in ("odds","props")}
-        p=manifest()
-        p.pop("projection")
-        asof=(nowutc()-timedelta(hours=1)).isoformat()
-        p["projection_ref"]={
-            "sport":"CBB","event_id":"C1","asof_utc":asof,
-            "feature_paths":paths,
-            "source_manifest":source_manifest(paths,"CBB","C1",asof),
-        }
-        p["markets"]=[]
-        r=run_from_manifest(p)
+        with tempfile.TemporaryDirectory() as d:
+            venue=Path(d)/"venue_registry.csv"
+            now=nowutc()
+            stamp=lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            venue.write_text(
+                "game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\\n"
+                "C1,0,ESPN," + "a"*64 +
+                f",{stamp(now-timedelta(hours=4))},{stamp(now-timedelta(hours=3))},{stamp(now+timedelta(hours=2))}\\n")
+            paths["venue_registry"]=str(venue)
+            p=manifest()
+            p.pop("projection")
+            asof=(now-timedelta(hours=1)).isoformat()
+            p["projection_ref"]={
+                "sport":"CBB","event_id":"C1","asof_utc":asof,
+                "feature_paths":paths,
+                "source_manifest":source_manifest(paths,"CBB","C1",asof),
+            }
+            p["markets"]=[]
+            r=run_from_manifest(p)
         self.assertEqual(r["event_id"],"C1")
         self.assertEqual(r["model_projection_method"],"RECOVERED_MODEL_FUNCTION")
         self.assertEqual(r["approved_stake_u"],0)
