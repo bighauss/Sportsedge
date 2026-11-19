@@ -76,6 +76,20 @@ def check_provenance(repo: Path) -> None:
             raise FreezeViolation('INTRODUCING_COMMIT_BYTES_MISMATCH:' + sport)
         _git(repo, 'merge-base', '--is-ancestor', BASELINE_COMMIT, commit)
         _git(repo, 'merge-base', '--is-ancestor', commit, 'HEAD')
+        # A descendant that merely *contains* the candidate is not the first
+        # introducing commit. Require the file to be at the original frozen
+        # blob in every immediate parent and changed at the nominated commit.
+        # For merges, checking every parent avoids an ambiguous first-parent
+        # assumption. If any parent differs, refuse rather than guess.
+        parents = _git(repo, 'rev-list', '--parents', '-n', '1', commit).decode('ascii').split()
+        if len(parents) < 2 or parents[0] != commit:
+            raise FreezeViolation('INTRODUCING_COMMIT_PARENTS_UNVERIFIABLE:' + sport)
+        if new == old:
+            raise FreezeViolation('INTRODUCING_COMMIT_NO_SOURCE_CHANGE:' + sport)
+        for parent in parents[1:]:
+            parent_bytes = _git(repo, 'show', parent + ':' + path)
+            if git_blob_digest(parent_bytes) != old:
+                raise FreezeViolation('NOT_FIRST_INTRODUCING_COMMIT:' + sport)
 
 def run(repo: Path = ROOT, legacy_path: Path = LEGACY, transition_path: Path = TRANSITION) -> dict:
     raw = legacy_path.read_bytes()
