@@ -79,7 +79,7 @@ class VenueTests(unittest.TestCase):
         self.registry.write_text(HEADER+ORIGINAL.strip()+",extra\n")
         with self.assertRaisesRegex(ValueError,"CSV_ROW_INVALID"):
             self.check()
-        self.registry.write_text(HEADER+"extra_column\n"+ORIGINAL)
+        self.registry.write_text(HEADER.replace("game_id,","event_id,")+ORIGINAL)
         with self.assertRaisesRegex(ValueError,"REGISTRY_SCHEMA_INVALID"):
             self.check()
 
