@@ -162,8 +162,8 @@ def evaluate(rows):
         "games": n, "unique_events": len(seen), "pair": pair,
         "observed_joint_rate": mean(actual),
         "independence_expected_rate": mean(ind),
-        "observed_bernoulli_covariance": mean(actual) - mean(
-            (_prob(r["ya"], "ya") * _prob(r["yb"], "yb")) for r in rows
+        "observed_bernoulli_covariance": mean(actual) - (
+            mean(r["ya"] for r in rows) * mean(r["yb"] for r in rows)
         ),
         "independence_brier": mean(ind_losses),
         "joint_model_brier": mean(joint_losses) if present else None,
