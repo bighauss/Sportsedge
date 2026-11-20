@@ -30,6 +30,8 @@ jobs:
         run: python -m unittest sportsedge.markets.test_player_projection_builder -v
       - name: Run CBB CFB NFL team plus own-player integrated research pipeline
         run: python -m unittest sportsedge.markets.test_player_features_run_it -v
+      - name: Fit independent train-only NFL CFB CBB player opportunities and rates (synthetic)
+        run: python -m unittest sportsedge.markets.test_pit_player_history_fit -v
       - name: Inspect private screenshot bytes and match two-sided DK prices to frozen forecasts
         run: python -m unittest sportsedge.markets.test_screenshot_line_handoff -v
       - name: Test point-in-time manifest original bytes and chronology
