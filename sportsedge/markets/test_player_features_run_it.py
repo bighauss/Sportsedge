@@ -82,6 +82,104 @@ def _update_features(p, path, features):
 
 
 class DirectThreeSportPlayerResearch(unittest.TestCase):
+    def test_cbb_direct_team_and_player_features_same_event(self):
+        from models.cbb import test_cbb
+        paths = {k: v for k, v in test_cbb.make_samples().items()
+                 if k not in ("odds", "props")}
+        now = datetime.now(timezone.utc)
+        asof = (now - timedelta(hours=1)).isoformat()
+        with TemporaryDirectory() as d:
+            venue = Path(d) / "venue.csv"
+            fmt = lambda dt: dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            venue.write_text(
+                "game_id,neutral,source,source_sha256,published_utc,captured_utc,tipoff_utc\\n".replace("\\n", "\n") +
+                "C1,0,ESPN," + "a" * 64 + "," +
+                fmt(now-timedelta(hours=4)) + "," +
+                fmt(now-timedelta(hours=3)) + "," +
+                fmt(now+timedelta(hours=3)) + "\n")
+            paths["venue_registry"] = str(venue)
+            p = manifest()
+            p.pop("projection")
+            p["projection_ref"] = {
+                "sport": "CBB", "event_id": "C1", "asof_utc": asof,
+                "feature_paths": paths,
+                "source_manifest": source_manifest(paths,"CBB","C1",asof),
+            }
+            p["markets"] = []
+            p["roster_ids"] = ["CBB-P1"]
+            features = {
+                "schema": SCHEMA, "sport": "CBB", "event_id": "C1",
+                "home_id": "Alpha", "away_id": "Beta",
+                "event_start_utc": (now + timedelta(hours=3)).isoformat(),
+                "forecast_asof_utc": asof,
+                "trained_until_utc": (now-timedelta(days=10)).isoformat(),
+                "source_published_utc": (now-timedelta(hours=5)).isoformat(),
+                "source_captured_utc": (now-timedelta(hours=4)).isoformat(),
+                "source_snapshot_sha256": H, "source_id": "CBB_HOOPR",
+                "frozen_roster": {"CBB-P1": "Alpha"},
+                "players": [
+                    _player("POINTS", "MINUTES", 30, .6, 5, "CBB-P1", "Alpha"),
+                    _player("ASSISTS", "MINUTES", 30, .12, 2, "CBB-P1", "Alpha"),
+                ],
+            }
+            path = Path(d) / "cbb_features.json"
+            raw = json.dumps(features).encode()
+            path.write_bytes(raw)
+            p["player_features_ref"] = {
+                "path": str(path),
+                "raw_sha256": "sha256:" + sha256(raw).hexdigest(),
+                "odds_observed_at_utc": (now-timedelta(minutes=2)).isoformat(),
+            }
+            out = run_from_manifest(p)
+            self.assertEqual(out["sport"], "CBB")
+            self.assertEqual(out["player_projection_builder_census"]["produced"], 2)
+            self.assertEqual(out["approved_stake_u"], 0)
+
+    def test_cfb_direct_team_and_player_features_same_event(self):
+        from models.cfb import make_samples
+        make_samples.main()
+        root = Path(__file__).resolve().parents[2] / "models/cfb/samples"
+        inputs = json.loads((root/"inputs.json").read_text())
+        paths = {k: str(root/v) for k, v in inputs.items()}
+        now = datetime.now(timezone.utc)
+        asof = (now-timedelta(hours=1)).isoformat()
+        with TemporaryDirectory() as d:
+            p = manifest()
+            p.pop("projection")
+            p["projection_ref"] = {
+                "sport": "CFB", "event_id": "1001", "asof_utc": asof,
+                "feature_paths": paths,
+                "source_manifest": source_manifest(paths,"CFB","1001",asof),
+            }
+            p["distribution"]["sport"] = "CFB"
+            p["markets"] = []
+            p["roster_ids"] = ["CFB-P1"]
+            features = {
+                "schema": SCHEMA, "sport": "CFB", "event_id": "1001",
+                "home_id": "Alpha State", "away_id": "Beta Tech",
+                "event_start_utc": (now+timedelta(hours=3)).isoformat(),
+                "forecast_asof_utc": asof,
+                "trained_until_utc": (now-timedelta(days=10)).isoformat(),
+                "source_published_utc": (now-timedelta(hours=5)).isoformat(),
+                "source_captured_utc": (now-timedelta(hours=4)).isoformat(),
+                "source_snapshot_sha256": H, "source_id": "CFB_DATA",
+                "frozen_roster": {"CFB-P1": "Alpha State"},
+                "players": [_player("RUSH_YDS", "RUSH_ATT", 18, 5, 25,
+                                    "CFB-P1", "Alpha State")],
+            }
+            path = Path(d) / "cfb_features.json"
+            raw = json.dumps(features).encode()
+            path.write_bytes(raw)
+            p["player_features_ref"] = {
+                "path": str(path),
+                "raw_sha256": "sha256:" + sha256(raw).hexdigest(),
+                "odds_observed_at_utc": (now-timedelta(minutes=2)).isoformat(),
+            }
+            out = run_from_manifest(p)
+            self.assertEqual(out["sport"], "CFB")
+            self.assertEqual(out["player_projection_builder_census"]["produced"], 1)
+            self.assertEqual(out["official_counted"], 0)
+
     def test_nfl_real_recovered_team_model_plus_private_features(self):
         with TemporaryDirectory() as d:
             p, features, path = _nfl_setup(d)
