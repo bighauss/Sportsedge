@@ -201,3 +201,51 @@ def build_player_forecast_csv(payload: dict) -> tuple[bytes, dict]:
         "official_counted": 0, "approved_stake_u": 0,
         "status": "PAPER_0U_UNVERIFIED" if output else "BLOCK_NO_PLAYER_FORECASTS",
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Create-only private files for existing player_file intake."""
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(description="PAPER / 0u pregame player means")
+    parser.add_argument("features_json")
+    parser.add_argument("forecast_csv")
+    parser.add_argument("census_json")
+    args = parser.parse_args(argv)
+    source = Path(args.features_json).resolve()
+    csv_out = Path(args.forecast_csv).resolve()
+    census_out = Path(args.census_json).resolve()
+    repository = Path(__file__).resolve().parents[2]
+    for candidate in (source, csv_out, census_out):
+        if candidate == repository or repository in candidate.parents:
+            raise ValueError("PLAYER_BUILD_PRIVATE_DATA_MUST_STAY_OUTSIDE_PUBLIC_REPO")
+    if csv_out == census_out or csv_out.exists() or census_out.exists():
+        raise ValueError("PLAYER_BUILD_CREATE_ONLY_OUTPUT_REQUIRED")
+
+    def no_dupes(pairs):
+        obj = {}
+        for key, value in pairs:
+            if key in obj:
+                raise ValueError("PLAYER_BUILD_DUPLICATE_JSON_KEY")
+            obj[key] = value
+        return obj
+
+    def no_nan(value):
+        raise ValueError("PLAYER_BUILD_NONFINITE_JSON:" + value)
+
+    payload = json.loads(source.read_bytes(), object_pairs_hook=no_dupes,
+                         parse_constant=no_nan)
+    raw, census = build_player_forecast_csv(payload)
+    # A zero-row research output is never admitted as a valid player file.
+    if not census["produced"]:
+        raise ValueError("PLAYER_BUILD_NO_ADMISSIBLE_FORECAST_ROWS")
+    with csv_out.open("xb") as out:
+        out.write(raw)
+    with census_out.open("xb") as out:
+        out.write((json.dumps(census, sort_keys=True, indent=2) + "\n").encode("utf-8"))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
