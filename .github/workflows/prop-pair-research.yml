@@ -1,0 +1,30 @@
+name: Player-prop joint probability research (PIT synthetic)
+on:
+  pull_request:
+    paths:
+      - 'research/prop_pairs/joint_prop_audit.py'
+      - 'research/prop_pairs/test_joint_prop_audit.py'
+      - '.github/workflows/prop-pair-research.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/prop_pairs/joint_prop_audit.py'
+      - 'research/prop_pairs/test_joint_prop_audit.py'
+      - '.github/workflows/prop-pair-research.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile research-only scorer
+        run: python -m compileall -q research/prop_pairs
+      - name: PIT, covariance, and adversarial pair tests
+        run: python -m unittest discover -s research/prop_pairs -p 'test_joint_prop_audit.py' -v
