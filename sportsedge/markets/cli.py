@@ -27,6 +27,7 @@ from .score_dispersion_fit import fit_score_residuals, private_path, MAX_BYTES a
 from .period_share_fit import fit_period_shares, _private_path as period_private_path, MAX_SIZE as MAX_PERIOD_BYTES
 from .player_forecast_intake import ingest_player_forecast_csv
 from .player_projection_builder import build_player_forecast_csv
+from .pit_player_history_fit import fit_player_history
 from .run_it_research import MarketCandidate,run_research_board
 from .source_ingestion import SOURCES
 from sportsedge.odds.storage import EvidenceChain
@@ -145,9 +146,68 @@ def _player_features_from_private_reference(info, projection, roster):
     return intake, census
 
 
+def _player_history_from_private_reference(info, projection, roster):
+    """Fit actual earlier-game stats only; never use quote or current matchup as rate."""
+    required={"history_path", "history_sha256", "context_path",
+              "context_sha256", "odds_observed_at_utc"}
+    _only_keys(info,required,"player_history_ref")
+    if not isinstance(info,dict) or set(info)!=required:
+        raise ValueError("PLAYER_HISTORY_REF_REQUIRED_FIELDS_MISSING")
+    def read_checked(path, expected, maxbytes):
+        if not isinstance(path,str) or not path:
+            raise ValueError("PLAYER_HISTORY_PRIVATE_PATH_REQUIRED")
+        source=Path(path)
+        if source.is_symlink():
+            raise ValueError("PLAYER_HISTORY_SYMLINK_REFUSED")
+        lexical=source.absolute()
+        root=Path(__file__).resolve().parents[2]
+        resolved=source.resolve()
+        if any(p==root or root in p.parents for p in (lexical,resolved)):
+            raise ValueError("PLAYER_HISTORY_PUBLIC_REPO_PATH_REFUSED")
+        if not source.is_file() or not 0<source.stat().st_size<=maxbytes:
+            raise ValueError("PLAYER_HISTORY_SOURCE_MISSING_OR_TOO_LARGE")
+        data=source.read_bytes()
+        if "sha256:"+sha256(data).hexdigest()!=expected:
+            raise ValueError("PLAYER_HISTORY_ORIGINAL_SOURCE_HASH_MISMATCH")
+        return data
+    raw=read_checked(info["history_path"],info["history_sha256"],8_000_000)
+    ctx_raw=read_checked(info["context_path"],info["context_sha256"],1_000_000)
+    try:
+        context=json.loads(ctx_raw.decode("utf-8"),
+                           object_pairs_hook=_unique_json_keys,
+                           parse_constant=_deny_nonfinite_json)
+    except UnicodeDecodeError as exc:
+        raise ValueError("PLAYER_HISTORY_CONTEXT_NOT_UTF8") from exc
+    if not isinstance(context,dict) or (
+        context.get("sport"),context.get("event_id"),
+        context.get("home_id"),context.get("away_id")
+    )!=(projection.sport,projection.event_id,projection.home_id,projection.away_id):
+        raise ValueError("PLAYER_HISTORY_TEAM_EVENT_IDENTITY_MISMATCH")
+    if _iso(context.get("forecast_asof_utc"))!=projection.asof_utc:
+        raise ValueError("PLAYER_HISTORY_DIFFERENT_TEAM_MODEL_FREEZE")
+    frozen=context.get("frozen_roster")
+    if type(frozen) is not dict or set(frozen)!=set(roster):
+        raise ValueError("PLAYER_HISTORY_FROZEN_ROSTER_MISMATCH")
+    quote=_iso(info["odds_observed_at_utc"])
+    if not projection.asof_utc<=quote<_iso(context["event_start_utc"]):
+        raise ValueError("PLAYER_HISTORY_QUOTE_NOT_PREGAME_OR_BEFORE_MODEL")
+    features,history_census=fit_player_history(raw,context)
+    forecast,census=build_player_forecast_csv(features)
+    if census["produced"]<1:
+        raise ValueError("PLAYER_HISTORY_NO_ADMISSIBLE_PROP_FORECASTS")
+    intake=ingest_player_forecast_csv(
+        forecast,sport=projection.sport,event_id=projection.event_id,
+        game_roster_ids=roster,
+        event_team_ids=frozenset({projection.home_id,projection.away_id}),
+        forecast_freeze_utc=projection.asof_utc,
+        odds_observed_at_utc=quote,
+        expected_file_sha256=census["file_sha256"])
+    return intake,{**census,"history_fit":history_census}
+
+
 def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     _only_keys(payload,{"projection","projection_ref","distribution","dispersion_fit_ref",
-                        "period_fit_ref","markets","player_file","player_features_ref","roster_ids","event_team_ids",
+                        "period_fit_ref","markets","player_file","player_features_ref","player_history_ref","roster_ids","event_team_ids",
                         "simulation_count","simulation_seed"},"root")
     if ("projection" in payload)==("projection_ref" in payload):
         raise ValueError("EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED")
@@ -275,9 +335,18 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
         raise ValueError("INVALID_FROZEN_ROSTER_IDS")
     players=()
     player_builder_census=None
-    if "player_file" in payload and "player_features_ref" in payload:
+    if sum(key in payload for key in
+           ("player_file","player_features_ref","player_history_ref"))>1:
         raise ValueError("ONLY_ONE_PLAYER_FORECAST_SOURCE_ALLOWED")
-    if "player_features_ref" in payload:
+    if "player_history_ref" in payload:
+        if "projection_ref" not in payload:
+            raise ValueError("PLAYER_HISTORY_REQUIRES_DIRECT_OWN_TEAM_MODEL")
+        if projection.sport not in ("NFL","CFB","CBB"):
+            raise ValueError("PLAYER_HISTORY_SPORT_UNSUPPORTED")
+        intake,player_builder_census=_player_history_from_private_reference(
+            payload["player_history_ref"],projection,roster)
+        players=intake.moments
+    elif "player_features_ref" in payload:
         if "projection_ref" not in payload:
             raise ValueError("PLAYER_FEATURES_REQUIRE_DIRECT_OWN_TEAM_MODEL")
         if projection.sport not in ("NFL", "CFB", "CBB"):
@@ -355,6 +424,8 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     results["source_transport_authentication"]=False
     results["historical_backtest_certified"]=False
     results["player_projection_producer"] = (
+        "THREE_SPORT_PRIOR_GAME_HISTORY_UNCALIBRATED"
+        if "player_history_ref" in payload else
         "THREE_SPORT_PRIVATE_FEATURES_UNVERIFIED"
         if player_builder_census is not None else
         "EXTERNAL_PLAYER_FORECAST_CSV_UNVERIFIED" if "player_file" in payload
