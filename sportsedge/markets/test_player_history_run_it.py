@@ -162,8 +162,11 @@ class FullHistoryToScreenHandoff(unittest.TestCase):
         with TemporaryDirectory() as d:
             slate,snap,_=fixture(d)
             p,_,_,_=history_refs(d,slate)
+            from sportsedge.markets.test_cli import manifest
             p["projection"]={
+                **manifest()["projection"],
                 "sport":"NFL","event_id":"NFL-TEST",
+                "home_id":"Alpha","away_id":"Beta",
             }
             del p["projection_ref"]
             with self.assertRaisesRegex(ValueError,"PLAYER_HISTORY_REQUIRES_DIRECT_OWN_TEAM_MODEL"):
