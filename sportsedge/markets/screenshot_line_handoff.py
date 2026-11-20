@@ -289,7 +289,7 @@ def prepare_line_capture(frozen_slate: dict, screenshots: dict,
         variants.append(slate)
     return {
         "schema": "sportsedge-screenshot-line-preflight-v1",
-        "captured_offers": len(observations),
+        "captured_offers": total,
         "paired_markets": len(pairs),
         "blocked_offers": blocked,
         "capture_sha256": sorted(used_image),
