@@ -343,6 +343,8 @@ def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=No
                     research_feature_sha256=result.get("feature_sha256"),
                     model_method=result.get("model_projection_method"),
                     pit_status=result.get("pit_file_manifest_status"),
+                    player_projection_producer=result.get("player_projection_producer"),
+                    player_projection_builder_census=result.get("player_projection_builder_census"),
                     research_rows=rows,
                     sgp_joint_pricing_certified=False,
                 )
