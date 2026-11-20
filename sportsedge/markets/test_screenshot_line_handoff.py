@@ -98,6 +98,36 @@ class ScreenshotOnlyHandoffTest(unittest.TestCase):
             self.assertTrue(all(x["reason"] == "MISSING_OR_AMBIGUOUS_OPPOSITE_PRICE"
                                 for x in r["blocked_offers"]))
 
+    def test_different_images_cannot_form_same_market_two_sided_quote(self):
+        with TemporaryDirectory() as d:
+            slate, snap, now = fixture(d)
+            original = snap["captures"][0]
+            one = deepcopy(original)
+            other = deepcopy(original)
+            one["offers"] = [offer("TOTAL", "OVER", "42.5")]
+            other["offers"] = [offer("TOTAL", "UNDER", "42.5")]
+            image = Path(d) / "different_screen.png"
+            image.write_bytes(bytes.fromhex("89504e470d0a1a0a") + b"SECOND-SYNTHETIC-SCREEN")
+            other["image_path"] = str(image)
+            other["image_sha256"] = "sha256:" + sha256(image.read_bytes()).hexdigest()
+            snap["captures"] = [one, other]
+            result = prepare_line_capture(slate, snap, now=now)
+            self.assertEqual(result["paired_markets"], 0)
+            self.assertEqual(len(result["blocked_offers"]), 2)
+
+    def test_unmodelled_sgp_remains_visible_block_while_totals_price(self):
+        with TemporaryDirectory() as d:
+            slate, snap, now = fixture(d)
+            sgp = offer("TOTAL", "OVER", "42.5")
+            sgp["market"]["kind"] = "SGP"
+            sgp["market"]["line"] = ""
+            snap["captures"][0]["offers"].append(sgp)
+            result = prepare_line_capture(slate, snap, now=now)
+            self.assertEqual(result["captured_offers"], 5)
+            self.assertEqual(result["paired_markets"], 2)
+            self.assertEqual(result["blocked_offers"][0]["reason"],
+                             "SCREENSHOT_SGP_NOT_SUPPORTED_NO_JOINT_MODEL")
+
     def test_one_sided_only_block_no_invented_negative_110(self):
         with TemporaryDirectory() as d:
             slate, snap, now = fixture(d)
