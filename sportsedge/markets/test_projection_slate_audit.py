@@ -139,5 +139,38 @@ class TestSlateProjectionOverlay(unittest.TestCase):
         self.assertIsNone(out["card"])
 
 
+    def test_three_sport_five_family_matrix_does_not_hallucinate_missing_projections(self):
+        out = run_slate(fixture())
+        matrix = out["cbb_cfb_nfl_projection_matrix"]
+        self.assertEqual(set(matrix), {"CBB", "CFB", "NFL"})
+        cbb = matrix["CBB"]["families"]
+        self.assertEqual(set(cbb), {"ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"})
+        self.assertEqual(cbb["TOTAL"]["submitted_candidates"], 1)
+        self.assertEqual(cbb["TOTAL"]["valid_model_receipt_shape_unverified"], 0)
+        self.assertEqual(cbb["TOTAL"]["status"],
+                         "BLOCK_MISSING_OR_INVALID_INDEPENDENT_MODEL_RECEIPTS")
+        self.assertEqual(cbb["PLAYER_PROP"]["status"],
+                         "MARKET_NOT_SUBMITTED_OFFERING_UNVERIFIED")
+        self.assertEqual(matrix["NFL"]["families"]["TEAM_TOTAL"]["status"],
+                         "MARKET_NOT_SUBMITTED_OFFERING_UNVERIFIED")
+        self.assertEqual(matrix["CFB"]["families"]["SPREAD"]["status"],
+                         "NO_SCHEDULED_EVENTS_SUPPLIED")
+        self.assertFalse(matrix["CBB"]["all_market_families_verified"])
+        self.assertEqual(out["approved_stake_u"], 0)
+
+    def test_three_sport_matrix_valid_receipt_is_still_paper_not_market_complete(self):
+        f = fixture()
+        f["projection_evidence"] = [make_receipt(f, run_slate(f))]
+        out = run_slate(f)
+        cbb = out["cbb_cfb_nfl_projection_matrix"]["CBB"]["families"]
+        self.assertEqual(cbb["TOTAL"]["valid_model_receipt_shape_unverified"], 1)
+        self.assertEqual(cbb["TOTAL"]["status"], "PAPER_MODEL_RECEIPT_SHAPE_ONLY")
+        self.assertFalse(cbb["TOTAL"]["source_authenticated"])
+        self.assertFalse(cbb["TOTAL"]["calibration_verified"])
+        self.assertEqual(cbb["PLAYER_PROP"]["valid_model_receipt_shape_unverified"], 0)
+        self.assertEqual(out["independent_projection_coverage"]["verified_model_ev_count"], 0)
+
+
+
 if __name__ == "__main__":
     unittest.main()
