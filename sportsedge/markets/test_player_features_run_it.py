@@ -140,7 +140,8 @@ class DirectThreeSportPlayerResearch(unittest.TestCase):
         make_samples.main()
         root = Path(__file__).resolve().parents[2] / "models/cfb/samples"
         inputs = json.loads((root/"inputs.json").read_text())
-        paths = {k: str(root/v) for k, v in inputs.items()}
+        paths = {k: str(root/v) for k, v in inputs.items()
+                 if k not in ("lines", "lines_extra", "props", "odds")}
         now = datetime.now(timezone.utc)
         asof = (now-timedelta(hours=1)).isoformat()
         with TemporaryDirectory() as d:
