@@ -55,8 +55,8 @@ def _private_image(path: str, digest: str) -> bytes:
         raise ValueError("SCREENSHOT_ORIGINAL_INVALID_SIZE_OR_TYPE")
     raw = lexical.read_bytes()
     valid = (
-        raw.startswith(b"\\x89PNG\\r\\n\\x1a\\n") or
-        raw.startswith(b"\\xff\\xd8\\xff") or
+        raw.startswith(b"\x89PNG\r\n\x1a\n") or
+        raw.startswith(b"\xff\xd8\xff") or
         (raw.startswith(b"RIFF") and raw[8:12] == b"WEBP") or
         raw.startswith(b"%PDF-")
     )
