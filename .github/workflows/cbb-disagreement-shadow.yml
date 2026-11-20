@@ -1,0 +1,30 @@
+name: CBB shadow disagreement calibration
+on:
+  pull_request:
+    paths:
+      - 'research/audit/cbb_disagreement_shrinkage_shadow.py'
+      - 'research/audit/test_cbb_disagreement_shrinkage_shadow.py'
+      - '.github/workflows/cbb-disagreement-shadow.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/audit/cbb_disagreement_shrinkage_shadow.py'
+      - 'research/audit/test_cbb_disagreement_shrinkage_shadow.py'
+      - '.github/workflows/cbb-disagreement-shadow.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-research-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile preregistered shrinkage experiment
+        run: python -m compileall -q research/audit/cbb_disagreement_shrinkage_shadow.py research/audit/test_cbb_disagreement_shrinkage_shadow.py
+      - name: Chronological shadow holdout against prior and market close
+        run: python -m unittest discover -v -s research/audit -p test_cbb_disagreement_shrinkage_shadow.py
