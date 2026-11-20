@@ -68,3 +68,24 @@ python -m unittest sportsedge.markets.test_pit_player_history_fit -v
 ## Boundaries before "only screenshots produce wagers"
 
 This baseline produces **conditional research-only player moments** when genuine immutable earlier-game rows and pregame active rosters already exist. Automated feed capture and normalization, exact real event and player roster identity, actual injury participation, new-game opportunities, team-score model source, bookmaker-original offer provenance, fit of calibrated conditional and joint distributions, untouched forward results, and issue #10 gates A-E remain prerequisites. Absent any verified ingredient, card emission stays PAPER/0u / BLOCK.
+
+## Direct RUN IT input, without intermediate player-feature files
+
+The existing event `projection_ref` research manifest may now include **exactly one** private `player_history_ref` instead of `player_features_ref` or `player_file`:
+
+```json
+"player_history_ref": {
+  "history_path": "/private/previous_only_player_game_stats.csv",
+  "history_sha256": "sha256:<real sha256 of normalized game stat bytes>",
+  "context_path": "/private/game_and_roster_freeze.json",
+  "context_sha256": "sha256:<real sha256 of event context bytes>",
+  "odds_observed_at_utc": "<actual independent sportsbook observed UTC>"
+}
+```
+
+It validates both original private files against their hashes, rejects changed/late, mismatched roster/event/team and model-cutoff context, and computes independent opportunities/rates/empirical SD in memory. The exact forecast CSV then passes unchanged through `player_forecast_intake.py` and the scenario/line pricer; the final report exposes `player_projection_producer: THREE_SPORT_PRIOR_GAME_HISTORY_UNCALIBRATED` and a complete nested `player_projection_builder_census.history_fit` with blocked status. This does not modify a historic bet, source or frozen v5.
+
+The merged screenshot handoff accepts a frozen slate containing such `player_history_ref` event manifests. **That is a functioning research software pipeline from earlier-game player stat rows to fresh screenshot observations.** It still does not fetch/normalize real league feeds, prove that the point-in-time roster is authentic, fit a mature opponent-adjusted model, or certify wager probabilities. A pregame source worker must privately build and pin these files without user involvement before the last screenshot arrives. No model source or official betting gate can be substituted by a screenshot.
+
+End-to-end synthetic regression:
+`python -m unittest sportsedge.markets.test_player_history_run_it -v`.

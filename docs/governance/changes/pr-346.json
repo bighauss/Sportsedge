@@ -1,0 +1,65 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 346,
+  "base_commit": "b2ce0b7f7d4a44c84a62bb57def719956b2fce32",
+  "protected_paths": [
+    ".github/workflows/allmarkets-research.yml",
+    "sportsedge/markets/cli.py",
+    "sportsedge/markets/test_player_history_run_it.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/341",
+  "change_summary": "Wire exact pregame source-frozen CBB CFB NFL player game-stat history to own-model rate/volume/dispersion forecast to RUN IT screen capture research pricing, without archived feature CSV manual intermediate or frozen v5 changes.",
+  "assumptions": [
+    "Local archived historical data and source timestamps need independent source attestation and cross-league normalization before production.",
+    "The prior-five empirical SD and rate are a research-only, not forward-calibrated player prop probability model.",
+    "Screenshot-only bookmaker data is not authenticated provider-original, no promised positive EV or official wager follows from any synthetic test.",
+    "All player inputs require stable exact event team and roster identities; missing players or periods remain blocked."
+  ],
+  "agent_identity": "ChatGPT GPT-6 SportsEdge archived history RUN IT integration",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "authenticated live CBB CFB NFL source-to-screen betting readiness",
+    "before": null,
+    "unit": "independent validated full-slate official wagers",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest sportsedge.markets.test_player_history_run_it -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "b2ce0b7f7d4a44c84a62bb57def719956b2fce32",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest sportsedge.markets.test_player_history_run_it -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
