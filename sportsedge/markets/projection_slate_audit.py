@@ -36,6 +36,79 @@ def _reason(reason: str) -> dict:
     }
 
 
+
+# An explicit five-family coverage contract for the three owner-priority sports.
+# An absent market is UNKNOWN offering coverage, not evidence of no DK offering.
+THREE_SPORT_FAMILIES = {
+    "CBB": ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"),
+    "CFB": ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"),
+    "NFL": ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"),
+}
+
+
+def _three_sport_projection_matrix(result: dict) -> dict:
+    """Report missing own-model receipts for every game/market family.
+
+    Never infer independently modeled player props from a score projection.
+    A valid receipt shape is not authenticated input or calibrated EV.
+    """
+    requested = result.get("sport_coverage", {})
+    report = {}
+    for sport, families in THREE_SPORT_FAMILIES.items():
+        games = [e for e in result["events"] if e["sport"] == sport]
+        family_report = {}
+        for family in families:
+            submitted = sum(e.get("families", {}).get(family, {}).get(
+                "submitted_research_candidates", 0) for e in games)
+            matched_rows = []
+            for event in games:
+                for row in event.get("research_rows", []):
+                    market = row.get("market")
+                    if (type(market) in (tuple, list) and len(market) >= 3
+                            and market[2] == family):
+                        matched_rows.append(row)
+            valid = sum(row.get("independent_projection", {}).get(
+                "research_projection_usable") is True for row in matched_rows)
+            missing_rows = max(0, submitted - len(matched_rows))
+            blocked = len(matched_rows) - valid
+            no_family_rows_games = sum(
+                e.get("families", {}).get(family, {}).get(
+                    "submitted_research_candidates", 0) == 0 for e in games)
+            if sport not in requested:
+                status = "SPORT_NOT_REQUESTED"
+            elif not games:
+                status = "NO_SCHEDULED_EVENTS_SUPPLIED"
+            elif submitted == 0:
+                status = "MARKET_NOT_SUBMITTED_OFFERING_UNVERIFIED"
+            elif missing_rows:
+                status = "BLOCK_MISSING_RESEARCH_OUTPUT_ROWS"
+            elif blocked:
+                status = "BLOCK_MISSING_OR_INVALID_INDEPENDENT_MODEL_RECEIPTS"
+            elif no_family_rows_games:
+                status = "PARTIAL_EVENT_MARKET_CENSUS_UNVERIFIED"
+            else:
+                status = "PAPER_MODEL_RECEIPT_SHAPE_ONLY"
+            family_report[family] = {
+                "submitted_candidates": submitted,
+                "rows_with_projection_audit": len(matched_rows),
+                "valid_model_receipt_shape_unverified": valid,
+                "blocked_or_invalid_model_receipts": blocked,
+                "missing_research_output_rows": missing_rows,
+                "events_without_submitted_family": no_family_rows_games,
+                "status": status,
+                "source_authenticated": False,
+                "calibration_verified": False,
+                "official_counted": 0,
+            }
+        report[sport] = {
+            "scheduled_events_supplied": len(games),
+            "families": family_report,
+            "all_market_families_verified": False,
+            "approved_stake_u": 0,
+        }
+    return report
+
+
 def attach_independent_projection_audit(result: dict, evidence: list[dict]) -> dict:
     """Attach a source-UNVERIFIED metadata audit to the existing research rows.
 
@@ -140,4 +213,5 @@ def attach_independent_projection_audit(result: dict, evidence: list[dict]) -> d
         "verified_model_ev_count": 0,
         "official_counted": 0, "approved_stake_u": 0,
     }
+    result["cbb_cfb_nfl_projection_matrix"] = _three_sport_projection_matrix(result)
     return result
