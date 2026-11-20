@@ -26,6 +26,7 @@ from .projection_distribution import DistributionInput,generate_score_scenarios
 from .score_dispersion_fit import fit_score_residuals, private_path, MAX_BYTES as MAX_FIT_BYTES
 from .period_share_fit import fit_period_shares, _private_path as period_private_path, MAX_SIZE as MAX_PERIOD_BYTES
 from .player_forecast_intake import ingest_player_forecast_csv
+from .player_projection_builder import build_player_forecast_csv
 from .run_it_research import MarketCandidate,run_research_board
 from .source_ingestion import SOURCES
 from sportsedge.odds.storage import EvidenceChain
@@ -89,9 +90,64 @@ def _quote(data:dict|None)->PriceReceipt|None:
     return PriceReceipt(**r)
 
 
+def _player_features_from_private_reference(info, projection, roster):
+    """Build owned pregame player means from frozen private input bytes.
+
+    The file hash confirms local byte integrity, NOT authentic source
+    publication time or fitted prop accuracy. PAPER / 0u on every path.
+    """
+    _only_keys(info, {"path", "raw_sha256", "odds_observed_at_utc"},
+               "player_features_ref")
+    if set(info) != {"path", "raw_sha256", "odds_observed_at_utc"}:
+        raise ValueError("PLAYER_FEATURE_REFERENCE_REQUIRED_FIELDS_MISSING")
+    source = Path(info["path"])
+    if source.is_symlink():
+        raise ValueError("PLAYER_FEATURE_REFERENCE_SYMLINK_REFUSED")
+    source = source.resolve()
+    repository = Path(__file__).resolve().parents[2]
+    if source == repository or repository in source.parents:
+        raise ValueError("PLAYER_FEATURE_REFERENCE_MUST_BE_PRIVATE")
+    if not source.is_file() or not 0 < source.stat().st_size <= 4_000_000:
+        raise ValueError("PLAYER_FEATURE_SOURCE_MISSING_OR_OVERSIZED")
+    original = source.read_bytes()
+    if "sha256:" + sha256(original).hexdigest() != info["raw_sha256"]:
+        raise ValueError("PLAYER_FEATURE_ORIGINAL_BYTES_HASH_MISMATCH")
+    try:
+        features = json.loads(
+            original.decode("utf-8"), object_pairs_hook=_unique_json_keys,
+            parse_constant=_deny_nonfinite_json)
+    except UnicodeDecodeError as exc:
+        raise ValueError("PLAYER_FEATURE_SOURCE_NOT_UTF8_JSON") from exc
+    if not isinstance(features, dict) or (
+        features.get("sport"), features.get("event_id"),
+        features.get("home_id"), features.get("away_id")
+    ) != (projection.sport, projection.event_id,
+          projection.home_id, projection.away_id):
+        raise ValueError("PLAYER_FEATURE_MODEL_EVENT_TEAM_MISMATCH")
+    if _iso(features.get("forecast_asof_utc")) != projection.asof_utc:
+        raise ValueError("PLAYER_FEATURE_DIFFERENT_MODEL_FREEZE")
+    frozen = features.get("frozen_roster")
+    if type(frozen) is not dict or set(frozen) != set(roster):
+        raise ValueError("PLAYER_FEATURE_FROZEN_ROSTER_CENSUS_MISMATCH")
+    quote_utc = _iso(info["odds_observed_at_utc"])
+    if quote_utc >= _iso(features.get("event_start_utc")):
+        raise ValueError("PLAYER_FEATURE_QUOTE_NOT_PREGAME")
+    raw, census = build_player_forecast_csv(features)
+    if not census["produced"]:
+        raise ValueError("PLAYER_FEATURE_NO_ADMISSIBLE_INDEPENDENT_MOMENTS")
+    intake = ingest_player_forecast_csv(
+        raw, sport=projection.sport, event_id=projection.event_id,
+        game_roster_ids=roster,
+        event_team_ids=frozenset({projection.home_id, projection.away_id}),
+        forecast_freeze_utc=projection.asof_utc,
+        odds_observed_at_utc=quote_utc,
+        expected_file_sha256=census["file_sha256"])
+    return intake, census
+
+
 def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     _only_keys(payload,{"projection","projection_ref","distribution","dispersion_fit_ref",
-                        "period_fit_ref","markets","player_file","roster_ids","event_team_ids",
+                        "period_fit_ref","markets","player_file","player_features_ref","roster_ids","event_team_ids",
                         "simulation_count","simulation_seed"},"root")
     if ("projection" in payload)==("projection_ref" in payload):
         raise ValueError("EXACTLY_ONE_TEAM_PROJECTION_SOURCE_REQUIRED")
@@ -218,7 +274,18 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
     if any(not isinstance(p,str) or not p.strip() for p in roster):
         raise ValueError("INVALID_FROZEN_ROSTER_IDS")
     players=()
-    if "player_file" in payload:
+    player_builder_census=None
+    if "player_file" in payload and "player_features_ref" in payload:
+        raise ValueError("ONLY_ONE_PLAYER_FORECAST_SOURCE_ALLOWED")
+    if "player_features_ref" in payload:
+        if "projection_ref" not in payload:
+            raise ValueError("PLAYER_FEATURES_REQUIRE_DIRECT_OWN_TEAM_MODEL")
+        if projection.sport not in ("NFL", "CFB", "CBB"):
+            raise ValueError("PLAYER_FEATURES_UNSUPPORTED_SPORT")
+        intake, player_builder_census = _player_features_from_private_reference(
+            payload["player_features_ref"], projection, roster)
+        players=intake.moments
+    elif "player_file" in payload:
         info=_only_keys(payload["player_file"],
             {"path","raw_sha256","odds_observed_at_utc"},"player_file")
         src=Path(info["path"])
@@ -287,6 +354,12 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
             if "projection_ref" in payload else "CALLER_SUPPLIED_UNVERIFIED_MEAN")
     results["source_transport_authentication"]=False
     results["historical_backtest_certified"]=False
+    results["player_projection_producer"] = (
+        "THREE_SPORT_PRIVATE_FEATURES_UNVERIFIED"
+        if player_builder_census is not None else
+        "EXTERNAL_PLAYER_FORECAST_CSV_UNVERIFIED" if "player_file" in payload
+        else "NO_PLAYER_STAT_FORECASTS")
+    results["player_projection_builder_census"] = player_builder_census
     return results
 
 

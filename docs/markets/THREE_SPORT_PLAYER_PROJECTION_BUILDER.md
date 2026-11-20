@@ -79,3 +79,24 @@ The parent manifest must also include exactly matching roster IDs, home/away tea
 4. Independently authenticate original DK quotes, exact side/line/settlement and source chain; close hard gates A–E separately before any real-money output.
 
 Do not report this research capability as full live projection coverage or independently proven +EV.
+
+## Direct RUN IT research integration (optional private feature reference)
+
+The `sportsedge.markets.cli` runner may now accept a **single** `player_features_ref` for NFL, CFB or CBB directly alongside the genuine team `projection_ref`. It does not need an intermediate player CSV or manual data copy. It refuses use alongside `player_file` and refuses fallback to a caller-invented team projection. It verifies exact sport, event, home/away IDs, roster-ID census, team forecast freeze time, source-file byte SHA256 and pregame quote observation time before passing an in-memory CSV through the existing intake and score/player simulation.
+
+Example **fragment** in an event research manifest, alongside a real `projection_ref`, two-sided market receipts, `distribution`, `roster_ids` and `markets`:
+
+```json
+"player_features_ref": {
+  "path": "/private/observed_nfl_event_player_features.json",
+  "raw_sha256": "sha256:<actual full original file digest>",
+  "odds_observed_at_utc": "<actual UTC pregame original sportsbook observation>"
+}
+```
+
+The `player_features_ref` file must follow the synthetic schema illustrated above but contain **real** source-frozen, independent opportunities/rates/SDs rather than illustrative numbers. Only NFL, CFB, CBB are supported by this direct route. CBB and CFB team models use their point-in-time frozen feature manifests; NFL uses the reconstructed opponent-adjusted rating forecast source. Mixed-feature identity, missing freeze evidence, lookahead, poststart quotes and unsigned/mismatched file hashes are rejected. No bookmaker lines are used to estimate a player mean.
+
+Every research report exposes `player_projection_producer` and `player_projection_builder_census`, including the submitted/produced/blocked quantities. Full-slate outputs retain the same per-event census. This describes **code-path readiness only**. The separate independently authenticated market-family matrix and A–E evidence requirements remain unsatisfied without actual original pregame receipts and forward calibration.
+
+Integration tests are synthetic for all three sports:
+`python -m unittest sportsedge.markets.test_player_features_run_it -v`.

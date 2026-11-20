@@ -28,6 +28,8 @@ jobs:
         run: python -m unittest sportsedge.markets.test_player_forecast_intake -v
       - name: Produce and independently ingest NFL CFB CBB player means (synthetic)
         run: python -m unittest sportsedge.markets.test_player_projection_builder -v
+      - name: Run CBB CFB NFL team plus own-player integrated research pipeline
+        run: python -m unittest sportsedge.markets.test_player_features_run_it -v
       - name: Test point-in-time manifest original bytes and chronology
         run: python -m unittest sportsedge.markets.test_pit_source_manifest -v
       - name: Run single-command research CLI smoke tests
