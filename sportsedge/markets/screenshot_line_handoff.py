@@ -167,6 +167,7 @@ def prepare_line_capture(frozen_slate: dict, screenshots: dict,
     if not originals:
         raise ValueError("SCREENSHOT_NO_FROZEN_MODELS")
     observations = []
+    preblocked = []
     used_image = set()
     total = 0
     for cap_index, capture in enumerate(captures):
@@ -187,6 +188,16 @@ def prepare_line_capture(frozen_slate: dict, screenshots: dict,
             raise ValueError("SCREENSHOT_TOO_MANY_OFFERS")
         for offer_index, raw_offer in enumerate(entries):
             _strict_keys(raw_offer, OFFER_FIELDS, "offer")
+            if (type(raw_offer["market"]) is dict and
+                set(raw_offer["market"]) == MARKET_FIELDS and
+                raw_offer["market"]["sport"] in SPORTS and
+                raw_offer["market"]["kind"] == "SGP"):
+                preblocked.append({
+                    "market": [raw_offer["market"][k] for k in MARKET_FIELDS_ORDER],
+                    "reason": "SCREENSHOT_SGP_NOT_SUPPORTED_NO_JOINT_MODEL",
+                    "source_authenticated": False, "approved_stake_u": 0,
+                })
+                continue
             market = _side_market(raw_offer["market"])
             if type(raw_offer["odds_american"]) is not int:
                 raise ValueError("SCREENSHOT_AMERICAN_PRICE_INTEGER_REQUIRED")
@@ -220,7 +231,7 @@ def prepare_line_capture(frozen_slate: dict, screenshots: dict,
     for entry in observations:
         identity = entry["market"].identity()
         seen.setdefault(identity, []).append(entry)
-    blocked = []
+    blocked = list(preblocked)
     valid = []
     for entry in observations:
         matches = seen[entry["market"].identity()]
@@ -231,6 +242,7 @@ def prepare_line_capture(frozen_slate: dict, screenshots: dict,
         else:
             opp = [x for x in observations if (
                 x is not entry and "blocked" not in x and
+                entry["sha"] == x["sha"] and
                 entry["market"].opposite(x["market"]))]
             reason = (None if len(opp) == 1 and len(seen[opp[0]["market"].identity()]) == 1
                       else "MISSING_OR_AMBIGUOUS_OPPOSITE_PRICE")
@@ -244,6 +256,7 @@ def prepare_line_capture(frozen_slate: dict, screenshots: dict,
     pairs = {}
     for e in valid:
         matches = [x for x in valid if (x is not e and
+                    e["sha"] == x["sha"] and
                     e["market"].opposite(x["market"]))]
         if len(matches) != 1:
             raise ValueError("SCREENSHOT_PAIR_CENSUS_NOT_BIJECTIVE")
