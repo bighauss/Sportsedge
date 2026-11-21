@@ -144,6 +144,7 @@ def _players(sport, data, team_ids):
         return {}, [], ["MLB_PLAYER_SCHEMA_NOT_ADMITTED"]
     result, ids = {}, set()
     warnings = set()
+    athlete_teams, invalid_athletes, invalid_stat_keys = {}, set(), set()
     for group in box["players"]:
         if not isinstance(group, dict) or not isinstance(group.get("team"), dict):
             warnings.add("PLAYER_TEAM_MAPPING_MISSING")
@@ -180,6 +181,11 @@ def _players(sport, data, team_ids):
                 if not isinstance(vals, list) or len(vals) != len(labels):
                     warnings.add("PLAYER_STAT_WIDTH_INVALID")
                     continue
+                if pid in athlete_teams and athlete_teams[pid] != tid:
+                    invalid_athletes.add(pid)
+                    warnings.add("PLAYER_ID_BELONGS_TO_MULTIPLE_TEAMS")
+                    continue
+                athlete_teams[pid] = tid
                 ids.add(pid)
                 rec = result.setdefault(pid, {})
                 for name, raw in zip(labels, vals):
@@ -189,8 +195,11 @@ def _players(sport, data, team_ids):
                         mm = PAIR_RE.fullmatch(str(raw))
                         if mm and int(mm[1]) <= int(mm[2]):
                             for statname, number2 in (("COMPLETIONS",int(mm[1])),("PASS_ATT",int(mm[2]))):
+                                if (pid,statname) in invalid_stat_keys:
+                                    continue
                                 if statname in rec and rec[statname] != number2:
                                     warnings.add("CONFLICTING_PLAYER_STAT_VALUES")
+                                    invalid_stat_keys.add((pid,statname))
                                     rec.pop(statname, None)
                                 else:
                                     rec[statname] = number2
@@ -207,12 +216,16 @@ def _players(sport, data, team_ids):
                         if number is None:
                             warnings.add("MISSING_OR_AMBIGUOUS_STAT:" + target)
                             continue
+                        if (pid,target) in invalid_stat_keys:
+                            continue
                         if target in rec and rec[target] != number:
                             warnings.add("CONFLICTING_PLAYER_STAT_VALUES")
+                            invalid_stat_keys.add((pid,target))
                             rec.pop(target,None)
                         else:
                             rec[target] = number
-    return {k:v for k,v in result.items() if v}, sorted(ids), sorted(warnings)
+    return ({k:v for k,v in result.items() if v and k not in invalid_athletes},
+            sorted(ids - invalid_athletes), sorted(warnings))
 
 
 def inspect(raw, *, event_id, sport, home_espn_id, away_espn_id,
