@@ -1,0 +1,65 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 350,
+  "base_commit": "15ed244640595193fe8fe339bf71ce624d073043",
+  "protected_paths": [
+    ".github/workflows/tests.yml",
+    "models/mlb/mlb_lineup_pit_guard.py",
+    "models/mlb/test_mlb_lineup_pit_guard.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/194",
+  "change_summary": "Add offline research-only MLB starters and confirmed nine-player lineup as-of source-shape gate with immutable normalized-byte digest and adversarial tests. Wire tests into existing MLB CI. No pricing, model coefficients or frozen v5 changes.",
+  "assumptions": [
+    "The module consumes locally normalized MLB StatsAPI-shaped input; a SHA-256 hash and declared publication time are not independent original-provider authentication.",
+    "An exact nine-person lineup, stable MLBAM identifiers and reported confirmation flags are necessary shape checks but do not prove a player was actually active or a starter at a prior instant.",
+    "These tests use synthetic events and do not establish validated forecast distributions, positive betting edge, authentic provider originals or complete MLB markets.",
+    "Absent original source evidence and externally reviewed A-E gates, every result remains PAPER 0u."
+  ],
+  "agent_identity": "ChatGPT GPT-6 SportsEdge MLB source-freeze research",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "MLB verified historical original pregame lineup/starting-pitcher freeze coverage",
+    "before": null,
+    "unit": "authenticated complete MLB pregame event snapshots",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest test_mlb_lineup_pit_guard -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "15ed244640595193fe8fe339bf71ce624d073043",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest test_mlb_lineup_pit_guard -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
