@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 395,
-  "base_commit": "1c2d9a258178158e772dd41e7c8aca4e03d3905f",
+  "base_commit": "2cd395dc7096208df42f2787b96798fbcf3b31b3",
   "protected_paths": [
     "sportsedge/markets/allmarkets_research.py",
     "sportsedge/markets/test_allmarkets_research.py"
@@ -39,7 +39,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "1c2d9a258178158e772dd41e7c8aca4e03d3905f",
+    "target_base_sha": "2cd395dc7096208df42f2787b96798fbcf3b31b3",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest sportsedge.markets.test_allmarkets_research sportsedge.validation.test_paper_ledger"
   },
