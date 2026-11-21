@@ -43,6 +43,9 @@ def _asof_check(row: dict) -> None:
                 'fitted_until_utc', 'settled_utc',
                 'model_sha256', 'quote_sha256', 'price_american',
                 'qualification_rule_sha256', 'qualified')
+    # A nonqualifier need not have a selection timestamp. A counted pick MUST.
+    if str(row.get('qualified', '')).lower() in ('1', 'true'):
+        required += ('rules_effective_utc', 'selected_utc')
     missing = [key for key in required if not str(row.get(key, '')).strip()]
     if missing:
         raise ValueError('MISSING_REQUIRED:' + ','.join(missing))
@@ -69,6 +72,15 @@ def _asof_check(row: dict) -> None:
     american(row['price_american'])
     if str(row.get('qualified')).lower() not in ('0', '1', 'true', 'false'):
         raise ValueError('UNLOCKED_SELECTION_STATUS')
+    if str(row['qualified']).lower() in ('1', 'true'):
+        selected = when(row['selected_utc'])
+        if not (freeze <= selected < start and captured <= selected):
+            raise ValueError('SELECTION_NOT_PROSPECTIVE')
+        if when(row['rules_effective_utc']) > selected:
+            raise ValueError('QUALIFICATION_RULE_RETROACTIVE')
+        # Gate A pregame default: a qualified decision cannot use old prices.
+        if (selected - captured).total_seconds() > 300:
+            raise ValueError('STALE_QUOTE_AT_SELECTION')
     market_id = _market_id(str(row['market']))
     if ('prop' in market_id or market_id in ('attd', 'firsttd', 'td2plus',
                                              'firstbasket', 'homerun')) and not str(row.get('player_id') or '').strip():
@@ -198,6 +210,9 @@ def _validate_market_pair(row: dict) -> float:
     captured_time = when(row['captured_utc'])
     if paired_time >= when(row['game_start_utc']) or abs((paired_time - captured_time).total_seconds()) > 300:
         raise ValueError('STALE_OR_LATE_OPPOSING_QUOTE')
+    # A later opposing-side price is hindsight, not an available pregame benchmark.
+    if paired_time > when(row['selected_utc']):
+        raise ValueError('OPPOSING_QUOTE_AFTER_SELECTION')
     supplied = _valid_probability(row['market_p_no_vig'], 'market_probability')
     computed = devig_two_way(row['price_american'],row['paired_price_american'])['no_vig_a']
     if abs(supplied - computed) > 1e-6:
