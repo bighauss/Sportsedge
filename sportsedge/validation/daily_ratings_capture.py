@@ -1,4 +1,4 @@
-"""Daily point-in-time ratings capture (Torvik CBB, CFBD SP+). PAPER / 0u.
+"""Daily point-in-time ratings capture (CBBD adjusted CBB, CFBD SP+; Torvik by manual import). PAPER / 0u.
 
 Saves the exact response bytes of each source with a UTC observation time and
 SHA256, into a new private owner-only directory. Never retries, follows
@@ -36,6 +36,23 @@ def sources(season_cbb: int, season_cfb: int):
         {"name": "cfbd_ratings_sp", "url": f"https://api.collegefootballdata.com/ratings/sp?year={season_cfb}",
          "key_env": "CFBD_API_KEY", "expect": "json", "season": season_cfb},
     ]
+
+
+def cbbd_source(season_cbb: int):
+    if type(season_cbb) is not int or not 2000 <= season_cbb <= 2100:
+        raise ValueError("INVALID_SEASON")
+    return {"name": "cbbd_ratings_adjusted",
+            "url": f"https://api.collegebasketballdata.com/ratings/adjusted?season={season_cbb}",
+            "key_env": "CBBD_API_KEY", "expect": "cbbd_json", "season": season_cbb}
+
+
+def known_sources(season: int):
+    return sources(season, season) + [cbbd_source(season)]
+
+
+def automated_sources(season_cbb: int, season_cfb: int):
+    """Runner path. Torvik returns HTTP 403 to data-center IPs, so it is manual-import only."""
+    return [cbbd_source(season_cbb), sources(season_cbb, season_cfb)[1]]
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -101,7 +118,7 @@ def _inspect(expect, body, season):
         except (UnicodeError, csv.Error, StopIteration, ValueError, OverflowError):
             return "INVALID_CSV", 0
         return (None, len(names)) if 350 <= len(names) <= 420 else ("CSV_CENSUS_OUT_OF_RANGE", len(names))
-    if expect != "json":
+    if expect not in ("json", "cbbd_json"):
         return "SOURCE_KIND_UNKNOWN", 0
     try:
         doc = json.loads(body, object_pairs_hook=_fields, parse_constant=_bad_json_constant)
@@ -110,6 +127,20 @@ def _inspect(expect, body, season):
     if not isinstance(doc, list):
         return "JSON_SCHEMA", 0
     names = set()
+    if expect == "cbbd_json":
+        for row in doc:
+            if not isinstance(row, dict) or type(row.get("season")) is not int or row.get("season") != season:
+                return "CBBD_WRONG_SEASON_OR_SCHEMA", 0
+            team = row.get("team")
+            if not isinstance(team, str) or not team.strip():
+                return "CBBD_TEAM_INVALID", 0
+            key = team.strip().casefold()
+            o, dfn, net = (row.get(k) for k in ("offensiveRating", "defensiveRating", "netRating"))
+            if (key in names or any(type(n) not in (float, int) for n in (o, dfn, net))
+                    or not 60 <= o <= 160 or not 60 <= dfn <= 160 or not -80 <= net <= 80):
+                return "CBBD_TEAM_OR_RATING_INVALID", 0
+            names.add(key)
+        return (None, len(names)) if 350 <= len(names) <= 420 else ("CBBD_CENSUS_OUT_OF_RANGE", len(names))
     for row in doc:
         if not isinstance(row, dict) or row.get("year") != season or type(row.get("year")) is not int:
             return "SP_WRONG_SEASON_OR_SCHEMA", 0
@@ -130,7 +161,7 @@ def _inspect(expect, body, season):
 def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None, *, local_torvik=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     srcs = tuple(srcs)
-    sources_expected = {s["url"]: s for src in srcs for s in sources(src["season"], src["season"])}
+    sources_expected = {s["url"]: s for src in srcs for s in known_sources(src["season"])}
     if not srcs or any(sources_expected.get(s.get("url")) != s for s in srcs):
         raise ValueError("UNRECOGNIZED_RATINGS_SOURCE")
     if len({s["name"] for s in srcs}) != len(srcs):
@@ -188,7 +219,7 @@ def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None, *, loca
 def eligible_bytes(body, receipt, *, source, season, decision, kickoff, max_age_seconds):
     """Gate decrypted bytes at the forecast cutoff; makes no publisher-time claim."""
     decision, kickoff = _utc(decision), _utc(kickoff)
-    expected = next((s for s in sources(season, season) if s["name"] == source), None)
+    expected = next((s for s in known_sources(season) if s["name"] == source), None)
     if (not isinstance(receipt, dict) or expected is None or receipt.get("source") != source or receipt.get("season") != season
             or receipt.get("url") != expected["url"] or receipt.get("state") != "CAPTURED"):
         raise ValueError("RATINGS_RECEIPT_SCOPE_MISMATCH")
@@ -217,7 +248,7 @@ def main(argv=None):
     p.add_argument("--cfb-season", type=int)
     p.add_argument("--claim-date")
     modes = p.add_mutually_exclusive_group()
-    modes.add_argument("--execute", action="store_true", help="permit requests to Torvik and CFBD")
+    modes.add_argument("--execute", action="store_true", help="permit requests to CBBD and CFBD (Torvik blocks runners)")
     modes.add_argument("--import-torvik", type=Path, help="archive an original Torvik CSV locally without fetching")
     a = p.parse_args(argv)
     if not a.execute and a.import_torvik is None:
@@ -229,8 +260,8 @@ def main(argv=None):
     if os.getenv("GITHUB_ACTIONS") == "true" and (not a.claim_date or a.import_torvik is not None):
         return 2
     try:
-        srcs = sources(cbb, cfb)
-        out = capture(a.private_dir, srcs[:1] if a.import_torvik is not None else srcs,
+        srcs = sources(cbb, cfb)[:1] if a.import_torvik is not None else automated_sources(cbb, cfb)
+        out = capture(a.private_dir, srcs,
                       claim_date=a.claim_date, local_torvik=a.import_torvik)
     except (ValueError, OSError):
         print("BLOCKED_RATINGS_CAPTURE", file=sys.stderr)
