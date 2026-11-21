@@ -121,6 +121,12 @@ class Validation(unittest.TestCase):
         self.assertEqual(z['claimed_clusters'],2)
         self.assertEqual(len(z['top_claimed_clusters_including_flagged']),2)
 
+    def test_cluster_key_never_splits_raw_event_ids_on_delimiters(self):
+        z=run(row(event_id='E|PIPE',market='SPREAD',side='home',line='-3.5'),
+              row(event_id='E|PIPE',market='SPREAD',side='home',line='-4.5'))
+        self.assertEqual(z['computable_claimed_edges'],2)
+        self.assertEqual(z['claimed_clusters'],1)
+
     def test_file_hash_and_read_only(self):
         with tempfile.TemporaryDirectory() as td:
             f=Path(td)/'snap.csv';a=row()
