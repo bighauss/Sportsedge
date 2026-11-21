@@ -25,6 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sportsedge_cfb_model as M  # production model, imported unchanged
 
 CT = ZoneInfo("America/Chicago")
+# Same pin as cfb_baselines.FROZEN_RUNIT["module_sha256"]; a drifted model file refuses the run.
+MODEL_SHA256_PIN = "1f24cf1a925147a1601d0ba2f04ada30c4cf25173ab6df73bcb16016cff735be"
 CFBD = "https://api.collegefootballdata.com"
 ALIASES = {"miamifl": ["miami"], "ulm": ["ulmonroe", "louisianamonroe"],
            "fiu": ["floridainternational"], "uconn": ["connecticut"]}
@@ -193,6 +195,8 @@ def match_player(name, teams, ptable, truncated=False):
 
 # ---------------------------------------------------------------- run
 def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=False, legacy_inputs=False):
+    if sha256(open(M.__file__, "rb").read()) != MODEL_SHA256_PIN:
+        raise Fail("FROZEN_MODEL_FILE_SHA_DRIFT")
     if "injuries" not in intake and not allow_no_injury_feed:
         raise Fail("INJURY_INTAKE_MISSING")
     inj = intake.get("injuries", [])
@@ -235,7 +239,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             withheld.append((label, f"intake game id {L['cfbd_game_id']} != CFBD {g['id']}")); continue
         ko = dt.datetime.fromisoformat(g["startDate"].replace("Z", "+00:00"))
         if L.get("kickoff_ct"):
-            want = dt.datetime.combine(now_utc.astimezone(CT).date(),
+            want = dt.datetime.combine(ko.astimezone(CT).date(),
                                        dt.datetime.strptime(L["kickoff_ct"], "%I:%M %p").time(), CT)
             if abs((ko - want).total_seconds()) > 20 * 60:
                 withheld.append((label, f"kickoff mismatch: DK {L['kickoff_ct']} CT vs CFBD {ko.astimezone(CT):%-I:%M %p} CT")); continue

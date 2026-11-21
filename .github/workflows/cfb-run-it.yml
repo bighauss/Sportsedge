@@ -46,7 +46,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Offline end-to-end gate (fixture capture -> model -> card)
-        run: python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_ledger -v
+        run: python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_ledger models.cfb.test_cfb_run_it_parity -v
       - name: Encryption preflight (fail closed before any provider request)
         env:
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
