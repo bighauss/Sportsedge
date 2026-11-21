@@ -1,0 +1,73 @@
+name: NCAA RUN IT model execution gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'models/cfb/**'
+      - 'models/cbb/**'
+      - 'sportsedge/**'
+      - '.github/workflows/ncaa-*.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  controlled-model-execution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: .:models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies without provider credentials
+        run: python -m pip install cryptography==46.0.4 PyYAML==6.0.3
+      - name: Execute real models with controlled fixtures; reject skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import socket
+          import sys
+          import unittest
+
+          protected = [Path('models/cfb/sportsedge_cfb_model.py'),
+                       Path('models/cbb/sportsedge_cbb_model.py')]
+          before = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected}
+          def refuse_network(*args, **kwargs):
+              raise AssertionError('PROVIDER_NETWORK_FORBIDDEN_IN_CONTROLLED_RUN')
+          socket.create_connection = refuse_network
+          socket.socket.connect = refuse_network
+          socket.socket.connect_ex = refuse_network
+          names = [
+              'models.cfb.test_cfb_paper_card',
+              'models.cfb.test_cfb_source_pit_contract',
+              'test_cbbd_native_score_model',
+              'test_cbbd_paper_card',
+              'test_cbbd_paper_ledger',
+              'sportsedge.odds.test_ncaa_daily_odds',
+              'sportsedge.odds.test_ncaa_archive_export',
+              'sportsedge.odds.test_daily_pilot_artifact_gate',
+          ]
+          suite = unittest.defaultTestLoader.loadTestsFromNames(names)
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          after = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in protected}
+          unchanged = before == after
+          passed = result.wasSuccessful() and not result.skipped and result.testsRun > 0 and unchanged
+          summary = ('## Controlled NCAA model execution\n'
+                     f'Tests: {result.testsRun}; failures: {len(result.failures)}; '
+                     f'errors: {len(result.errors)}; skips: {len(result.skipped)}.\n'
+                     f'Production model files unchanged: {unchanged}.\n'
+                     'Synthetic fixtures only. No live capture or validated wagering edge.\n')
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
+              stream.write(summary)
+          sys.exit(0 if passed else 1)
+          PY
