@@ -126,6 +126,17 @@ def relation_name(a, b, relation):
     return a["sport"] + "|" + relation + "|" + "|".join(leg_desc)
 
 
+def report_leg_key(leg):
+    """Sort ACTUAL legs into a stable marginal A/B order for reporting.
+
+    The relationship label already sorts stat names; sorting only that
+    label while keeping CSV encounter order produces mislabeled marginals.
+    Exact bound IDs and lines make ties deterministic, never inferred.
+    """
+    return (leg["stat"], leg["side"], leg["period"],
+            leg["player_id"], leg["team_id"], leg["line_num"], leg["leg_id"])
+
+
 def confidence_interval_cluster(rows, field, iterations, seed):
     if not rows:
         return None
@@ -271,6 +282,7 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
     allpairs = {}
     for (event_id, snapshot_id), legs in eligible_snapshots.items():
         for a, b in itertools.combinations(legs, 2):
+            a, b = sorted((a, b), key=report_leg_key)
             pair_natural = tuple(sorted([str(natural_key(a)), str(natural_key(b))]))
             unique_key = (event_id, pair_natural)
             relation = classify(a, b)
