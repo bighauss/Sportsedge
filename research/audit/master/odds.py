@@ -154,17 +154,3 @@ def parlay(legs: Sequence[tuple[float, float]], offered_odds: float) -> dict:
             "ev_per_10": 10 * ev_per_unit(p, offered_odds),
             "weakest_leg": min(range(len(legs)), key=lambda i: legs[i][0] - implied_prob(legs[i][1])),
             "independence_assumed": True}
-
-
-def clv(bet_odds: float, close_odds: float, close_other_side: float | None = None) -> dict:
-    """Closing line value. With both closing sides, uses no-vig close as truth."""
-    p_close = (no_vig([close_odds, close_other_side])[0] if close_other_side is not None
-               else implied_prob(close_odds))
-    return {"clv_prob": p_close - implied_prob(bet_odds),
-            "clv_ev": ev_per_unit(p_close, bet_odds),
-            "beat_close": american_to_decimal(bet_odds) > american_to_decimal(close_odds)}
-
-
-def spread_clv_points(bet_line: float, close_line: float) -> float:
-    """Positive = you got a better number. Lines from your side's perspective (e.g. -3 vs -4 → +1)."""
-    return bet_line - close_line
