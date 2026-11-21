@@ -25,7 +25,7 @@
   },
   "baseline": {
     "metric": "orphan research player features after census-file write exception",
-    "before": "possible",
+    "before": null,
     "unit": "paired local private output files",
     "source_state": "UNKNOWN"
   },
