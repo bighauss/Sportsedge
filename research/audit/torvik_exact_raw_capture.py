@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 DEFAULT_URL = "https://barttorvik.com/2027_team_results.csv"
 ALIAS = {
     "team": ("team", "team_name", "teamname"),
-    "adjoe": ("adjoe", "adjo", "adj_o", "adj. off.", "adjoe"),
+    "adjoe": ("adjoe", "adjo", "adj_o", "adj. off."),
     "adjde": ("adjde", "adjd", "adj_d", "adj. def."),
     "adj_t": ("adj_t", "adjt", "tempo", "adj tempo", "adj. tempo")
 }
