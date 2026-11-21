@@ -14,7 +14,8 @@ def adv(team, ppa_o, ppa_d):
 
 def fixture():
     teams = ["UCLA", "Michigan", "LSU", "Tennessee"]
-    pl = lambda cat, team, player, st, v: {"team": team, "player": player, "category": cat, "statType": st, "stat": v}
+    pl = lambda cat, team, player, st, v, pid="501": {"team": team, "player": player, "playerId": pid,
+                                                        "category": cat, "statType": st, "stat": v}
     return {
         "games": [{"id": 1, "season": 2026, "week": 13, "homeTeam": "Michigan", "awayTeam": "UCLA",
                    "neutralSite": False, "venueId": 10, "venue": "Michigan Stadium",

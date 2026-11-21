@@ -18,7 +18,7 @@ conservative. Under bets are never generated for one-sided props.
 Keys are never printed; raw captures are written only to --private-dir.
 """
 from __future__ import annotations
-import argparse, datetime as dt, json, os, re, sys, unicodedata, urllib.request, urllib.parse
+import argparse, datetime as dt, hashlib, json, os, re, sys, unicodedata, urllib.request, urllib.parse
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -37,15 +37,26 @@ class Fail(Exception):
     pass
 
 # ---------------------------------------------------------------- fetch
-def http_json(url, key=None, timeout=60):
+def http_bytes(url, key=None, timeout=60):
     req = urllib.request.Request(url, headers={"Accept": "application/json",
                                                **({"Authorization": f"Bearer {key}"} if key else {})})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         if r.status != 200:
             raise Fail(f"HTTP_{r.status}")
-        return json.loads(r.read())
+        body = r.read()
+    if key and key.encode() in body:
+        raise Fail("SECRET_ECHO")
+    return body
 
-def capture_cfbd(season, key, fetch=http_json):
+def http_json(url, key=None, timeout=60):
+    return json.loads(http_bytes(url, key, timeout))
+
+def sha256(b):
+    return hashlib.sha256(b).hexdigest()
+
+def capture_cfbd(season, key, fetch=http_bytes):
+    """Returns (parsed capture, raw bytes by source, receipts). Raw bytes are kept for the
+    private archive; receipts (sha256, bytes, observed time) are public."""
     q = lambda p, **kw: f"{CFBD}{p}?" + urllib.parse.urlencode(kw)
     eps = {
         "games": q("/games", year=season, seasonType="regular", classification="fbs"),
@@ -60,13 +71,17 @@ def capture_cfbd(season, key, fetch=http_json):
         "player_passing": q("/stats/player/season", year=season, category="passing"),
         "player_receiving": q("/stats/player/season", year=season, category="receiving"),
     }
-    out = {}
+    out, raw, receipts = {}, {}, []
     for name, url in eps.items():
         try:
-            out[name] = fetch(url, key)
+            b = fetch(url, key)
+            out[name] = json.loads(b)
         except Exception as e:  # never echo the key; url has no key
             raise Fail(f"CFBD_{name}_BLOCKED:{type(e).__name__}")
-    return out
+        raw[name] = b
+        receipts.append({"source": name, "provider": "collegefootballdata.com", "bytes": len(b),
+                         "sha256": sha256(b), "observed_utc": dt.datetime.now(dt.timezone.utc).isoformat()})
+    return out, raw, receipts
 
 def fetch_weather(lat, lon, kickoff_utc, fetch=http_json):
     url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode({
@@ -136,12 +151,19 @@ def team_volume(team_stats):
     return v
 
 def player_table(cap):
-    p = {}
+    """Keyed by (team, CFBD playerId). Rows without a provider ID are dropped (never name-keyed).
+    A playerId seen on two teams or under two names is quarantined."""
+    p, names, teams = {}, {}, {}
     for cat in ("rushing", "passing", "receiving"):
         for r in cap["player_" + cat]:
-            k = (r["team"], r["player"])
-            p.setdefault(k, {})[f"{cat}.{r['statType']}"] = float(r["stat"] or 0)
-    return p
+            pid = r.get("playerId")
+            if pid in (None, "", 0):
+                continue
+            pid = str(pid)
+            names.setdefault(pid, set()).add(r["player"]); teams.setdefault(pid, set()).add(r["team"])
+            p.setdefault((r["team"], pid), {"name": r["player"]})[f"{cat}.{r['statType']}"] = float(r["stat"] or 0)
+    bad = {pid for pid in names if len(names[pid]) > 1 or len(teams[pid]) > 1}
+    return {k: v for k, v in p.items() if k[1] not in bad}
 
 def usage_row(player, team, market, stats, vol):
     tv = vol.get(team, {})
@@ -161,9 +183,12 @@ def usage_row(player, team, market, stats, vol):
         return {"share": rec / pa, "eff": (s.get("receiving.YDS", 0) / rec) if market == "rec_yds" else 1.0}
     return None
 
-def match_player(name, teams, ptable):
+def match_player(name, teams, ptable, truncated=False):
+    """Exact normalized name within the game's two teams -> exactly one provider ID.
+    Prefix match only for names DraftKings truncated with an ellipsis. Otherwise None."""
     n = norm(name)
-    hits = [(t, p) for (t, p) in ptable if t in teams and (norm(p) == n or norm(p).startswith(n))]
+    hits = [k for k, v in ptable.items() if k[0] in teams and
+            (norm(v["name"]) == n or (truncated and norm(v["name"]).startswith(n)))]
     return hits[0] if len(hits) == 1 else None
 
 # ---------------------------------------------------------------- run
@@ -184,7 +209,12 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
            "talent": M.by(cap["talent"], "team"), "ret": M.by(cap["returning"], "team"),
            "ratings": sp_relative(cap["ratings"]), "teams": M.by(cap["teams"], "school"),
            "venues": {}, "injuries": inj, "weather": {}, "rest": {}, "cross": {}, "usage": []}
-    games_by_pair = {(g["awayTeam"], g["homeTeam"]): g for g in cap["games"]}
+    games_by_pair = {}
+    for g in cap["games"]:
+        if g.get("completed"): continue
+        k = (g["awayTeam"], g["homeTeam"])
+        games_by_pair[k] = None if k in games_by_pair else g     # duplicate pair -> unusable
+    games_by_pair = {k: v for k, v in games_by_pair.items() if v is not None}
     ptable, vol = player_table(cap), team_volume(cap["team_stats"])
     rows, projs, withheld, meta = [], [], [], {}
     for L in intake["lines"]:
@@ -199,8 +229,16 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                 withheld.append((label, "required input missing -> " + "; ".join(bad))); continue
         g = games_by_pair.get((A, H))
         if not g:
-            withheld.append((label, "no CFBD game record")); continue
+            why = "home/away orientation mismatch with CFBD" if games_by_pair.get((H, A)) else "no CFBD game record"
+            withheld.append((label, why)); continue
+        if L.get("cfbd_game_id") is not None and str(L["cfbd_game_id"]) != str(g["id"]):
+            withheld.append((label, f"intake game id {L['cfbd_game_id']} != CFBD {g['id']}")); continue
         ko = dt.datetime.fromisoformat(g["startDate"].replace("Z", "+00:00"))
+        if L.get("kickoff_ct"):
+            want = dt.datetime.combine(now_utc.astimezone(CT).date(),
+                                       dt.datetime.strptime(L["kickoff_ct"], "%I:%M %p").time(), CT)
+            if abs((ko - want).total_seconds()) > 20 * 60:
+                withheld.append((label, f"kickoff mismatch: DK {L['kickoff_ct']} CT vs CFBD {ko.astimezone(CT):%-I:%M %p} CT")); continue
         if g.get("completed") or ko <= now_utc:
             withheld.append((label, f"kicked off {ko.astimezone(CT):%-I:%M %p} CT before run")); continue
         ven = venues.get(g.get("venueId"), {})
@@ -222,7 +260,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             withheld.append((label, f"model error: {e}")); continue
         if "injuries" not in intake:
             pj["notes"].append("injuries: none supplied")
-        pj["kickoff_ct"] = f"{ko.astimezone(CT):%-I:%M %p} CT"
+        pj["kickoff_ct"] = f"{ko.astimezone(CT):%-I:%M %p} CT"; pj["kickoff_utc"] = ko.isoformat()
         projs.append(pj)
         rows += M.price_game(pj, line)
         for mk, need in (("homeTT", f"{H} team total"), ("awayTT", f"{A} team total")):
@@ -230,10 +268,10 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
         # one-sided milestone props
         for p in intake.get("props", []):
             if resolve(p["away"]) != A or resolve(p["home"]) != H: continue
-            hit = match_player(p["player"], (A, H), ptable)
+            hit = match_player(p["player"], (A, H), ptable, p.get("truncated", False))
             if not hit:
                 withheld.append((label, f"prop {p['player']} {p['market']}: player identity not unique in CFBD")); continue
-            team, player = hit
+            team, pid = hit; player = ptable[hit]["name"]
             u = usage_row(player, team, p["market"], ptable[hit], vol)
             if not u:
                 withheld.append((label, f"prop {player} {p['market']}: no season usage")); continue
@@ -246,49 +284,131 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             po = M.pgt(mean, float(p["line"]), max(1.0, sd_f * mean))
             M.bet(rows, pj, f"Prop {p['market']}", f"{player} Over {p['line']}", p["line"], p["overOdds"],
                   po, p_imp, "over", f"{g['id']}|PTS|UP|{player}", mean)
+            rows[-1]["player_id"] = pid
             rows[-1]["why"] = f"{team}: {why}; model {mm:.1f} / mkt {mkt_mean:.1f} (one-sided, vig in mkt p)"
     card = M.finalize(rows)
     return card, projs, withheld, ctx
 
-def render(card, projs, withheld, ctx, intake, now_utc):
-    md = M.render_md(card, projs, ctx)
-    ko = {f"{p['away']} @ {p['home']}": p["kickoff_ct"] for p in projs}
-    md = md.replace("# SportsEdge CFB RUN IT card", "# SportsEdge CFB RUN IT card\n\n"
-                    f"Run {now_utc.astimezone(CT):%Y-%m-%d %-I:%M %p} CT · lines: {intake.get('captured','?')}\n"
-                    + "\n".join(f"- {k}: {v}" for k, v in ko.items()))
-    md += "\n## Withheld\n\n" + ("\n".join(f"- {g}: {r}" for g, r in withheld) or "- none") + "\n"
-    return md
+INJURY_MAX_AGE_H = 6
+
+def eligibility(intake, now_utc):
+    """Card-level eligibility. This runner never emits official wagers: the model is unvalidated.
+    Reasons are listed so a missing input is never mistaken for a model finding."""
+    reasons = ["MODEL_UNVALIDATED_PAPER_0U"]
+    if "injuries" not in intake:
+        reasons.append("INJURY_INTAKE_MISSING")
+    else:
+        rv = intake.get("injuries_reviewed_utc")
+        if not rv:
+            reasons.append("INJURY_REVIEW_TIME_MISSING")
+        elif (now_utc - dt.datetime.fromisoformat(rv.replace("Z", "+00:00"))).total_seconds() > INJURY_MAX_AGE_H * 3600:
+            reasons.append("INJURY_REVIEW_STALE")
+    return {"state": "RESEARCH_ONLY", "official_counted": 0, "approved_stake_u": 0, "reasons": reasons}
+
+def to_doc(card, projs, withheld, intake, now_utc, receipts):
+    """Two separate records: raw model projections and the market-adjusted card."""
+    raw = [{"game": f"{p['away']} @ {p['home']}", "cfbd_game_id": p["game"]["id"], "kickoff_utc": p["kickoff_utc"],
+            "kickoff_ct": p["kickoff_ct"], "pts_home": p["pts_home"], "pts_away": p["pts_away"],
+            "margin": p["margin"], "total": p["total"], "plays": p["plays"], "ratings_pts": p["ratings_pts"],
+            "matchup_pts": p["matchup_pts"], "hfa": p["hfa"], "weather": p["weather"], "notes": p["notes"]}
+           for p in projs]
+    ko = {r["game"]: r["kickoff_utc"] for r in raw}
+    rows = []
+    for r in card:
+        r = {k: v for k, v in r.items() if k not in ("p_blend", "ev_blend")} | {
+            "p_blend": r["p_blend"], "ev_blend": r["ev_blend"], "kickoff_utc": ko.get(r["game"])}
+        rows.append(r)
+    return {"model_projections": {"schema": "sportsedge-cfb-run-it-raw-v1",
+                                  "model_file_sha256": sha256(open(M.__file__, "rb").read()),
+                                  "run_utc": now_utc.isoformat(), "games": raw},
+            "card": {"schema": "sportsedge-cfb-run-it-card-v1", "run_utc": now_utc.isoformat(),
+                     "lines_captured": intake.get("captured"), "eligibility": eligibility(intake, now_utc),
+                     "receipts": receipts, "rows": rows, "withheld": [list(w) for w in withheld]}}
+
+def recheck(doc, now_utc):
+    """Immediately before publication: anything that has kicked off moves to withheld."""
+    c = doc["card"]; keep = []
+    started = {g["game"] for g in doc["model_projections"]["games"]
+               if dt.datetime.fromisoformat(g["kickoff_utc"]) <= now_utc}
+    for r in c["rows"]:
+        if r["game"] in started:
+            c["withheld"].append([r["game"], f"{r['market']} {r['pick']}: kicked off before publication"])
+        else:
+            keep.append(r)
+    for i, r in enumerate(keep, 1):
+        r["rank"] = i
+    c["rows"] = keep; c["rechecked_utc"] = now_utc.isoformat()
+    doc["model_projections"]["games"] = [g for g in doc["model_projections"]["games"] if g["game"] not in started]
+    return doc
+
+def render(doc):
+    c, raw = doc["card"], doc["model_projections"]
+    run = dt.datetime.fromisoformat(c["run_utc"]).astimezone(CT)
+    o = ["# SportsEdge CFB RUN IT card", "",
+         f"**{c['eligibility']['state']}** — 0u · reasons: {', '.join(c['eligibility']['reasons'])}", "",
+         f"Run {run:%Y-%m-%d %-I:%M %p} CT" + (f" · rechecked {dt.datetime.fromisoformat(c['rechecked_utc']).astimezone(CT):%-I:%M %p} CT" if c.get("rechecked_utc") else "")
+         + f" · lines: {c.get('lines_captured')} · model sha256 {raw['model_file_sha256'][:12]}", "",
+         "_All weights untested starting values. p model = raw model; p blend = 30% model / 70% market._", "",
+         "## Raw model projections", "", "| Game | Kickoff | Home | Away | Margin (H) | Total | Plays/team | Weather | Inputs |",
+         "|---|---|---|---|---|---|---|---|---|"]
+    for g in raw["games"]:
+        o.append(f"| {g['game']} | {g['kickoff_ct']} | {g['pts_home']:.1f} | {g['pts_away']:.1f} | {g['margin']:+.1f} | "
+                 f"{g['total']:.1f} | {g['plays']:.1f} | {g['weather']} | {'; '.join(g['notes']) or 'none'} |")
+    o += ["", "## Ranked by blended EV", "",
+          "| # | Stars | Game | Market | Pick | Odds | Proj | p model | p mkt | p blend | EV raw | EV blend |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in c["rows"]:
+        mk = r["market"].startswith("Prop")
+        proj = "-" if r["proj"] is None else f"{r['proj']:.1f}"
+        o.append(f"| {r['rank']} | {'*' * r['stars']}{' FIRE' if r['flames'] else ''} | {r['game']} | {r['market']} | {r['pick']} | "
+                 f"{r['odds']:+d} | {proj} | {r['p_model']:.3f} | "
+                 f"{r['p_market']:.3f}{'*' if mk else ''} | {r['p_blend']:.3f} | {r['ev_raw']*100:+.1f}% | {r['ev_blend']*100:+.1f}% |")
+    o += ["", "\\* one-sided milestone price: market probability includes vig.", "", "## Withheld", ""]
+    o += [f"- {g}: {w}" for g, w in c["withheld"]] or ["- none"]
+    o += ["", "## Source receipts", ""] + [f"- {r['source']}: {r['bytes']} bytes, sha256 {r['sha256'][:16]}…" for r in c["receipts"]]
+    return "\n".join(o) + "\n"
 
 def main(argv=None):
     a = argparse.ArgumentParser()
-    a.add_argument("intake"); a.add_argument("--season", type=int, required=True)
+    a.add_argument("intake", nargs="?"); a.add_argument("--season", type=int)
     a.add_argument("--out", default="cfb_run_it_out"); a.add_argument("--private-dir", default=None)
     a.add_argument("--allow-no-injury-feed", action="store_true")
+    a.add_argument("--recheck", action="store_true", help="re-gate an existing --out card against the clock and re-render")
     a.add_argument("--fixture", help="offline CFBD capture JSON (tests only)")
     a.add_argument("--now", help="ISO UTC override (tests only)")
     x = a.parse_args(argv)
-    intake = json.load(open(x.intake))
     now = dt.datetime.fromisoformat(x.now) if x.now else dt.datetime.now(dt.timezone.utc)
+    if x.recheck:
+        f = os.path.join(x.out, "cfb_run_it.json")
+        doc = recheck(json.load(open(f)), now)
+        json.dump(doc, open(f, "w"), indent=1, default=str)
+        open(os.path.join(x.out, "cfb_card.md"), "w").write(render(doc))
+        print(f"rechecked: {len(doc['card']['rows'])} rows remain"); return 0
+    intake = json.load(open(x.intake))
     try:
         if x.fixture:
             cap = json.load(open(x.fixture)); wf = lambda *_: cap["_weather"]
+            raw = {"fixture": open(x.fixture, "rb").read()}
+            receipts = [{"source": "fixture", "bytes": len(raw["fixture"]), "sha256": sha256(raw["fixture"]),
+                         "observed_utc": now.isoformat()}]
         else:
             key = os.environ.get("CFBD_API_KEY")
             if not key: raise Fail("CFBD_API_KEY_ABSENT")
-            cap = capture_cfbd(x.season, key); wf = fetch_weather
+            if x.private_dir is None: raise Fail("PRIVATE_DIR_REQUIRED_FOR_LIVE_CAPTURE")
+            cap, raw, receipts = capture_cfbd(x.season, key); wf = fetch_weather
         if x.private_dir:
-            os.makedirs(x.private_dir, exist_ok=True)
-            json.dump(cap, open(os.path.join(x.private_dir, "cfbd_capture.json"), "w"))
+            os.makedirs(x.private_dir, mode=0o700, exist_ok=True)
+            for name, b in raw.items():
+                open(os.path.join(x.private_dir, f"{name}.json"), "wb").write(b)
         card, projs, withheld, ctx = run(intake, cap, now, wf, x.allow_no_injury_feed)
     except Fail as e:
         print(f"BLOCKED {e}", file=sys.stderr); return 2
     os.makedirs(x.out, exist_ok=True)
-    md = render(card, projs, withheld, ctx, intake, now)
-    open(os.path.join(x.out, "cfb_card.md"), "w").write(md)
-    json.dump({"card": card, "withheld": withheld,
-               "projections": [{k: p[k] for k in ("home", "away", "pts_home", "pts_away", "margin", "total", "notes", "kickoff_ct")} for p in projs]},
-              open(os.path.join(x.out, "cfb_card.json"), "w"), indent=1, default=str)
-    print(f"{len(projs)} games projected, {len(card)} +EV plays, {len(withheld)} withheld")
+    doc = to_doc(card, projs, withheld, intake, now, receipts)
+    json.dump(doc, open(os.path.join(x.out, "cfb_run_it.json"), "w"), indent=1, default=str)
+    json.dump(receipts, open(os.path.join(x.out, "receipts.json"), "w"), indent=1)
+    open(os.path.join(x.out, "cfb_card.md"), "w").write(render(doc))
+    print(f"{len(projs)} games projected, {len(card)} +EV rows, {len(withheld)} withheld")
     return 0
 
 if __name__ == "__main__":

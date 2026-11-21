@@ -76,9 +76,10 @@ for pat,mk in [("5d5a871c*","pass_yds"),("1a54d4a1*","rush_yds"),("917fd2cb*","r
             nm=re.sub(r"\s\([A-Z&]+\)$","",m.group(1)).rstrip("…").strip()
             tm=re.search(r"\(([A-Z&]+)\)",m.group(1))
             props.append({"away":game[0],"home":game[1],"player":nm,"teamAbbr":tm.group(1) if tm else None,
-                          "market":market,"line":line-0.5,"overOdds":int(o.group(1))})
-json.dump({"captured":"2026-11-21T10:24-10:27 CT DraftKings (uploaded screenshots)","lines":main,"props":props},
-          open(sys.argv[1],"w"),indent=1)
+                          "market":market,"line":line-0.5,"overOdds":int(o.group(1)),
+                          "truncated":m.group(1).endswith("…")})
+json.dump({"injuries_note":"no injury feed; RESEARCH_ONLY","captured":"2026-11-21T10:24-10:27 CT DraftKings (uploaded screenshots)","lines":main,"props":props},
+          open(sys.argv[1],"w"),separators=(",",":"))
 print(len(main),"games",len(props),"props")
 for g in main:
     if "UCLA" in g["awayTeam"] or "LSU" in g["awayTeam"]: print(g)
