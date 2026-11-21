@@ -151,6 +151,25 @@ class TestJointPropAudit(unittest.TestCase):
             self.assertEqual(result["accepted_rows_before_snapshot_checks"],0)
             self.assertEqual(result["exclusion_counts"]["NON_INDEPENDENT_MODEL_MODE"],2)
 
+    def test_report_outputs_are_private_and_create_only(self):
+        from prop_joint_correlation import __file__ as audit_module_path
+        with TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            write(d/"p.csv",list(REQ)+["model_mode"],
+                  [prediction("G1","A"),prediction("G1","B",stat="AST")])
+            destination=d/"out"
+            initial=audit(d/"p.csv",None,destination,iterations=100)
+            self.assertEqual(initial["pair_rows"],1)
+            before=(destination/"coverage.json").read_bytes()
+            with self.assertRaises(FileExistsError):
+                audit(d/"p.csv",None,destination,iterations=100)
+            self.assertEqual((destination/"coverage.json").read_bytes(),before)
+            repo=Path(audit_module_path).resolve().parents[2]
+            unsafe=repo/"research"/"audit"/"DO_NOT_WRITE_PRIVATE_AUDIT"
+            with self.assertRaisesRegex(ValueError,"PRIVATE_AUDIT_OUTPUT_REQUIRED"):
+                audit(d/"p.csv",None,unsafe,iterations=100)
+            self.assertFalse(unsafe.exists())
+
     def test_structural_threshold_not_statistical_covariance(self):
         with TemporaryDirectory() as tmp:
             d=Path(tmp)
