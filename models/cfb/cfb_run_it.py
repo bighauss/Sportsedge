@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sportsedge_cfb_model as M  # production model, imported unchanged
+import cfb_injury_intake as INJ
 
 CT = ZoneInfo("America/Chicago")
 CFBD = "https://api.collegefootballdata.com"
@@ -192,10 +193,8 @@ def match_player(name, teams, ptable, truncated=False):
     return hits[0] if len(hits) == 1 else None
 
 # ---------------------------------------------------------------- run
-def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=False, legacy_inputs=False):
-    if "injuries" not in intake and not allow_no_injury_feed:
-        raise Fail("INJURY_INTAKE_MISSING")
-    inj = intake.get("injuries", [])
+def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=False, legacy_inputs=False,
+        injury_file=None):
     adv = cap["advanced"] if legacy_inputs else with_games(cap["advanced"], games_played(cap["games"], now_utc))
     teamkey = {norm(r["team"]): r["team"] for r in adv}
     def resolve(name):
@@ -204,6 +203,12 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             if c in teamkey: return teamkey[c]
         c = [v for k, v in teamkey.items() if k.startswith(n)] if name.endswith("…") else []
         return c[0] if len(c) == 1 else None
+    if injury_file is not None:   # (doc, path): manual phone file overrides inline intake rows
+        merged = INJ.merge(intake.copy(), injury_file[0], injury_file[1], resolve)
+        intake.clear(); intake.update(merged)
+    if "injuries" not in intake and not allow_no_injury_feed:
+        raise Fail("INJURY_INTAKE_MISSING")
+    inj = intake.get("injuries", [])
     venues = {v.get("id"): v for v in cap["venues"]}
     ctx = {"adv": M.by(adv, "team"), "lm": M.league_means(adv),
            "talent": M.by(cap["talent"], "team"), "ret": M.by(cap["returning"], "team"),
@@ -260,6 +265,13 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             withheld.append((label, f"model error: {e}")); continue
         if "injuries" not in intake:
             pj["notes"].append("injuries: none supplied")
+        else:
+            gap = INJ.missing_coverage(intake, (A, H))
+            if gap: pj["notes"].append("injury coverage missing: " + ", ".join(gap))
+            for r in intake.get("injuries_listed", []):
+                if r["team"] in (A, H):
+                    pj["notes"].append(f"injury {r['team']} {r['player']} {r['status']} "
+                                       f"{'applied ' + r['role'] if r['applied'] else 'listed only'} [{r['source']}]")
         pj["kickoff_ct"] = f"{ko.astimezone(CT):%-I:%M %p} CT"; pj["kickoff_utc"] = ko.isoformat()
         projs.append(pj)
         rows += M.price_game(pj, line)
@@ -291,7 +303,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
 
 INJURY_MAX_AGE_H = 6
 
-def eligibility(intake, now_utc):
+def eligibility(intake, now_utc, teams=()):
     """Card-level eligibility. This runner never emits official wagers: the model is unvalidated.
     Reasons are listed so a missing input is never mistaken for a model finding."""
     reasons = ["MODEL_UNVALIDATED_PAPER_0U"]
@@ -303,6 +315,8 @@ def eligibility(intake, now_utc):
             reasons.append("INJURY_REVIEW_TIME_MISSING")
         elif (now_utc - dt.datetime.fromisoformat(rv.replace("Z", "+00:00"))).total_seconds() > INJURY_MAX_AGE_H * 3600:
             reasons.append("INJURY_REVIEW_STALE")
+        gap = INJ.missing_coverage(intake, teams)
+        if gap: reasons.append("INJURY_COVERAGE_PARTIAL: " + ", ".join(gap))
     return {"state": "RESEARCH_ONLY", "official_counted": 0, "approved_stake_u": 0, "reasons": reasons}
 
 def to_doc(card, projs, withheld, intake, now_utc, receipts):
@@ -322,7 +336,7 @@ def to_doc(card, projs, withheld, intake, now_utc, receipts):
                                   "model_file_sha256": sha256(open(M.__file__, "rb").read()),
                                   "run_utc": now_utc.isoformat(), "games": raw},
             "card": {"schema": "sportsedge-cfb-run-it-card-v1", "run_utc": now_utc.isoformat(),
-                     "lines_captured": intake.get("captured"), "eligibility": eligibility(intake, now_utc),
+                     "lines_captured": intake.get("captured"), "eligibility": eligibility(intake, now_utc, [t for p in projs for t in (p["away"], p["home"])]),
                      "receipts": receipts, "rows": rows, "withheld": [list(w) for w in withheld]}}
 
 def recheck(doc, now_utc):
@@ -373,6 +387,7 @@ def main(argv=None):
     a.add_argument("intake", nargs="?"); a.add_argument("--season", type=int)
     a.add_argument("--out", default="cfb_run_it_out"); a.add_argument("--private-dir", default=None)
     a.add_argument("--allow-no-injury-feed", action="store_true")
+    a.add_argument("--injuries", help="manual injury file models/cfb/injuries/<date>.json (overrides intake rows)")
     a.add_argument("--recheck", action="store_true", help="re-gate an existing --out card against the clock and re-render")
     a.add_argument("--fixture", help="offline CFBD capture JSON (tests only)")
     a.add_argument("--now", help="ISO UTC override (tests only)")
@@ -400,7 +415,14 @@ def main(argv=None):
             os.makedirs(x.private_dir, mode=0o700, exist_ok=True)
             for name, b in raw.items():
                 open(os.path.join(x.private_dir, f"{name}.json"), "wb").write(b)
-        card, projs, withheld, ctx = run(intake, cap, now, wf, x.allow_no_injury_feed)
+        injf = None
+        if x.injuries:
+            try: doc_i, rec_i = INJ.load_manual(x.injuries)
+            except INJ.InjuryFileError as e: raise Fail(str(e))
+            injf = (doc_i, x.injuries); receipts.append(rec_i)
+            if x.private_dir:
+                open(os.path.join(x.private_dir, "manual_injuries.json"), "wb").write(open(x.injuries, "rb").read())
+        card, projs, withheld, ctx = run(intake, cap, now, wf, x.allow_no_injury_feed, injury_file=injf)
     except Fail as e:
         print(f"BLOCKED {e}", file=sys.stderr); return 2
     os.makedirs(x.out, exist_ok=True)
