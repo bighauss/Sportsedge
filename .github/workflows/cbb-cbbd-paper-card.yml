@@ -1,0 +1,49 @@
+name: CBB CBBD-native paper card (offline synthetic tests, PAPER / 0u)
+
+# Manual-only, main-only, no schedule. Offline: no secrets, no provider calls,
+# no real data. Passing these synthetic tests is NOT predictive validation.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cbb-cbbd-paper-card
+  cancel-in-progress: false
+
+jobs:
+  offline-tests:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile CBBD paper-card modules
+        run: >-
+          python -m compileall -q models/cbb/cbbd_native_score_model.py
+          models/cbb/cbbd_paper_card.py models/cbb/cbbd_paper_ledger.py
+          models/cbb/cbbd_paper_synthetic.py
+      - name: Model, card, ledger and reused-join regressions (synthetic, offline)
+        working-directory: models/cbb
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+        run: >-
+          python -m unittest -v test_cbbd_native_score_model test_cbbd_paper_card
+          test_cbbd_paper_ledger test_cbbd_frozen_final_join
+          test_point_in_time_score_walkforward test_cbbd_prospective_capture
+      - name: Reused venue and ratings-cutoff gates (offline)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python -m unittest -v sportsedge.validation.test_daily_ratings_capture
+          sportsedge.validation.test_cbbd_ratings_capture
+      - name: Reused venue registry regression (offline)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m unittest discover -v -s tests -p test_cbb_venue_registry.py
