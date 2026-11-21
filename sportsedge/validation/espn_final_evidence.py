@@ -325,6 +325,10 @@ def _fetch(sport,event_id):
 
 
 def save(raw, report, out, *, source_url, import_kind):
+    if (not isinstance(raw, bytes) or not isinstance(report, dict)
+            or hashlib.sha256(raw).hexdigest() != report.get("source_original_sha256")
+            or not isinstance(report.get("candidate"), dict)):
+        raise Reject("SOURCE_RECEIPT_RAW_BYTES_MISMATCH")
     out=Path(os.path.abspath(os.fspath(out)))
     resolved = out.resolve()
     if (out == REPO_ROOT or REPO_ROOT in out.parents
@@ -343,9 +347,9 @@ def save(raw, report, out, *, source_url, import_kind):
         with os.fdopen(fd,"wb") as f:
             f.write(data)
     write("original_espn_summary.json",raw)
-    canonical=report.pop("candidate")
+    canonical=report["candidate"]
     write("canonical_final_FOR_REVIEW.json",json.dumps(canonical,sort_keys=True,indent=2).encode()+b"\n")
-    receipt={**report,"source_url":source_url,"acquisition":"LIVE_HTTP" if import_kind=="live" else "LOCAL_SAVED_BYTES_NOT_PIT_ATTESTED",
+    receipt={**{k:v for k,v in report.items() if k != "candidate"},"source_url":source_url,"acquisition":"LIVE_HTTP" if import_kind=="live" else "LOCAL_SAVED_BYTES_NOT_PIT_ATTESTED",
              "raw_bytes":len(raw),"status":"RESEARCH_ONLY_NOT_LEDGER_ADMITTED"}
     write("result_evidence_receipt.json",json.dumps(receipt,sort_keys=True,indent=2).encode()+b"\n")
     return receipt
