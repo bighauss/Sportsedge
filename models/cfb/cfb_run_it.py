@@ -26,9 +26,8 @@ import sportsedge_cfb_model as M  # production model, imported unchanged
 
 CT = ZoneInfo("America/Chicago")
 CFBD = "https://api.collegefootballdata.com"
-ALIASES = {"miamifl": "miami", "hawaii": "hawaii", "sanjosestate": "sanjosestate",
-           "appalachianstate": "appalachianstate", "ulm": "ulmonroe", "fiu": "floridainternational",
-           "uconn": "connecticut"}
+ALIASES = {"miamifl": ["miami"], "ulm": ["ulmonroe", "louisianamonroe"],
+           "fiu": ["floridainternational"], "uconn": ["connecticut"]}
 
 def norm(s):
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
@@ -142,8 +141,9 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
     adv = cap["advanced"]
     teamkey = {norm(r["team"]): r["team"] for r in adv}
     def resolve(name):
-        n = norm(name.replace("…", "")); n = ALIASES.get(n, n)
-        if n in teamkey: return teamkey[n]
+        n = norm(name.replace("…", ""))
+        for c in [n] + ALIASES.get(n, []):
+            if c in teamkey: return teamkey[c]
         c = [v for k, v in teamkey.items() if k.startswith(n)] if name.endswith("…") else []
         return c[0] if len(c) == 1 else None
     venues = {v.get("id"): v for v in cap["venues"]}
@@ -168,7 +168,8 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
         ven = venues.get(g.get("venueId"), {})
         dome = bool(ven.get("dome"))
         if not dome:
-            lat, lon = M.g(ven, "location.x"), M.g(ven, "location.y")
+            lat = next((v for v in (ven.get("latitude"), M.g(ven, "location.x"), M.g(ven, "location.latitude")) if v is not None), None)
+            lon = next((v for v in (ven.get("longitude"), M.g(ven, "location.y"), M.g(ven, "location.longitude")) if v is not None), None)
             if lat is None:
                 withheld.append((label, "venue coordinates missing -> no forecast")); continue
             try:
