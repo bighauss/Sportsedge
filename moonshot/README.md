@@ -7,16 +7,16 @@ An offline, mobile-friendly **DraftKings Football Moonshot research tool**. This
 - Manual play-by-play wager tracker: qualifying rushes/passes, yardage increments, first downs, offensive touchdowns, score and 10th-play bonuses, incomplete/turnover loss, pre-start void, end-of-half settlement, cashout, nullified plays.
 - Target payout cap and stake/payout accounting, action undo, JSON log export.
 - Historical CSV importer with duplicate-ID validation and a retrospective payoff table for chosen targets, including 95% Wilson bounds on observed hit rates.
-- Pure JavaScript rule engine, **15 unit tests**, no dependencies or login, no network calls.
+- Pure JavaScript rule engine with offline unit tests, no dependencies or login, and no network calls.
 
 ## Start
 
-Open `index.html` in a desktop browser with `engine.js` alongside it. For phones, host the two files together on HTTPS (e.g. GitHub Pages). `moonshot_lab_standalone.html` is a single-file option where supported by the local file viewer.
+Open [index.html](index.html) with `engine.js` alongside it. To use that version on a phone, host those two files together over HTTPS; do not publish private logs or CSVs. The single-file [standalone.html](standalone.html) embeds the same engine and can open offline in file viewers that support JavaScript.
 
-Run tests with Node.js:
+Run the offline tests from the repository root with Node.js 22, as used in CI. The suite also checks that the standalone's embedded engine matches `engine.js`.
 
 ```bash
-node engine.test.js
+node moonshot/engine.test.js
 ```
 
 ## Historical CSV format

@@ -77,6 +77,7 @@
       else if(c==='"'){q=!q;} else if(c===','&&!q){out.push(cur.trim());cur='';} else cur+=c;
     }if(q) throw Error('Unclosed CSV quote');out.push(cur.trim());return out;}
     const hdr=splitCsv(lines[0]).map(x=>x.toLowerCase());
+    if (new Set(hdr).size!==hdr.length) throw Error('CSV has duplicate column names');
     for (const key of ['round_id','final_x','end_type']) if(!hdr.includes(key)) throw Error('CSV requires '+key+' column');
     const seen = new Set();
     return lines.slice(1).map((line,ix)=>{
@@ -85,7 +86,7 @@
       const end_type=obj.end_type.toLowerCase();
       if(!['incomplete','turnover','half_end','void'].includes(end_type)) throw Error(`Row ${ix+2}: invalid end_type`);
       const final_x=+obj.final_x;
-      if (!Number.isFinite(final_x)||final_x<0) throw Error(`Row ${ix+2}: invalid final_x`);
+      if (obj.final_x===''||!Number.isFinite(final_x)||final_x<0) throw Error(`Row ${ix+2}: invalid final_x`);
       const round_id=obj.round_id.trim();
       if (!round_id || seen.has(round_id)) throw Error(`Row ${ix+2}: duplicate or empty round_id`);
       seen.add(round_id);
@@ -122,4 +123,3 @@
   }
   return {init,next,replay,parseCsv,summary};
 });
-

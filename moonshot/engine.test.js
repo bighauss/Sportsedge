@@ -1,4 +1,6 @@
 const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
 const {init,next,replay,parseCsv,summary}=require('./engine');
 const t=(name,fn)=>{try{fn();console.log('PASS',name)}catch(e){console.error('FAIL',name);throw e}};
 t('starts at zero, waits for eligible snap',()=>{let s=init();assert.equal(s.multiplier,0);s=next(s,{type:'rush',yards:14,outside20:false});assert.equal(s.phase,'waiting');s=next(s,{type:'rush',yards:14});assert.equal(s.multiplier,0.7)});
@@ -15,5 +17,14 @@ t('scoring bonus applies on second scoring event',()=>{const s=replay([{type:'ru
 t('cashout accepts offer between plays',()=>{let s=next(init(),{type:'pass',yards:6});s=next(s,{type:'cashout',cashout:7.25});assert.equal(s.phase,'cashed_out');assert.equal(s.payout,7.25)});
 t('void at end of half if never started',()=>{const s=next(init(),{type:'half_end'});assert.equal(s.phase,'void');assert.equal(s.payout,10)});
 t('CSV parser handles quoted columns and duplicates',()=>{const csv='round_id,game,final_x,end_type\nr1,"CHI, MIN",3.5,incomplete\nr2,CHI,0,void';assert.equal(parseCsv(csv)[0].game,'CHI, MIN');assert.throws(()=>parseCsv(csv+'\nr2,CHI,1,incomplete'),/duplicate/)});
+t('CSV parser rejects blank final_x but preserves explicit zero',()=>{for(const blank of ['', ' ', '" "'])assert.throws(()=>parseCsv(`round_id,final_x,end_type\nr1,${blank},half_end`),/invalid final_x/);assert.equal(parseCsv('round_id,final_x,end_type\nr1,0,half_end')[0].final_x,0)});
+t('CSV parser rejects duplicate normalized headers',()=>{assert.throws(()=>parseCsv('round_id,final_x, FINAL_X ,end_type\nr1,3,0,half_end'),/duplicate column/i)});
 t('replay expected returns handle void, half partial, wins and losses',()=>{const rows=parseCsv('round_id,game,final_x,end_type\na,g1,4,incomplete\nb,g2,1.2,incomplete\nc,g3,0.6,half_end\nd,g4,0,void');const x=summary(rows,3);assert.equal(x.wins,1);assert.equal(x.voids,1);assert.equal(x.partials,1);assert.ok(Math.abs(x.historicalRoi-0.15)<1e-10)});
-console.log('15/15 verified');
+t('standalone embeds the tested engine',()=>{
+  const standalone=fs.readFileSync(path.join(__dirname,'standalone.html'),'utf8');
+  const engine=fs.readFileSync(path.join(__dirname,'engine.js'),'utf8');
+  const inline=standalone.match(/<\/main><script>\n([\s\S]*?)<\/script>/);
+  assert.ok(inline);
+  assert.equal(inline[1].trim(),engine.trim());
+});
+console.log('18/18 verified');

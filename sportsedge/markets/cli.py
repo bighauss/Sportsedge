@@ -19,7 +19,7 @@ from hashlib import sha256
 import json
 import sys
 
-from .allmarkets_research import Market,PriceReceipt
+from .allmarkets_research import Market,PriceReceipt,_time
 from .projection_bridge import TeamProjection, from_claude_sport, from_nfl_ridge
 from .pit_source_manifest import verify_model_feature_manifest
 from .projection_distribution import DistributionInput,generate_score_scenarios
@@ -205,7 +205,11 @@ def _player_history_from_private_reference(info, projection, roster):
     return intake,{**census,"history_fit":history_census}
 
 
-def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
+def run_from_manifest(
+    payload:dict, *, chain:EvidenceChain|None=None, now:datetime|None=None
+)->dict:
+    """Evaluate one event at the slate's decision time, or snapshot UTC once."""
+    decision_at_utc=_time(datetime.now(timezone.utc) if now is None else now)
     _only_keys(payload,{"projection","projection_ref","distribution","dispersion_fit_ref",
                         "period_fit_ref","markets","player_file","player_features_ref","player_history_ref","roster_ids","event_team_ids",
                         "simulation_count","simulation_seed"},"root")
@@ -368,15 +372,14 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
             odds_observed_at_utc=_iso(info["odds_observed_at_utc"]),
             expected_file_sha256=info["raw_sha256"])
         players=intake.moments
-    now=datetime.now(timezone.utc)
-    if projection.asof_utc>now:
+    if projection.asof_utc>decision_at_utc:
         raise ValueError("MODEL_PROJECTION_DATED_IN_FUTURE")
     if not isinstance(payload.get("markets"),list) or len(payload["markets"])>5000:
         raise ValueError("INVALID_MARKET_LIST")
     batch=generate_score_scenarios(projection,distribution,
         roster_ids=roster,player_moments=players,
         count=payload.get("simulation_count",2000),
-        seed=payload.get("simulation_seed",10),generated_at_utc=now)
+        seed=payload.get("simulation_seed",10),generated_at_utc=decision_at_utc)
     candidates=[]
     for item in payload["markets"]:
         _only_keys(item,{"market","dk_quote","dk_opposite_quote","v21_inputs"},"candidate")
@@ -386,9 +389,9 @@ def run_from_manifest(payload:dict, *, chain:EvidenceChain|None=None)->dict:
             dk_other_side=_quote(item.get("dk_opposite_quote")),
             v21_inputs=item.get("v21_inputs",{})))
     results=run_research_board(batch,tuple(candidates),
-                               datetime.now(timezone.utc),chain=chain)
+                               decision_at_utc,chain=chain)
     results["input_version"]="SPORTSEDGE_FIVE_SPORT_RESEARCH_CLI_V1"
-    results["generated_at_utc"]=datetime.now(timezone.utc).isoformat()
+    results["generated_at_utc"]=decision_at_utc.isoformat()
     results["generator_unvalidated"]=True
     results["dispersion_fit_status"]=(
         fitted_dispersion["status"] if fitted_dispersion else "NOT_TRAINED_FROM_LEDGER")

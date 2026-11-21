@@ -1,0 +1,68 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 390,
+  "base_commit": "94646d2a2c323eb0e5e912c4561ab2fca86e19b0",
+  "protected_paths": [
+    "sportsedge/markets/cli.py",
+    "sportsedge/markets/pit_player_history_fit.py",
+    "sportsedge/markets/run_it_operator.py",
+    "sportsedge/markets/slate_orchestrator.py",
+    "sportsedge/markets/test_pit_player_history_fit.py",
+    "sportsedge/markets/test_run_it_operator.py",
+    "sportsedge/markets/test_slate_orchestrator.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Route the slate decision clock through per-event research, harden private player history matching and CSV handling, and add a private offline run operator. Includes Console timestamp and Moonshot CSV and standalone parity fixes. No odds fetching, existing archive rewrite, risk settings, frozen v5 or market promotion.",
+  "assumptions": [
+    "Offline test fixtures are synthetic and establish software behavior only.",
+    "The provider, bookmaker, feature and screenshot clocks are not independently authenticated by this change.",
+    "Market coverage remains bounded by the declared slate, available frozen models, quote contracts and existing settlement."
+  ],
+  "agent_identity": "Perplexity Computer audit and research operator",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Independently validated prospective research accuracy",
+    "before": null,
+    "unit": "No comparable authenticated baseline supplied",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest sportsedge.markets.test_run_it_operator sportsedge.markets.test_screenshot_line_handoff sportsedge.markets.test_slate_orchestrator sportsedge.markets.test_pit_player_history_fit -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "94646d2a2c323eb0e5e912c4561ab2fca86e19b0",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest sportsedge.markets.test_slate_orchestrator sportsedge.markets.test_pit_player_history_fit -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

@@ -34,6 +34,13 @@ Read these in order when researching a slate; **the repository has not been show
 | `docs/handoffs/` | Agent handoffs |
 | `docs/MIGRATION.md` | What came from where; what stays on Drive |
 
+## Offline RUN IT operator command
+
+Use the [RUN IT operator runbook](docs/markets/RUN_IT_OPERATOR.md) for the
+single command that accepts a prepared slate or a frozen slate with manually
+transcribed screenshot lines. It reconciles the supplied schedule and returns
+research results and blockers. It does not fetch odds or send a final bet card.
+
 ## Current status and safety
 - **Engine of record:** `engine/sportsedge_v5.py`, adopted 2026-11-11 and restored unchanged in PR #5. Original R5 guards and research-only NFL lane are under `research/r5/`.
 - New standalone model weights remain **untested starting values**. Even passing every synthetic CI check does not imply a verified betting edge.
@@ -42,16 +49,23 @@ Read these in order when researching a slate; **the repository has not been show
 - Historical captures, daily run logs, historical graded results and private data remain in Drive. The old GitHub repository's contents and Git history cannot be reconstructed from a 404.
 - Research sources include `docs/research/` and a separated prediction-markets watchlist. Never copy unreviewed external trading bot code into execution lanes or put credentials in GitHub.
 
-## Tests
+## Offline tests from a fresh clone
+
+Run these commands from the repository root with Python 3.12, as used by the main test workflow. No API keys or third-party packages are needed for these commands. CFB, NBA and MLB generate synthetic fixtures in ignored directories before running their tests.
+
 ```sh
-python models/cfb/test_cfb_model.py
-python models/nba/test_sportsedge_nba_model.py
-python models/mlb/test_sportsedge_mlb_model.py
+(cd models/cfb && python make_samples.py && python test_cfb_model.py)
+(cd models/nba && python make_samples.py && python test_sportsedge_nba_model.py)
+(cd models/mlb && python make_samples.py && python test_sportsedge_mlb_model.py)
 python models/cbb/test_cbb.py
 python models/nhl/test_sportsedge_nhl.py
 python research/audit/test_pregame_edge_audit.py
+python -m unittest -q sportsedge.markets.test_allmarkets_research sportsedge.markets.test_cli
 ```
-CI runs the five sport suites, 87 additional R5 synthetic regressions, and 12 pregame evidence-audit tests. Betting calibration, source verification and real-world profitability require separate forward evidence.
+
+These are smoke tests, not a complete test run. Plain `python -m unittest discover` from the root misses suites in directories without `__init__.py`; use the explicit commands in the [model test workflow](.github/workflows/tests.yml), the [all-markets workflow](.github/workflows/allmarkets-research.yml), or the relevant suite's workflow. `requirements.txt` lists optional data-loader dependencies, not the dependencies for every research suite.
+
+For the offline UIs, see the [Research Console](web/console/README.md) and [Moonshot Lab](moonshot/README.md). Passing software tests does not verify source authenticity, forward calibration or profitability; all outputs remain **PAPER / 0u**.
 
 
 ## AI/ML monitoring (research only)
