@@ -112,7 +112,7 @@ class FakeProvider:
             return FakeResponse(url, json.dumps(body).encode(), hdr, final_url=final)
         if parts.path == f"/v4/sports/{self.sport_key}/events":
             body = self.events() if self.window_events else []
-            return FakeResponse(url, json.dumps(body).encode(), {"x-requests-last": "0"})
+            return FakeResponse(url, json.dumps(body).encode(), {"x-requests-last": "0", "x-requests-remaining": self.remaining})
         if parts.path == f"/v4/sports/{self.sport_key}/odds":
             if self.odds_error:
                 raise HTTPError(url, self.odds_error, "error " + url, {}, None)
@@ -246,6 +246,34 @@ class NcaaDailyOddsTests(unittest.TestCase):
         self.assertEqual(nxt["state"], "BLOCKED_PRIOR_QUOTA_REVIEW")
         self.assertEqual(p2.calls, [])
 
+    def test_quota_review_rejects_preserved_evidence_at_both_card_boundaries(self):
+        cbb_dir = str(Path(__file__).resolve().parents[2] / "models" / "cbb")
+        if cbb_dir not in sys.path:
+            sys.path.insert(0, cbb_dir)
+        cbb = importlib.import_module("cbbd_paper_card")
+        cfb = importlib.import_module("models.cfb.cfb_paper_card")
+        for sport in ("ncaab", "ncaaf"):
+            for charge in (None, "malformed", "4"):
+                with self.subTest(sport=sport, charge=charge), TemporaryDirectory() as d:
+                    self.root = Path(d) / "private"
+                    provider = FakeProvider(ncaa.SPORTS[ncaa.SPORT_CODES[sport]], self.now)
+                    provider.odds_last = charge
+                    report, _ = self.run_snap(sport=sport, provider=provider)
+                    self.assertIsNone(report["manifest_filename"])
+                    self.assertIsNone(report["pairs_filename"])
+                    self.assertFalse(list(self.root.glob("*.accepted.json")))
+                    raw = (self.root / report["archive"]["raw_filename"]).read_bytes()
+                    audit = json.loads((self.root / report["audit_manifest_filename"]).read_text())
+                    self.assertEqual(audit["original_raw_sha256"], "sha256:" + sha256(raw).hexdigest())
+                    for candidate in (audit, report["archive"]):
+                        if sport == "ncaab":
+                            with self.assertRaisesRegex(cbb.Pass, "MANIFEST_NOT_CBB"):
+                                cbb.odds_api_quotes(raw, candidate, b"")
+                        else:
+                            with self.assertRaisesRegex(cfb.QuoteRefused, "SCOPE_OR_SHA"):
+                                cfb.load_odds_api_archive(raw, candidate, {})
+                    self.assertTrue((self.root / ncaa.HOLD_FILENAME).is_file())
+
     def test_http_error_is_not_retried_and_never_echoes_key(self):
         p = FakeProvider("basketball_ncaab", self.now)
         p.odds_error = 500
@@ -318,10 +346,7 @@ class NcaaDailyOddsTests(unittest.TestCase):
         cbb_dir = str(Path(__file__).resolve().parents[2] / "models" / "cbb")
         if cbb_dir not in sys.path:
             sys.path.insert(0, cbb_dir)
-        try:
-            card = importlib.import_module("cbbd_paper_card")
-        except ImportError as exc:  # card not present on this base
-            self.skipTest("CBB paper card unavailable: " + type(exc).__name__)
+        card = importlib.import_module("cbbd_paper_card")
         out, _ = self.run_snap()
         raw = (self.root / out["archive"]["raw_filename"]).read_bytes()
         man = json.loads((self.root / out["manifest_filename"]).read_text())
@@ -334,10 +359,7 @@ class NcaaDailyOddsTests(unittest.TestCase):
 
     def test_real_cfb_paper_card_loader_accepts_archive(self):
         """End-to-end with the merged models/cfb/cfb_paper_card.load_odds_api_archive."""
-        try:
-            card = importlib.import_module("models.cfb.cfb_paper_card")
-        except ImportError as exc:
-            self.skipTest("CFB paper card unavailable: " + type(exc).__name__)
+        card = importlib.import_module("models.cfb.cfb_paper_card")
         out, _ = self.run_snap(sport="ncaaf")
         raw = (self.root / out["archive"]["raw_filename"]).read_bytes()
         man = json.loads((self.root / out["manifest_filename"]).read_text())

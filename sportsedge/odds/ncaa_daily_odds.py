@@ -159,7 +159,7 @@ def preflight(sport_key, snapshot, key, now, opener=None):
     remaining = _credits(headers.get("x-requests-remaining") if headers else None)
     charged = _credits(headers.get("x-requests-last") if headers else None)
     facts = {"preflight_remaining_credits": remaining, "preflight_credits_last": charged}
-    if charged not in (None, 0):
+    if charged != 0:
         return "PREFLIGHT_UNEXPECTEDLY_CHARGED_PAUSE", facts
     if remaining is None:
         return "BLOCKED_PREFLIGHT_QUOTA_UNVERIFIED", facts
@@ -170,9 +170,17 @@ def preflight(sport_key, snapshot, key, now, opener=None):
     if not any(s.get("key") == sport_key and s.get("active") is True for s in sports):
         return "SKIPPED_SPORT_NOT_IN_SEASON", facts
     window_end = now + timedelta(minutes=WINDOWS_MINUTES[snapshot])
-    events, _ = _free_get("/" + sport_key + "/events", {
+    events, event_headers = _free_get("/" + sport_key + "/events", {
         "dateFormat": "iso", "commenceTimeFrom": _stamp(now),
         "commenceTimeTo": _stamp(window_end)}, key, opener)
+    event_charge = _credits(event_headers.get("x-requests-last"))
+    event_remaining = _credits(event_headers.get("x-requests-remaining"))
+    facts["events_credits_last"] = event_charge
+    facts["events_remaining_credits"] = event_remaining
+    if event_charge != 0 or event_remaining is None:
+        return "PREFLIGHT_EVENTS_QUOTA_UNVERIFIED_PAUSE", facts
+    if event_remaining < MAX_CREDITS + RESERVE_CREDITS:
+        return "BLOCKED_REMAINING_CREDITS_TOO_LOW", facts
     if not isinstance(events, list) or any(not isinstance(e, dict) for e in events):
         raise ValueError("PREFLIGHT_EVENTS_NOT_LIST")
     upcoming = 0
@@ -326,7 +334,7 @@ def run_snapshot(sport: str, snapshot: str, destination: Path, *, execute=False,
         _save(stem.with_suffix(".result.json"), result)
         return result
     try:
-        summary = capture(code, root, key=key, markets=MARKETS, bookmakers=BOOKS, opener=opener)
+        summary = capture(code, root, key=key, markets=MARKETS, bookmakers=BOOKS, opener=opener, audit_only=True)
     except (ValueError, TypeError, ArithmeticError, OSError, KeyError):
         # Provider may have charged even if parsing/archiving failed.
         hold("CAPTURE_FAILED_REVIEW_PRIVATELY")
@@ -339,8 +347,7 @@ def run_snapshot(sport: str, snapshot: str, destination: Path, *, execute=False,
     pairs = None
     try:
         raw = (root / summary["raw_filename"]).read_bytes()
-        pairs = two_sided_pairs(raw, summary, snapshot)
-        _save(stem.with_suffix(".pairs.json"), pairs)
+        pairs = two_sided_pairs(raw, {**summary, "sport": code}, snapshot)
     except (ValueError, TypeError, KeyError, OSError):
         pairs = None
     if charge is None or remaining is None:
@@ -349,15 +356,31 @@ def run_snapshot(sport: str, snapshot: str, destination: Path, *, execute=False,
         state = "ARCHIVED_UNEXPECTED_QUOTA_COST_PAUSE"
     elif remaining < MAX_CREDITS + RESERVE_CREDITS:
         state = "ARCHIVED_LOW_REMAINING_QUOTA_PAUSE"
+    elif summary.get("stale_or_missing_aggregator_market_timestamp_outcomes"):
+        state = "ARCHIVED_QUOTE_CLOCK_REVIEW"
     elif pairs is None:
         state = "ARCHIVED_PAIRS_SIDECAR_FAILED_REVIEW"
-    elif not summary.get("outcomes_returned"):
+    elif not summary.get("outcomes_returned") or not any(r["in_snapshot_window"] for r in pairs["rows"]):
         state = "ARCHIVED_NO_QUOTED_OUTCOMES"
     else:
         state = "ARCHIVED_PROVIDER_RESPONSE"
+    if state != "ARCHIVED_PROVIDER_RESPONSE":
+        pairs = None
+    if pairs is not None:
+        _save(stem.with_suffix(".pairs.json"), pairs)
+    audit_filename = Path(summary["raw_filename"]).stem + ".manifest.json"
+    manifest_filename = None
+    if state == "ARCHIVED_PROVIDER_RESPONSE" and snapshot == "pregame" and pairs["rows"]:
+        # Preserve the original audit manifest. Only this new receipt carries
+        # the card-loader sport/schema, and the digest binds the raw bytes.
+        manifest_filename = stem.with_suffix(".accepted.json").name
+        _save(root / manifest_filename, {
+            **summary, "schema": "sportsedge-oddsapi-aggregator-raw-v1", "sport": code,
+            "acceptance_state": state, "snapshot": snapshot, "audit_manifest": audit_filename,
+        })
     result = {**base, "state": state, "credits_used": charge,
               "archive": {k: summary.get(k) for k in ARCHIVE_FIELDS},
-              "manifest_filename": summary["raw_filename"][:-len(".json")] + ".manifest.json",
+              "audit_manifest_filename": audit_filename, "manifest_filename": manifest_filename,
               "pairs_filename": stem.with_suffix(".pairs.json").name if pairs else None,
               "two_sided_pairs": len(pairs["rows"]) if pairs else 0,
               "two_sided_pairs_in_window": (sum(r["in_snapshot_window"] for r in pairs["rows"])

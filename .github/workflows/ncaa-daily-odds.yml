@@ -31,9 +31,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-      ODDS_API_KEY_BACKUP: ${{ secrets.ODDS_API_KEY_BACKUP }}
-      SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
       NCAA_SPORT: ${{ inputs.sport }}
       NCAA_SNAPSHOT: ${{ inputs.snapshot }}
       PYTHONPATH: .
@@ -44,23 +41,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fail closed on unexpected inputs or absent owner secrets
+      - name: Validate dispatch inputs
         shell: bash
         run: |
           set -euo pipefail
           case "$NCAA_SPORT" in ncaab|ncaaf) ;; *) echo "::error::BLOCK_INPUT_SPORT"; exit 2;; esac
           case "$NCAA_SNAPSHOT" in pregame|close) ;; *) echo "::error::BLOCK_INPUT_SNAPSHOT"; exit 2;; esac
-          if [[ -z "${ODDS_API_KEY:-}" && -z "${ODDS_API_KEY_BACKUP:-}" ]]; then
-            echo "::error::BLOCK_SOURCE_AUTH: configure ODDS_API_KEY (or ODDS_API_KEY_BACKUP)"
-            exit 2
-          fi
-          if [[ -z "${SPORTSEDGE_ARCHIVE_FERNET_KEY:-}" ]]; then
-            echo "::error::BLOCK_ARCHIVE_ENCRYPTION: configure SPORTSEDGE_ARCHIVE_FERNET_KEY"
-            exit 2
-          fi
       - name: Install pinned encryption package
         run: python -m pip install --disable-pip-version-check cryptography==46.0.4
       - name: Validate Fernet key before any provider call
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
         shell: bash
         run: |
           python - <<'PY'
@@ -97,52 +88,54 @@ jobs:
           set -euo pipefail
           python -m sportsedge.odds.daily_pilot_artifact_gate verify --pilot "${NCAA_SPORT}-${NCAA_SNAPSHOT}"
       - name: One budgeted snapshot (free preflight, then at most 3 credits)
+        id: capture
         shell: bash
         env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          ODDS_API_KEY_BACKUP: ${{ secrets.ODDS_API_KEY_BACKUP }}
           PRIVATE_ROOT: ${{ runner.temp }}/sportsedge-private-ncaa-odds
           SPORTSEDGE_DAILY_CLAIM_DATE_CT: ${{ steps.daily_claim.outputs.date_ct }}
         run: |
           set -euo pipefail
           umask 077
+          if [[ -z "${ODDS_API_KEY:-}" && -z "${ODDS_API_KEY_BACKUP:-}" ]]; then
+            echo "::error::BLOCK_SOURCE_AUTH: configure ODDS_API_KEY (or ODDS_API_KEY_BACKUP)"
+            exit 2
+          fi
           python -m sportsedge.odds.ncaa_daily_odds "$PRIVATE_ROOT" \
             --sport "$NCAA_SPORT" --snapshot "$NCAA_SNAPSHOT" --execute
-      - name: Encrypt every archived file (raw response never uploaded in clear)
-        if: always()
-        shell: bash
+      - name: Encrypt the complete private evidence bundle
+        id: encrypt
+        if: always() && steps.capture.outcome != 'skipped'
         env:
-          PRIVATE_ROOT: ${{ runner.temp }}/sportsedge-private-ncaa-odds
-          EXPORT_ROOT: ${{ runner.temp }}/sportsedge-encrypted-ncaa-odds
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
         run: |
-          set -euo pipefail
+          set -eu
           umask 077
-          install -d -m 0700 "$EXPORT_ROOT"
-          [[ -d "$PRIVATE_ROOT" ]] || { echo "nothing archived"; exit 0; }
-          python - <<'PY'
-          import hashlib, json, os, pathlib
-          from cryptography.fernet import Fernet
-          f = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode())
-          src = pathlib.Path(os.environ["PRIVATE_ROOT"]); dst = pathlib.Path(os.environ["EXPORT_ROOT"])
-          index = []
-          for p in sorted(x for x in src.rglob("*") if x.is_file()):
-              data = p.read_bytes()
-              (dst / (p.name + ".fernet")).write_bytes(f.encrypt(data))
-              index.append({"file": p.name, "plaintext_sha256": "sha256:" + hashlib.sha256(data).hexdigest()})
-          (dst / "index.json").write_text(json.dumps(index, indent=2) + "\n")
-          print(f"encrypted {len(index)} file(s)")
-          PY
-      - name: Persist shared NCAA quota hold even if capture or encryption failed
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ncaa-daily-odds-quota-hold
-          path: ${{ runner.temp }}/sportsedge-private-ncaa-odds/ncaa-daily-odds.quota-hold.json
-          retention-days: 90
-          if-no-files-found: ignore
-      - name: Retain encrypted archive only
-        if: always()
+          python -m sportsedge.odds.ncaa_archive_export "$RUNNER_TEMP/sportsedge-private-ncaa-odds" "$RUNNER_TEMP/ncaa-evidence.tar.fernet"
+
+      - name: Persist the complete encrypted bundle
+        id: export
+        if: always() && steps.encrypt.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ncaa-odds-encrypted-${{ inputs.sport }}-${{ inputs.snapshot }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/sportsedge-encrypted-ncaa-odds
+          path: ${{ runner.temp }}/ncaa-evidence.tar.fernet
           retention-days: 90
-          if-no-files-found: ignore
+          if-no-files-found: error
+
+      - name: Create fixed control marker after capture or export failure
+        id: hold
+        if: always() && steps.capture.outcome != 'skipped' && (steps.capture.outcome != 'success' || steps.export.outcome != 'success')
+        run: |
+          set -eu
+          printf 'HOLD\n' > "$RUNNER_TEMP/ncaa-hold.txt"
+
+      - name: Persist shared stop signal
+        if: always() && steps.hold.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncaa-daily-odds-quota-hold
+          path: ${{ runner.temp }}/ncaa-hold.txt
+          retention-days: 90
+          if-no-files-found: error

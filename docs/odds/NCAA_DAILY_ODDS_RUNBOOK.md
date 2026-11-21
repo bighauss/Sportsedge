@@ -7,7 +7,7 @@ CLV results or stakes. Every record carries `official_counted=0`,
 
 Code: `sportsedge/odds/ncaa_daily_odds.py`. Workflow:
 `.github/workflows/ncaa-daily-odds.yml`. Offline tests:
-`sportsedge/odds/test_ncaa_daily_odds.py` (run on PRs by
+`sportsedge/odds/test_ncaa_daily_odds.py` (run manually by
 `.github/workflows/ncaa-odds-intake-tests.yml`, no secrets).
 The NFL pilot (`daily_main_odds.py`, `nfl-daily-odds-pilot.yml`) is unchanged.
 
@@ -56,10 +56,10 @@ day's close slot is gone.
    is missing/unparseable or below `3 + 50` (reserve floor), or if the sport is not
    `active`. Free `GET /v4/sports/{key}/events` window check.
 4. One paid `GET /v4/sports/{key}/odds` through
-   `free_odds_aggregator_intake.capture` (unchanged): redirects refused,
+   `free_odds_aggregator_intake.capture`: redirects refused,
    non-200 refused, no retries, key never logged.
 5. Private archive (mode 0600, outside the repo), then every file is Fernet
-   encrypted; only ciphertext + a SHA-256 index is uploaded (90-day retention).
+   packed into a single tar archive and Fernet-encrypted before atomic publication (90-day retention). Decrypt the complete token privately and unpack the tar.
 
 Log line: state, sport, snapshot, date, budget, credits used, window events,
 pair counts, key slot (`primary`/`backup`). No remaining balance, teams, prices or keys.
@@ -69,10 +69,11 @@ pair counts, key slot (`primary`/`backup`). No remaining balance, teams, prices 
 | File | Consumer |
 |---|---|
 | `aggregator_<CBB or CFB>_<ts>_<sha16>.json` — exact provider bytes | both paper cards |
-| `aggregator_..._.manifest.json` — schema `sportsedge-oddsapi-aggregator-raw-v1`, `sport` `CBB`/`CFB`, `original_raw_sha256`, `captured_utc` (observed UTC) | both paper cards |
+| `aggregator_..._.manifest.json` — audit-only schema, `observed_sport`, `original_raw_sha256`, `captured_utc` (observed UTC) | audit |
+| `ncaa-<sport>-pregame-<date>.accepted.json` | card admission receipt bound to original raw digest |
 | `ncaa-<sport>-<snapshot>-<date>.pairs.json` — schema `sportsedge-ncaa-odds-pairs-v1`, full two-sided per-book pairs only, event list for crosswalk building | graders / CLV, operator crosswalk |
 | `ncaa-<sport>-<snapshot>-<date>.attempt.json` / `.result.json` | audit |
-| `ncaa-daily-odds.quota-hold.json` (only on pause/review) | gate |
+| `ncaa-daily-odds.quota-hold.json` (only on pause/review) | encrypted audit |
 
 ### Feeding the paper cards (after decrypting privately)
 
@@ -81,7 +82,7 @@ CBB (merged #403):
 ```sh
 python models/cbb/cbbd_paper_card.py ... \
   --odds-api-raw aggregator_CBB_<...>.json \
-  --odds-api-manifest aggregator_CBB_<...>.manifest.json \
+  --odds-api-manifest ncaa-ncaab-pregame-<date>.accepted.json \
   --odds-api-crosswalk crosswalk.csv   # odds_event_id,game_id,odds_home_team,odds_away_team
 ```
 
@@ -89,7 +90,7 @@ CFB (merged #404):
 
 ```sh
 python -m models.cfb.cfb_paper_card <capture_dir> ... \
-  --odds-archive aggregator_CFB_<...>.json aggregator_CFB_<...>.manifest.json crosswalk.json
+  --odds-archive aggregator_CFB_<...>.json ncaa-ncaaf-pregame-<date>.accepted.json crosswalk.json
 ```
 
 The crosswalk is operator-built from the `events` list in the pairs file; no fuzzy
@@ -99,10 +100,9 @@ intake to both merged loaders unchanged.
 
 ## Quota holds
 
-Unexpected cost, unparseable billing headers, low remaining balance after the call,
-a capture failure after the request may have been billed, or a failed pairs sidecar
-writes `ncaa-daily-odds-quota-hold`. It blocks **both** sports and snapshots until an
-owner reviews billing and deletes the hold artifact. The NFL hold is separate.
+The daily claim and a five-byte shared control marker (`HOLD` plus newline) are the only plaintext artifact exceptions. Detailed hold reasons and all provider evidence travel inside the encrypted bundle. Review states issue no paper-card receipt or grader pairs. Both card loaders reject the audit-only manifest. A close snapshot never issues a pregame card receipt.
+
+A failed capture, encryption or archive upload triggers a separate attempt to upload the fixed marker. The claim check blocks all four NCAA slots while the hold artifact exists. A failed marker upload fails the job. In that case shared protection is unconfirmed: suspend dispatches and inspect Actions artifact state before resuming. The same-slot claim survives the later failure. Cancellation or runner loss can interrupt later steps. Verify both the exported artifact and the claim against the run ID before recording a successful live capture.
 
 ## Limitations
 
