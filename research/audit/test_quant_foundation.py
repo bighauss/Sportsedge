@@ -11,6 +11,8 @@ BASE=dict(sport='NFL',event_id='E1',period='FG',market='TOTAL',side='over',
           model_sha256=H,feature_available_utc='2026-11-15T16:00:00-06:00',
           source_published_utc='2026-11-15T16:00:00-06:00',
           book='DK',qualified='1',selection_id='S1',qualification_rule_sha256=H,
+          rules_effective_utc='2026-11-15T16:00:00-06:00',
+          selected_utc='2026-11-15T17:30:30-06:00',
           outcome='W',result_source='finals:sha256:example',
           fitted_until_utc='2026-11-14T12:00:00Z',
           settled_utc='2026-11-16T02:00:00Z')
@@ -57,7 +59,7 @@ class TestFoundation(unittest.TestCase):
     def test_legacy_paper_ledger_duplicate_snapshots_quarantined(self):
         a=dict(BASE)
         b=dict(BASE,selection_id='S2',captured_utc='2026-11-15T17:45:00-06:00',
-               price_american='+130')
+               selected_utc='2026-11-15T17:45:30-06:00',price_american='+130')
         r=paper_ledger([a,b])
         self.assertEqual(r['qualified_graded_n'],0)
         self.assertEqual(r['total_quarantined_rows'],2)
@@ -74,6 +76,12 @@ class TestFoundation(unittest.TestCase):
         self.assertEqual(r['losses'],0)
         self.assertAlmostEqual(r['net_units'],100/110,places=6)
         self.assertAlmostEqual(r['roi_flat_1u'],100/110,places=6)
+    def test_paper_ledger_refuses_hindsight_qualified_without_selection_clock(self):
+        r=paper_ledger([dict(BASE,selected_utc='')])
+        self.assertEqual(r['qualified_graded_n'],0)
+        self.assertEqual(r['net_units'],0)
+        self.assertTrue(any('selected_utc' in x['code'] for x in r['unverifiable']))
+
     def test_odd_type_and_missing_line_never_crash(self):
         r=audit_rows([dict(BASE,price_american=-110,line='')])
         self.assertEqual(r['retained_rows'],1)
