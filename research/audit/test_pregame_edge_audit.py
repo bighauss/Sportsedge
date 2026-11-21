@@ -162,6 +162,20 @@ class Validation(unittest.TestCase):
               row(event_id='E',market='S|SPREAD',line='-3.5'))
         self.assertEqual(z['diagnostic_eligible'],2)
 
+    def test_signed_zero_spread_duplicate_quarantines_both(self):
+        z=run(row(market='SPREAD',line='-0.0'),
+              row(market='SPREAD',line='+0.0'))
+        self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertEqual(z['claimed_clusters'],1)
+
+    def test_scientific_or_huge_line_is_flagged_but_claim_retained(self):
+        for line in ('1e999999', '9999999999999999999999999999999999'):
+            with self.subTest(line=line):
+                z=run(row(market='SPREAD',line=line))
+                self.assertEqual(z['diagnostic_eligible'],0)
+                self.assertIn('INVALID_OR_UNBOUNDED_LINE',z['flagged'][0]['flags'])
+                self.assertEqual(len(z['top_claimed_edges_including_flagged']),1)
+
     def test_file_hash_and_read_only(self):
         with tempfile.TemporaryDirectory() as td:
             f=Path(td)/'snap.csv';a=row()
