@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 import json
 import os
 from pathlib import Path
@@ -73,6 +74,20 @@ def _key(row):
     values = tuple(row.get(k) for k in fields)
     if not all(isinstance(v, str) and v.strip() for v in values[:5]) or not isinstance(values[5], str):
         raise CompletenessError("MARKET_IDENTITY_MISSING")
+    # Non-ML spread and total rungs must be ordinary bounded decimal identities.
+    # A mathematically finite value such as Decimal("1e999") is NOT a valid
+    # offered market line: it may overflow downstream canonical formatting.
+    family = values[2].upper()
+    if "SPREAD" in family or "TOTAL" in family:
+        line_text = values[5].strip()
+        if not re.fullmatch(r"[+-]?\\d{1,5}(?:\\.\\d{1,4})?", line_text):
+            raise CompletenessError("NUMERIC_MARKET_LINE_INVALID")
+        try:
+            numeric_line = Decimal(line_text)
+        except (InvalidOperation, ValueError):
+            raise CompletenessError("NUMERIC_MARKET_LINE_INVALID") from None
+        if not numeric_line.is_finite() or abs(numeric_line) > Decimal("10000"):
+            raise CompletenessError("NUMERIC_MARKET_LINE_INVALID")
     # A provider_market_id may cover multiple players/teams or alternate rungs.
     # Retain participant and settlement identity rather than collapsing them.
     extras = ("team_id", "player_id", "stat", "settlement")
