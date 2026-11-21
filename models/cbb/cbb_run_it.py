@@ -235,6 +235,16 @@ def render(card, names, extra):
          f"Freeze {parse_z(card['freeze_utc']).astimezone(CT):%Y-%m-%d %-I:%M %p} CT · slate {extra['slate_games']} games · "
          f"projected {card['projected_rows']} · priced markets {card['priced_market_rows']} · "
          f"prior finals used {(card.get('context') or {}).get('prior_games_used')}", ""]
+    cx = card.get("context") or {}
+    if cx:
+        h, sd = cx.get("hca") or {}, cx.get("sd") or {}
+        o += [f"Model context: HCA {h.get('value')} (n {h.get('n')}, sd {h.get('sd')}) · predictive SD margin "
+              f"{sd.get('margin')} / total {sd.get('total')} (basis {sd.get('basis')}, n {sd.get('n')}) · "
+              f"league pace {cx.get('league_pace')} · league ORtg {cx.get('league_mean_ortg')}", ""]
+    sides = [(_best(m)[0]) for r in card["rows"] for m in r["markets"] if m["status"] == "PRICED_PAPER"]
+    if sides:
+        from collections import Counter as _C
+        o += [f"Side balance of best-EV picks: {dict(_C(sides))}", ""]
     if card.get("context_error"):
         o += [f"**Context error (all games PASS):** {card['context_error']}", ""]
     priced = []
