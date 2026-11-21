@@ -85,6 +85,28 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertEqual(len(summary['paired_brier_event_cluster95']),2)
         self.assertAlmostEqual(summary['paired_brier_delta_model_minus_market'],-.24)
 
+    def test_same_native_game_id_across_sports_is_two_independent_events(self):
+        rows = [dict(BASE, sport='NFL', event_id='GAME-1',selection_id='NFL1'),
+                dict(BASE, sport='CBB', event_id='GAME-1',selection_id='CBB1',
+                     outcome='L',p_model='.4')]
+        report = replay(rows)
+        self.assertEqual(report['eligible'], 2)
+        self.assertEqual(report['overall']['events'], 2)
+        self.assertIsNotNone(report['overall']['roi_event_cluster95'])
+        self.assertEqual(report['overall']['decided_n'],2)
+
+    def test_numeric_error_clusters_do_not_conflate_sports(self):
+        rows = [dict(BASE, sport='NFL', event_id='GAME-1',
+                     projected_mean='100',actual_value='95'),
+                dict(BASE, sport='CBB', event_id='GAME-1',
+                     projected_mean='100',actual_value='110')]
+        report = bias_analysis(rows)
+        self.assertEqual(report['accepted'],2)
+        market_group = next(g for g in report['groups']
+                            if g['dimension']=='market' and g['value']=='spread')
+        self.assertEqual(market_group['distinct_events'],2)
+        self.assertIsNotNone(market_group['mean_error_cluster95'])
+
     def test_missing_provenance_fails_closed(self):
         row=dict(BASE,source_published_utc='2026-11-15T12:01:00Z')
         out=replay([row])
