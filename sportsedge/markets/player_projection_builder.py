@@ -240,10 +240,28 @@ def main(argv: list[str] | None = None) -> int:
     # A zero-row research output is never admitted as a valid player file.
     if not census["produced"]:
         raise ValueError("PLAYER_BUILD_NO_ADMISSIBLE_FORECAST_ROWS")
-    with csv_out.open("xb") as out:
-        out.write(raw)
-    with census_out.open("xb") as out:
-        out.write((json.dumps(census, sort_keys=True, indent=2) + "\n").encode("utf-8"))
+    census_bytes = (json.dumps(census, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    # The CSV and census form one evidence handoff. If either write fails,
+    # remove ONLY files this invocation created; never leave an orphan CSV
+    # that could be mistaken for a completed research forecast.
+    # This handles write errors, not process crashes or an untrusted filesystem.
+    created = []
+    try:
+        with csv_out.open("xb") as out:
+            created.append(csv_out)
+            out.write(raw)
+            out.flush()
+            import os
+            os.fsync(out.fileno())
+        with census_out.open("xb") as out:
+            created.append(census_out)
+            out.write(census_bytes)
+            out.flush()
+            os.fsync(out.fileno())
+    except BaseException:
+        for candidate in reversed(created):
+            candidate.unlink(missing_ok=True)
+        raise
     return 0
 
 
