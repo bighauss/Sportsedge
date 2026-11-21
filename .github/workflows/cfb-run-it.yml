@@ -17,6 +17,10 @@ on:
         description: "Run without an injury list (card says 'injuries: none supplied')"
         type: boolean
         default: false
+      injuries_path:
+        description: "Manual injury file in repo, e.g. models/cfb/injuries/2026-11-21.json (blank = none)"
+        required: false
+        default: ""
       issue:
         description: "Issue number to post the card to (blank = summary only)"
         required: false
@@ -46,7 +50,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Offline end-to-end gate (fixture capture -> model -> card)
-        run: python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_ledger models.cfb.test_cfb_run_it_parity -v
+        run: python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_ledger models.cfb.test_cfb_run_it_parity models.cfb.test_cfb_injury_intake -v
       - name: Encryption preflight (fail closed before any provider request)
         env:
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
@@ -82,9 +86,11 @@ jobs:
           LINES: ${{ inputs.lines_path }}
           SEASON: ${{ inputs.season }}
           NOINJ: ${{ inputs.allow_no_injury_feed }}
+          INJ: ${{ inputs.injuries_path }}
         run: |
           umask 077
           flag=""; [ "$NOINJ" = "true" ] && flag="--allow-no-injury-feed"
+          [ -n "$INJ" ] && flag="$flag --injuries $INJ"
           python models/cfb/cfb_run_it.py "$LINES" --season "$SEASON" --out out \
             --private-dir "$RUNNER_TEMP/private" $flag
       - name: Encrypt private capture and verify against public receipts
