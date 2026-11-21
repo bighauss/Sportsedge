@@ -46,6 +46,11 @@ def run_daily(destination: Path, *, execute: bool = False, now: datetime | None 
     if clock.tzinfo is None or clock.utcoffset() is None:
         raise ValueError("PILOT_CLOCK_NEEDS_UTC_OFFSET")
     day = clock.astimezone(CENTRAL).date().isoformat()
+    # GitHub Actions artifact claim is bound to this Central date; abort if
+    # the runner crossed midnight between claim and capture.
+    claimed_day = os.environ.get("SPORTSEDGE_DAILY_CLAIM_DATE_CT")
+    if claimed_day and claimed_day != day:
+        raise ValueError("PILOT_CENTRAL_DATE_CHANGED_AFTER_CLAIM")
     root = private_archive_root(destination)
     if destination.is_symlink():
         raise ValueError("PILOT_ARCHIVE_MUST_NOT_BE_SYMLINK")
@@ -83,7 +88,13 @@ def run_daily(destination: Path, *, execute: bool = False, now: datetime | None 
     try:
         summary = capture(SPORT, root, markets=MARKETS, bookmakers=BOOKS)
     except (ValueError, TypeError, ArithmeticError, OSError, KeyError):
+        # The provider might still have charged even when parsing/archiving
+        # failed. Persist a quota hold to prevent a new-day automatic retry.
         # Do not expose a provider response, credentials or a private path.
+        try:
+            _save(halt, {"reason": "CAPTURE_FAILED_REVIEW_PRIVATELY", "date_ct": day})
+        except FileExistsError:
+            pass
         result = {**base, "state": "CAPTURE_FAILED_REVIEW_PRIVATELY", "archive": None}
     else:
         charge = _credits(summary.get("provider_request_credits_last"))
