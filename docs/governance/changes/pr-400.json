@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 400,
-  "base_commit": "27ec5947f0f7d3e3f2e552d8e5ce3e826a463d73",
+  "base_commit": "70e46a5eb6abfbae74c60da91f4327ccbe1ae24c",
   "protected_paths": [
     ".github/workflows/daily-ratings-capture.yml",
     ".github/workflows/tests.yml",
@@ -43,7 +43,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "27ec5947f0f7d3e3f2e552d8e5ce3e826a463d73",
+    "target_base_sha": "70e46a5eb6abfbae74c60da91f4327ccbe1ae24c",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest sportsedge.validation.test_daily_ratings_capture sportsedge.odds.test_daily_pilot_artifact_gate"
   },
