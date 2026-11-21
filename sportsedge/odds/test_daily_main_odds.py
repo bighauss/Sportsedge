@@ -64,7 +64,7 @@ class DailyMainOddsTests(unittest.TestCase):
             self.assertEqual(result["state"], "CAPTURE_FAILED_REVIEW_PRIVATELY")
             self.assertNotIn("EXAMPLE_PRIVATE_VALUE", str(result))
             out = run_daily(root, execute=True, now=self.clock)
-            self.assertEqual(out["state"], "SKIPPED_ALREADY_ATTEMPTED")
+            self.assertEqual(out["state"], "BLOCKED_PRIOR_QUOTA_REVIEW")
             self.assertEqual(capture.call_count, 1)
             # An ambiguous provider failure might still have consumed credits:
             # the next day's job must halt until quota is reviewed.
