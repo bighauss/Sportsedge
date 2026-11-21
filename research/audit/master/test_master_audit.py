@@ -1,6 +1,7 @@
 """Synthetic regression tests for the master audit layer. Run:
     python -m research.audit.master.test_master_audit
 """
+import math
 import os
 import random
 import sys
@@ -10,6 +11,7 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 from research.audit.master import odds, stats, audits, props_corr as pc, projections as pj, pipeline  # noqa: E402
+from research.audit.master import uncertainty as un, ablation as ab  # noqa: E402
 
 T0 = "2026-11-16T12:00:00-06:00"
 KO = "2026-11-16T15:25:00-06:00"
@@ -147,7 +149,21 @@ class Audits(unittest.TestCase):
         bb = audits.bias_breakdown(rs)
         self.assertEqual(bb["player"][0]["direction"], "OVER_PROJECTS")
         self.assertTrue(bb["player"][0]["repeatable"])
-        self.assertTrue(audits.market_disagreement(rs))
+        self.assertTrue(audits.market_disagreement(rs)["buckets"])
+
+    def test_market_disagreement_flags_big_gaps(self):
+        rng = random.Random(8)
+        rs = []
+        for i in range(2000):
+            mp = rng.uniform(.52, .75)
+            true_p = .52 if mp - .5238 > .06 else mp      # big disagreements are model errors
+            rs.append(row(i, p=mp, res="W" if rng.random() < true_p else "L"))
+        rs.append(row(9999, pred_ts=KO))                  # not pregame -> excluded
+        md = audits.market_disagreement(rs)
+        self.assertEqual(md["excluded_not_pregame_or_ungraded"], 1)
+        self.assertEqual(md["trend"], "BIGGER_DISAGREEMENT_WORSE")
+        self.assertTrue(md["weakness_buckets"])
+        self.assertTrue(any(b["small_sample"] for b in md["buckets"]) or all(b["n"] >= 50 for b in md["buckets"]))
         c = audits.clv_report([row(0, close_odds=-130, close_other_odds=110), row(1)])
         self.assertEqual(c["n"], 1)
         ev = audits.ev_inspector([row(0, p=.5, prices={"DK": 105, "FD": -115})], benchmark_book="FD")
@@ -248,6 +264,59 @@ class Pipeline(unittest.TestCase):
             rep = pipeline.postgame_report(g)
             self.assertEqual(rep["graded"], 2)
             self.assertIn("performance_BLOCKED", rep)
+
+
+class Uncertainty(unittest.TestCase):
+    def test_sim_noise(self):
+        self.assertAlmostEqual(un.sim_se(.5, 25000), .00316, 4)
+        self.assertEqual(un.required_sims(.5, .03), 27778)
+        r = un.sim_noise_check([{"pred_id": "a", "model_prob": .5, "edge": .01},
+                                {"pred_id": "b", "model_prob": .6, "edge": .08}])
+        self.assertEqual(r["flagged"], 1)
+        self.assertEqual(r["rows"][0]["pred_id"], "a")
+
+    def test_sim_convergence(self):
+        def sim(n, seed):
+            rng = random.Random(seed * 7919 + n)
+            return sum(rng.random() < .55 for _ in range(n)) / n
+        c = un.sim_convergence(sim, counts=(1000, 4000), seeds=range(12))
+        self.assertLess(c[1]["run_sd"], c[0]["run_sd"])
+        self.assertEqual(c[1]["cost_vs_prev"], 4)
+
+    def test_dispersion_detects_61pct_spread(self):
+        rng = random.Random(9)
+        rows = []
+        for i in range(1500):
+            mu = rng.uniform(40, 100)
+            true_sd = 25.0
+            actual = rng.gauss(mu, true_sd)
+            rows.append({"projection": mu, "proj_sd": true_sd * .61, "actual": actual,
+                         "line": mu + rng.uniform(-15, 15), "kickoff_ts": f"2026-{1 + i % 12:02d}-{1 + i % 28:02d}"})
+        d = un.dispersion_audit(rows)
+        self.assertEqual(d["status"], "UNDERDISPERSED_OVERCONFIDENT")
+        self.assertAlmostEqual(d["spread_used"], .61, delta=.04)
+        rec = d["recommendation"]
+        self.assertLess(rec["holdout_after"]["extreme_share"], rec["holdout_before"]["extreme_share"])
+        self.assertLess(rec["holdout_after"]["brier"], rec["holdout_before"]["brier"])
+        self.assertTrue(rec["verdict"].startswith("RECOMMEND"))
+        ok = [{**r, "proj_sd": 25.0} for r in rows]
+        self.assertEqual(un.dispersion_audit(ok)["status"], "OK")
+
+
+class Ablation(unittest.TestCase):
+    def test_noise_group_is_simplify_candidate(self):
+        rng = random.Random(5)
+        rows = []
+        for i in range(700):
+            epa, rest, d1, d2 = (rng.gauss(0, 1) for _ in range(4))
+            p = 1 / (1 + math.exp(-(1.2 * epa)))
+            rows.append({"kickoff_ts": f"t{i:05d}", "epa": epa, "rest": rest, "def1": d1, "def2": d2,
+                         "y": int(rng.random() < p)})
+        r = ab.ablation(rows, {"core": ["epa"], "schedule": ["rest"], "defense": ["def1", "def2"]}, folds=3, iters=400)
+        v = {g["group"]: g["verdict"] for g in r["groups"]}
+        self.assertEqual(v["core"], "KEEP_HELPS")
+        self.assertTrue(v["defense"].startswith("SIMPLIFY_CANDIDATE"))
+        self.assertTrue(v["schedule"].startswith("SIMPLIFY_CANDIDATE"))
 
 
 if __name__ == "__main__":
