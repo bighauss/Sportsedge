@@ -1,157 +1,158 @@
 """Daily point-in-time ratings capture (Torvik CBB, CFBD SP+). PAPER / 0u.
 
 Saves the exact response bytes of each source with a UTC observation time and
-SHA256, into a private owner-only directory. Never retries, never fabricates a
-missing source, never prints a key. One CFBD call per run (free tier: 1,000 a
-month). Non-200 or empty bodies are recorded as BLOCKED, not as data.
+SHA256, into a new private owner-only directory. Never retries, follows
+redirects, fabricates a missing source, or prints a key.
 """
 from __future__ import annotations
 
-import argparse, csv, hashlib, io, json, math, os, sys, urllib.error, urllib.request
+import argparse, csv, hashlib, io, json, os, sys, urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 UA = "SportsEdge-research/1.0 (+https://github.com/bighauss/Sportsedge)"
+MAX_BYTES = 2_000_000
+CT = ZoneInfo("America/Chicago")
+
+
+def _utc(value):
+    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("RATINGS_CLOCK_MUST_HAVE_OFFSET")
+    return value.astimezone(timezone.utc)
+
+
+def _stamp(value):
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def sources(season_cbb: int, season_cfb: int):
+    if any(type(s) is not int or not 2000 <= s <= 2100 for s in (season_cbb, season_cfb)):
+        raise ValueError("INVALID_SEASON")
     return [
         {"name": "torvik_team_results", "url": f"https://barttorvik.com/{season_cbb}_team_results.csv",
-         "key_env": None, "expect": "csv"},
+         "key_env": None, "expect": "csv", "season": season_cbb},
         {"name": "cfbd_ratings_sp", "url": f"https://api.collegefootballdata.com/ratings/sp?year={season_cfb}",
-         "key_env": "CFBD_API_KEY", "expect": "json"},
+         "key_env": "CFBD_API_KEY", "expect": "json", "season": season_cfb},
     ]
 
 
-MAX_BYTES = 4_000_000
-
-
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Never forward CFBD Authorization to a redirected host or path."""
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(self, *args, **kwargs):
         return None
 
 
 def _fetch(url, key, timeout=30):
-    headers = {"User-Agent": UA, "Accept": "application/json,text/csv"}
+    headers = {"User-Agent": UA, "Accept": "*/*"}
     if key:
         headers["Authorization"] = "Bearer " + key
     req = urllib.request.Request(url, headers=headers)
-    opener = urllib.request.build_opener(_NoRedirect())
     try:
-        with opener.open(req, timeout=timeout) as r:
-            if r.status != 200 or r.geturl() != url:
-                return (r.status, b"")
-            data = r.read(MAX_BYTES + 1)
-            if len(data) > MAX_BYTES:
-                return (413, b"")
-            return (r.status, data)
+        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
+            if r.geturl() != url or r.status != 200:
+                return r.status, b""
+            return r.status, r.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as e:
-        # Never log HTTPError's URL, which could embed credentials.
-        return (e.code, b"")
+        return e.code, b""
     except (urllib.error.URLError, TimeoutError, OSError):
-        return (None, b"")
+        return None, b""
 
 
-def _numeric(value, low=-100.0, high=200.0):
-    if type(value) is bool:
-        return False
-    try:
-        n = float(value)
-    except (TypeError, ValueError):
-        return False
-    return math.isfinite(n) and low <= n <= high
+def _finite(value, lo, hi):
+    return not isinstance(value, bool) and lo <= float(value) <= hi
 
 
-def _normalized(name):
-    return "".join(c for c in name.strip().lower() if c.isalnum())
+def _fields(pairs):
+    result = dict(pairs)
+    if len(result) != len(pairs):
+        raise ValueError("DUPLICATE_JSON_KEY")
+    return result
 
 
-def check_body(expect, body):
-    """Exact-byte source gets CAPTURED only with structurally usable ratings.
+def _bad_json_constant(_):
+    raise ValueError("NONFINITE_JSON_NUMBER")
 
-    This is schema validation, NOT validation that the ratings were available
-    historically, nor that the provider response was authenticated upstream.
-    """
+
+def _inspect(expect, body, season):
     if not body:
-        return "EMPTY_BODY"
+        return "EMPTY_BODY", 0
     if len(body) > MAX_BYTES:
-        return "BODY_TOO_LARGE"
-    if body[:300].lstrip().lower().startswith((b"<html", b"<!doctype")):
-        return "HTML_NOT_RATINGS"
+        return "BODY_TOO_LARGE", 0
     if expect == "csv":
+        if body[:200].lstrip().startswith(b"<"):
+            return "HTML_NOT_CSV", 0
+        needed = {"team", "adjoe", "adjde", "adjt"}
         try:
-            reader = csv.reader(io.StringIO(body.decode("utf-8-sig"), newline=""), strict=True)
-            raw_header = next(reader, [])
-            header = [_normalized(x) for x in raw_header]
-            if not header or not all(header) or len(header) != len(set(header)):
-                return "CSV_HEADER_INVALID"
-            def index(aliases):
-                hits = [i for i, name in enumerate(header) if name in aliases]
-                return hits[0] if len(hits) == 1 else None
-            col = {
-                "team": index(("team", "teamname")),
-                "off": index(("adjoe", "adjo", "adjoffense", "adjustedoffense")),
-                "def": index(("adjde", "adjd", "adjdefense", "adjusteddefense")),
-                "tempo": index(("adjt", "adjtempo", "adjustedtempo"))
-            }
-            if any(x is None for x in col.values()):
-                return "CSV_REQUIRED_RATINGS_MISSING"
+            rows = csv.reader(io.StringIO(body.decode("utf-8-sig"), newline=""), strict=True)
+            header = next(rows)
+            if not needed.issubset(header) or any(header.count(k) != 1 for k in needed):
+                return "CSV_SCHEMA", 0
+            team, off, defense, tempo = (header.index(k) for k in ("team", "adjoe", "adjde", "adjt"))
             names = set()
-            for record in reader:
-                if len(record) != len(header) or not any(x.strip() for x in record):
-                    return "CSV_ROW_SHAPE_INVALID"
-                team = record[col["team"]].strip()
-                if not team or team in names:
-                    return "CSV_TEAM_DUPLICATE_OR_MISSING"
-                names.add(team)
-                if not (_numeric(record[col["off"]], 65, 160) and
-                        _numeric(record[col["def"]], 65, 160) and
-                        _numeric(record[col["tempo"]], 45, 90)):
-                    return "CSV_RATINGS_INVALID"
-            return None if 350 <= len(names) <= 420 else "CSV_D1_CENSUS_INCOMPLETE"
-        except (UnicodeError, csv.Error):
-            return "CSV_DECODE_INVALID"
+            for row in rows:
+                if len(row) != len(header):
+                    return "CSV_ROW_WIDTH", 0
+                key = row[team].strip().casefold()
+                if (not key or key in names or not _finite(row[off], 20, 250)
+                        or not _finite(row[defense], 20, 250) or not _finite(row[tempo], 20, 120)):
+                    return "CSV_TEAM_OR_RATING_INVALID", 0
+                names.add(key)
+        except (UnicodeError, csv.Error, StopIteration, ValueError, OverflowError):
+            return "INVALID_CSV", 0
+        return (None, len(names)) if 350 <= len(names) <= 420 else ("CSV_CENSUS_OUT_OF_RANGE", len(names))
     if expect != "json":
-        return "SOURCE_KIND_UNKNOWN"
+        return "SOURCE_KIND_UNKNOWN", 0
     try:
-        records = json.loads(body)
-    except (ValueError, UnicodeError):
-        return "INVALID_JSON"
-    if not isinstance(records, list) or len(records) != 138:
-        return "CFBD_FBS_CENSUS_INCOMPLETE"
-    teams = set()
-    for row in records:
-        if not isinstance(row, dict):
-            return "CFBD_RATING_SCHEMA_INVALID"
+        doc = json.loads(body, object_pairs_hook=_fields, parse_constant=_bad_json_constant)
+    except (ValueError, RecursionError):
+        return "INVALID_JSON", 0
+    if not isinstance(doc, list):
+        return "JSON_SCHEMA", 0
+    names = set()
+    for row in doc:
+        if not isinstance(row, dict) or row.get("year") != season or type(row.get("year")) is not int:
+            return "SP_WRONG_SEASON_OR_SCHEMA", 0
         team = row.get("team")
-        if not isinstance(team, str) or not team.strip() or team in teams:
-            return "CFBD_TEAM_DUPLICATE_OR_MISSING"
-        teams.add(team)
-        for k in ("offense", "defense", "specialTeams"):
-            value = row.get(k)
-            if not isinstance(value, dict) or not _numeric(value.get("rating"), -100, 100):
-                return "CFBD_RATING_SCHEMA_INVALID"
-        if not _numeric(row.get("rating"), -100, 100):
-            return "CFBD_RATING_SCHEMA_INVALID"
-    return None
+        if not isinstance(team, str) or not team.strip():
+            return "SP_TEAM_INVALID", 0
+        key = team.strip().casefold()
+        nums = [row.get("rating")] + [
+            row[k].get("rating") if isinstance(row.get(k), dict) else None
+            for k in ("offense", "defense", "specialTeams")
+        ]
+        if key in names or any(type(n) not in (float, int) or not -250 <= n <= 250 for n in nums):
+            return "SP_TEAM_OR_RATING_INVALID", 0
+        names.add(key)
+    return (None, len(names)) if 125 <= len(names) <= 175 else ("SP_CENSUS_OUT_OF_RANGE", len(names))
 
-def capture(root: Path, srcs, fetch=_fetch, now=None):
-    root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if root.stat().st_mode & 0o077:
-        raise ValueError("ARCHIVE_MUST_BE_OWNER_ONLY")
+
+def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None):
+    clock = clock or (lambda: datetime.now(timezone.utc))
+    srcs = tuple(srcs)
+    sources_expected = {s["url"]: s for src in srcs for s in sources(src["season"], src["season"])}
+    if not srcs or any(sources_expected.get(s.get("url")) != s for s in srcs):
+        raise ValueError("UNRECOGNIZED_RATINGS_SOURCE")
+    if len({s["name"] for s in srcs}) != len(srcs):
+        raise ValueError("DUPLICATE_RATINGS_SOURCE")
+    root.mkdir(mode=0o700, exist_ok=False)
     receipts = []
     for s in srcs:
         key = os.environ.get(s["key_env"]) if s["key_env"] else None
+        started = _utc(clock())
+        rec = {"source": s["name"], "url": s["url"], "season": s["season"],
+               "request_started_utc": _stamp(started), "provider_published_utc": None}
+        if claim_date is not None and started.astimezone(CT).date().isoformat() != claim_date:
+            receipts.append({**rec, "state": "BLOCKED_CLAIM_DATE_CHANGED"})
+            continue
         if s["key_env"] and not key:
-            observed = (now or datetime.now(timezone.utc)).isoformat()
-            receipts.append({"source": s["name"], "state": "BLOCKED_KEY_ABSENT", "observed_utc": observed})
+            receipts.append({**rec, "state": "BLOCKED_KEY_ABSENT"})
             continue
         status, body = fetch(s["url"], key)
-        observed = (now or datetime.now(timezone.utc)).isoformat()
-        problem = "HTTP_" + str(status) if status != 200 else check_body(s["expect"], body)
-        rec = {"source": s["name"], "url": s["url"], "http_status": status, "observed_utc": observed,
-               "bytes": len(body)}
+        observed = _utc(clock())
+        problem, count = ("HTTP_" + str(status), 0) if status != 200 else _inspect(s["expect"], body, s["season"])
+        if started > observed:
+            problem = "CLOCK_MOVED_BACKWARD"
+        rec.update(http_status=status, observed_utc=_stamp(observed), bytes=len(body))
         if problem:
             rec["state"] = "BLOCKED_" + problem
         else:
@@ -159,7 +160,7 @@ def capture(root: Path, srcs, fetch=_fetch, now=None):
             fd = os.open(root / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "wb") as f:
                 f.write(body)
-            rec.update(state="CAPTURED", file=name,
+            rec.update(state="CAPTURED", file=name, row_count=count,
                        sha256="sha256:" + hashlib.sha256(body).hexdigest())
         receipts.append(rec)
     out = {"schema": "sportsedge-daily-ratings-capture-v1", "official_counted": 0,
@@ -170,13 +171,52 @@ def capture(root: Path, srcs, fetch=_fetch, now=None):
     return out
 
 
+def eligible_bytes(body, receipt, *, source, season, decision, kickoff, max_age_seconds):
+    """Gate decrypted bytes at the forecast cutoff; makes no publisher-time claim."""
+    decision, kickoff = _utc(decision), _utc(kickoff)
+    expected = next((s for s in sources(season, season) if s["name"] == source), None)
+    if (not isinstance(receipt, dict) or expected is None or receipt.get("source") != source or receipt.get("season") != season
+            or receipt.get("url") != expected["url"] or receipt.get("state") != "CAPTURED"):
+        raise ValueError("RATINGS_RECEIPT_SCOPE_MISMATCH")
+    try:
+        observed, started = (_utc(datetime.fromisoformat(receipt[k])) for k in
+                             ("observed_utc", "request_started_utc"))
+    except (KeyError, ValueError, TypeError):
+        raise ValueError("RATINGS_RECEIPT_CLOCK_INVALID") from None
+    if (type(max_age_seconds) not in (float, int) or not 0 < max_age_seconds <= 366 * 86400
+            or not started <= observed <= decision < kickoff
+            or (decision - observed).total_seconds() > max_age_seconds):
+        raise ValueError("RATINGS_NOT_ELIGIBLE_AT_DECISION")
+    if (receipt.get("bytes") != len(body)
+            or receipt.get("sha256") != "sha256:" + hashlib.sha256(body).hexdigest()):
+        raise ValueError("RATINGS_BYTES_MISMATCH")
+    problem, count = _inspect(expected["expect"], body, season)
+    if problem or count != receipt.get("row_count"):
+        raise ValueError("RATINGS_PAYLOAD_INVALID")
+    return body
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("private_dir", type=Path)
-    p.add_argument("--cbb-season", type=int, default=2027)
-    p.add_argument("--cfb-season", type=int, default=2026)
+    p.add_argument("--cbb-season", type=int)
+    p.add_argument("--cfb-season", type=int)
+    p.add_argument("--claim-date")
+    p.add_argument("--execute", action="store_true", help="permit requests to Torvik and CFBD")
     a = p.parse_args(argv)
-    out = capture(a.private_dir, sources(a.cbb_season, a.cfb_season))
+    if not a.execute:
+        print("DRY_RUN: no requests or writes")
+        return 0
+    today = datetime.now(CT).date()
+    cbb = a.cbb_season if a.cbb_season is not None else today.year + (today.month >= 9)
+    cfb = a.cfb_season if a.cfb_season is not None else today.year - (today.month <= 1)
+    if os.getenv("GITHUB_ACTIONS") == "true" and not a.claim_date:
+        return 2
+    try:
+        out = capture(a.private_dir, sources(cbb, cfb), claim_date=a.claim_date)
+    except (ValueError, OSError):
+        print("BLOCKED_RATINGS_CAPTURE", file=sys.stderr)
+        return 2
     # Public log: states and sizes only, never bodies or keys.
     for r in out["receipts"]:
         print(r["source"], r["state"], r.get("bytes", 0))
