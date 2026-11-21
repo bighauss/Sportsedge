@@ -133,7 +133,9 @@ def confidence_interval_cluster(rows, field, iterations, seed):
     for r in rows:
         grouped[r["event_id"]].append(r[field])
     keys = sorted(grouped)
-    if len(keys) < 5:
+    # Suppress nominal 95% confidence intervals below the preregistered
+    # independent-event evidence floor; five-game bootstrap tails mislead.
+    if len(keys) < 30:
         return None
     rng = random.Random(seed)
     draws = []
@@ -201,6 +203,29 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
             for r in legs:
                 excluded.append({"source": "predictions", "line": "",
                                  "reason": "EVENT_ID_REUSED_FOR_DIFFERENT_GAME",
+                                 "event_id": event_id, "leg_id": r["leg_id"]})
+            del eligible_snapshots[(event_id, snap)]
+
+    # Final player/team identity and settled outcomes must be invariant across
+    # every saved pregame snapshot of the same event. Quarantine the complete
+    # event rather than silently choosing the first conflicting record.
+    event_player_teams = defaultdict(lambda: defaultdict(set))
+    event_market_outcomes = defaultdict(lambda: defaultdict(set))
+    for (event_id, _snap), legs in eligible_snapshots.items():
+        for r in legs:
+            event_player_teams[event_id][r["player_id"]].add(r["team_id"])
+            event_market_outcomes[event_id][natural_key(r)].add(r["y"])
+    contaminated_events = {}
+    for event_id in event_player_teams:
+        if any(len(teams) > 1 for teams in event_player_teams[event_id].values()):
+            contaminated_events[event_id] = "PLAYER_TEAM_CHANGED_ACROSS_SNAPSHOTS"
+        elif any(len(ys) > 1 for ys in event_market_outcomes[event_id].values()):
+            contaminated_events[event_id] = "PLAYER_GRADE_CHANGED_ACROSS_SNAPSHOTS"
+    for (event_id, snap), legs in list(eligible_snapshots.items()):
+        if event_id in contaminated_events:
+            for r in legs:
+                excluded.append({"source": "predictions", "line": "",
+                                 "reason": contaminated_events[event_id],
                                  "event_id": event_id, "leg_id": r["leg_id"]})
             del eligible_snapshots[(event_id, snap)]
 
@@ -291,7 +316,7 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
             "observed_cothit_rate": round_or_none(obs),
             "expected_cothit_independence": round_or_none(exp),
             "observed_minus_independence": round_or_none(dif),
-            "delta_event_cluster_bootstrap_95ci": str(ci) if ci else "N/A_FEW_EVENTS",
+            "delta_event_cluster_bootstrap_95ci": str(ci) if ci else "N/A_LT_30_EVENTS",
             "marginal_a_pred_mean": round_or_none(statistics.fmean(x["p_a"] for x in pairs)),
             "marginal_a_hit_rate": round_or_none(statistics.fmean(x["y_a"] for x in pairs)),
             "marginal_b_pred_mean": round_or_none(statistics.fmean(x["p_b"] for x in pairs)),
@@ -301,7 +326,7 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
             "independence_brier_joint_matched_subset": round_or_none(statistics.fmean(x["brier_ind"] for x in joint_subset)) if joint_subset else None,
             "frozen_joint_brier_matched_subset": round_or_none(statistics.fmean(x["brier_frozen_joint"] for x in joint_subset)) if joint_subset else None,
             "matched_brier_improvement_ind_minus_joint": round_or_none(statistics.fmean(x["brier_advantage"] for x in joint_subset)) if joint_subset else None,
-            "matched_brier_improvement_event_cluster_bootstrap_95ci": str(cb) if cb else "N/A_FEW_EVENTS_OR_NO_JOINT",
+            "matched_brier_improvement_event_cluster_bootstrap_95ci": str(cb) if cb else "N/A_LT_30_JOINT_EVENTS_OR_NO_JOINT",
             "flag": flag,
         })
 
