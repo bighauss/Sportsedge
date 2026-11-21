@@ -50,3 +50,5 @@ Base URL: `https://api.collegefootballdata.com`. On a phone, save the JSON respo
 Things CFBD does not give free: prices for team totals, 1H, and props (add them from your sportsbook as the flat
 columns listed in the .py docstring), injuries (manual file), and days of rest (derive from the schedule).
 Field names are listed in the module docstring; CSV inputs use dotted headers such as `offense.rushingPlays.ppa`.
+
+PAPER card pipeline (pregame assembler, frozen baselines, append-only ledger, chronological evaluator): see [CFB_PAPER_CARD.md](CFB_PAPER_CARD.md).

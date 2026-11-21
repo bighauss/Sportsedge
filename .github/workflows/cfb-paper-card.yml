@@ -1,0 +1,116 @@
+name: CFB paper card (manual only, PAPER / 0u)
+
+# Manual-only. No schedule, no pull_request / push trigger. Offline tests by
+# default; the optional CFBD capture job needs CFBD_API_KEY and fails closed.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "offline-tests (default) or cfbd-capture (prospective pregame CFBD capture, encrypted)"
+        type: choice
+        options: [offline-tests, cfbd-capture]
+        default: offline-tests
+      season:
+        description: "CFB season year (cfbd-capture only)"
+        required: false
+        default: ""
+      week:
+        description: "CFB week (cfbd-capture only)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cfb-paper-card
+  cancel-in-progress: false
+
+jobs:
+  offline-tests:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile models/cfb/cfb_*.py models/cfb/test_cfb_paper_card.py
+      - name: Synthetic CFB paper-card tests (network off)
+        run: python -m unittest models.cfb.test_cfb_paper_card models.cfb.test_cfb_source_pit_contract -v
+      - name: Existing RUN IT synthetic test (unchanged model)
+        working-directory: models/cfb
+        run: python make_samples.py && python test_cfb_model.py > /dev/null
+
+  cfbd-capture:
+    needs: offline-tests
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'cfbd-capture'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+      SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+      CFB_SEASON: ${{ inputs.season }}
+      CFB_WEEK: ${{ inputs.week }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail closed without inputs or secrets (values never printed)
+        run: |
+          [ -n "$CFB_SEASON" ] && [ -n "$CFB_WEEK" ] || { echo "::error::season and week inputs required"; exit 2; }
+          [ -n "$CFBD_API_KEY" ] || { echo "::error::CFBD_API_KEY not configured"; exit 2; }
+          [ -n "$SPORTSEDGE_ARCHIVE_FERNET_KEY" ] || { echo "::error::archive key not configured"; exit 2; }
+      - name: Install pinned encryption package
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Validate archive key before any request
+        run: python -c "import os; from cryptography.fernet import Fernet; Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode()); print('archive key OK')"
+      - name: Capture (at most four CFBD GETs, no retries)
+        id: cap
+        continue-on-error: true
+        run: |
+          umask 077
+          python -m models.cfb.cfb_cfbd_capture "$RUNNER_TEMP/cfb-capture" --season "$CFB_SEASON" --week "$CFB_WEEK" --execute
+      - name: Encrypt archive
+        id: encrypt
+        if: ${{ !cancelled() && steps.cap.outcome != 'skipped' }}
+        run: |
+          umask 077
+          install -d -m 0700 "$RUNNER_TEMP/cfb-encrypted"
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          from cryptography.fernet import Fernet
+          f = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode())
+          src = pathlib.Path(os.environ["RUNNER_TEMP"]) / "cfb-capture"
+          dst = pathlib.Path(os.environ["RUNNER_TEMP"]) / "cfb-encrypted"
+          idx = []
+          for p in sorted(src.glob("*")) if src.is_dir() else []:
+              b = p.read_bytes(); (dst / (p.name + ".fernet")).write_bytes(f.encrypt(b))
+              idx.append({"file": p.name, "plaintext_sha256": "sha256:" + hashlib.sha256(b).hexdigest()})
+          if not idx:
+              raise SystemExit("No CFB capture files to encrypt")
+          (dst / "index.json").write_text(json.dumps(idx, indent=2) + "\n")
+          print("encrypted", len(idx), "file(s)")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.encrypt.outcome == 'success' }}
+        with:
+          name: cfb-capture-encrypted-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cfb-encrypted
+          retention-days: 90
+          if-no-files-found: error
+      - name: Report partial capture
+        if: steps.cap.outcome == 'failure'
+        run: |
+          echo "::warning::One or more CFBD sources BLOCKED; see the state lines above"
+          exit 1
