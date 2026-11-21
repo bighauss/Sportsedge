@@ -178,6 +178,11 @@ jobs:
         run: |
           printf '%s\n' '## CBB diagnostic execution' 'Model command, evidence checks and encrypted upload succeeded.' 'PAPER / 0u. Not wager-eligible. Model calibration is unvalidated.' '' >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/evidence/card/cbb_card.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Sanitized block reason (codes only, no bodies or URLs)
+        if: always() && steps.model.outcome == 'failure'
+        run: |
+          grep -oE '^BLOCKED [A-Za-z]+: [A-Z][A-Z0-9_:]{2,80}' "$RUNNER_TEMP/evidence/stderr.log" | head -3 >> "$GITHUB_STEP_SUMMARY" || echo "BLOCKED (reason not a plain code; see encrypted evidence)" >> "$GITHUB_STEP_SUMMARY"
+          grep -oE '^BLOCKED [A-Za-z]+: [A-Z][A-Z0-9_:]{2,80}' "$RUNNER_TEMP/evidence/stderr.log" | head -3 || true
       - name: Fail closed on execution or evidence failure
         if: always() && steps.model.outcome != 'skipped' && (steps.model.outcome != 'success' || steps.evidence.outcome != 'success')
         run: |

@@ -3,10 +3,11 @@
   "pr_number": 416,
   "base_commit": "70442623374cb5a79560825888ba83cc24018fab",
   "protected_paths": [
+    ".github/workflows/cbb-run-it.yml",
     "models/cbb/test_cbb_run_it_parity.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
-  "change_summary": "Test-only: CBB RUN IT card equals cbbd_paper_card.run on equivalent files (excluding input_sha256/card_sha256). No code changes.",
+  "change_summary": "Test-only: CBB RUN IT card equals cbbd_paper_card.run on equivalent files (excluding input_sha256/card_sha256). No code changes. Also: CBB workflow prints the sanitized BLOCKED reason code (uppercase code only) to the job summary when the model step fails.",
   "assumptions": [
     "Model weights are untested; this PR does not change them.",
     "SP+ is centred on captured file means as model input; input mapping, not a weight change.",
