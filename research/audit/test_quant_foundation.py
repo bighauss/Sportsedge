@@ -110,22 +110,22 @@ class StrictSourceCsvTests(unittest.TestCase):
 
     def test_overlong_record_is_not_silently_trimmed(self):
         original=self.valid_csv()
-        long=original.rstrip(b'\\r\\n')+b',EXTRA\\r\\n'
+        long=original.rstrip(b'\r\n')+b',EXTRA\r\n'
         with self.assertRaisesRegex(ValueError,'CSV_EXTRA_FIELD_NOT_IN_HEADER'):
             parse_source_csv(long)
 
     def test_short_record_and_blank_record_refused(self):
         header,payload=self.valid_csv().splitlines()
-        short=header+b'\\n'+payload.rsplit(b',',1)[0]+b'\\n'
+        short=header+b'\n'+payload.rsplit(b',',1)[0]+b'\n'
         with self.assertRaisesRegex(ValueError,'CSV_MISSING_FIELD_IN_RECORD'):
             parse_source_csv(short)
-        blank=header+b'\\n\\n'+payload+b'\\n'
+        blank=header+b'\n\n'+payload+b'\n'
         with self.assertRaisesRegex(ValueError,'BLANK_CSV_RECORD'):
             parse_source_csv(blank)
 
     def test_non_utf8_capture_refused_before_cleaned_report(self):
         with self.assertRaisesRegex(ValueError,'INVALID_UTF8_CSV'):
-            parse_source_csv(b'\\xff\\xfe')
+            parse_source_csv(b'\xff\xfe')
 
 
 class OddsFormatsAndQuality(unittest.TestCase):
