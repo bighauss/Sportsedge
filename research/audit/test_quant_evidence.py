@@ -59,6 +59,46 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
                          'OPPOSING_QUOTE_AFTER_SELECTION')
 
+    def test_opposing_quote_age_independently_limited_at_selection(self):
+        paired = dict(market_p_no_vig='.5', paired_quote_sha256=H,
+                      paired_price_american='-110', paired_event_id='E1',
+                      paired_book='DK', paired_period='FG',
+                      paired_market='spread', paired_side='away',
+                      paired_line='3.5')
+        # Selected side is four minutes old; pair differs by only 61 seconds.
+        # The opposing quote nevertheless becomes 301 seconds old at selection.
+        for timestamp, eligible in (
+            ('2026-11-15T12:01:00Z', True),
+            ('2026-11-15T06:01:00-06:00', True),
+            ('2026-11-15T12:00:59Z', False),
+        ):
+            with self.subTest(paired_captured_utc=timestamp):
+                row = dict(BASE, **paired, paired_captured_utc=timestamp)
+                result = replay([row])
+                self.assertEqual(result['eligible'], int(eligible))
+                if not eligible:
+                    self.assertEqual(
+                        result['rejected_qualified_or_invalid'][0]['reason'],
+                        'STALE_OPPOSING_QUOTE_AT_SELECTION')
+
+    def test_opposing_quote_age_quarantine_does_not_depend_on_csv_row_order(self):
+        paired = dict(market_p_no_vig='.5', paired_quote_sha256=H,
+                      paired_price_american='-110', paired_book='DK',
+                      paired_period='FG', paired_market='spread',
+                      paired_side='away', paired_line='3.5')
+        recent = dict(BASE, **paired, paired_event_id='E1',
+                      paired_captured_utc='2026-11-15T12:01:00Z')
+        stale = dict(BASE, **paired, event_id='E2', selection_id='B2',
+                     paired_event_id='E2',
+                     paired_captured_utc='2026-11-15T12:00:59Z')
+        for ordering in ((recent, stale), (stale, recent)):
+            result = replay(list(ordering))
+            self.assertEqual(result['eligible'], 1)
+            self.assertEqual(len(result['rejected_qualified_or_invalid']), 1)
+            self.assertEqual(
+                result['rejected_qualified_or_invalid'][0]['reason'],
+                'STALE_OPPOSING_QUOTE_AT_SELECTION')
+
     def test_nonqualified_unselected_row_stays_in_denominator(self):
         row = dict(BASE, qualified='0', rules_effective_utc='', selected_utc='')
         result = replay([row])
