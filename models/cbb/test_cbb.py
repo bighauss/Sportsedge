@@ -122,3 +122,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Shared CI bridge for the separately reviewed ESPN and Torvik research suites.
+    # During independent draft review, either script may be absent. Whenever
+    # installed, the suite MUST pass: no swallowing failures or optional exit.
+    import subprocess
+    audit_dir = os.path.abspath(os.path.join(HERE, "..", "..", "research", "audit"))
+    for pattern in ("test_espn_college_availability_intake.py",
+                    "test_torvik_exact_raw_capture.py"):
+        if not os.path.isfile(os.path.join(audit_dir, pattern)):
+            print(f"RESEARCH_SUITE_NOT_YET_INSTALLED: {pattern}", flush=True)
+            continue
+        subprocess.run([sys.executable, "-m", "unittest", "discover",
+                        "-s", audit_dir, "-p", pattern, "-v"], check=True)
