@@ -26,7 +26,7 @@
     "metric": "automated CI execution of player-prop joint audit synthetic tests",
     "before": 0,
     "unit": "explicit GitHub workflow regression suites",
-    "source_state": "REPOSITORY_SOURCE_REVIEW"
+    "source_state": "UNKNOWN"
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
