@@ -94,6 +94,87 @@ class CapturePreflightTests(unittest.TestCase):
                   '--provider','DK','--manifest','/tmp/not_a_real_capture_manifest.json'])
         self.assertFalse(bad.exists())
 
+    def test_optional_original_source_clocks_never_look_ahead(self):
+        cases = [
+            (dict(source_published_utc='2026-11-15T18:01:00Z'),
+             'SOURCE_PUBLISHED_AFTER_LOCAL_CAPTURE'),
+            (dict(source_published_utc='2026-11-15T16:00:00Z',
+                  source_captured_utc='2026-11-15T18:01:00Z'),
+             'SOURCE_CAPTURED_AFTER_LOCAL_CAPTURE'),
+            (dict(source_published_utc='2026-11-15T16:01:00Z',
+                  source_captured_utc='2026-11-15T16:00:00Z'),
+             'SOURCE_CAPTURE_PRECEDES_PUBLICATION'),
+        ]
+        for changes, expected in cases:
+            with self.subTest(reason=expected):
+                result=manifest_for_capture(capture(**changes),
+                    asof_utc='2026-11-15T18:00:00Z',provider='DK')
+                self.assertEqual(result['row_count'],1)
+                self.assertIn(expected,[x['reason'] for x in result['rejected_rows']])
+                self.assertFalse(result['admission_allowed'])
+
+    def test_optional_model_feature_and_fit_clocks_reject_future(self):
+        cases = [
+            (dict(model_asof_utc='2026-11-15T21:00:00Z'),
+             'MODEL_FORECAST_NOT_PREGAME'),
+            (dict(model_asof_utc='2026-11-15T16:00:00Z',
+                  feature_available_utc='2026-11-15T16:01:00Z'),
+             'FEATURE_AVAILABLE_AFTER_MODEL_FORECAST'),
+            (dict(model_asof_utc='2026-11-15T16:00:00Z',
+                  fitted_until_utc='2026-11-15T16:00:00Z'),
+             'MODEL_FITTED_USING_FUTURE_INFORMATION'),
+        ]
+        for changes, expected in cases:
+            with self.subTest(reason=expected):
+                result=manifest_for_capture(capture(**changes),
+                    asof_utc='2026-11-15T18:00:00Z',provider='DK')
+                self.assertEqual(result['rejected_rows'][0]['reason'],expected)
+                self.assertEqual(result['row_count'],1)
+
+    def test_duplicate_original_offer_quarantines_all_copies_in_any_order(self):
+        rows=[
+            dict(sport='NFL',event_id='G1',book='DK',period='FG',
+                 market='total',side='over',line='44.50',price_american='-110',
+                 quote_sha256=H,captured_utc='2026-11-15T17:00:00Z',
+                 game_start_utc='2026-11-15T21:00:00Z',offered='1',
+                 captured='1',modeled='0',provenance='0'),
+            dict(sport='NFL',event_id='G1',book='DK',period='FG',
+                 market='total',side='over',line='44.5',price_american='-105',
+                 quote_sha256=H,captured_utc='2026-11-15T17:00:00Z',
+                 game_start_utc='2026-11-15T21:00:00Z',offered='1',
+                 captured='1',modeled='0',provenance='0'),
+        ]
+        for order in (rows,rows[::-1]):
+            file=io.StringIO()
+            writer=csv.DictWriter(file,fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(order)
+            result=manifest_for_capture(file.getvalue().encode(),
+                asof_utc='2026-11-15T18:00:00Z',provider='DK')
+            self.assertEqual(result['row_count'],2)
+            self.assertEqual(
+                [r['row'] for r in result['rejected_rows']
+                 if r['reason']=='DUPLICATE_OR_CONFLICTING_OFFER_IDENTITY'],
+                [2,3])
+            self.assertFalse(result['source_authenticated'])
+        rows[1]['side']='under'
+        file=io.StringIO()
+        writer=csv.DictWriter(file,fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+        result=manifest_for_capture(file.getvalue().encode(),
+            asof_utc='2026-11-15T18:00:00Z',provider='DK')
+        self.assertFalse(any(x['reason']=='DUPLICATE_OR_CONFLICTING_OFFER_IDENTITY'
+                             for x in result['rejected_rows']))
+
+    def test_invalid_numeric_line_in_quote_identity_visible_without_deletion(self):
+        result=manifest_for_capture(capture(book='DK',side='over',
+                                            line='not-a-number'),
+             asof_utc='2026-11-15T18:00:00Z',provider='DK')
+        self.assertEqual(result['row_count'],1)
+        self.assertIn('INVALID_OFFER_LINE',
+                      [x['reason'] for x in result['rejected_rows']])
+
     def test_future_api_call_denied(self):
         with self.assertRaises(ValueError):quota_decision('2026-11-15T18:00:00Z',
              ['2026-11-15T19:00:00Z'],max_hour=2,max_day=4,cache_age_seconds=None)
