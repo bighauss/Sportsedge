@@ -122,6 +122,29 @@ class TestJointPropAudit(unittest.TestCase):
                             rows=list(csv.DictReader(handle))
                         self.assertEqual(rows[0]["p_joint_frozen"],"")
 
+    def test_invalid_first_joint_copy_cannot_admit_later_valid_quote(self):
+        with TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            write(d/"p.csv",list(REQ)+["model_mode"],
+                  [prediction("G1","A"),
+                   prediction("G1","B",stat="AST")])
+            for reversed_input in (False, True):
+                joints=[dict(event_id="G1",snapshot_id="s",
+                             leg_id_a="A",leg_id_b="B",
+                             asof_utc="2026-11-20T18:00:00Z",
+                             joint_p=p)
+                        for p in ("not-a-probability","0.3")]
+                if reversed_input:
+                    joints.reverse()
+                write(d/"j.csv",JOINT_REQ,joints)
+                result=audit(d/"p.csv",d/"j.csv",
+                             d/("reversed" if reversed_input else "normal"),
+                             iterations=100)
+                self.assertEqual(result["pair_rows"],1)
+                self.assertEqual(result["frozen_joint_matched_pair_rows"],0)
+                self.assertEqual(result["exclusion_counts"][
+                    "DUPLICATE_FROZEN_JOINT_PAIR_ALL_COPIES"],2)
+
     def test_player_team_conflict_across_snapshots_quarantines_entire_event(self):
         with TemporaryDirectory() as tmp:
             d=Path(tmp)
