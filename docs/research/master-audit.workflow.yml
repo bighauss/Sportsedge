@@ -1,0 +1,30 @@
+name: master-audit
+on:
+  pull_request:
+    paths: ["research/audit/master/**", ".github/workflows/master-audit.yml"]
+  push:
+    branches: [main]
+    paths: ["research/audit/master/**"]
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Prediction file (JSON/CSV) in repo to audit"
+        required: false
+        default: "research/audit/master/examples/sample_predictions.json"
+permissions:
+  contents: read
+jobs:
+  test-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python research/audit/master/test_master_audit.py
+      - run: python research/audit/master/examples/make_sample.py
+      - name: Full read-only audit report
+        run: |
+          python -m research.audit.master full "${{ github.event.inputs.file || 'research/audit/master/examples/sample_predictions.json' }}" \
+            --rules research/audit/master/examples/rules.json --out master_audit_report.json
+      - uses: actions/upload-artifact@v4
+        with: {name: master-audit-report, path: master_audit_report.json}
