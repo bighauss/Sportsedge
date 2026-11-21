@@ -248,10 +248,12 @@ def _summary(records: list[dict]) -> dict:
                 'model_brier_on_market_matched_rows': None,
                 'paired_brier_delta_model_minus_market': None,
                 'paired_brier_event_cluster95': None,
+                'paired_brier_unique_events': 0,
+                'paired_brier_small_sample': True,
                 'market_baseline_matched_n': 0,
                 'win_rate': None, 'win_wilson95': None, 'roi_event_cluster95': None,
                 'small_sample': True}
-    events = len({r['event_id'] for r in records})
+    events = len({(r['sport'], r['event_id']) for r in records})
     decided = [r for r in records if r['outcome'] != 'P']
     model_brier = mean((r['p']-int(r['outcome'] == 'W'))**2 for r in decided) if decided else None
     model_logloss = mean(-math.log(r['p'] if r['outcome'] == 'W' else (1-r['p'])) for r in decided) if decided else None
@@ -268,16 +270,20 @@ def _summary(records: list[dict]) -> dict:
         - (r['q']-int(r['outcome'] == 'W'))**2 for r in market
     ]
     paired_brier_delta = mean(paired_differences) if market else None
-    paired_brier_ci = _cluster_ci([
+    paired_event_count = len({(row['sport'], row['event_id']) for row in market})
+    # A tiny number of games cannot substantiate a paired 95% uncertainty
+    # interval, even when many alternate lines came from those same games.
+    paired_brier_ci = (_cluster_ci([
         (str(row['sport']) + ':' + str(row['event_id']), delta)
         for row, delta in zip(market, paired_differences)
-    ])
+    ]) if paired_event_count >= 30 else None)
     unit_total = sum(r['unit'] for r in records)
     n_w = sum(r['outcome'] == 'W' for r in decided)
     return {'n': n, 'decided_n': len(decided), 'events': events,
             'wins': n_w, 'losses': len(decided)-n_w, 'pushes': n-len(decided),
             'net_units': round(unit_total, 6), 'roi': round(unit_total/n, 6),
-            'roi_event_cluster95': _cluster_ci([(r['event_id'], r['unit']) for r in records]),
+            'roi_event_cluster95': _cluster_ci([
+                (str(r['sport']) + ':' + str(r['event_id']), r['unit']) for r in records]),
             'win_rate': round(n_w/len(decided), 6) if decided else None,
             'win_wilson95': _wilson(n_w, len(decided)),
             'brier': round(model_brier, 6) if model_brier is not None else None,
@@ -288,6 +294,8 @@ def _summary(records: list[dict]) -> dict:
             'paired_brier_delta_model_minus_market': (
                 round(paired_brier_delta, 6) if paired_brier_delta is not None else None),
             'paired_brier_event_cluster95': paired_brier_ci,
+            'paired_brier_unique_events': paired_event_count,
+            'paired_brier_small_sample': paired_event_count < 30,
             'market_baseline_matched_n': len(market),
             'small_sample': events < 30}
 
