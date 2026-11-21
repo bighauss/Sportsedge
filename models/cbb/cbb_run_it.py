@@ -99,6 +99,10 @@ def prior_games(games, boxes, observed_utc, season):
             continue
         if ids[str(g["id"])] > 1:
             census["duplicate_game_id"] += 1; continue
+        # An unknown neutral flag cannot be treated as a true home game:
+        # HCA is fitted from non-neutral prior finals.
+        if type(g.get("neutralSite")) is not bool:
+            census["neutral_unknown"] = census.get("neutral_unknown", 0) + 1; continue
         rows = poss.get(str(g["id"]), [])
         if len(rows) != 2:
             census["no_possessions"] += 1; continue
@@ -108,7 +112,7 @@ def prior_games(games, boxes, observed_utc, season):
         census["finals"] += 1
         out.append({"game_id": str(g["id"]), "season": season, "tipoff_utc": utcz(parse_z(g["startDate"])),
                     "final_captured_utc": observed_utc, "home_team_id": str(g["homeTeamId"]),
-                    "away_team_id": str(g["awayTeamId"]), "neutral": bool(g.get("neutralSite")),
+                    "away_team_id": str(g["awayTeamId"]), "neutral": g["neutralSite"],
                     "home_points": g.get("homePoints"), "away_points": g.get("awayPoints"),
                     "possessions": sum(ps) / 2})
     return out, census
@@ -157,7 +161,10 @@ def registry(slate_rows, espn, espn_sha, captured_utc):
                 hit.append(c)
         if len(hit) != 1:
             miss.append((r["game_id"], "ESPN event not uniquely matched")); continue
-        rows.append({"game_id": r["game_id"], "neutral": "1" if hit[0].get("neutralSite") else "0",
+        # A missing or non-boolean ESPN flag must not be coerced to False.
+        if type(hit[0].get("neutralSite")) is not bool:
+            miss.append((r["game_id"], "ESPN neutral-site flag unknown")); continue
+        rows.append({"game_id": r["game_id"], "neutral": "1" if hit[0]["neutralSite"] else "0",
                      "source": "ESPN", "source_sha256": espn_sha, "published_utc": captured_utc,
                      "captured_utc": captured_utc, "tipoff_utc": r["tipoff_utc"]})
     return rows, miss
