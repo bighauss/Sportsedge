@@ -10,11 +10,71 @@ BASE=dict(sport='CBB',event_id='E1',period='FG',market='spread',side='home',
     game_start_utc='2026-11-15T20:00:00Z',
     feature_available_utc='2026-11-15T11:00:00Z',source_published_utc='2026-11-15T11:00:00Z',
     model_sha256=H,quote_sha256=H,qualification_rule_sha256=H,qualified='1',
+    rules_effective_utc='2026-11-15T11:00:00Z',selected_utc='2026-11-15T12:06:00Z',
     selection_id='B1',outcome='W',result_source='official_final:receipt',
     fitted_until_utc='2026-11-14T22:00:00Z',settled_utc='2026-11-15T23:00:00Z')
 
 
 class QuantEvidenceTests(unittest.TestCase):
+    def test_qualified_replay_requires_both_prospective_decision_clocks(self):
+        for omitted in ('rules_effective_utc', 'selected_utc'):
+            with self.subTest(omitted=omitted):
+                row = dict(BASE, **{omitted: ''})
+                result = replay([row])
+                self.assertEqual(result['eligible'], 0)
+                self.assertIn(omitted, result['rejected_qualified_or_invalid'][0]['reason'])
+
+    def test_retroactive_qualification_rule_is_rejected(self):
+        result = replay([dict(BASE, rules_effective_utc='2026-11-15T12:06:01Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'QUALIFICATION_RULE_RETROACTIVE')
+
+    def test_price_captured_after_selection_is_rejected(self):
+        result = replay([dict(BASE, selected_utc='2026-11-15T12:01:59Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'SELECTION_NOT_PROSPECTIVE')
+
+    def test_selection_after_kickoff_is_rejected(self):
+        result = replay([dict(BASE, selected_utc='2026-11-15T20:00:01Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'SELECTION_NOT_PROSPECTIVE')
+
+    def test_original_quote_older_than_five_minutes_at_decision_is_rejected(self):
+        result = replay([dict(BASE, selected_utc='2026-11-15T12:07:01Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'STALE_QUOTE_AT_SELECTION')
+
+    def test_opposing_quote_captured_after_selection_is_not_market_baseline(self):
+        pair = dict(BASE, market_p_no_vig='.5', paired_quote_sha256=H,
+                    paired_price_american='-110',
+                    paired_captured_utc='2026-11-15T12:07:00Z',
+                    paired_event_id='E1', paired_book='DK', paired_period='FG',
+                    paired_market='spread', paired_side='away', paired_line='3.5')
+        result = replay([pair])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'OPPOSING_QUOTE_AFTER_SELECTION')
+
+    def test_nonqualified_unselected_row_stays_in_denominator(self):
+        row = dict(BASE, qualified='0', rules_effective_utc='', selected_utc='')
+        result = replay([row])
+        self.assertEqual(result['unqualified'], 1)
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'], [])
+
+    def test_rules_effective_between_forecast_and_selection_allowed(self):
+        row = dict(BASE, rules_effective_utc='2026-11-15T12:05:00Z')
+        result = replay([row])
+        self.assertEqual(result['eligible'], 1)
+
+    def test_quote_and_selection_same_instant_allowed(self):
+        result = replay([dict(BASE, selected_utc=BASE['captured_utc'])])
+        self.assertEqual(result['eligible'], 1)
+
     def test_replay_roi_and_baseline(self):
         r1=dict(BASE,market_p_no_vig='.5',paired_quote_sha256=H,paired_price_american='-110',
                 paired_captured_utc='2026-11-15T12:05:00Z',paired_event_id='E1',
@@ -220,7 +280,7 @@ class QuantEvidenceTests(unittest.TestCase):
     def test_same_decision_different_capture_and_price_quarantines_both(self):
         earliest=dict(BASE)
         later=dict(BASE,selection_id='B2',captured_utc='2026-11-15T12:22:00Z',
-                   price_american='+150',outcome='W')
+                   selected_utc='2026-11-15T12:22:30Z',price_american='+150',outcome='W')
         out=replay([earliest,later])
         self.assertEqual(out['eligible'],0)
         self.assertEqual(out['total_quarantined_rows'],2)
