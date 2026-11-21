@@ -297,9 +297,17 @@ def main(argv=None):
             ratings = (priv / "ratings" / rec[0]["file"]).read_bytes()
             now = clock()
             import cbbd_prospective_capture as CAP
-            gcap = CAP.capture_games(season=x.season, start_utc=x.season_start_utc,
-                                     end_utc=utcz(now + timedelta(hours=30)), private_dir=priv / "games", key=key)
-            games = json.loads(Path(gcap["raw_path"]).read_bytes())
+            # capture_games allows at most one UTC day: use it for today's Central-time slate,
+            # and a separate archived GET for season-to-date finals. Today's rows win on id overlap.
+            day0 = datetime.combine(now.astimezone(CT).date(), datetime.min.time(), CT).astimezone(timezone.utc)
+            gcap = CAP.capture_games(season=x.season, start_utc=utcz(day0),
+                                     end_utc=utcz(day0 + timedelta(hours=24)), private_dir=priv / "games", key=key)
+            today = json.loads(Path(gcap["raw_path"]).read_bytes())
+            qs = urllib.parse.urlencode({"season": x.season, "startDateRange": x.season_start_utc, "endDateRange": utcz(day0)})
+            season_rows, srec = capture_raw("cbbd_games_season", f"{CAP.BASE}?{qs}", priv / "games", key)
+            by_id = {str(g.get("id")): g for g in season_rows}
+            by_id.update({str(g.get("id")): g for g in today})
+            games = list(by_id.values())
             q = urllib.parse.urlencode({"season": x.season, "startDateRange": x.season_start_utc, "endDateRange": utcz(now)})
             boxes, brec = capture_raw("cbbd_games_teams", f"{BOX_URL}?{q}", priv / "games", key)
             espn_url = f"{ESPN_URL}?" + urllib.parse.urlencode({"dates": now.astimezone(CT).strftime("%Y%m%d"),
@@ -317,7 +325,7 @@ def main(argv=None):
         print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
     receipts = [{"source": "cbbd_ratings_adjusted", **{k: rec[0].get(k) for k in ("bytes", "sha256", "observed_utc")}},
                 {"source": "cbbd_games", "sha256": gcap["sha256"], "observed_utc": gcap["observed_utc"]},
-                brec, erec, {"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
+                brec, erec, *([srec] if not x.fixture_dir else []), {"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
                              "observed_utc": x.board_captured_utc}]
     out = Path(x.out); out.mkdir(parents=True, exist_ok=True)
     (out / "cbb_card.json").write_text(json.dumps(card, indent=1, sort_keys=True))

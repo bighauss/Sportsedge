@@ -1,13 +1,13 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 419,
-  "base_commit": "932bc31e882be705c794394183ff4ec7b9bd1c54",
+  "base_commit": "887ae169b11f3068912fc44052bf20d125e33370",
   "protected_paths": [
     ".github/workflows/cbb-run-it-evidence-tests.yml",
     ".github/workflows/cbb-run-it.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/341",
-  "change_summary": "CBB RUN IT ledger continuity: prevent silent new-chain bootstrap after any previous successful CBB workflow run when latest encrypted paper ledger is unavailable or expired. Test actual workflow restore script provider-free with fake gh. No model changes and PAPER / 0u.",
+  "change_summary": "CBB RUN IT ledger continuity: prevent silent new-chain bootstrap after any previous successful CBB workflow run when latest encrypted paper ledger is unavailable or expired. Test actual workflow restore script provider-free with fake gh. No model changes and PAPER / 0u. Synced with main 887ae169 including CBB slate/finals capture changes from #418.",
   "assumptions": [
     "The CBB RUN IT workflow name cbb-run-it.yml is stable and its success history is authoritative for whether a prior published run may exist.",
     "Expired or deleted ledger artifacts must block continuation rather than authorize a fresh chain.",
@@ -41,7 +41,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "932bc31e882be705c794394183ff4ec7b9bd1c54",
+    "target_base_sha": "887ae169b11f3068912fc44052bf20d125e33370",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest tools.test_cbb_run_it_workflow_security tools.test_cbb_run_it_ledger_bootstrap"
   },
