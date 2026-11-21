@@ -217,6 +217,39 @@ class ThreeSportPlayerProjectionBuilder(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "CREATE_ONLY"):
                 main([str(src), str(csv_path), str(census_path)])
 
+    def test_failed_census_publication_rolls_back_just_created_csv(self):
+        q = p()
+        q["players"] = [player()]
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            src = root / "features.json"
+            csv_path = root / "forecast.csv"
+            # No such parent: forces a failure AFTER the valid CSV is written.
+            census_path = root / "missing_directory" / "census.json"
+            src.write_text(json.dumps(q))
+            original = src.read_bytes()
+            with self.assertRaises((FileNotFoundError, NotADirectoryError)):
+                main([str(src), str(csv_path), str(census_path)])
+            self.assertFalse(csv_path.exists(),
+                             "incomplete evidence handoff must not leave an orphan")
+            self.assertFalse(census_path.exists())
+            self.assertEqual(src.read_bytes(), original)
+
+    def test_existing_census_does_not_get_overwritten_or_leave_csv(self):
+        q = p()
+        q["players"] = [player()]
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            src = root / "features.json"
+            csv_path = root / "forecast.csv"
+            census_path = root / "census.json"
+            src.write_text(json.dumps(q))
+            census_path.write_text("PRESERVE ORIGINAL CENSUS")
+            with self.assertRaisesRegex(ValueError, "CREATE_ONLY_OUTPUT_REQUIRED"):
+                main([str(src), str(csv_path), str(census_path)])
+            self.assertEqual(census_path.read_text(), "PRESERVE ORIGINAL CENSUS")
+            self.assertFalse(csv_path.exists())
+
     def test_duplicate_json_keys_block_before_projection(self):
         with TemporaryDirectory() as d:
             src = Path(d) / "dup.json"
