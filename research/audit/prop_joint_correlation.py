@@ -152,15 +152,21 @@ def round_or_none(x, n=6):
 
 
 def write_csv(path, rows, cols):
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    with open(path, "x", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
 
 
 def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Each audit run gets a fresh private output directory; never overwrite
+    # previous research evidence or write result/settlement data into public git.
+    repo_root = Path(__file__).resolve().parents[2]
+    resolved_output = Path(output_dir).resolve()
+    if resolved_output == repo_root or repo_root in resolved_output.parents:
+        raise ValueError("PRIVATE_AUDIT_OUTPUT_REQUIRED")
     source = read_rows(pred_csv, REQ)
+    output_dir.mkdir(parents=True, exist_ok=False)
     excluded, accepted = [], []
     for n, row in source:
         try:
@@ -360,7 +366,8 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
                "frozen_joint_matched_pair_rows": sum(p["p_joint_frozen"] is not None for p in pair_rows),
                "excluded_records_or_reasons": len(excluded), "exclusion_counts": dict(Counter(e["reason"] for e in excluded)),
                "relationship_groups": len(reports), "note": "Exploratory analysis, not an out-of-sample validated betting edge. Do not infer causation from dependence; sources not independently authenticated by this script. Event-cluster CI accounts for multiple pairs from same event, not season/team drift or multiple-testing selection."}
-    (output_dir / "coverage.json").write_text(json.dumps(summary, indent=2) + "\n")
+    with (output_dir / "coverage.json").open("x", encoding="utf-8") as report:
+        report.write(json.dumps(summary, indent=2) + "\n")
     return summary
 
 
