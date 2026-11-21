@@ -230,30 +230,33 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
             del eligible_snapshots[(event_id, snap)]
 
     joints = {}
-    duplicate_joint_keys = set()
     if joint_csv:
-        for n, r in read_rows(joint_csv, JOINT_REQ):
+        original_joint_rows = read_rows(joint_csv, JOINT_REQ)
+        # Count every declared canonical pair BEFORE parsing numeric probabilities
+        # or times: an invalid-first copy must not permit a valid later copy to
+        # become an apparently unique frozen forecast.
+        declared_pairs = Counter()
+        for _line, row in original_joint_rows:
+            if all((row.get(field) or "").strip() for field in
+                   ("event_id", "snapshot_id", "leg_id_a", "leg_id_b")):
+                key = (row["event_id"], row["snapshot_id"],
+                       tuple(sorted((row["leg_id_a"], row["leg_id_b"]))))
+                declared_pairs[key] += 1
+        for n, r in original_joint_rows:
             try:
                 for field in JOINT_REQ:
                     if not (r.get(field) or "").strip():
                         raise ValueError("MISSING_" + field)
                 key = (r["event_id"], r["snapshot_id"],
-                       tuple(sorted([r["leg_id_a"], r["leg_id_b"]])))
+                       tuple(sorted((r["leg_id_a"], r["leg_id_b"]))))
                 if r["leg_id_a"] == r["leg_id_b"]:
                     raise ValueError("DUPLICATE_OR_SELF_PAIR")
-                if key in duplicate_joint_keys:
-                    raise ValueError("DUPLICATE_FROZEN_JOINT_PAIR_ALL_COPIES")
-                if key in joints:
-                    original = joints.pop(key)
-                    duplicate_joint_keys.add(key)
-                    excluded.append({"source": "joint", "line": original[2],
-                                     "reason": "DUPLICATE_FROZEN_JOINT_PAIR_ALL_COPIES",
-                                     "event_id": key[0], "leg_id": key[2][0]})
+                if declared_pairs[key] > 1:
                     raise ValueError("DUPLICATE_FROZEN_JOINT_PAIR_ALL_COPIES")
                 p = float(r["joint_p"])
                 if not math.isfinite(p) or not 0 <= p <= 1:
                     raise ValueError("JOINT_P_OUT_OF_RANGE")
-                joints[key] = (p, timestamp(r["asof_utc"]), n)
+                joints[key] = (p, timestamp(r["asof_utc"]))
             except (ValueError, TypeError) as ex:
                 excluded.append({"source": "joint", "line": n, "reason": str(ex),
                                  "event_id": r.get("event_id", ""), "leg_id": r.get("leg_id_a", "")})
