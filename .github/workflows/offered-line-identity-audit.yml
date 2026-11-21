@@ -1,0 +1,30 @@
+name: Offered numeric market identity research checks
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/odds/completeness_gate.py'
+      - 'sportsedge/odds/test_completeness_numeric_rung_v2.py'
+      - '.github/workflows/offered-line-identity-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sportsedge/odds/completeness_gate.py'
+      - 'sportsedge/odds/test_completeness_numeric_rung_v2.py'
+      - '.github/workflows/offered-line-identity-audit.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-offer-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Numeric spread, total, quarter-line and exponent adversarial tests
+        run: python -m unittest sportsedge.odds.test_completeness_numeric_rung_v2 -v
+      - name: Existing quoted market completeness tests
+        run: python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py -v
