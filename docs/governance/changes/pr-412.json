@@ -10,7 +10,7 @@
     "models/cbb/test_cbb_run_it.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
-  "change_summary": "CBB research orchestration plus protected diagnostic evidence export and provider-free tests executing the workflow export code. Public card and issue posting disabled pending admission review. No frozen model changes or wagering approval.",
+  "change_summary": "CBB research orchestration plus protected diagnostic evidence export and provider-free tests executing the workflow export code. Public card and issue posting disabled pending admission review. No frozen model changes or wagering approval. Rebased PR review against main 21059246 after the CFB-only #410/#411 merges; CBB's model and research-only eligibility are unchanged.",
   "assumptions": [
     "CBBD possessions field requires live schema verification; absence must fail closed.",
     "Board total side orientation remains unverified and must not support wagering eligibility.",
