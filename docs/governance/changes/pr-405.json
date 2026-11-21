@@ -4,17 +4,16 @@
   "base_commit": "8b5b622b227b291ae6e785e886bbcfda836c23a9",
   "protected_paths": [
     ".github/workflows/ncaa-daily-odds.yml",
+    ".github/workflows/ncaa-hosted-rehearsal.yml",
     ".github/workflows/ncaa-odds-intake-tests.yml",
+    "models/cbb/cbbd_paper_card.py",
+    "models/cfb/cfb_paper_card.py",
     "sportsedge/odds/daily_pilot_artifact_gate.py",
-    "sportsedge/odds/ncaa_daily_odds.py",
-    "sportsedge/odds/test_ncaa_daily_odds.py",
     "sportsedge/odds/free_odds_aggregator_intake.py",
     "sportsedge/odds/ncaa_archive_export.py",
+    "sportsedge/odds/ncaa_daily_odds.py",
     "sportsedge/odds/test_ncaa_archive_export.py",
-    ".github/actions/ncaa-hold/action.yml",
-    ".github/workflows/ncaa-hosted-rehearsal.yml",
-    "models/cbb/cbbd_paper_card.py",
-    "models/cfb/cfb_paper_card.py"
+    "sportsedge/odds/test_ncaa_daily_odds.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/341",
   "change_summary": "Add manual-only NCAA (basketball_ncaab, americanfootball_ncaaf) pregame/close Odds API snapshot intake with a 3-credit pre-computed budget, free remaining-credit preflight, per sport+snapshot+Central-date artifact claim, Fernet-encrypted archive, and paper-card-compatible raw+manifest output. Additive artifact-gate pilots; NFL and ratings paths unchanged.",
