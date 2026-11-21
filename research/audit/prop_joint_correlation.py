@@ -104,6 +104,33 @@ def natural_key(a):
     return (a["player_id"], a["stat"], a["period"], a["side"], a["line_num"])
 
 
+def contradictory_player_settlements(legs):
+    """Return True if decided same-player lines imply an empty value interval.
+
+    OVER WIN / UNDER LOSS imply value > line; OVER LOSS / UNDER WIN
+    imply value < line. This enforces monotone ladders and exact opposite
+    sides without inventing any final stat values or retroactive repairs.
+    Compare only the same player, stat and period in the same event.
+    """
+    bounds = {}
+    for leg in legs:
+        if leg["side"] not in {"OVER", "UNDER"}:
+            continue
+        key = (leg["player_id"], leg["stat"], leg["period"])
+        low, high = bounds.get(key, (None, None))
+        if (leg["side"] == "OVER" and leg["y"] == 1) or (
+            leg["side"] == "UNDER" and leg["y"] == 0
+        ):
+            low = leg["line_num"] if low is None else max(low, leg["line_num"])
+        else:
+            high = leg["line_num"] if high is None else min(high, leg["line_num"])
+        bounds[key] = (low, high)
+    return any(
+        low is not None and high is not None and low >= high
+        for low, high in bounds.values()
+    )
+
+
 def classify(a, b):
     if a["player_id"] == b["player_id"]:
         if a["stat"] == b["stat"]:
@@ -238,6 +265,17 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
             contaminated_events[event_id] = "PLAYER_TEAM_CHANGED_ACROSS_SNAPSHOTS"
         elif any(len(ys) > 1 for ys in event_market_outcomes[event_id].values()):
             contaminated_events[event_id] = "PLAYER_GRADE_CHANGED_ACROSS_SNAPSHOTS"
+    # Final same-player results cannot contradict threshold/order logic,
+    # even when the two legs were published in different pregame snapshots.
+    # Any contradiction poisons the event's grading custody; quarantine
+    # every otherwise eligible snapshot without silently changing sources.
+    all_decided_by_event = defaultdict(list)
+    for leg in accepted:
+        all_decided_by_event[leg["event_id"]].append(leg)
+    for event_id, legs in all_decided_by_event.items():
+        if contradictory_player_settlements(legs):
+            contaminated_events[event_id] = "PLAYER_FINAL_SETTLEMENT_CONTRADICTION"
+
     for (event_id, snap), legs in list(eligible_snapshots.items()):
         if event_id in contaminated_events:
             for r in legs:
@@ -298,8 +336,9 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
                 else:
                     excluded.append({"source": "joint", "line": "", "reason": "JOINT_FRECHET_BOUNDS_VIOLATION",
                                      "event_id": event_id, "leg_id": "|".join(pair_key[2])})
-            if relation.startswith("STRUCTURAL"):
-                # Structural complement/nested outcomes are tracked, not learned correlations.
+            if relation.startswith("STRUCTURAL") or relation == "SAME_PLAYER_COMPOSITE_OVERLAP":
+                # Deterministic same-player bounds/composites are not evidence
+                # of learned empirical player-stat covariance.
                 field = "STRUCTURAL_LOGIC_ONLY"
             else:
                 field = "EMPIRICAL_CANDIDATE"
