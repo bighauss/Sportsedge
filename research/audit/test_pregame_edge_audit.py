@@ -2,7 +2,7 @@ import tempfile
 import unittest
 import csv
 from pathlib import Path
-from pregame_edge_audit import audit_rows, audit_file
+from pregame_edge_audit import audit_rows, audit_file, strict_csv_rows
 
 H='a'*64
 B='b'*64
@@ -126,6 +126,41 @@ class Validation(unittest.TestCase):
               row(event_id='E|PIPE',market='SPREAD',side='home',line='-4.5'))
         self.assertEqual(z['computable_claimed_edges'],2)
         self.assertEqual(z['claimed_clusters'],1)
+
+    def test_duplicate_normalized_headers_and_ragged_rows_fail_closed(self):
+        for raw,reason in [
+            (b'sport,SPORT\\nNFL,NFL\\n','CSV_DUPLICATE_NORMALIZED_HEADER'),
+            (b'sport,event_id\\nNFL\\n','RAGGED_CSV_RECORD'),
+            (b'sport,event_id\\nNFL,E,EXTRA\\n','RAGGED_CSV_RECORD'),
+            (b'sport,event_id\\nNFL,E\\n\\n','BLANK_CSV_RECORD')]:
+            with self.subTest(reason=reason):
+                with self.assertRaisesRegex(ValueError,reason):
+                    strict_csv_rows(raw)
+
+    def test_quoted_multiline_field_does_not_count_as_blank_record(self):
+        raw=b'sport,comment\\nNFL,"note\\n\\nwith a blank quoted line"\\n'
+        z=strict_csv_rows(raw)
+        self.assertEqual(len(z),1)
+        self.assertIn('\\n\\n',z[0]['comment'])
+
+    def test_numeric_equivalent_spread_rungs_deduplicate(self):
+        z=run(row(event_id='S',market='SPREAD',line='-3.50'),
+              row(event_id='S',market='SPREAD',line='-3.5'))
+        self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertEqual(len(z['flagged']),2)
+        self.assertEqual(z['claimed_clusters'],1)
+
+    def test_different_player_stat_and_team_are_distinct(self):
+        z=run(row(event_id='P',market='PLAYER_PROP',player_id='p1',team_id='A',
+                  stat='PASS_YDS',line='70.5',side='over'),
+              row(event_id='P',market='PLAYER_PROP',player_id='p1',team_id='A',
+                  stat='RUSH_YDS',line='70.5',side='over'))
+        self.assertEqual(z['diagnostic_eligible'],2)
+
+    def test_delimiter_collision_does_not_poison_duplicate_count(self):
+        z=run(row(event_id='E|S',market='SPREAD',line='-3.5'),
+              row(event_id='E',market='S|SPREAD',line='-3.5'))
+        self.assertEqual(z['diagnostic_eligible'],2)
 
     def test_file_hash_and_read_only(self):
         with tempfile.TemporaryDirectory() as td:
