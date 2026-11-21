@@ -1,0 +1,126 @@
+name: NFL daily featured-odds pilot (encrypted, PAPER)
+
+on:
+  # Manual-only until an externally durable quota lock and live opt-in are verified.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read  # list prior attempt/hold artifacts before any billable provider call
+
+concurrency:
+  group: nfl-daily-odds-pilot
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    # Secrets never reach pull-request jobs or non-main branches.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail closed if owner secrets are absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ODDS_API_KEY:-}" || -z "${SPORTSEDGE_ARCHIVE_FERNET_KEY:-}" ]]; then
+            echo "::error::BLOCK_SOURCE_AUTH: configure ODDS_API_KEY and SPORTSEDGE_ARCHIVE_FERNET_KEY in Actions secrets"
+            exit 2
+          fi
+      - name: Install pinned encryption package
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Validate Fernet key before any billable API call
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, sys
+          from cryptography.fernet import Fernet
+          try:
+              Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode("ascii"))
+          except (KeyError, ValueError, TypeError):
+              print("::error::BLOCK_ARCHIVE_ENCRYPTION: invalid Fernet secret", file=sys.stderr)
+              sys.exit(2)
+          PY
+      - name: Offline regression tests
+        run: python -m unittest sportsedge.odds.test_daily_main_odds sportsedge.odds.test_daily_pilot_artifact_gate -v
+      - name: Check prior day claims and reserve Central date
+        id: daily_claim
+        shell: bash
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m sportsedge.odds.daily_pilot_artifact_gate reserve
+      - name: Persist claim artifact BEFORE any billable provider request
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.daily_claim.outputs.artifact_name }}
+          path: ${{ runner.temp }}/nfl-daily-claim.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Confirm claim belongs to this run and same Central date
+        shell: bash
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m sportsedge.odds.daily_pilot_artifact_gate verify
+      - name: One bounded live capture (expected 3 credits, provider billing verified afterward)
+        shell: bash
+        env:
+          PRIVATE_ROOT: ${{ runner.temp }}/sportsedge-private-odds
+          SPORTSEDGE_DAILY_CLAIM_DATE_CT: ${{ steps.daily_claim.outputs.date_ct }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python -m sportsedge.odds.daily_main_odds "$PRIVATE_ROOT" --execute
+      - name: Encrypt every archived file (raw response never uploaded in clear)
+        if: always()
+        shell: bash
+        env:
+          PRIVATE_ROOT: ${{ runner.temp }}/sportsedge-private-odds
+          EXPORT_ROOT: ${{ runner.temp }}/sportsedge-encrypted-odds
+        run: |
+          set -euo pipefail
+          umask 077
+          install -d -m 0700 "$EXPORT_ROOT"
+          [[ -d "$PRIVATE_ROOT" ]] || { echo "nothing archived"; exit 0; }
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          from cryptography.fernet import Fernet
+          f = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode())
+          src = pathlib.Path(os.environ["PRIVATE_ROOT"]); dst = pathlib.Path(os.environ["EXPORT_ROOT"])
+          index = []
+          for p in sorted(x for x in src.rglob("*") if x.is_file()):
+              data = p.read_bytes()
+              (dst / (p.name + ".fernet")).write_bytes(f.encrypt(data))
+              index.append({"file": p.name, "plaintext_sha256": "sha256:" + hashlib.sha256(data).hexdigest()})
+          (dst / "index.json").write_text(json.dumps(index, indent=2) + "\n")
+          print(f"encrypted {len(index)} file(s)")
+          PY
+      - name: Persist quota hold even if capture or encryption failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-daily-odds-quota-hold
+          path: ${{ runner.temp }}/sportsedge-private-odds/daily-nfl-main.quota-hold.json
+          retention-days: 90
+          if-no-files-found: ignore
+      - name: Retain encrypted archive only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-daily-odds-encrypted-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sportsedge-encrypted-odds
+          retention-days: 90
+          if-no-files-found: ignore
