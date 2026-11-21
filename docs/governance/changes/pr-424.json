@@ -1,14 +1,14 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 424,
-  "base_commit": "593a3002c9cc2335957ce6333f00099a65ca3a95",
+  "base_commit": "9a75e5f7545d718280697f6b7122f66eab8164b5",
   "protected_paths": [
     ".github/workflows/cbb-run-it.yml",
     "models/cbb/cbb_run_it.py",
     "models/cbb/test_cbb_run_it_neutral_unknown.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/326",
-  "change_summary": "Research-only strict neutral-site admission: quarantine CBBD prior finals with missing or non-boolean neutralSite before home-court estimation; withhold ESPN registry entries with missing/non-boolean neutralSite before the actual CBB card; add six regressions, including end-to-end withholding. Frozen model and frozen ledger untouched.",
+  "change_summary": "Research-only strict neutral-site admission: quarantine CBBD prior finals with missing or non-boolean neutralSite before home-court estimation; withhold ESPN registry entries with missing/non-boolean neutralSite before the actual CBB card; add six regressions, including end-to-end withholding. Frozen model and frozen ledger untouched. Reconciled with #423 model-context/side-balance diagnostics on main; those diagnostic additions are preserved.",
   "assumptions": [
     "Source claims are not provider-authenticated; synthetic fixtures establish adapter behavior only.",
     "Actual November 21 impact cannot be measured without authorized read-only decrypted source evidence.",
@@ -42,7 +42,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "593a3002c9cc2335957ce6333f00099a65ca3a95",
+    "target_base_sha": "9a75e5f7545d718280697f6b7122f66eab8164b5",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest -v models.cbb.test_cbb_run_it models.cbb.test_cbb_run_it_neutral_unknown"
   },
