@@ -122,3 +122,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Research-only CI bridge: network-free exact Torvik receipt regressions.
+    import subprocess
+    audit_dir = os.path.abspath(os.path.join(HERE, "..", "..", "research", "audit"))
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", audit_dir,
+                    "-p", "test_torvik_exact_raw_capture.py", "-v"], check=True)
