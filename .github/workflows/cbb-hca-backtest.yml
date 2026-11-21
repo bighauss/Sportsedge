@@ -1,0 +1,47 @@
+name: CBB home-court backtest (research only)
+
+# Walk-forward of the frozen CBBD-native model vs final margins and CBBD lines, with
+# research-only HCA candidates. No model changes, no picks, no ledger.
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        default: "2027"
+      start:
+        default: "2026-11-10"
+      end:
+        default: "2026-11-20"
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline tests
+        run: python -m unittest -v research.cbb_hca.test_cbb_hca_backtest
+      - name: Backtest
+        env:
+          CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
+          SEASON: ${{ inputs.season }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+        run: |
+          python research/cbb_hca/cbb_hca_backtest.py --season "$SEASON" --start "$START" --end "$END" --out out
+          cat out/hca.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cbb-hca-backtest-${{ github.run_id }}
+          path: out
+          retention-days: 90
