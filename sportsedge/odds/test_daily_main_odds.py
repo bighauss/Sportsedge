@@ -66,6 +66,11 @@ class DailyMainOddsTests(unittest.TestCase):
             out = run_daily(root, execute=True, now=self.clock)
             self.assertEqual(out["state"], "SKIPPED_ALREADY_ATTEMPTED")
             self.assertEqual(capture.call_count, 1)
+            # An ambiguous provider failure might still have consumed credits:
+            # the next day's job must halt until quota is reviewed.
+            following = run_daily(root, execute=True, now=self.clock + timedelta(days=1))
+            self.assertEqual(following["state"], "BLOCKED_PRIOR_QUOTA_REVIEW")
+            self.assertTrue((root / "daily-nfl-main.quota-hold.json").exists())
 
     def test_one_day_is_central_not_utc(self):
         before = datetime(2026, 11, 22, 5, 59, tzinfo=timezone.utc)
@@ -88,6 +93,17 @@ class DailyMainOddsTests(unittest.TestCase):
                 following = run_daily(root, execute=True, now=self.clock + timedelta(days=1))
                 self.assertEqual(following["state"], "BLOCKED_PRIOR_QUOTA_REVIEW")
                 capture.assert_called_once()
+
+
+    def test_runner_claim_date_change_blocks_before_any_provider_call(self):
+        with TemporaryDirectory() as d, patch(
+            "sportsedge.odds.daily_main_odds.capture"
+        ) as capture, patch.dict(
+            "os.environ", {"SPORTSEDGE_DAILY_CLAIM_DATE_CT": "2026-11-20"}
+        ):
+            with self.assertRaisesRegex(ValueError, "PILOT_CENTRAL_DATE_CHANGED_AFTER_CLAIM"):
+                run_daily(Path(d) / "archive", execute=True, now=self.clock)
+            capture.assert_not_called()
 
     def test_rejects_public_or_group_readable_path_before_capture(self):
         with TemporaryDirectory() as d, patch("sportsedge.odds.daily_main_odds.capture") as capture:
