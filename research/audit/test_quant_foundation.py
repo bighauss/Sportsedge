@@ -123,6 +123,36 @@ class StrictSourceCsvTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'BLANK_CSV_RECORD'):
             parse_source_csv(blank)
 
+    def test_quoted_multiline_field_with_blank_physical_line_is_one_record(self):
+        stream = io.StringIO(newline='')
+        writer = csv.writer(stream, lineterminator='\n')
+        writer.writerow(['event_id', 'source_note'])
+        writer.writerow(['E1', 'first line\n\nthird line'])
+        source = stream.getvalue().encode('utf-8')
+        rows = parse_source_csv(source)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['event_id'], 'E1')
+        self.assertEqual(rows[0]['source_note'], 'first line\n\nthird line')
+
+    def test_whitespace_and_empty_logical_records_are_refused(self):
+        for source in (
+            b'event_id,note\nE1,ok\n   \nE2,ok\n',
+            b'event_id,note\nE1,ok\n,\nE2,ok\n',
+            b'event_id,note\nE1,ok\n\nE2,ok\n',
+        ):
+            with self.subTest(source=source):
+                with self.assertRaisesRegex(ValueError, 'BLANK_CSV_RECORD'):
+                    parse_source_csv(source)
+
+    def test_duplicate_headers_still_fail_even_with_multiline_content(self):
+        source = b'event_id, EVENT_ID,notes\nE1,E2,"hello\n\nworld"\n'
+        with self.assertRaisesRegex(ValueError, 'CSV_DUPLICATE_NORMALIZED_HEADER'):
+            parse_source_csv(source)
+
+    def test_unterminated_multiline_quoted_cell_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, 'MALFORMED_CSV'):
+            parse_source_csv(b'event_id,note\nE1,"unfinished\n')
+
     def test_non_utf8_capture_refused_before_cleaned_report(self):
         with self.assertRaisesRegex(ValueError,'INVALID_UTF8_CSV'):
             parse_source_csv(b'\xff\xfe')
