@@ -24,7 +24,7 @@
   },
   "baseline": {
     "metric": "automated CI execution of player-prop joint audit synthetic tests",
-    "before": 0,
+    "before": null,
     "unit": "explicit GitHub workflow regression suites",
     "source_state": "UNKNOWN"
   },
