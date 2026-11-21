@@ -23,8 +23,8 @@ def fixture():
                   {"id": 2, "season": 2026, "week": 13, "homeTeam": "Tennessee", "awayTeam": "LSU",
                    "neutralSite": False, "venueId": 11, "venue": "Neyland", "startDate": "2026-11-21T16:00:00Z",
                    "completed": False}] + [
-            {"id": 100 + i, "homeTeam": t, "awayTeam": "Filler", "startDate": f"2026-10-{i+1:02d}T18:00:00Z",
-             "completed": True} for t in teams for i in range(10)],
+            {"id": 100 + 10 * j + i, "homeTeam": t, "awayTeam": "Filler", "startDate": f"2026-10-{i+1:02d}T18:00:00Z",
+             "completed": True} for j, t in enumerate(teams) for i in range(10)],
         "advanced": [adv("UCLA", .25, .10), adv("Michigan", .05, .12), adv("LSU", .2, .1), adv("Tennessee", .2, .1)],
         "team_stats": [{"team": t, "statName": n, "statValue": v} for t in teams
                        for n, v in (("rushingAttempts", 400), ("passAttempts", 350))],
