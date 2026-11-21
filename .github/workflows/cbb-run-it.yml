@@ -36,6 +36,8 @@ jobs:
         run: python -m unittest -v test_cbb_run_it test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
       - name: Install encryption
         run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Provider-free CBB ledger continuity regressions
+        run: python -m unittest -v tools.test_cbb_run_it_ledger_bootstrap
       - name: Preflight before provider requests
         env:
           CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
@@ -64,8 +66,24 @@ jobs:
         run: |
           set -euo pipefail
           install -d -m 0700 "$RUNNER_TEMP/ledger"
-          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cbb-run-it-ledger&per_page=1" --jq '[.artifacts[]|select(.expired==false)][0].id // empty')
-          if [ -z "$id" ]; then echo "no prior ledger artifact: new chain"; exit 0; fi
+          # Never silently reset an existing chain: the newest artifact is authoritative.
+          artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cbb-run-it-ledger&per_page=1" \
+            --jq 'if (.artifacts | length) == 0 then "NONE" else "\(.artifacts[0].id) \(.artifacts[0].expired)" end')
+          if [ "$artifact" = "NONE" ]; then
+            # A genuine first run can bootstrap. Any earlier successful CBB RUN IT
+            # without a retained ledger is a continuity failure, not a fresh slate.
+            prior_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cbb-run-it.yml/runs?status=success&per_page=1" --jq '.total_count')
+            case "$prior_success" in ''|*[!0-9]*) echo "::error::CBB_LEDGER_HISTORY_UNVERIFIED"; exit 2;; esac
+            if [ "$prior_success" -ne 0 ]; then
+              echo "::error::CBB_LEDGER_MISSING_AFTER_PRIOR_SUCCESS"; exit 2
+            fi
+            echo "no prior successful CBB RUN IT: initialize PAPER chain"; exit 0
+          fi
+          read -r id expired <<< "$artifact"
+          case "$id" in ''|*[!0-9]*) echo "::error::CBB_LEDGER_ARTIFACT_ID_INVALID"; exit 2;; esac
+          if [ "$expired" != "false" ]; then
+            echo "::error::CBB_LEDGER_ARTIFACT_EXPIRED_OR_UNVERIFIED"; exit 2
+          fi
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger.zip"
           unzip -q "$RUNNER_TEMP/ledger.zip" -d "$RUNNER_TEMP/ledger-enc"
           python - <<'PY'
