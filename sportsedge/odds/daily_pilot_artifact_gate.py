@@ -42,6 +42,9 @@ def _utc(now):
 def _repo_and_run(repository, run_id, token):
     if not isinstance(repository, str) or not REPO_RE.fullmatch(repository):
         raise Blocked("REPO_UNVERIFIED")
+    owner, name = repository.split("/")
+    if owner in (".", "..") or name in (".", ".."):
+        raise Blocked("REPO_UNVERIFIED")
     if not str(run_id).isascii() or not str(run_id).isdecimal() or int(run_id) < 1:
         raise Blocked("RUN_ID_UNVERIFIED")
     if not isinstance(token, str) or not token.strip():
@@ -102,6 +105,8 @@ def reserve(root, *, repository, run_id, token, now=None, lookup=api_artifacts):
         raise Blocked("PILOT_QUOTA_HOLD_REVIEW_REQUIRED")
     if previous["total_count"]:
         raise Blocked("PILOT_ALREADY_ATTEMPTED_CENTRAL_DATE")
+    if root is None:
+        raise Blocked("RUNNER_TEMP_MISSING")
     root = Path(root)
     if not root.is_dir():
         raise Blocked("RUNNER_TEMP_MISSING")
