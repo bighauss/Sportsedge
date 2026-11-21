@@ -9,11 +9,19 @@ CSV = b"rank,team,adjoe,adjde,adjt\r\n" + b"".join(b"%d,T%d,107,105,70\r\n" % (i
 JS = json.dumps([{"team": "T%d" % i, "year": 2026, "rating": 1,
                   "offense": {"rating": 31}, "defense": {"rating": 30},
                   "specialTeams": {"rating": 0}} for i in range(130)]).encode()
+CBBD = json.dumps([{"team": "T%d" % i, "teamId": i + 1, "season": 2027,
+                    "offensiveRating": 110, "defensiveRating": 101, "netRating": 9}
+                   for i in range(365)]).encode()
+KEYS = {"CFBD_API_KEY": "football-key", "CBBD_API_KEY": "basketball-key"}
 NOW = datetime(2026, 11, 21, 16, tzinfo=timezone.utc)
 
 
 def fake(url, key):
-    return (200, CSV) if "barttorvik" in url else (200, JS)
+    if "api.collegebasketballdata.com" in url and key == KEYS["CBBD_API_KEY"]:
+        return 200, CBBD
+    if "api.collegefootballdata.com" in url and key == KEYS["CFBD_API_KEY"]:
+        return 200, JS
+    raise AssertionError("Unexpected provider or credential routing")
 
 
 class T(unittest.TestCase):
@@ -23,39 +31,56 @@ class T(unittest.TestCase):
         self.root = Path(tmp.name) / "a"
 
     def test_captures_both_with_hash(self):
-        with patch.dict(os.environ, {"CFBD_API_KEY": "k"}):
-            out = d.capture(self.root, d.sources(2027, 2026), fetch=fake)
+        with patch.dict(os.environ, KEYS, clear=True):
+            out = d.capture(self.root, d.api_sources(2027, 2026), fetch=fake)
         self.assertEqual([r["state"] for r in out["receipts"]], ["CAPTURED", "CAPTURED"])
-        self.assertEqual((self.root / "torvik_team_results.csv").read_bytes(), CSV)
-        self.assertEqual([r["row_count"] for r in out["receipts"]], [365, 130])
+        self.assertEqual((self.root / "cbbd_ratings_adjusted.json").read_bytes(), CBBD)
+        self.assertEqual((self.root / "cfbd_ratings_sp.json").read_bytes(), JS)
+        self.assertEqual([r["row_count"] for r in out["receipts"]], [130, 365])
         self.assertEqual((self.root / "receipt.json").stat().st_mode & 0o777, 0o600)
 
-    def test_missing_key_never_calls_cfbd(self):
-        calls = []
-        with patch.dict(os.environ, {}, clear=True):
-            out = d.capture(self.root, d.sources(2027, 2026),
-                            fetch=lambda u, k: (calls.append(u), fake(u, k))[1])
+    def test_missing_cbbd_key_never_calls_cbbd_and_preserves_cfbd(self):
+        with patch.dict(os.environ, {"CFBD_API_KEY": KEYS["CFBD_API_KEY"]}, clear=True):
+            out = d.capture(self.root, d.api_sources(2027, 2026), fetch=fake)
+        self.assertEqual(out["receipts"][0]["state"], "CAPTURED")
         self.assertEqual(out["receipts"][1]["state"], "BLOCKED_KEY_ABSENT")
-        self.assertTrue(all("barttorvik" in u for u in calls))
+        self.assertFalse((self.root / "cbbd_ratings_adjusted.json").exists())
 
     def test_html_or_403_is_blocked_not_data(self):
         def bad(url, key):
-            return (200, b"<!DOCTYPE html><html>verify</html>") if "barttorvik" in url else (403, b"")
-        with patch.dict(os.environ, {"CFBD_API_KEY": "k"}):
-            out = d.capture(self.root, d.sources(2027, 2026), fetch=bad)
-        self.assertEqual([r["state"] for r in out["receipts"]], ["BLOCKED_HTML_NOT_CSV", "BLOCKED_HTTP_403"])
-        self.assertFalse((self.root / "torvik_team_results.csv").exists())
+            return (200, b"<!DOCTYPE html><html>verify</html>") if "basketball" in url else (403, b"")
+        with patch.dict(os.environ, KEYS, clear=True):
+            out = d.capture(self.root, d.api_sources(2027, 2026), fetch=bad)
+        self.assertEqual([r["state"] for r in out["receipts"]], ["BLOCKED_HTTP_403", "BLOCKED_INVALID_JSON"])
+        self.assertFalse((self.root / "cbbd_ratings_adjusted.json").exists())
 
     def test_key_never_in_receipt(self):
-        with patch.dict(os.environ, {"CFBD_API_KEY": "SECRETVALUE"}):
-            d.capture(self.root, d.sources(2027, 2026), fetch=fake)
-        self.assertNotIn("SECRETVALUE", (self.root / "receipt.json").read_text())
+        with patch.dict(os.environ, KEYS, clear=True):
+            d.capture(self.root, d.api_sources(2027, 2026), fetch=fake)
+        for key in KEYS.values():
+            self.assertNotIn(key, (self.root / "receipt.json").read_text())
 
     def test_rejects_group_readable_dir(self):
         self.root.mkdir(mode=0o755)
         os.chmod(self.root, 0o755)
         with self.assertRaises(FileExistsError):
-            d.capture(self.root, d.sources(2027, 2026), fetch=fake)
+            d.capture(self.root, d.api_sources(2027, 2026), fetch=fake)
+
+    def test_cbbd_validation_rejects_bad_population_ids_and_ratings(self):
+        self.assertEqual(d._inspect("cbbd_json", CBBD, 2027), (None, 365))
+        self.assertEqual(d._inspect("cbbd_json", CBBD, 2026)[0], "CBBD_WRONG_SEASON_OR_SCHEMA")
+        rows = json.loads(CBBD)
+        self.assertEqual(d._inspect("cbbd_json", json.dumps(rows[:349]).encode(), 2027),
+                         ("CBBD_CENSUS_OUT_OF_RANGE", 349))
+        for update, problem in (({"teamId": 2}, "CBBD_TEAM_IDENTITY_INVALID"),
+                                ({"teamId": True}, "CBBD_TEAM_IDENTITY_INVALID"),
+                                ({"team": " t1 "}, "CBBD_TEAM_IDENTITY_INVALID"),
+                                ({"offensiveRating": "110"}, "CBBD_RATING_INVALID"),
+                                ({"netRating": None}, "CBBD_RATING_INVALID")):
+            changed = [{**rows[0], **update}, *rows[1:]]
+            self.assertEqual(d._inspect("cbbd_json", json.dumps(changed).encode(), 2027)[0], problem)
+        self.assertEqual(d._inspect("cbbd_json", CBBD.replace(b'"netRating": 9', b'"netRating": NaN', 1), 2027)[0],
+                         "INVALID_JSON")
 
     def test_schema_and_wrong_season(self):
         junk = b"text\n" * 365
@@ -80,7 +105,7 @@ class T(unittest.TestCase):
             self.assertIsNone(handler.redirect_request(None, None, 302, "", {}, "https://other.test/"))
 
     def test_response_read_is_bounded(self):
-        url = d.sources(2027, 2026)[0]["url"]
+        url = d.api_sources(2027, 2026)[1]["url"]
         with patch.object(d.urllib.request, "build_opener") as opener:
             handle = opener.return_value.open.return_value.__enter__.return_value
             handle.geturl.return_value, handle.status, handle.read.return_value = url, 200, b"data"
@@ -89,21 +114,22 @@ class T(unittest.TestCase):
 
     def test_after_fetch_clock_and_replay_gate(self):
         later = NOW + timedelta(seconds=5)
-        torvik = d.sources(2027, 2026)[0]
-        out = d.capture(self.root, [torvik], fetch=fake, clock=iter([NOW, later]).__next__)
+        cbbd = d.api_sources(2027, 2026)[1]
+        with patch.dict(os.environ, KEYS, clear=True):
+            out = d.capture(self.root, [cbbd], fetch=fake, clock=iter([NOW, later]).__next__)
         receipt = out["receipts"][0]
-        opts = dict(source=torvik["name"], season=2027, decision=later,
+        opts = dict(source=cbbd["name"], season=2027, decision=later,
                     kickoff=later + timedelta(hours=2), max_age_seconds=600)
-        self.assertEqual(d.eligible_bytes(CSV, receipt, **opts), CSV)
+        self.assertEqual(d.eligible_bytes(CBBD, receipt, **opts), CBBD)
         for changes in ({"decision": NOW}, {"season": 2028}, {"kickoff": later},
-                        {"decision": later + timedelta(seconds=601)}):
+                        {"decision": later + timedelta(seconds=601)}, {"source": "torvik_team_results"}):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
-                d.eligible_bytes(CSV, receipt, **{**opts, **changes})
+                d.eligible_bytes(CBBD, receipt, **{**opts, **changes})
         with self.assertRaisesRegex(ValueError, "BYTES_MISMATCH"):
-            d.eligible_bytes(CSV.replace(b"107", b"108"), receipt, **opts)
+            d.eligible_bytes(CBBD.replace(b"110", b"111"), receipt, **opts)
 
     def test_claim_rollover_before_provider_calls(self):
-        out = d.capture(self.root, d.sources(2027, 2026),
+        out = d.capture(self.root, d.api_sources(2027, 2026),
                         fetch=lambda *_: self.fail("provider call not allowed"),
                         clock=lambda: NOW, claim_date="2026-11-20")
         self.assertEqual([r["state"] for r in out["receipts"]], ["BLOCKED_CLAIM_DATE_CHANGED"] * 2)
@@ -121,6 +147,12 @@ class T(unittest.TestCase):
         self.assertEqual(row["observation_basis"], "LOCAL_FILE_NOT_PROVIDER_ATTESTED")
         self.assertIsNone(row["http_status"])
         self.assertEqual((self.root / row["file"]).read_bytes(), CSV)
+
+    def test_torvik_network_capture_is_refused_even_when_programmatic(self):
+        with self.assertRaisesRegex(ValueError, "TORVIK_LOCAL_IMPORT_ONLY"):
+            d.capture(self.root, d.sources(2027, 2026)[:1],
+                      fetch=lambda *_: self.fail("must not call network"))
+        self.assertFalse(self.root.exists())
 
     def test_durable_ratings_claim_isolated_from_nfl(self):
         repo = "bighauss/Sportsedge"
