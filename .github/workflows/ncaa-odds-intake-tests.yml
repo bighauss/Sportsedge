@@ -1,13 +1,28 @@
 name: NCAA odds intake offline tests (synthetic ONLY)
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'sportsedge/odds/**'
+      - 'models/cbb/**'
+      - 'models/cfb/**'
+      - '.github/actions/ncaa-hold/**'
+      - '.github/workflows/ncaa-*.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sportsedge/odds/**'
+      - 'models/cbb/**'
+      - 'models/cfb/**'
+      - '.github/actions/ncaa-hold/**'
+      - '.github/workflows/ncaa-*.yml'
 
 permissions:
   contents: read
 
 jobs:
   offline:
-    # No secrets, no provider call: every HTTP path is an in-memory fake.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -18,7 +33,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install cryptography==46.0.4 PyYAML==6.0.3
-      - name: NCAA intake + unchanged NFL/ratings gate regressions
+      - name: NCAA intake and existing pilot regressions (no provider credentials)
         env:
           PYTHONPATH: .
         run: |
