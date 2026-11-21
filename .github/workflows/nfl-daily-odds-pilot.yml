@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  actions: read  # list prior attempt/hold artifacts before any billable provider call
 
 concurrency:
   group: nfl-daily-odds-pilot
@@ -51,11 +52,34 @@ jobs:
               sys.exit(2)
           PY
       - name: Offline regression tests
-        run: python -m unittest sportsedge.odds.test_daily_main_odds -v
-      - name: One bounded live capture (3 credits max)
+        run: python -m unittest sportsedge.odds.test_daily_main_odds sportsedge.odds.test_daily_pilot_artifact_gate -v
+      - name: Check prior day claims and reserve Central date
+        id: daily_claim
+        shell: bash
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m sportsedge.odds.daily_pilot_artifact_gate reserve
+      - name: Persist claim artifact BEFORE any billable provider request
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.daily_claim.outputs.artifact_name }}
+          path: ${{ runner.temp }}/nfl-daily-claim.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Confirm claim belongs to this run and same Central date
+        shell: bash
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m sportsedge.odds.daily_pilot_artifact_gate verify
+      - name: One bounded live capture (expected 3 credits, provider billing verified afterward)
         shell: bash
         env:
           PRIVATE_ROOT: ${{ runner.temp }}/sportsedge-private-odds
+          SPORTSEDGE_DAILY_CLAIM_DATE_CT: ${{ steps.daily_claim.outputs.date_ct }}
         run: |
           set -euo pipefail
           umask 077
@@ -84,6 +108,14 @@ jobs:
           (dst / "index.json").write_text(json.dumps(index, indent=2) + "\n")
           print(f"encrypted {len(index)} file(s)")
           PY
+      - name: Persist quota hold even if capture or encryption failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfl-daily-odds-quota-hold
+          path: ${{ runner.temp }}/sportsedge-private-odds/daily-nfl-main.quota-hold.json
+          retention-days: 90
+          if-no-files-found: ignore
       - name: Retain encrypted archive only
         if: always()
         uses: actions/upload-artifact@v4
