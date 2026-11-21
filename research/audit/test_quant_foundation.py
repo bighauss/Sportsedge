@@ -1,7 +1,9 @@
 import unittest
+import csv
+import io
 from quant_foundation import (american, devig_two_way, ev_per_dollar,
                               probabilities_from_samples, player_prop_baseline,
-                              audit_rows, paper_ledger)
+                              audit_rows, paper_ledger, parse_source_csv)
 H='a'*64
 BASE=dict(sport='NFL',event_id='E1',period='FG',market='TOTAL',side='over',
           line='44.5',price_american='-110',p_model='0.54',
@@ -82,6 +84,50 @@ class TestFoundation(unittest.TestCase):
         r=paper_ledger([dict(BASE, result_source='')])
         self.assertEqual(r['qualified_graded_n'],0)
         self.assertEqual(len(r['unverifiable']),1)
+
+class StrictSourceCsvTests(unittest.TestCase):
+    @staticmethod
+    def valid_csv():
+        stream=io.StringIO()
+        writer=csv.DictWriter(stream, fieldnames=list(BASE))
+        writer.writeheader()
+        writer.writerow(BASE)
+        return stream.getvalue().encode()
+
+    def test_valid_csv_retained_without_row_loss(self):
+        rows=parse_source_csv(self.valid_csv())
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]['selection_id'],'S1')
+
+    def test_duplicated_header_must_not_replace_first_value(self):
+        original=self.valid_csv()
+        duplicate=original.replace(b'p_model,',b'p_model,p_model,',1)
+        with self.assertRaisesRegex(ValueError,'CSV_DUPLICATE_NORMALIZED_HEADER'):
+            parse_source_csv(duplicate)
+        spaced=original.replace(b'p_model,',b'p_model,p_model ,',1)
+        with self.assertRaisesRegex(ValueError,'CSV_DUPLICATE_NORMALIZED_HEADER'):
+            parse_source_csv(spaced)
+
+    def test_overlong_record_is_not_silently_trimmed(self):
+        original=self.valid_csv()
+        long=original.rstrip(b'\\r\\n')+b',EXTRA\\r\\n'
+        with self.assertRaisesRegex(ValueError,'CSV_EXTRA_FIELD_NOT_IN_HEADER'):
+            parse_source_csv(long)
+
+    def test_short_record_and_blank_record_refused(self):
+        header,payload=self.valid_csv().splitlines()
+        short=header+b'\\n'+payload.rsplit(b',',1)[0]+b'\\n'
+        with self.assertRaisesRegex(ValueError,'CSV_MISSING_FIELD_IN_RECORD'):
+            parse_source_csv(short)
+        blank=header+b'\\n\\n'+payload+b'\\n'
+        with self.assertRaisesRegex(ValueError,'BLANK_CSV_RECORD'):
+            parse_source_csv(blank)
+
+    def test_non_utf8_capture_refused_before_cleaned_report(self):
+        with self.assertRaisesRegex(ValueError,'INVALID_UTF8_CSV'):
+            parse_source_csv(b'\\xff\\xfe')
+
+
 class OddsFormatsAndQuality(unittest.TestCase):
     def test_decimal_fractional(self):
         from quant_foundation import odds_in_format
