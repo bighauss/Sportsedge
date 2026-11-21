@@ -1,0 +1,39 @@
+name: NCAA odds intake offline tests (synthetic ONLY)
+
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/odds/ncaa_*.py'
+      - 'sportsedge/odds/test_ncaa_*.py'
+      - 'sportsedge/odds/daily_pilot_artifact_gate.py'
+      - 'sportsedge/odds/free_odds_aggregator_intake.py'
+      - '.github/workflows/ncaa-daily-odds.yml'
+      - '.github/workflows/ncaa-odds-intake-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'sportsedge/odds/**'
+      - '.github/workflows/ncaa-daily-odds.yml'
+      - '.github/workflows/ncaa-odds-intake-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    # No secrets, no provider call: every HTTP path is an in-memory fake.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: NCAA intake + unchanged NFL/ratings gate regressions
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m compileall -q sportsedge/odds
+          python -m unittest -v sportsedge.odds.test_ncaa_daily_odds sportsedge.odds.test_daily_pilot_artifact_gate sportsedge.odds.test_daily_main_odds sportsedge.odds.test_free_odds_aggregator_intake
