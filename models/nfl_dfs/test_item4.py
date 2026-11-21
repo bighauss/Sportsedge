@@ -192,6 +192,14 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaises(builder.Blocked):
             backtest.replay(a,n_sims=50)
 
+    def test_nfl_pit_forecast_scorecard_research_suites(self):
+        """CI bridge: existing NFL DFS job invokes offline NFL scoring audit suites."""
+        import subprocess, sys
+        source = Path(__file__).resolve().parent.parent / "nfl"
+        for pattern in ("test_forecast_scorecard_pit.py", "test_elo_baseline_pit.py"):
+            subprocess.run([sys.executable, "-m", "unittest", "discover",
+                            "-s", str(source), "-p", pattern, "-v"], check=True)
+
 
 if __name__=="__main__":
     unittest.main()
