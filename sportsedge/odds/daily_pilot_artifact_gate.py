@@ -24,6 +24,10 @@ from zoneinfo import ZoneInfo
 CT = ZoneInfo("America/Chicago")
 CLAIM_FILENAME = "nfl-daily-claim.json"
 HOLD_ARTIFACT_NAME = "nfl-daily-odds-quota-hold"
+# Additive NCAA profiles: one claim per sport + snapshot + Central date and
+# one shared NCAA quota hold (both sports draw on the same Odds API quota).
+NCAA_PILOTS = tuple(f"{s}-{m}" for s in ("ncaab", "ncaaf") for m in ("pregame", "close"))
+NCAA_HOLD_ARTIFACT_NAME = "ncaa-daily-odds-quota-hold"
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 
@@ -94,6 +98,14 @@ def _profile(pilot):
         return "nfl-daily-odds-attempt-", CLAIM_FILENAME, HOLD_ARTIFACT_NAME
     if pilot == "ratings":
         return "daily-ratings-attempt-", "daily-ratings-claim.json", None
+    if pilot in NCAA_PILOTS:
+        return (pilot + "-daily-odds-attempt-", pilot + "-daily-claim.json",
+                NCAA_HOLD_ARTIFACT_NAME)
+    rehearsal = re.fullmatch(r"(rehearsal-[0-9]+-[0-9]+-(?:capture|export|marker))-(ncaab|ncaaf)-(pregame|close)", pilot)
+    if rehearsal:
+        prefix, filename, hold = _profile("-".join(rehearsal.groups()[1:]))
+        namespace = rehearsal.group(1) + "-"
+        return namespace + prefix, namespace + filename, namespace + hold
     raise Blocked("UNKNOWN_PILOT")
 
 
@@ -172,7 +184,7 @@ def verify(root, *, repository, run_id, token, now=None, lookup=api_artifacts, p
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("action", choices=("reserve", "verify"))
-    p.add_argument("--pilot", choices=("nfl", "ratings"), default="nfl")
+    p.add_argument("--pilot", default="nfl")
     a = p.parse_args(argv)
     env = os.environ
     opts = dict(repository=env.get("GITHUB_REPOSITORY"),

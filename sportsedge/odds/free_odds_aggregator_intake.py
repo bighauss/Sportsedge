@@ -92,7 +92,7 @@ def strict_json(raw):
 
 
 def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spreads","totals"),
-            bookmakers=("draftkings","fanduel"), opener=None):
+            bookmakers=("draftkings","fanduel"), opener=None, audit_only=False):
     if sport not in SPORTS:raise ValueError("SPORT_NOT_ALLOWED")
     # The GitHub Actions authorized read-only provider workflow already
     # supplies ODDS_API_KEY. Accept that as a documented, lower-priority
@@ -217,6 +217,11 @@ def capture(sport, destination, *, key=None, event_id=None, markets=("h2h","spre
        "requested_books":list(bookmakers),"requested_event_id":event_id,
        "original_source_chain_certified":False,
        "matched_clv_triplets":0,"official_counted":0,"approved_stake_u":0}
+    if audit_only:
+        # NCAA billing has not been adjudicated. Neither card loader accepts
+        # an audit manifest as a sport-scoped input.
+        summary["schema"] = "sportsedge-ncaa-odds-audit-v1"
+        summary["observed_sport"] = summary.pop("sport")
     manifest=root/(base+".manifest.json")
     manifest_fd=os.open(manifest,flags,0o600)
     with os.fdopen(manifest_fd,'w',encoding='utf-8') as f:

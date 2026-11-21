@@ -190,6 +190,9 @@ def odds_api_quotes(raw, manifest, crosswalk_raw):
                 for o in mk.get("outcomes") or ():
                     by.setdefault(o.get("name"), []).append(o)
                 key = mk.get("key")
+                if len(mk.get("outcomes") or ()) > 2:
+                    census["UNEXPECTED_EXTRA_OUTCOME"] += 1
+                    continue
                 try:
                     if key == "h2h":
                         a, b, market, line = by[home], by[away], "moneyline", None
