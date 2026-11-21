@@ -52,6 +52,7 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
     # probability; the operator must reconcile duplicate raw evidence instead.
     identity_counts=Counter(identity(row) for row in rows)
     valid=[]; rejected=[]; claimed=[]
+    cluster_by_row={}
     for number, row in enumerate(rows, 2):
         flags=[]
         is_ml=(row.get('market') or '').strip().casefold() in ('ml','moneyline','money_line')
@@ -111,6 +112,15 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
              **(value or {})}
         if value is not None:
             claimed.append(rec)
+            # Keep structured identity; splitting identity(row)'s printable
+            # pipe-delimited string conflates fields when an ID contains '|'.
+            v=lambda k: str(row.get(k) or '').strip().casefold()
+            market=v('market').replace('moneyline','ml').replace('money_line','ml')
+            period={'full_game':'fg','fullgame':'fg','h1':'1h',
+                    'first_half':'1h'}.get(v('period'),v('period'))
+            cluster_by_row[number]=(v('sport'),v('event_id'),period,
+                                    market,v('side'),v('player_id'),
+                                    v('team_id'),v('stat'))
         if rec['flags']:
             rejected.append(rec)
         else:
@@ -123,8 +133,7 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
     clusters=[]
     seen=set()
     for rec in claimed:
-        parts=rec['identity'].split('|')
-        cluster=(parts[0],parts[1],parts[2],parts[3],parts[4],parts[6])
+        cluster=cluster_by_row[rec['row']]
         if cluster not in seen:
             seen.add(cluster)
             clusters.append(rec)
