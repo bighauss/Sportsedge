@@ -246,5 +246,18 @@ class ESPNIntakeTests(unittest.TestCase):
 
 
 
+    def test_original_response_modified_after_inspection_refused(self):
+        with TemporaryDirectory() as folder:
+            root=Path(folder)
+            root.chmod(0o700)
+            raw=json.dumps(summary()).encode()
+            report=run(summary())
+            # Different byte layout still the same JSON object: must be blocked.
+            changed=json.dumps(summary(),indent=4).encode()
+            with self.assertRaisesRegex(f.Reject,"SOURCE_RECEIPT_RAW_BYTES_MISMATCH"):
+                f.save(changed,report,root/"no",source_url="synthetic",import_kind="import")
+            self.assertFalse((root/"no").exists())
+
+
 if __name__=="__main__":
     unittest.main(verbosity=2)
