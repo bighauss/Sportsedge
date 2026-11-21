@@ -98,7 +98,7 @@ class WorkflowEvidenceTests(unittest.TestCase):
         self.assertFalse(self.target.exists())
 
     def test_publication_boundary(self):
-        self.assertEqual(self.document['permissions'], {'contents': 'read'})
+        self.assertEqual(self.document['permissions'], {'contents': 'read', 'actions': 'read'})  # read-only: restore ledger artifact
         self.assertEqual(self.by_id['evidence']['with']['if-no-files-found'], 'error')
         self.assertEqual(self.by_id['evidence']['with']['path'], '${{ runner.temp }}/cbb-evidence.tar.fernet')
         summary = next(s for s in self.steps if s.get('name') == 'Sanitized diagnostic summary')

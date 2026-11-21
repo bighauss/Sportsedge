@@ -84,19 +84,27 @@ def prior_games(games, boxes, observed_utc, season):
     """Finals before observation with possessions = mean of both teams' teamStats.possessions."""
     poss = {}
     for b in boxes:
-        gid, p = b.get("gameId"), (b.get("teamStats") or {}).get("possessions")
-        if gid is not None and isinstance(p, (int, float)):
-            poss.setdefault(str(gid), []).append(float(p))
-    out, census = [], {"finals": 0, "no_possessions": 0}
+        gid, tid, p = b.get("gameId"), b.get("teamId"), (b.get("teamStats") or {}).get("possessions")
+        if gid is not None and tid is not None and type(p) in (int, float):
+            poss.setdefault(str(gid), []).append((str(tid), float(p)))
+    ids = {}
+    for g in games:
+        ids[str(g.get("id"))] = ids.get(str(g.get("id")), 0) + 1
+    out, census = [], {"finals": 0, "no_possessions": 0, "duplicate_game_id": 0, "team_mismatch": 0}
     obs = parse_z(observed_utc)
     for g in games:
         if g.get("status") != "final" or g.get("startTimeTbd") is not False:
             continue
         if parse_z(g["startDate"]) >= obs:
             continue
-        ps = poss.get(str(g["id"]), [])
-        if len(ps) != 2:
+        if ids[str(g["id"])] > 1:
+            census["duplicate_game_id"] += 1; continue
+        rows = poss.get(str(g["id"]), [])
+        if len(rows) != 2:
             census["no_possessions"] += 1; continue
+        if {t for t, _ in rows} != {str(g["homeTeamId"]), str(g["awayTeamId"])}:
+            census["team_mismatch"] += 1; continue
+        ps = [p for _, p in rows]
         census["finals"] += 1
         out.append({"game_id": str(g["id"]), "season": season, "tipoff_utc": utcz(parse_z(g["startDate"])),
                     "final_captured_utc": observed_utc, "home_team_id": str(g["homeTeamId"]),
@@ -105,11 +113,15 @@ def prior_games(games, boxes, observed_utc, season):
                     "possessions": sum(ps) / 2})
     return out, census
 
-def slate(games, day_ct, now_utc, season):
+def slate(games, day_ct, now_utc, season, misses=None):
     rows = []
     for g in games:
         tip = parse_z(g["startDate"])
         if tip.astimezone(CT).date() != day_ct or tip <= now_utc or g.get("startTimeTbd") is not False:
+            continue
+        if type(g.get("neutralSite")) is not bool:
+            if misses is not None:
+                misses.append((str(g["id"]), "CBBD neutral-site flag unknown"))
             continue
         rows.append({"game_id": str(g["id"]), "season": str(season), "tipoff_utc": utcz(tip),
                      "home_team_id": str(g["homeTeamId"]), "away_team_id": str(g["awayTeamId"]),
@@ -152,10 +164,19 @@ def registry(slate_rows, espn, espn_sha, captured_utc):
 
 MK = {"SPREAD": "spread", "TOTAL": "total", "ML": "moneyline"}
 
-def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings"):
+# Spread/ML price_a = home was verified 43/43 (spread sign vs moneyline favourite) on the
+# 11/21 Drive board. Total order was checked against same-morning screenshots: 30 agree,
+# 4 reversed -> unverified, so totals are withheld until a board format proves it.
+TOTALS_ORDER_VERIFIED = False
+
+def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
+                 totals_order_verified=TOTALS_ORDER_VERIFIED):
     out, unmatched = [], []
     for b in board_rows:
         if b.get("sport") != "CBB" or b.get("market") not in MK: continue
+        if b["market"] == "TOTAL" and not totals_order_verified:
+            unmatched.append((f"{b['away']} @ {b['home']}", "TOTAL",
+                              "over/under price order not verified for this board format")); continue
         g, why = _match(slate_rows, b["home"], b["away"])
         if not g:
             unmatched.append((f"{b['away']} @ {b['home']}", b["market"], why)); continue
@@ -173,9 +194,11 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
           espn, espn_sha, espn_captured, board_rows, board_captured_utc, ledger_path=None):
     work = Path(work); work.mkdir(parents=True, exist_ok=True)
     day = now_utc.astimezone(CT).date()
-    s = slate(games, day, now_utc, season)
+    slate_miss = []
+    s = slate(games, day, now_utc, season, slate_miss)
     pg, pcensus = prior_games(games, boxes, observed_utc, season)
     reg, reg_miss = registry(s, espn, espn_sha, espn_captured)
+    reg_miss = slate_miss + reg_miss
     quotes, unmatched = board_quotes(board_rows, s, board_captured_utc)
     write_csv(work / "slate.csv", list(PC.SLATE_COLUMNS), s)
     write_csv(work / "registry.csv", ["game_id", "neutral", "source", "source_sha256", "published_utc",
@@ -236,44 +259,64 @@ def render(card, names, extra):
           f"Ledger: {extra['ledger']}" if extra.get("ledger") else "Ledger: not written (no --ledger)", ""]
     return "\n".join(o)
 
+def _archive(priv, name, b):
+    p = Path(priv) / f"{name}.raw.json"
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as f: f.write(b)
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument("--board", required=True); a.add_argument("--board-captured-utc", required=True)
     a.add_argument("--season", type=int, required=True)
     a.add_argument("--private-dir", required=True); a.add_argument("--out", required=True)
     a.add_argument("--ledger"); a.add_argument("--season-start-utc", default="2026-11-01T00:00:00Z")
+    a.add_argument("--fixture-dir", help="offline captures (tests only): ratings.json receipt.json games.json boxes.json espn.json")
+    a.add_argument("--now", help="ISO UTC override (tests only)")
     x = a.parse_args(argv)
     key = os.environ.get("CBBD_API_KEY")
+    clock = (lambda: datetime.fromisoformat(x.now)) if x.now else (lambda: datetime.now(timezone.utc))
     try:
-        if not key: raise Hold("CBBD_API_KEY_ABSENT")
+        if not key and not x.fixture_dir: raise Hold("CBBD_API_KEY_ABSENT")
         priv = Path(x.private_dir); priv.mkdir(mode=0o700, parents=True, exist_ok=False)
-        from sportsedge.validation import daily_ratings_capture as DR
-        rc = DR.capture(priv / "ratings", [DR.cbbd_source(x.season)])
-        rec = [r for r in rc["receipts"] if r["source"] == "cbbd_ratings_adjusted"]
-        if len(rec) != 1 or rec[0]["state"] != "CAPTURED": raise Hold(f"RATINGS_{rec and rec[0]['state']}")
-        ratings = (priv / "ratings" / rec[0]["file"]).read_bytes()
-        now = datetime.now(timezone.utc)
-        import cbbd_prospective_capture as CAP
-        gcap = CAP.capture_games(season=x.season, start_utc=x.season_start_utc,
-                                 end_utc=utcz(now + timedelta(hours=30)), private_dir=priv / "games", key=key)
-        games = json.loads(Path(gcap["raw_path"]).read_bytes())
-        q = urllib.parse.urlencode({"season": x.season, "startDateRange": x.season_start_utc, "endDateRange": utcz(now)})
-        boxes, brec = capture_raw("cbbd_games_teams", f"{BOX_URL}?{q}", priv / "games", key)
-        espn_url = f"{ESPN_URL}?" + urllib.parse.urlencode({"dates": now.astimezone(CT).strftime("%Y%m%d"),
-                                                             "groups": 50, "limit": 500})
-        espn, erec = capture_raw("espn_scoreboard", espn_url, priv / "games")
+        if x.fixture_dir:
+            fx = Path(x.fixture_dir); now = clock()
+            ratings = (fx / "ratings.json").read_bytes(); rec = [json.loads((fx / "receipt.json").read_text())]
+            graw, braw, eraw = (fx / "games.json").read_bytes(), (fx / "boxes.json").read_bytes(), (fx / "espn.json").read_bytes()
+            for n, b in (("cbbd_ratings_adjusted", ratings), ("cbbd_games", graw), ("cbbd_games_teams", braw), ("espn_scoreboard", eraw)):
+                _archive(priv, n, b)
+            games, boxes, espn = json.loads(graw), json.loads(braw), json.loads(eraw)
+            obs = utcz(now - timedelta(minutes=30))
+            gcap = {"sha256": sha(graw), "observed_utc": obs}
+            brec = {"source": "cbbd_games_teams", "bytes": len(braw), "sha256": sha(braw), "observed_utc": obs}
+            erec = {"source": "espn_scoreboard", "bytes": len(eraw), "sha256": sha(eraw), "observed_utc": obs}
+        else:
+            from sportsedge.validation import daily_ratings_capture as DR
+            rc = DR.capture(priv / "ratings", [DR.cbbd_source(x.season)])
+            rec = [r for r in rc["receipts"] if r["source"] == "cbbd_ratings_adjusted"]
+            if len(rec) != 1 or rec[0]["state"] != "CAPTURED": raise Hold(f"RATINGS_{rec and rec[0]['state']}")
+            ratings = (priv / "ratings" / rec[0]["file"]).read_bytes()
+            now = clock()
+            import cbbd_prospective_capture as CAP
+            gcap = CAP.capture_games(season=x.season, start_utc=x.season_start_utc,
+                                     end_utc=utcz(now + timedelta(hours=30)), private_dir=priv / "games", key=key)
+            games = json.loads(Path(gcap["raw_path"]).read_bytes())
+            q = urllib.parse.urlencode({"season": x.season, "startDateRange": x.season_start_utc, "endDateRange": utcz(now)})
+            boxes, brec = capture_raw("cbbd_games_teams", f"{BOX_URL}?{q}", priv / "games", key)
+            espn_url = f"{ESPN_URL}?" + urllib.parse.urlencode({"dates": now.astimezone(CT).strftime("%Y%m%d"),
+                                                                 "groups": 50, "limit": 500})
+            espn, erec = capture_raw("espn_scoreboard", espn_url, priv / "games")
+            now = clock()
         board_raw = Path(x.board).read_bytes()
         board = list(csv.DictReader(io.StringIO(board_raw.decode("utf-8-sig"))))
-        now = datetime.now(timezone.utc)
         card, names, extra = build(work=Path(x.out) / "work", season=x.season, now_utc=now, games=games,
                                    boxes=boxes, observed_utc=gcap["observed_utc"], ratings_body=ratings,
                                    ratings_receipt=rec[0], espn=espn, espn_sha=erec["sha256"],
                                    espn_captured=erec["observed_utc"], board_rows=board,
                                    board_captured_utc=x.board_captured_utc, ledger_path=x.ledger)
-    except (Hold, PC.Pass, ValueError, OSError) as e:
+    except (Hold, PC.Pass, ValueError, OSError, LG.LedgerError) as e:
         print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
     receipts = [{"source": "cbbd_ratings_adjusted", **{k: rec[0].get(k) for k in ("bytes", "sha256", "observed_utc")}},
-                {"source": "cbbd_games", "bytes": None, "sha256": gcap["sha256"], "observed_utc": gcap["observed_utc"]},
+                {"source": "cbbd_games", "sha256": gcap["sha256"], "observed_utc": gcap["observed_utc"]},
                 brec, erec, {"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
                              "observed_utc": x.board_captured_utc}]
     out = Path(x.out); out.mkdir(parents=True, exist_ok=True)

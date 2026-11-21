@@ -13,6 +13,7 @@ on:
         default: '2027'
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: cbb-run-it
   cancel-in-progress: false
@@ -56,6 +57,26 @@ jobs:
           if not board.is_relative_to(repo) or not board.is_file():
               raise SystemExit('BLOCK_BOARD_PATH')
           PY
+      - name: Restore and verify encrypted paper ledger from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$RUNNER_TEMP/ledger"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cbb-run-it-ledger&per_page=1" --jq '[.artifacts[]|select(.expired==false)][0].id // empty')
+          if [ -z "$id" ]; then echo "no prior ledger artifact: new chain"; exit 0; fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger.zip"
+          unzip -q "$RUNNER_TEMP/ledger.zip" -d "$RUNNER_TEMP/ledger-enc"
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          import cbbd_paper_ledger as LG
+          t = pathlib.Path(os.environ['RUNNER_TEMP'])
+          raw = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).decrypt((t / 'ledger-enc' / 'ledger.jsonl.fernet').read_bytes())
+          LG.parse_ledger(raw)
+          p = t / 'ledger' / 'ledger.jsonl'; p.write_bytes(raw); p.chmod(0o600)
+          PY
       - name: Diagnostic model execution with private logs
         id: model
         env:
@@ -70,8 +91,9 @@ jobs:
           cp -- "$BOARD" "$RUNNER_TEMP/evidence/board.csv"
           python models/cbb/cbb_run_it.py --board "$BOARD" --board-captured-utc "$BOARD_AT" --season "$SEASON" \
             --private-dir "$RUNNER_TEMP/evidence/capture" --out "$RUNNER_TEMP/evidence/card" \
-            --ledger "$RUNNER_TEMP/evidence/capture/ledger.jsonl" \
+            --ledger "$RUNNER_TEMP/ledger/ledger.jsonl" \
             > "$RUNNER_TEMP/evidence/stdout.log" 2> "$RUNNER_TEMP/evidence/stderr.log"
+          cp -- "$RUNNER_TEMP/ledger/ledger.jsonl" "$RUNNER_TEMP/evidence/capture/ledger.jsonl"
       - name: Complete encrypted evidence or encrypted failure diagnostics
         id: encrypt
         if: always() && steps.model.outcome != 'skipped'
@@ -136,10 +158,26 @@ jobs:
           path: ${{ runner.temp }}/cbb-evidence.tar.fernet
           retention-days: 90
           if-no-files-found: error
+      - name: Encrypt ledger for the next run
+        if: success() && steps.evidence.outcome == 'success'
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          install -d -m 0700 "$RUNNER_TEMP/ledger-out"
+          python -c "import os,pathlib;from cryptography.fernet import Fernet;t=pathlib.Path(os.environ['RUNNER_TEMP']);(t/'ledger-out'/'ledger.jsonl.fernet').write_bytes(Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).encrypt((t/'ledger'/'ledger.jsonl').read_bytes()))"
+      - name: Retain encrypted ledger
+        if: success() && steps.evidence.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbb-run-it-ledger
+          path: ${{ runner.temp }}/ledger-out/ledger.jsonl.fernet
+          retention-days: 90
+          if-no-files-found: error
       - name: Sanitized diagnostic summary
         if: success() && steps.model.outcome == 'success' && steps.evidence.outcome == 'success'
         run: |
-          printf '%s\n' '## CBB diagnostic execution' 'Model command, evidence checks and encrypted upload succeeded.' 'PAPER / 0u. Not wager-eligible. Admission, persistent-ledger, source provenance and model calibration gates remain unverified.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' '## CBB diagnostic execution' 'Model command, evidence checks and encrypted upload succeeded.' 'PAPER / 0u. Not wager-eligible. Model calibration is unvalidated.' '' >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/evidence/card/cbb_card.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Fail closed on execution or evidence failure
         if: always() && steps.model.outcome != 'skipped' && (steps.model.outcome != 'success' || steps.evidence.outcome != 'success')
         run: |
