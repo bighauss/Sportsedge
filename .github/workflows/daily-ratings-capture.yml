@@ -1,4 +1,4 @@
-name: Daily ratings capture (Torvik CBB + CFBD SP+, encrypted, PAPER)
+name: Daily ratings capture (CBBD adjusted + CFBD SP+, encrypted, PAPER)
 
 on:
   workflow_dispatch:   # manual-only until a week of clean runs
@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
       SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
       PYTHONPATH: .
     steps:
@@ -49,11 +48,13 @@ jobs:
         env:
           GH_ACTIONS_READ_TOKEN: ${{ github.token }}
         run: python -m sportsedge.odds.daily_pilot_artifact_gate verify --pilot ratings
-      - name: Capture (one Torvik GET, one CFBD call)
+      - name: Capture (at most one CBBD call and one CFBD call)
         id: cap
         continue-on-error: true
         env:
           CLAIM_DATE_CT: ${{ steps.claim.outputs.date_ct }}
+          CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
         run: |
           umask 077
           python -m sportsedge.validation.daily_ratings_capture "$RUNNER_TEMP/ratings-private" --claim-date "$CLAIM_DATE_CT" --execute
