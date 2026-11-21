@@ -80,6 +80,47 @@ class Validation(unittest.TestCase):
         z=run(*rr)
         self.assertEqual(z['diagnostic_eligible'],35)
         self.assertEqual(len(z['top_edges']),20)
+    def test_flagged_longshot_stays_visible_in_claimed_top(self):
+        z=run(row(event_id='LONGSHOT',price_american='+1400',p_model='0.50'),
+              row(event_id='SMALL',price_american='+105',p_model='0.52'))
+        self.assertEqual(z['top_claimed_edges_including_flagged'][0]['identity'].split('|')[1],'longshot')
+        self.assertIn('LONGSHOT_METHOD_SENSITIVITY_REQUIRED',
+                      z['top_claimed_edges_including_flagged'][0]['flags'])
+        self.assertEqual(z['top_edges'][0]['identity'].split('|')[1],'small')
+        self.assertFalse(z['admission_allowed'])
+
+    def test_invalid_quote_timestamp_cannot_hide_extreme_claim(self):
+        z=run(row(event_id='LATE',captured_utc='2026-11-15T18:00:00Z',
+                  price_american='+1400',p_model='0.40'))
+        self.assertEqual(len(z['top_edges']),0)
+        self.assertEqual(len(z['top_claimed_edges_including_flagged']),1)
+        self.assertIn('QUOTE_NOT_PREGAME',
+                      z['top_claimed_edges_including_flagged'][0]['flags'])
+
+    def test_selection_time_not_attested_is_explicit(self):
+        z=run(row())
+        self.assertEqual(z['top_claimed_edges_including_flagged'][0]['selection_clock_status'],
+                         'NOT_ATTESTED')
+        self.assertEqual(z['quote_age_basis'],'KICKOFF_LOOKBACK_RESEARCH_NOT_SELECTION_FRESHNESS')
+
+    def test_declared_selection_clock_checks_age_and_chronology(self):
+        stale=run(row(selected_utc='2026-11-15T16:20:00Z'))
+        self.assertIn('QUOTE_OLDER_THAN_300S_AT_SELECTION',stale['flagged'][0]['flags'])
+        late=run(row(selected_utc='2026-11-15T16:09:00Z'))
+        self.assertIn('QUOTE_AFTER_SELECTION',late['flagged'][0]['flags'])
+        same=run(row(selected_utc='2026-11-15T16:11:00Z'))
+        self.assertEqual(same['top_edges'][0]['quote_age_at_selection_seconds'],60.0)
+        self.assertEqual(same['top_edges'][0]['selection_clock_status'],
+                         'DECLARED_NOT_AUTHENTICATED')
+
+    def test_ladder_cluster_dedup_preserves_all_claimed_rows(self):
+        z=run(row(event_id='GAME',market='SPREAD',side='home',line='-3.5'),
+              row(event_id='GAME',market='SPREAD',side='home',line='-4.5'),
+              row(event_id='OTHER',market='ML',side='home',line='0'))
+        self.assertEqual(len(z['top_claimed_edges_including_flagged']),3)
+        self.assertEqual(z['claimed_clusters'],2)
+        self.assertEqual(len(z['top_claimed_clusters_including_flagged']),2)
+
     def test_file_hash_and_read_only(self):
         with tempfile.TemporaryDirectory() as td:
             f=Path(td)/'snap.csv';a=row()
