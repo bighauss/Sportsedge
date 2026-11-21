@@ -79,7 +79,7 @@ def valid_prediction(lineno, d):
     if not math.isfinite(line):
         raise ValueError("INVALID_LINE")
     mode = d.get("model_mode", "").strip().upper()
-    if mode and mode not in {"PROJECTION", "INDEPENDENT_MODEL", "FROZEN_PROJECTION"}:
+    if mode not in {"PROJECTION", "INDEPENDENT_MODEL", "FROZEN_PROJECTION"}:
         raise ValueError("NON_INDEPENDENT_MODEL_MODE")
     side = d["side"].strip().upper()
     if side not in {"OVER", "UNDER", "YES", "NO"}:
@@ -153,15 +153,21 @@ def round_or_none(x, n=6):
 
 
 def write_csv(path, rows, cols):
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    with open(path, "x", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
 
 
 def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Never write potentially private settled player results into the repo or
+    # overwrite earlier research evidence with a fresh run.
+    repo_root = Path(__file__).resolve().parents[2]
+    resolved_output = Path(output_dir).resolve()
+    if resolved_output == repo_root or repo_root in resolved_output.parents:
+        raise ValueError("PRIVATE_AUDIT_OUTPUT_REQUIRED")
     source = read_rows(pred_csv, REQ)
+    output_dir.mkdir(parents=True, exist_ok=False)
     excluded, accepted = [], []
     for n, row in source:
         try:
@@ -231,17 +237,31 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
 
     joints = {}
     if joint_csv:
-        for n, r in read_rows(joint_csv, JOINT_REQ):
+        original_joint_rows = read_rows(joint_csv, JOINT_REQ)
+        # Count every declared canonical pair BEFORE parsing numeric probabilities
+        # or times: an invalid-first copy must not permit a valid later copy to
+        # become an apparently unique frozen forecast.
+        declared_pairs = Counter()
+        for _line, row in original_joint_rows:
+            if all((row.get(field) or "").strip() for field in
+                   ("event_id", "snapshot_id", "leg_id_a", "leg_id_b")):
+                key = (row["event_id"], row["snapshot_id"],
+                       tuple(sorted((row["leg_id_a"], row["leg_id_b"]))))
+                declared_pairs[key] += 1
+        for n, r in original_joint_rows:
             try:
-                for c in JOINT_REQ:
-                    if not (r.get(c) or "").strip():
-                        raise ValueError("MISSING_" + c)
+                for field in JOINT_REQ:
+                    if not (r.get(field) or "").strip():
+                        raise ValueError("MISSING_" + field)
+                key = (r["event_id"], r["snapshot_id"],
+                       tuple(sorted((r["leg_id_a"], r["leg_id_b"]))))
+                if r["leg_id_a"] == r["leg_id_b"]:
+                    raise ValueError("DUPLICATE_OR_SELF_PAIR")
+                if declared_pairs[key] > 1:
+                    raise ValueError("DUPLICATE_FROZEN_JOINT_PAIR_ALL_COPIES")
                 p = float(r["joint_p"])
                 if not math.isfinite(p) or not 0 <= p <= 1:
                     raise ValueError("JOINT_P_OUT_OF_RANGE")
-                key = (r["event_id"], r["snapshot_id"], tuple(sorted([r["leg_id_a"], r["leg_id_b"]])))
-                if r["leg_id_a"] == r["leg_id_b"] or key in joints:
-                    raise ValueError("DUPLICATE_OR_SELF_PAIR")
                 joints[key] = (p, timestamp(r["asof_utc"]))
             except (ValueError, TypeError) as ex:
                 excluded.append({"source": "joint", "line": n, "reason": str(ex),
@@ -355,7 +375,8 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
                "frozen_joint_matched_pair_rows": sum(p["p_joint_frozen"] is not None for p in pair_rows),
                "excluded_records_or_reasons": len(excluded), "exclusion_counts": dict(Counter(e["reason"] for e in excluded)),
                "relationship_groups": len(reports), "note": "Exploratory analysis, not an out-of-sample validated betting edge. Do not infer causation from dependence; sources not independently authenticated by this script. Event-cluster CI accounts for multiple pairs from same event, not season/team drift or multiple-testing selection."}
-    (output_dir / "coverage.json").write_text(json.dumps(summary, indent=2) + "\n")
+    with (output_dir / "coverage.json").open("x", encoding="utf-8") as report:
+        report.write(json.dumps(summary, indent=2) + "\n")
     return summary
 
 
@@ -363,7 +384,7 @@ def self_test():
     from tempfile import TemporaryDirectory
     with TemporaryDirectory() as temp:
         d = Path(temp)
-        header = list(REQ)
+        header = list(REQ) + ["model_mode"]
         rows = []
         for i,(ya,yb) in enumerate([(1,1),(1,0),(0,1),(0,0)]):
             for who,y in [("A",ya),("B",yb)]:
@@ -371,7 +392,7 @@ def self_test():
                                  snapshot_id="s",asof_utc="2026-11-20T18:00:00Z",leg_id=who,
                                  player_id=who,team_id="TEAM",stat="PTS" if who=="A" else "AST",side="OVER",
                                  period="FG",line="10.5",predicted_p="0.5",result="WIN" if y else "LOSS",
-                                 result_source="OFFICIAL_PLAYER_BOX_SCORE"))
+                                 result_source="OFFICIAL_PLAYER_BOX_SCORE", model_mode="PROJECTION"))
         with (d/"input.csv").open("w",newline="") as f:
             w=csv.DictWriter(f,fieldnames=header);w.writeheader();w.writerows(rows)
         result=audit(d/"input.csv",None,d/"out",iterations=100)

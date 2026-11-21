@@ -8,7 +8,7 @@ from prop_joint_correlation import audit, REQ
 
 def write(path, rows):
     with path.open("w", newline="", encoding="utf8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=REQ)
+        writer = csv.DictWriter(handle, fieldnames=list(REQ) + ["model_mode"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -21,7 +21,7 @@ def leg(event, player, snapshot, asof, team="TEAM", result="WIN"):
         leg_id=player, player_id=player, team_id=team,
         stat="PTS" if player == "A" else "AST", side="OVER",
         period="FG", line="10.5", predicted_p="0.5", result=result,
-        result_source="OFFICIAL_PLAYER_BOX_SCORE",
+        result_source="OFFICIAL_PLAYER_BOX_SCORE", model_mode="PROJECTION",
     )
 
 
