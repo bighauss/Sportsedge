@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import math
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -159,8 +160,13 @@ def manifest_for_capture(source: bytes, *, asof_utc: str,
         line = str(row.get('line') or '').strip()
         if line:
             try:
+                # Reject unbounded exponents/precision before creating or
+                # formatting a Decimal. Original quote bytes are never mutated.
+                if (len(line) > 40 or not re.fullmatch(
+                        r'[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)', line)):
+                    raise InvalidOperation
                 numeric = Decimal(line)
-                if not numeric.is_finite():
+                if not numeric.is_finite() or abs(numeric) > Decimal('1000000'):
                     raise InvalidOperation
                 line = ('0' if numeric == 0 else format(numeric.normalize(), 'f'))
             except (InvalidOperation, ValueError):
