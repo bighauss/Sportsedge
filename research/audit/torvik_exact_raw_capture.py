@@ -137,11 +137,11 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--url", default=DEFAULT_URL)
     p.add_argument("--out-dir", required=True)
-    p.add_argument("--captured-utc", required=True, help="Real acquisition time, not a backdated prediction")
     a = p.parse_args()
     # Fail loudly on HTTP 403 / DNS / HTML / wrong CSV shape. Do not pretend success.
     raw = download(a.url)
-    report = persist(raw, a.out_dir, a.url, a.captured_utc)
+    # The CLI stamps its own UTC acquisition clock; never accept backdated user input.
+    report = persist(raw, a.out_dir, a.url, datetime.now(timezone.utc).isoformat())
     print(f"RAW_BYTES={report['original_bytes_size']} SHA256={report['original_bytes_sha256']} "
           f"TEAMS={report['scale_candidate']['n_teams']} PAPER/0u")
 
