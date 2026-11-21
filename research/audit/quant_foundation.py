@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import datetime as dt
 import hashlib
 import json
@@ -352,6 +353,48 @@ def paper_ledger(rows: list[dict]) -> dict:
     }
 
 
+
+def parse_source_csv(raw: bytes) -> list[dict]:
+    """Parse a complete original CSV without silently overwriting duplicate
+    headers, ignoring blank records, or coercing ragged fields.
+
+    Invalid sources stay untouched; do not emit a misleading normalized copy.
+    Both the audit and paper ledger must consume the same safe row parser.
+    """
+    if type(raw) is not bytes or not raw:
+        raise ValueError('EMPTY_OR_NONBYTES_CSV')
+    try:
+        text = raw.decode('utf-8-sig')
+    except UnicodeDecodeError as exc:
+        raise ValueError('INVALID_UTF8_CSV') from exc
+    # A blank physical line inside a quoted CSV field is valid source data.
+    # Parse *logical* records so genuine empty records cannot disappear while
+    # embedded line breaks keep the exact original field and row denominator.
+    try:
+        reader = csv.reader(io.StringIO(text, newline=''), strict=True)
+        header = next(reader, None)
+        if not header or any(not isinstance(h, str) or not h.strip()
+                             for h in header):
+            raise ValueError('CSV_HEADER_MISSING_OR_BLANK')
+        normalized = [h.strip().casefold() for h in header]
+        if len(set(normalized)) != len(header):
+            raise ValueError('CSV_DUPLICATE_NORMALIZED_HEADER')
+        if any(h != h.strip() for h in header):
+            raise ValueError('CSV_UNNORMALIZED_HEADER')
+        rows = []
+        for cells in reader:
+            if not cells or all(not value.strip() for value in cells):
+                raise ValueError('BLANK_CSV_RECORD')
+            if len(cells) > len(header):
+                raise ValueError('CSV_EXTRA_FIELD_NOT_IN_HEADER')
+            if len(cells) < len(header):
+                raise ValueError('CSV_MISSING_FIELD_IN_RECORD')
+            rows.append(dict(zip(header, cells)))
+    except csv.Error as exc:
+        raise ValueError('MALFORMED_CSV') from exc
+    return rows
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=('audit', 'ledger'))
@@ -360,7 +403,7 @@ def main(argv=None):
     parser.add_argument('--cleaned', help='Create-only corrected CSV; audit mode only')
     args = parser.parse_args(argv)
     raw = Path(args.csv_file).read_bytes()
-    rows = list(csv.DictReader(raw.decode('utf-8-sig').splitlines()))
+    rows = parse_source_csv(raw)
     report = audit_rows(rows) if args.mode == 'audit' else paper_ledger(rows)
     report['source_sha256'] = hashlib.sha256(raw).hexdigest()
     if args.mode == 'audit' and args.cleaned and rows:

@@ -1,7 +1,9 @@
 import unittest
+import csv
+import io
 from quant_foundation import (american, devig_two_way, ev_per_dollar,
                               probabilities_from_samples, player_prop_baseline,
-                              audit_rows, paper_ledger)
+                              audit_rows, paper_ledger, parse_source_csv)
 H='a'*64
 BASE=dict(sport='NFL',event_id='E1',period='FG',market='TOTAL',side='over',
           line='44.5',price_american='-110',p_model='0.54',
@@ -11,6 +13,8 @@ BASE=dict(sport='NFL',event_id='E1',period='FG',market='TOTAL',side='over',
           model_sha256=H,feature_available_utc='2026-11-15T16:00:00-06:00',
           source_published_utc='2026-11-15T16:00:00-06:00',
           book='DK',qualified='1',selection_id='S1',qualification_rule_sha256=H,
+          rules_effective_utc='2026-11-15T16:00:00-06:00',
+          selected_utc='2026-11-15T17:30:30-06:00',
           outcome='W',result_source='finals:sha256:example',
           fitted_until_utc='2026-11-14T12:00:00Z',
           settled_utc='2026-11-16T02:00:00Z')
@@ -57,7 +61,7 @@ class TestFoundation(unittest.TestCase):
     def test_legacy_paper_ledger_duplicate_snapshots_quarantined(self):
         a=dict(BASE)
         b=dict(BASE,selection_id='S2',captured_utc='2026-11-15T17:45:00-06:00',
-               price_american='+130')
+               selected_utc='2026-11-15T17:45:30-06:00',price_american='+130')
         r=paper_ledger([a,b])
         self.assertEqual(r['qualified_graded_n'],0)
         self.assertEqual(r['total_quarantined_rows'],2)
@@ -74,6 +78,12 @@ class TestFoundation(unittest.TestCase):
         self.assertEqual(r['losses'],0)
         self.assertAlmostEqual(r['net_units'],100/110,places=6)
         self.assertAlmostEqual(r['roi_flat_1u'],100/110,places=6)
+    def test_paper_ledger_refuses_hindsight_qualified_without_selection_clock(self):
+        r=paper_ledger([dict(BASE,selected_utc='')])
+        self.assertEqual(r['qualified_graded_n'],0)
+        self.assertEqual(r['net_units'],0)
+        self.assertTrue(any('selected_utc' in x['code'] for x in r['unverifiable']))
+
     def test_odd_type_and_missing_line_never_crash(self):
         r=audit_rows([dict(BASE,price_american=-110,line='')])
         self.assertEqual(r['retained_rows'],1)
@@ -82,6 +92,76 @@ class TestFoundation(unittest.TestCase):
         r=paper_ledger([dict(BASE, result_source='')])
         self.assertEqual(r['qualified_graded_n'],0)
         self.assertEqual(len(r['unverifiable']),1)
+
+class StrictSourceCsvTests(unittest.TestCase):
+    @staticmethod
+    def valid_csv():
+        stream=io.StringIO()
+        writer=csv.DictWriter(stream, fieldnames=list(BASE))
+        writer.writeheader()
+        writer.writerow(BASE)
+        return stream.getvalue().encode()
+
+    def test_valid_csv_retained_without_row_loss(self):
+        rows=parse_source_csv(self.valid_csv())
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]['selection_id'],'S1')
+
+    def test_duplicated_header_must_not_replace_first_value(self):
+        original=self.valid_csv()
+        duplicate=original.replace(b'p_model,',b'p_model,p_model,',1)
+        with self.assertRaisesRegex(ValueError,'CSV_DUPLICATE_NORMALIZED_HEADER'):
+            parse_source_csv(duplicate)
+        spaced=original.replace(b'p_model,',b'p_model,p_model ,',1)
+        with self.assertRaisesRegex(ValueError,'CSV_DUPLICATE_NORMALIZED_HEADER'):
+            parse_source_csv(spaced)
+
+    def test_overlong_record_is_not_silently_trimmed(self):
+        original=self.valid_csv()
+        long=original.rstrip(b'\r\n')+b',EXTRA\r\n'
+        with self.assertRaisesRegex(ValueError,'CSV_EXTRA_FIELD_NOT_IN_HEADER'):
+            parse_source_csv(long)
+
+    def test_short_record_and_blank_record_refused(self):
+        header,payload=self.valid_csv().splitlines()
+        short=header+b'\n'+payload.rsplit(b',',1)[0]+b'\n'
+        with self.assertRaisesRegex(ValueError,'CSV_MISSING_FIELD_IN_RECORD'):
+            parse_source_csv(short)
+        blank=header+b'\n\n'+payload+b'\n'
+        with self.assertRaisesRegex(ValueError,'BLANK_CSV_RECORD'):
+            parse_source_csv(blank)
+
+    def test_quoted_multiline_field_with_blank_physical_line_is_one_record(self):
+        stream = io.StringIO(newline='')
+        writer = csv.writer(stream, lineterminator='\n')
+        writer.writerow(['event_id', 'source_note'])
+        writer.writerow(['E1', 'first line\n\nthird line'])
+        source = stream.getvalue().encode('utf-8')
+        rows = parse_source_csv(source)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['event_id'], 'E1')
+        self.assertEqual(rows[0]['source_note'], 'first line\n\nthird line')
+
+    def test_whitespace_and_empty_logical_records_are_refused(self):
+        for source in (
+            b'event_id,note\nE1,ok\n   \nE2,ok\n',
+            b'event_id,note\nE1,ok\n,\nE2,ok\n',
+            b'event_id,note\nE1,ok\n\nE2,ok\n',
+        ):
+            with self.subTest(source=source):
+                with self.assertRaisesRegex(ValueError, 'BLANK_CSV_RECORD'):
+                    parse_source_csv(source)
+
+    def test_duplicate_headers_still_fail_even_with_multiline_content(self):
+        source = b'event_id, EVENT_ID,notes\nE1,E2,"hello\n\nworld"\n'
+        with self.assertRaisesRegex(ValueError, 'CSV_DUPLICATE_NORMALIZED_HEADER'):
+            parse_source_csv(source)
+
+    def test_non_utf8_capture_refused_before_cleaned_report(self):
+        with self.assertRaisesRegex(ValueError,'INVALID_UTF8_CSV'):
+            parse_source_csv(b'\xff\xfe')
+
+
 class OddsFormatsAndQuality(unittest.TestCase):
     def test_decimal_fractional(self):
         from quant_foundation import odds_in_format

@@ -10,11 +10,111 @@ BASE=dict(sport='CBB',event_id='E1',period='FG',market='spread',side='home',
     game_start_utc='2026-11-15T20:00:00Z',
     feature_available_utc='2026-11-15T11:00:00Z',source_published_utc='2026-11-15T11:00:00Z',
     model_sha256=H,quote_sha256=H,qualification_rule_sha256=H,qualified='1',
+    rules_effective_utc='2026-11-15T11:00:00Z',selected_utc='2026-11-15T12:06:00Z',
     selection_id='B1',outcome='W',result_source='official_final:receipt',
     fitted_until_utc='2026-11-14T22:00:00Z',settled_utc='2026-11-15T23:00:00Z')
 
 
 class QuantEvidenceTests(unittest.TestCase):
+    def test_qualified_replay_requires_both_prospective_decision_clocks(self):
+        for omitted in ('rules_effective_utc', 'selected_utc'):
+            with self.subTest(omitted=omitted):
+                row = dict(BASE, **{omitted: ''})
+                result = replay([row])
+                self.assertEqual(result['eligible'], 0)
+                self.assertIn(omitted, result['rejected_qualified_or_invalid'][0]['reason'])
+
+    def test_retroactive_qualification_rule_is_rejected(self):
+        result = replay([dict(BASE, rules_effective_utc='2026-11-15T12:06:01Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'QUALIFICATION_RULE_RETROACTIVE')
+
+    def test_price_captured_after_selection_is_rejected(self):
+        result = replay([dict(BASE, selected_utc='2026-11-15T12:01:59Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'SELECTION_NOT_PROSPECTIVE')
+
+    def test_selection_after_kickoff_is_rejected(self):
+        result = replay([dict(BASE, selected_utc='2026-11-15T20:00:01Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'SELECTION_NOT_PROSPECTIVE')
+
+    def test_original_quote_older_than_five_minutes_at_decision_is_rejected(self):
+        result = replay([dict(BASE, selected_utc='2026-11-15T12:07:01Z')])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'STALE_QUOTE_AT_SELECTION')
+
+    def test_opposing_quote_captured_after_selection_is_not_market_baseline(self):
+        pair = dict(BASE, market_p_no_vig='.5', paired_quote_sha256=H,
+                    paired_price_american='-110',
+                    paired_captured_utc='2026-11-15T12:07:00Z',
+                    paired_event_id='E1', paired_book='DK', paired_period='FG',
+                    paired_market='spread', paired_side='away', paired_line='3.5')
+        result = replay([pair])
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'][0]['reason'],
+                         'OPPOSING_QUOTE_AFTER_SELECTION')
+
+    def test_opposing_quote_age_independently_limited_at_selection(self):
+        paired = dict(market_p_no_vig='.5', paired_quote_sha256=H,
+                      paired_price_american='-110', paired_event_id='E1',
+                      paired_book='DK', paired_period='FG',
+                      paired_market='spread', paired_side='away',
+                      paired_line='3.5')
+        # Selected side is four minutes old; pair differs by only 61 seconds.
+        # The opposing quote nevertheless becomes 301 seconds old at selection.
+        for timestamp, eligible in (
+            ('2026-11-15T12:01:00Z', True),
+            ('2026-11-15T06:01:00-06:00', True),
+            ('2026-11-15T12:00:59Z', False),
+        ):
+            with self.subTest(paired_captured_utc=timestamp):
+                row = dict(BASE, **paired, paired_captured_utc=timestamp)
+                result = replay([row])
+                self.assertEqual(result['eligible'], int(eligible))
+                if not eligible:
+                    self.assertEqual(
+                        result['rejected_qualified_or_invalid'][0]['reason'],
+                        'STALE_OPPOSING_QUOTE_AT_SELECTION')
+
+    def test_opposing_quote_age_quarantine_does_not_depend_on_csv_row_order(self):
+        paired = dict(market_p_no_vig='.5', paired_quote_sha256=H,
+                      paired_price_american='-110', paired_book='DK',
+                      paired_period='FG', paired_market='spread',
+                      paired_side='away', paired_line='3.5')
+        recent = dict(BASE, **paired, paired_event_id='E1',
+                      paired_captured_utc='2026-11-15T12:01:00Z')
+        stale = dict(BASE, **paired, event_id='E2', selection_id='B2',
+                     paired_event_id='E2',
+                     paired_captured_utc='2026-11-15T12:00:59Z')
+        for ordering in ((recent, stale), (stale, recent)):
+            result = replay(list(ordering))
+            self.assertEqual(result['eligible'], 1)
+            self.assertEqual(len(result['rejected_qualified_or_invalid']), 1)
+            self.assertEqual(
+                result['rejected_qualified_or_invalid'][0]['reason'],
+                'STALE_OPPOSING_QUOTE_AT_SELECTION')
+
+    def test_nonqualified_unselected_row_stays_in_denominator(self):
+        row = dict(BASE, qualified='0', rules_effective_utc='', selected_utc='')
+        result = replay([row])
+        self.assertEqual(result['unqualified'], 1)
+        self.assertEqual(result['eligible'], 0)
+        self.assertEqual(result['rejected_qualified_or_invalid'], [])
+
+    def test_rules_effective_between_forecast_and_selection_allowed(self):
+        row = dict(BASE, rules_effective_utc='2026-11-15T12:05:00Z')
+        result = replay([row])
+        self.assertEqual(result['eligible'], 1)
+
+    def test_quote_and_selection_same_instant_allowed(self):
+        result = replay([dict(BASE, selected_utc=BASE['captured_utc'])])
+        self.assertEqual(result['eligible'], 1)
+
     def test_replay_roi_and_baseline(self):
         r1=dict(BASE,market_p_no_vig='.5',paired_quote_sha256=H,paired_price_american='-110',
                 paired_captured_utc='2026-11-15T12:05:00Z',paired_event_id='E1',
@@ -29,6 +129,84 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertAlmostEqual(out['overall']['roi'],-.030303,places=5)
         self.assertEqual(out['max_drawdown_units'],1.0)
         self.assertIn('60-65%', [x['prob_bucket'] for x in out['calibration_5pp']])
+    def test_model_vs_market_brier_uses_identical_matched_decisions(self):
+        paired=dict(market_p_no_vig='.5',paired_quote_sha256=H,
+                    paired_price_american='-110',
+                    paired_captured_utc='2026-11-15T12:05:00Z',
+                    paired_book='DK',paired_period='FG',
+                    paired_market='spread',paired_side='away',
+                    paired_line='3.5')
+        first=dict(BASE,**paired,paired_event_id='E1',p_model='.9',
+                   selection_id='B1',outcome='W')
+        second=dict(BASE,**paired,paired_event_id='E2',event_id='E2',
+                    selection_id='B2',p_model='.1',outcome='L')
+        # Deliberately terrible model forecast has NO authenticated same-line
+        # market pair and must not contaminate the paired comparison.
+        third=dict(BASE,event_id='E3',selection_id='B3',
+                   p_model='.01',outcome='W')
+        overall=replay([first,second,third])['overall']
+        self.assertEqual(overall['n'],3)
+        self.assertEqual(overall['market_baseline_matched_n'],2)
+        self.assertAlmostEqual(overall['model_brier_on_market_matched_rows'],.01)
+        self.assertAlmostEqual(overall['market_brier'],.25)
+        self.assertAlmostEqual(overall['paired_brier_delta_model_minus_market'],-.24)
+        self.assertGreater(overall['brier'],.33)
+        self.assertEqual(overall['paired_brier_matched_events'],2)
+        self.assertTrue(overall['paired_brier_small_sample'])
+        self.assertIsNone(overall['paired_brier_event_cluster95'])
+
+    def test_no_matched_quote_means_no_paired_brier_claim(self):
+        overall=replay([dict(BASE)])['overall']
+        self.assertIsNone(overall['model_brier_on_market_matched_rows'])
+        self.assertIsNone(overall['market_brier'])
+        self.assertIsNone(overall['paired_brier_delta_model_minus_market'])
+        self.assertIsNone(overall['paired_brier_event_cluster95'])
+        self.assertEqual(overall['market_baseline_matched_n'],0)
+        self.assertEqual(overall['paired_brier_matched_events'],0)
+        self.assertTrue(overall['paired_brier_small_sample'])
+
+    def test_paired_interval_requires_at_least_thirty_distinct_events(self):
+        rows = []
+        for i in range(30):
+            eid = f'E{i}'
+            outcome = 'W' if i % 2 else 'L'
+            rows.append(dict(
+                BASE, event_id=eid, selection_id=f'S{i}', outcome=outcome,
+                p_model='.9' if outcome == 'W' else '.1',
+                market_p_no_vig='.5', paired_quote_sha256=H,
+                paired_price_american='-110',
+                paired_captured_utc='2026-11-15T12:05:00Z',
+                paired_event_id=eid, paired_book='DK', paired_period='FG',
+                paired_market='spread', paired_side='away', paired_line='3.5'))
+        summary = replay(rows)['overall']
+        self.assertEqual(summary['market_baseline_matched_n'],30)
+        self.assertEqual(summary['paired_brier_matched_events'],30)
+        self.assertFalse(summary['paired_brier_small_sample'])
+        self.assertEqual(len(summary['paired_brier_event_cluster95']),2)
+        self.assertAlmostEqual(summary['paired_brier_delta_model_minus_market'],-.24)
+
+    def test_same_native_game_id_across_sports_is_two_independent_events(self):
+        rows = [dict(BASE, sport='NFL', event_id='GAME-1',selection_id='NFL1'),
+                dict(BASE, sport='CBB', event_id='GAME-1',selection_id='CBB1',
+                     outcome='L',p_model='.4')]
+        report = replay(rows)
+        self.assertEqual(report['eligible'], 2)
+        self.assertEqual(report['overall']['events'], 2)
+        self.assertIsNotNone(report['overall']['roi_event_cluster95'])
+        self.assertEqual(report['overall']['decided_n'],2)
+
+    def test_numeric_error_clusters_do_not_conflate_sports(self):
+        rows = [dict(BASE, sport='NFL', event_id='GAME-1',
+                     projected_mean='100',actual_value='95'),
+                dict(BASE, sport='CBB', event_id='GAME-1',
+                     projected_mean='100',actual_value='110')]
+        report = bias_analysis(rows)
+        self.assertEqual(report['accepted'],2)
+        market_group = next(g for g in report['groups']
+                            if g['dimension']=='market' and g['value']=='spread')
+        self.assertEqual(market_group['distinct_events'],2)
+        self.assertIsNotNone(market_group['mean_error_cluster95'])
+
     def test_missing_provenance_fails_closed(self):
         row=dict(BASE,source_published_utc='2026-11-15T12:01:00Z')
         out=replay([row])
@@ -187,7 +365,7 @@ class QuantEvidenceTests(unittest.TestCase):
     def test_same_decision_different_capture_and_price_quarantines_both(self):
         earliest=dict(BASE)
         later=dict(BASE,selection_id='B2',captured_utc='2026-11-15T12:22:00Z',
-                   price_american='+150',outcome='W')
+                   selected_utc='2026-11-15T12:22:30Z',price_american='+150',outcome='W')
         out=replay([earliest,later])
         self.assertEqual(out['eligible'],0)
         self.assertEqual(out['total_quarantined_rows'],2)

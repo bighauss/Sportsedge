@@ -43,6 +43,9 @@ def _asof_check(row: dict) -> None:
                 'fitted_until_utc', 'settled_utc',
                 'model_sha256', 'quote_sha256', 'price_american',
                 'qualification_rule_sha256', 'qualified')
+    # A nonqualifier need not have a selection timestamp. A counted pick MUST.
+    if str(row.get('qualified', '')).lower() in ('1', 'true'):
+        required += ('rules_effective_utc', 'selected_utc')
     missing = [key for key in required if not str(row.get(key, '')).strip()]
     if missing:
         raise ValueError('MISSING_REQUIRED:' + ','.join(missing))
@@ -69,6 +72,15 @@ def _asof_check(row: dict) -> None:
     american(row['price_american'])
     if str(row.get('qualified')).lower() not in ('0', '1', 'true', 'false'):
         raise ValueError('UNLOCKED_SELECTION_STATUS')
+    if str(row['qualified']).lower() in ('1', 'true'):
+        selected = when(row['selected_utc'])
+        if not (freeze <= selected < start and captured <= selected):
+            raise ValueError('SELECTION_NOT_PROSPECTIVE')
+        if when(row['rules_effective_utc']) > selected:
+            raise ValueError('QUALIFICATION_RULE_RETROACTIVE')
+        # Gate A pregame default: a qualified decision cannot use old prices.
+        if (selected - captured).total_seconds() > 300:
+            raise ValueError('STALE_QUOTE_AT_SELECTION')
     market_id = _market_id(str(row['market']))
     if ('prop' in market_id or market_id in ('attd', 'firsttd', 'td2plus',
                                              'firstbasket', 'homerun')) and not str(row.get('player_id') or '').strip():
@@ -198,6 +210,12 @@ def _validate_market_pair(row: dict) -> float:
     captured_time = when(row['captured_utc'])
     if paired_time >= when(row['game_start_utc']) or abs((paired_time - captured_time).total_seconds()) > 300:
         raise ValueError('STALE_OR_LATE_OPPOSING_QUOTE')
+    # Both quotes must have been available and fresh at the frozen decision.
+    selected_time = when(row['selected_utc'])
+    if paired_time > selected_time:
+        raise ValueError('OPPOSING_QUOTE_AFTER_SELECTION')
+    if (selected_time - paired_time).total_seconds() > 300:
+        raise ValueError('STALE_OPPOSING_QUOTE_AT_SELECTION')
     supplied = _valid_probability(row['market_p_no_vig'], 'market_probability')
     computed = devig_two_way(row['price_american'],row['paired_price_american'])['no_vig_a']
     if abs(supplied - computed) > 1e-6:
@@ -245,25 +263,58 @@ def _summary(records: list[dict]) -> dict:
     if not n:
         return {'n': 0, 'events': 0, 'wins': 0, 'losses': 0, 'pushes': 0, 'roi': None, 'net_units': 0.0,
                 'brier': None, 'log_loss': None, 'market_brier': None,
+                'model_brier_on_market_matched_rows': None,
+                'paired_brier_delta_model_minus_market': None,
+                'paired_brier_event_cluster95': None,
+                'paired_brier_matched_events': 0,
+                'paired_brier_small_sample': True,
+                'market_baseline_matched_n': 0,
                 'win_rate': None, 'win_wilson95': None, 'roi_event_cluster95': None,
                 'small_sample': True}
-    events = len({r['event_id'] for r in records})
+    events = len({(r['sport'], r['event_id']) for r in records})
     decided = [r for r in records if r['outcome'] != 'P']
     model_brier = mean((r['p']-int(r['outcome'] == 'W'))**2 for r in decided) if decided else None
     model_logloss = mean(-math.log(r['p'] if r['outcome'] == 'W' else (1-r['p'])) for r in decided) if decided else None
     market = [r for r in decided if r.get('q') is not None]
     market_brier = (mean((r['q']-int(r['outcome'] == 'W'))**2 for r in market) if market else None)
+    # An all-decided-rows model Brier is NOT comparable to market Brier
+    # computed only where the exact same-line original two-way quote exists.
+    # Score both probabilities on the identical matched decided rows.
+    model_matched_brier = (
+        mean((r['p']-int(r['outcome'] == 'W'))**2 for r in market)
+        if market else None)
+    paired_differences = [
+        (r['p']-int(r['outcome'] == 'W'))**2
+        - (r['q']-int(r['outcome'] == 'W'))**2 for r in market
+    ]
+    paired_brier_delta = mean(paired_differences) if market else None
+    matched_event_count = len({(r['sport'], r['event_id']) for r in market})
+    # A bootstrap interval on two games is not useful evidence of stable
+    # relative accuracy. Preserve the point estimate but suppress its interval
+    # unless at least 30 independent event clusters have original paired odds.
+    paired_brier_ci = (_cluster_ci([
+        (str(row['sport']) + ':' + str(row['event_id']), delta)
+        for row, delta in zip(market, paired_differences)
+    ]) if matched_event_count >= 30 else None)
     unit_total = sum(r['unit'] for r in records)
     n_w = sum(r['outcome'] == 'W' for r in decided)
     return {'n': n, 'decided_n': len(decided), 'events': events,
             'wins': n_w, 'losses': len(decided)-n_w, 'pushes': n-len(decided),
             'net_units': round(unit_total, 6), 'roi': round(unit_total/n, 6),
-            'roi_event_cluster95': _cluster_ci([(r['event_id'], r['unit']) for r in records]),
+            'roi_event_cluster95': _cluster_ci([
+                (r['sport'] + ':' + r['event_id'], r['unit']) for r in records]),
             'win_rate': round(n_w/len(decided), 6) if decided else None,
             'win_wilson95': _wilson(n_w, len(decided)),
             'brier': round(model_brier, 6) if model_brier is not None else None,
             'log_loss': round(model_logloss, 6) if model_logloss is not None else None,
             'market_brier': round(market_brier, 6) if market_brier is not None else None,
+            'model_brier_on_market_matched_rows': (
+                round(model_matched_brier, 6) if model_matched_brier is not None else None),
+            'paired_brier_delta_model_minus_market': (
+                round(paired_brier_delta, 6) if paired_brier_delta is not None else None),
+            'paired_brier_event_cluster95': paired_brier_ci,
+            'paired_brier_matched_events': matched_event_count,
+            'paired_brier_small_sample': matched_event_count < 30,
             'market_baseline_matched_n': len(market),
             'small_sample': events < 30}
 
@@ -409,12 +460,13 @@ def bias_analysis(rows: list[dict]) -> dict:
                 groups[(d, str(r[d]))].append((r, error))
     report = []
     for (d, value), group in sorted(groups.items()):
-        event_count = len({r['event_id'] for r, e in group})
+        event_count = len({(r['sport'], r['event_id']) for r, e in group})
         errors = [e for r, e in group]
         report.append({'dimension': d, 'value': value, 'n': len(errors),
                        'distinct_events': event_count, 'mean_error_actual_minus_model': round(mean(errors), 6),
                        'mae': round(mean(abs(x) for x in errors), 6),
-                       'mean_error_cluster95': _cluster_ci([(r['event_id'], e) for r, e in group]),
+                       'mean_error_cluster95': _cluster_ci([
+                           (r['sport'] + ':' + r['event_id'], e) for r, e in group]),
                        'small_sample': event_count < 30})
     return {'status': 'PAPER_ERROR_DIAGNOSTIC_NO_MODEL_CHANGE', 'rows': len(rows),
             'accepted': len(valid), 'rejected': rejected, 'groups': report}
