@@ -38,6 +38,10 @@ Both legs must share event and snapshot, decision timestamp must precede real st
 
 For each eligible pair: outcome both-win is `y_A*y_B`, independence baseline is `p_A*p_B`. Empirical deviation is `mean(y_A*y_B - p_A*p_B)`; all-pair independence Brier is separate from **matched-subset** independence and frozen joint Brier. Frozen joint p must itself be an original pregame forecast, not retrospectively imputed or tuned. Confidence intervals resample **games/events**, not pairs; small sample `n<30` or `<10` events is explicitly tagged, `n<100` or `<30` events preliminary. Even a confidence interval excluding 0 remains exploratory pending pre-registered multiple-testing control and unseen chronological confirmation.
 
+## Stacked audit-hardening corrections (research candidate)
+
+The evidence guard also rejects a complete event whenever a stable player ID changes teams or the same settled market changes result across pregame snapshots; an earlier valid-looking snapshot does **not** excuse inconsistent later records. Both mismatches are preserved in the refusal census. Nominal event-clustered 95% intervals are deliberately withheld unless at least **30 distinct games** support the particular paired comparison; smaller samples remain exploratory even when a descriptive co-hit or Brier score is computed. These checks do not independently authenticate the provider or retrospectively certify an edge.
+
 ## Parallel evidence recovery tracks
 
 - NFL: week-level means are not prop-line probabilities; recover immutable preseason/weekly game time and threshold curves, stable GSIS IDs, individual QB/WR/RB final stats.
