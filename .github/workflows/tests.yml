@@ -43,6 +43,8 @@ jobs:
         run: python -m unittest sportsedge.validation.test_daily_ratings_capture -v
       - name: NFL daily odds pilot metadata/quota safety (offline)
         run: python -m unittest sportsedge.odds.test_daily_main_odds sportsedge.odds.test_daily_pilot_artifact_gate -v
+      - name: ESPN final-score and player-stat evidence staging (offline)
+        run: python -m unittest sportsedge.validation.test_espn_final_evidence -v
       - name: Private paper grading with independent price evidence (offline)
         run: python -m unittest sportsedge.validation.test_paper_grade_batch sportsedge.validation.test_paper_ledger -v
       - name: Gate A original receipt hash completeness (synthetic)
