@@ -128,11 +128,13 @@ def _inspect(expect, body, season):
         return "JSON_SCHEMA", 0
     names = set()
     if expect == "cbbd_json":
+        ids = set()
         for row in doc:
             if not isinstance(row, dict) or type(row.get("season")) is not int or row.get("season") != season:
                 return "CBBD_WRONG_SEASON_OR_SCHEMA", 0
             team = row.get("team")
-            if not isinstance(team, str) or not team.strip():
+            tid = row.get("teamId")
+            if not isinstance(team, str) or not team.strip() or type(tid) is not int or tid <= 0 or tid in ids:
                 return "CBBD_TEAM_INVALID", 0
             key = team.strip().casefold()
             o, dfn, net = (row.get(k) for k in ("offensiveRating", "defensiveRating", "netRating"))
@@ -140,6 +142,7 @@ def _inspect(expect, body, season):
                     or not 60 <= o <= 160 or not 60 <= dfn <= 160 or not -80 <= net <= 80):
                 return "CBBD_TEAM_OR_RATING_INVALID", 0
             names.add(key)
+            ids.add(tid)
         return (None, len(names)) if 350 <= len(names) <= 420 else ("CBBD_CENSUS_OUT_OF_RANGE", len(names))
     for row in doc:
         if not isinstance(row, dict) or row.get("year") != season or type(row.get("year")) is not int:
@@ -168,6 +171,8 @@ def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None, *, loca
         raise ValueError("DUPLICATE_RATINGS_SOURCE")
     if local_torvik is not None and (len(srcs) != 1 or srcs[0]["name"] != "torvik_team_results"):
         raise ValueError("LOCAL_IMPORT_ALLOWS_TORVIK_ONLY")
+    if local_torvik is None and any(s["name"] == "torvik_team_results" for s in srcs):
+        raise ValueError("TORVIK_LOCAL_IMPORT_ONLY")
     root.mkdir(mode=0o700, exist_ok=False)
     receipts = []
     for s in srcs:
@@ -201,7 +206,8 @@ def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None, *, loca
         if problem:
             rec["state"] = "BLOCKED_" + problem
         else:
-            name = f"{s['name']}.{s['expect']}"
+            ext = "csv" if s["expect"] == "csv" else "json"
+            name = f"{s['name']}.{ext}"
             fd = os.open(root / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "wb") as f:
                 f.write(body)

@@ -42,7 +42,7 @@ jobs:
       - name: NFL daily odds pilot metadata/quota safety (offline)
         run: python -m unittest sportsedge.odds.test_daily_main_odds sportsedge.odds.test_daily_pilot_artifact_gate -v
       - name: Daily ratings evidence and decision cutoff (offline)
-        run: python -m unittest sportsedge.validation.test_daily_ratings_capture -v
+        run: python -m unittest sportsedge.validation.test_daily_ratings_capture sportsedge.validation.test_cbbd_ratings_capture -v
       - name: Gate A original receipt hash completeness (synthetic)
         run: python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py -v
       - name: DFS historical slate coverage preflight

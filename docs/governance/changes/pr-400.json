@@ -6,16 +6,17 @@
     ".github/workflows/daily-ratings-capture.yml",
     ".github/workflows/tests.yml",
     "sportsedge/validation/daily_ratings_capture.py",
-    "sportsedge/validation/test_cbbd_ratings_capture.py"
+    "sportsedge/validation/test_cbbd_ratings_capture.py",
+    "sportsedge/validation/test_daily_ratings_capture.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
   "change_summary": "Replace runner-side Torvik GET (HTTP 403 from data-center IPs) with CollegeBasketballData adjusted ratings under CBBD_API_KEY; Torvik stays manual no-network import only.",
   "assumptions": [
     "CBBD field names and season-end-year convention come from cbbd-python docs, not a live response; mismatches fail closed.",
     "CBBD ratings are not Torvik ratings; CBB model consumption needs separate validation.",
-    "Workflow edits adding CBBD_API_KEY and the new test module must be applied by the owner."
+    "CBBD provider identity uses positive unique team IDs; capture does not imply full coverage or model validation."
   ],
-  "agent_identity": "Claude coding agent",
+  "agent_identity": "Claude and Perplexity coding agents",
   "permissions": {
     "role": "CODING_AGENT",
     "repo_write": "BRANCH_ONLY",
