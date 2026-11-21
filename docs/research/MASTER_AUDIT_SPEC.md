@@ -19,7 +19,6 @@ The code uses only the Python standard library. It is a **read-only audit layer*
 | P1.2 Leakage Detective | `audits.leakage_audit`, `assert_no_leakage`, `point_in_time` | Rusty T2#1, T1#1 |
 | Data quality inspector | `audits.data_quality` (missing values, duplicates, inconsistent IDs, bad dates/odds/probs; logs every correction, deletes nothing) | Rusty T1#2 |
 | P1.3 Calibration | `stats.calibration_table` (5% buckets, Wilson CI, OVER/UNDER/SMALL_SAMPLE), `brier`, `log_loss`, `ece`, `reliability_svg`, `platt_fit` (recommendation only) | Rusty T2#3, Theo 26–31 |
-| P1.4 CLV | `odds.clv`, `odds.spread_clv_points`, `audits.clv_report` (warns when you are winning with negative CLV) | Theo 30 |
 | P1.5 Performance / backtest / versions | `stats.performance` (flat 1u, losses kept, ROI, drawdown, streaks, Sharpe), `stats.bootstrap_roi` (resamples whole games so correlated bets aren't treated as independent; gives P(ROI ≤ 0)), `audits.backtest_audit` (prospective vs retrospective by rule activation time), `audits.append_only_check`, `stats.edge_decay` | Rusty T1#5, T1#7, T2#2, T2#7, T2#8; Theo 28, 31, 41–45 |
 | P1.6 Bias hunter | `audits.bias_breakdown` (by player/team/opponent/market/side/edge/projection range/month, with 95% CI and a repeatable flag), `audits.market_disagreement` (pregame only, ROI at original odds, Wilson CI, overconfidence slope, MODEL_WEAKNESS / SMALL_SAMPLE flags) | Rusty T1#6, T2#5, Market Disagreement; Theo 27 |
 | P2 Independent projections | `projections.power_rating`, `fair_spread`, `pace_total` (shows its math), `cover_prob`, `total_prob_over`, `Elo`, `fip`, `red_zone_margin`, `blend`, `drop_contradictions` | Theo 1–3, 7, 26, 29, 47, 48 |
@@ -34,12 +33,15 @@ The code uses only the Python standard library. It is a **read-only audit layer*
 
 Every candidate carries the fields in `pipeline.REQUIRED_OUTPUT`: model_prob, fair_odds, edge, EV, best price/book, uncertainty, price_ts, audit_status, reason_codes, correlation_flags, input_timestamps.
 
-Some prompts are reasoning prompts rather than math: Theo 5, 6, 11, 16, 18, 23, 25, 33–35, 41. Their quantifiable parts are covered: line movement ↔ CLV, public bias ↔ blocked narratives, tilt/streaks ↔ `streak_probability`, autopsy ↔ `postgame_report`. Any narrative claim stays blocked until it is registered with evidence.
+Some prompts are reasoning prompts rather than math: Theo 5, 6, 11, 16, 18, 23, 25, 33–35, 41. Their quantifiable parts are covered: public bias ↔ blocked narratives, tilt/streaks ↔ `streak_probability`, autopsy ↔ `postgame_report`. Any narrative claim stays blocked until it is registered with evidence.
 
 ## How to run (phone-friendly)
 - **GitHub Actions → master-audit → Run workflow** (once the workflow file is installed: the GitHub app couldn't write to `.github/workflows/`, so copy `docs/research/master-audit.workflow.yml` to `.github/workflows/master-audit.yml` in the GitHub web editor). Point `file` at any prediction JSON/CSV in the repo. The full report downloads as the `master-audit-report` artifact.
-- CLI: `python -m research.audit.master <leakage|quality|largest|calibration|clv|bias|disagreement|backtest|bootstrap|correlation|gates|postgame|simnoise|dispersion|full> FILE [--rules rules.json] [--history graded.json]`
-- Tests: `python research/audit/master/test_master_audit.py` (25 synthetic tests).
+- CLI: `python -m research.audit.master <leakage|quality|largest|calibration|bias|disagreement|backtest|bootstrap|correlation|gates|postgame|simnoise|dispersion|challenge|full> FILE [--rules rules.json] [--history graded.json]`
+- Tests: `python research/audit/master/test_master_audit.py` (26 synthetic tests).
+- **Universal Model Challenge** (Rusty's every-model prompt): `python -m research.audit.master challenge FILE [--rules rules.json]` runs every check and returns issues ranked by severity, each with how to test the fix on unseen data. It changes nothing.
+
+**CLV removed (owner ruling 2026-11-21):** this layer does no closing-line value tracking or reporting (Theo 30 dropped).
 
 ## Gap matrix (next step)
 | Module | Status in this PR | Evidence still required |

@@ -49,13 +49,9 @@ class Odds(unittest.TestCase):
         self.assertEqual(odds.kelly_fraction(.4, -110), 0)
         self.assertAlmostEqual(odds.breakeven_prob(-110), .52381, 4)
 
-    def test_line_shop_clv(self):
+    def test_line_shop(self):
         r = odds.line_shopping({"A": -115, "B": -108, "C": -110})
         self.assertEqual(r["best_book"], "B")
-        c = odds.clv(-110, -130, 110)
-        self.assertGreater(c["clv_prob"], 0)
-        self.assertTrue(c["beat_close"])
-        self.assertEqual(odds.spread_clv_points(-3, -4), 1)
 
     def test_alt_lines(self):
         pmf = {1: .1, 3: .15, 4: .1, 7: .1, 10: .2, 14: .35}
@@ -144,7 +140,7 @@ class Audits(unittest.TestCase):
         self.assertIn("ROW_REWRITTEN", codes)
         self.assertIn("ROW_REMOVED", codes)
 
-    def test_bias_disagreement_clv_ev(self):
+    def test_bias_disagreement_ev(self):
         rs = [row(i, projection=60 + i % 5, actual=50, line=55.5, player="A", result="L") for i in range(40)]
         bb = audits.bias_breakdown(rs)
         self.assertEqual(bb["player"][0]["direction"], "OVER_PROJECTS")
@@ -164,8 +160,6 @@ class Audits(unittest.TestCase):
         self.assertEqual(md["trend"], "BIGGER_DISAGREEMENT_WORSE")
         self.assertTrue(md["weakness_buckets"])
         self.assertTrue(any(b["small_sample"] for b in md["buckets"]) or all(b["n"] >= 50 for b in md["buckets"]))
-        c = audits.clv_report([row(0, close_odds=-130, close_other_odds=110), row(1)])
-        self.assertEqual(c["n"], 1)
         ev = audits.ev_inspector([row(0, p=.5, prices={"DK": 105, "FD": -115})], benchmark_book="FD")
         self.assertEqual(ev["edges_that_disappear"][0]["why"], "EDGE_ONLY_AT_BEST_BOOK")
 
@@ -260,7 +254,7 @@ class Pipeline(unittest.TestCase):
             import csv
             with open(path) as fh:
                 led = list(csv.DictReader(fh))
-            g = pipeline.grade(led, {"p0": {"result": "W", "close_odds": -120}, "p1": {"result": "L"}})
+            g = pipeline.grade(led, {"p0": {"result": "W"}, "p1": {"result": "L"}})
             rep = pipeline.postgame_report(g)
             self.assertEqual(rep["graded"], 2)
             self.assertIn("performance_BLOCKED", rep)
@@ -317,6 +311,17 @@ class Ablation(unittest.TestCase):
         self.assertEqual(v["core"], "KEEP_HELPS")
         self.assertTrue(v["defense"].startswith("SIMPLIFY_CANDIDATE"))
         self.assertTrue(v["schedule"].startswith("SIMPLIFY_CANDIDATE"))
+
+
+class Challenge(unittest.TestCase):
+    def test_ranks_issues(self):
+        from research.audit.master.__main__ import challenge
+        rs = [row(i, p=.55 + (i % 7) / 100, res="W" if i % 2 else "L") for i in range(60)]
+        rs.append(row(99, p=.9, o=150, odds_ts="2026-11-16T13:00:00-06:00"))
+        c = challenge(rs)
+        self.assertGreater(c["n_issues"], 0)
+        self.assertEqual(c["issues"][0]["severity"], "CRITICAL")
+        self.assertTrue(all("how_to_test_fix" in i for i in c["issues"]))
 
 
 if __name__ == "__main__":
