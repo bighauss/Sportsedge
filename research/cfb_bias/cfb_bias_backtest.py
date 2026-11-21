@@ -53,6 +53,9 @@ def week_rows(season, week, key, all_games):
     advg = R.with_games(adv, R.games_played(all_games, first_ko))
     ctx = {"adv": M.by(advg, "team"), "lm": M.league_means(advg), "talent": {}, "ret": {}, "ratings": {},
            "teams": {}, "venues": {}, "injuries": [], "weather": {}, "rest": {}, "cross": {}, "usage": []}
+    prior = [x for x in all_games if x.get("completed") and x.get("homePoints") is not None
+             and dt.datetime.fromisoformat(x["startDate"].replace("Z", "+00:00")) < first_ko]
+    pit_ppg = mean((x["homePoints"] + x["awayPoints"]) / 2 for x in prior) if prior else None
     out = []
     for g in games:
         H, A = g["homeTeam"], g["awayTeam"]
@@ -61,10 +64,17 @@ def week_rows(season, week, key, all_games):
         if R.missing_adv(ctx["adv"][H]) or R.missing_adv(ctx["adv"][A]): continue
         L = consensus(lines.get(g["id"], {}))
         if not L: continue
-        try: pj = M.run_game({**g, "week": week}, ctx)
+        try:
+            pj = M.run_game({**g, "week": week}, ctx)
+            orig = M.LG_PPG
+            try:
+                M.LG_PPG = pit_ppg if pit_ppg else orig        # CANDIDATE (research only)
+                cj = M.run_game({**g, "week": week}, ctx)
+            finally:
+                M.LG_PPG = orig
         except Exception: continue
         out.append({"week": week, "game": f"{A} @ {H}", "proj_total": pj["total"], "proj_margin": pj["margin"],
-                    "pts_h": pj["pts_home"], "pts_a": pj["pts_away"], "mkt_total": float(L["overUnder"]),
+                    "pts_h": pj["pts_home"], "pts_a": pj["pts_away"], "cand_total": cj["total"], "cand_margin": cj["margin"], "pit_ppg": pit_ppg, "mkt_total": float(L["overUnder"]),
                     "mkt_spread": float(L["spread"]), "act_h": g["homePoints"], "act_a": g["awayPoints"]})
     return out
 
@@ -95,6 +105,9 @@ def metrics(rows, shift=0.0):
                        "market": mean(abs(-r["mkt_spread"] - (r["act_h"] - r["act_a"])) for r in rows)},
     }
 
+def candidate_rows(rows):
+    return [dict(r, proj_total=r["cand_total"], proj_margin=r["cand_margin"]) for r in rows if "cand_total" in r]
+
 def report(rows):
     league_pts = mean((r["act_h"] + r["act_a"]) / 2 for r in rows)
     base = metrics(rows)
@@ -111,9 +124,24 @@ def report(rows):
     for k in ("brier_over", "logloss_over", "brier_cover", "mae_total", "mae_margin"):
         md.append(f"| {k} | " + ", ".join(f"{a} {v:.4f}" for a, v in base[k].items()) + " | " +
                   ", ".join(f"{a} {v:.4f}" for a, v in rec[k].items()) + " |")
+    cr = candidate_rows(rows)
+    if cr:
+        c = metrics(cr)
+        md += ["", "## Candidate C1: league baseline = point-in-time realised points/team (fixed 28 removed)", "",
+               "| Metric | Frozen | Candidate C1 | Market |", "|---|---|---|---|",
+               f"| total bias vs actual | {base['bias_model_total_vs_actual']:+.2f} | {c['bias_model_total_vs_actual']:+.2f} | {base['bias_market_total_vs_actual']:+.2f} |",
+               f"| says Over rate (actual {base['actual_over_rate']:.3f}) | {base['model_says_over_rate']:.3f} | {c['model_says_over_rate']:.3f} | — |",
+               f"| Brier Over | {base['brier_over']['model']:.4f} | {c['brier_over']['model']:.4f} | {base['brier_over']['market']:.4f} |",
+               f"| Brier Over, 30/70 blend | {base['brier_over']['blend']:.4f} | {c['brier_over']['blend']:.4f} | — |",
+               f"| log loss Over | {base['logloss_over']['model']:.4f} | {c['logloss_over']['model']:.4f} | {base['logloss_over']['market']:.4f} |",
+               f"| MAE total | {base['mae_total']['model']:.2f} | {c['mae_total']['model']:.2f} | {base['mae_total']['market']:.2f} |",
+               f"| Brier cover | {base['brier_cover']['model']:.4f} | {c['brier_cover']['model']:.4f} | {base['brier_cover']['market']:.4f} |"]
+        js_c = c
+    else:
+        js_c = None
     md += ["", f"Re-centring shift applied in the diagnostic column: {shift:+.2f} total points (NOT applied to the model).",
            "Lower Brier / log loss is better; the market column is the same-time baseline to beat."]
-    return "\n".join(md) + "\n", {"frozen": base, "recentred": rec, "shift": shift, "n": len(rows)}
+    return "\n".join(md) + "\n", {"frozen": base, "recentred": rec, "candidate_c1": js_c, "shift": shift, "n": len(rows)}
 
 def main(argv=None):
     a = argparse.ArgumentParser()
