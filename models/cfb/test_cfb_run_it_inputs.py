@@ -39,9 +39,9 @@ class PPAUnits(unittest.TestCase):
 
 class GamesDenominator(unittest.TestCase):
     def test_games_count_is_point_in_time(self):
-        games = [{"homeTeam": "X", "awayTeam": "Y", "startDate": "2026-11-14T18:00:00Z", "completed": True},
-                 {"homeTeam": "X", "awayTeam": "Z", "startDate": "2026-11-21T16:00:00Z", "completed": True},  # starts after cutoff
-                 {"homeTeam": "X", "awayTeam": "W", "startDate": "2026-11-28T18:00:00Z", "completed": False}]
+        games = [{"id": 1, "homeTeam": "X", "awayTeam": "Y", "startDate": "2026-11-14T18:00:00Z", "completed": True},
+                 {"id": 2, "homeTeam": "X", "awayTeam": "Z", "startDate": "2026-11-21T16:00:00Z", "completed": True},  # starts after cutoff
+                 {"id": 3, "homeTeam": "X", "awayTeam": "W", "startDate": "2026-11-28T18:00:00Z", "completed": False}]
         gp = R.games_played(games, NOW)
         self.assertEqual(gp, {"X": 1, "Y": 1})
 

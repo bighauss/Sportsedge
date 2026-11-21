@@ -26,7 +26,7 @@ import sportsedge_cfb_model as M  # production model, imported unchanged
 import cfb_injury_intake as INJ
 
 CT = ZoneInfo("America/Chicago")
-# Same pin as cfb_baselines.FROZEN_RUNIT["module_sha256"]; a drifted model file refuses the run.
+# Frozen model file must match the reviewed research engine.
 MODEL_SHA256_PIN = "1f24cf1a925147a1601d0ba2f04ada30c4cf25173ab6df73bcb16016cff735be"
 CFBD = "https://api.collegefootballdata.com"
 ALIASES = {"miamifl": ["miami"], "ulm": ["ulmonroe", "louisianamonroe"],
@@ -86,11 +86,13 @@ def capture_cfbd(season, key, fetch=http_bytes):
                          "sha256": sha256(b), "observed_utc": dt.datetime.now(dt.timezone.utc).isoformat()})
     return out, raw, receipts
 
-def fetch_weather(lat, lon, kickoff_utc, fetch=http_json):
-    url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode({
+def weather_url(lat, lon):
+    return "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode({
         "latitude": lat, "longitude": lon, "hourly": "wind_speed_10m,precipitation,snowfall",
         "wind_speed_unit": "mph", "timezone": "UTC", "forecast_days": 3})
-    d = fetch(url)
+
+def weather_values(d, kickoff_utc):
+    """Translate only captured forecast fields; original response bytes are archived by main."""
     hrs = d["hourly"]["time"]; tgt = kickoff_utc.strftime("%Y-%m-%dT%H:00")
     if tgt not in hrs:
         raise Fail("FORECAST_HOUR_MISSING")
@@ -101,6 +103,10 @@ def fetch_weather(lat, lon, kickoff_utc, fetch=http_json):
     snow = sum(d["hourly"]["snowfall"][j] for j in rows)
     ptype = "snow" if snow >= 0.5 else "heavy_rain" if rain >= 6 else "light" if rain >= 0.5 else "none"
     return {"windSpeed": round(wind, 1), "precipitation_type": ptype, "isForecast": True}
+
+def fetch_weather(lat, lon, kickoff_utc, game_id=None, fetch=http_json):
+    """Standalone weather helper; live runner wraps this with original-byte receipts."""
+    return weather_values(fetch(weather_url(lat, lon)), kickoff_utc)
 
 # ---------------------------------------------------------------- model input shaping (no estimates)
 REQUIRED_ADV = ["offense.plays", "offense.drives", "offense.ppa", "offense.successRate",
@@ -114,14 +120,33 @@ def missing_adv(row):
     return [k for k in REQUIRED_ADV if M.g(row, k) is None]
 
 def games_played(games, now_utc):
-    """Completed FBS-listed games per team that started before the run (point-in-time count).
-    Replaces the model's offense.drives/12 fallback, which is used only when `games` is absent."""
-    n = {}
+    """Count only unique, previously completed game IDs observed in the live snapshot.
+
+    A missing or duplicate event ID makes every involved team's denominator
+    unknown; the caller withholds that team rather than silently undercounting
+    or inflating its per-game production.
+    """
+    seen, ambiguous = {}, set()
     for g in games:
+        sides = {g.get("homeTeam"), g.get("awayTeam")}
+        game_id = g.get("id")
+        if game_id in (None, "", 0):
+            ambiguous.update(sides)
+            continue
+        key = str(game_id)
+        if key in seen:
+            ambiguous.update(sides)
+            ambiguous.update((seen[key].get("homeTeam"), seen[key].get("awayTeam")))
+            continue
+        seen[key] = g
+    n = {}
+    for g in seen.values():
         ko = dt.datetime.fromisoformat(g["startDate"].replace("Z", "+00:00"))
         if g.get("completed") and ko < now_utc:
             for t in (g["homeTeam"], g["awayTeam"]):
                 n[t] = n.get(t, 0) + 1
+    for t in ambiguous:
+        n.pop(t, None)
     return n
 
 def with_games(adv, gp):
@@ -258,7 +283,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             if lat is None:
                 withheld.append((label, "venue coordinates missing -> no forecast")); continue
             try:
-                w = weather_fetch(lat, lon, ko.astimezone(dt.timezone.utc))
+                w = weather_fetch(lat, lon, ko.astimezone(dt.timezone.utc), g["id"])
             except Exception as e:
                 withheld.append((label, f"weather forecast unavailable ({e})")); continue
             ctx["weather"][g["id"]] = {**w, "gameId": g["id"], "roof": "open"}
@@ -317,8 +342,17 @@ def eligibility(intake, now_utc, teams=()):
         rv = intake.get("injuries_reviewed_utc")
         if not rv:
             reasons.append("INJURY_REVIEW_TIME_MISSING")
-        elif (now_utc - dt.datetime.fromisoformat(rv.replace("Z", "+00:00"))).total_seconds() > INJURY_MAX_AGE_H * 3600:
-            reasons.append("INJURY_REVIEW_STALE")
+        else:
+            try:
+                reviewed = dt.datetime.fromisoformat(rv.replace("Z", "+00:00"))
+                delta = (now_utc - reviewed).total_seconds()
+            except (ValueError, TypeError):
+                reasons.append("INJURY_REVIEW_TIME_INVALID")
+            else:
+                if delta < 0:
+                    reasons.append("INJURY_REVIEW_FUTURE")
+                elif delta > INJURY_MAX_AGE_H * 3600:
+                    reasons.append("INJURY_REVIEW_STALE")
         gap = INJ.missing_coverage(intake, teams)
         if gap: reasons.append("INJURY_COVERAGE_PARTIAL: " + ", ".join(gap))
     return {"state": "RESEARCH_ONLY", "official_counted": 0, "approved_stake_u": 0, "reasons": reasons}
@@ -453,7 +487,8 @@ def main(argv=None):
         json.dump(doc, open(f, "w"), indent=1, default=str)
         open(os.path.join(x.out, "cfb_card.md"), "w").write(render(doc))
         print(f"rechecked: {len(doc['card']['rows'])} rows remain"); return 0
-    intake = json.load(open(x.intake))
+    intake_raw = open(x.intake, "rb").read()
+    intake = json.loads(intake_raw)
     try:
         if x.fixture:
             cap = json.load(open(x.fixture)); wf = lambda *_: cap["_weather"]
@@ -464,19 +499,44 @@ def main(argv=None):
             key = os.environ.get("CFBD_API_KEY")
             if not key: raise Fail("CFBD_API_KEY_ABSENT")
             if x.private_dir is None: raise Fail("PRIVATE_DIR_REQUIRED_FOR_LIVE_CAPTURE")
-            cap, raw, receipts = capture_cfbd(x.season, key); wf = fetch_weather
+            cap, raw, receipts = capture_cfbd(x.season, key)
+            # The exact operator intake is part of the evidence, not merely a displayed timestamp.
+            raw["operator_lines"] = intake_raw
+            receipts.append({"source": "operator_lines", "provider": "operator_supplied",
+                             "bytes": len(intake_raw), "sha256": sha256(intake_raw),
+                             "observed_utc": dt.datetime.now(dt.timezone.utc).isoformat()})
+            def wf(lat, lon, kickoff_utc, game_id):
+                source = f"weather_game_{game_id}"
+                if source in raw:
+                    raise Fail("DUPLICATE_WEATHER_GAME_ID")
+                # Store original bytes before parsing; a malformed source still has a receipt.
+                body = http_bytes(weather_url(lat, lon))
+                raw[source] = body
+                receipts.append({"source": source, "provider": "open-meteo.com",
+                                 "game_id": game_id, "bytes": len(body), "sha256": sha256(body),
+                                 "observed_utc": dt.datetime.now(dt.timezone.utc).isoformat()})
+                return weather_values(json.loads(body), kickoff_utc)
+        if not x.fixture:
+            now = dt.datetime.now(dt.timezone.utc)  # actual provider observation is after the pre-fetch clock
+        injf = None
+        if x.injuries:
+            try:
+                doc_i, rec_i = INJ.load_manual(x.injuries)
+            except INJ.InjuryFileError as e:
+                raise Fail(str(e)) from None
+            injf = (doc_i, x.injuries)
+            # The original file must be in the same protected source/receipt census.
+            original_injuries = open(x.injuries, "rb").read()
+            raw["manual_injuries"] = original_injuries
+            receipts.append({**rec_i, "bytes": len(original_injuries),
+                             "sha256": sha256(original_injuries)})
+        card, projs, withheld, ctx = run(intake, cap, now, wf,
+                                         x.allow_no_injury_feed, injury_file=injf)
         if x.private_dir:
             os.makedirs(x.private_dir, mode=0o700, exist_ok=True)
             for name, b in raw.items():
-                open(os.path.join(x.private_dir, f"{name}.json"), "wb").write(b)
-        injf = None
-        if x.injuries:
-            try: doc_i, rec_i = INJ.load_manual(x.injuries)
-            except INJ.InjuryFileError as e: raise Fail(str(e))
-            injf = (doc_i, x.injuries); receipts.append(rec_i)
-            if x.private_dir:
-                open(os.path.join(x.private_dir, "manual_injuries.json"), "wb").write(open(x.injuries, "rb").read())
-        card, projs, withheld, ctx = run(intake, cap, now, wf, x.allow_no_injury_feed, injury_file=injf)
+                with open(os.path.join(x.private_dir, f"{name}.json"), "wb") as capture:
+                    capture.write(b)
     except Fail as e:
         print(f"BLOCKED {e}", file=sys.stderr); return 2
     os.makedirs(x.out, exist_ok=True)
