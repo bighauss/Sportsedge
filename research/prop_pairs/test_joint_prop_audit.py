@@ -121,6 +121,22 @@ class JointPropPITTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "EXACT_LEG_IDENTITY"):
             evaluate([row(a={"player_id":"p1"})])
 
+    def test_huge_exponent_and_numeric_lexeme_refused_before_formatting(self):
+        for invalid in ("1e9999999", "-1e9999999", "1e-9999999",
+                        "9"*41, "1000001", "NaN", "Infinity"):
+            with self.subTest(line=invalid):
+                invalid_leg = dict(row()["a"], line=invalid)
+                with self.assertRaisesRegex(ValueError, "INVALID_PROP_LINE"):
+                    evaluate([row(a=invalid_leg)])
+        decimal_leg = dict(row()["a"], line=".25")
+        self.assertEqual(evaluate([row(a=decimal_leg)])["games"], 1)
+
+    def test_signed_zero_is_one_canonical_player_prop_line(self):
+        negative_zero = evaluate([row(a=dict(row()["a"],line="-0.0"))])
+        zero = evaluate([row(a=dict(row()["a"],line="0.0"))])
+        self.assertEqual(negative_zero["pair"], zero["pair"])
+        self.assertEqual(negative_zero["pair"][0]["line"], "0")
+
     def test_observed_covariance_not_joint_probability(self):
         z = evaluate([row("g1"), row("g2", ya=0, yb=0)])
         self.assertAlmostEqual(z["observed_joint_rate"], 0.5)
