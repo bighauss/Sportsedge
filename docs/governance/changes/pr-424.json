@@ -28,7 +28,7 @@
     "metric": "CBB venue-neutral unknown admission, synthetic provider-shaped fixtures",
     "before": 4,
     "unit": "failed regression tests before repair",
-    "source_state": "SYNTHETIC"
+    "source_state": "SELF_REPORTED"
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
