@@ -31,9 +31,7 @@ class QuantFourStackIntegration(unittest.TestCase):
         self.assertFalse(preflight['source_authenticated'])
         self.assertEqual(len(parsed), 1)
         self.assertEqual(ledger['qualified_graded_n'], 1)
-        self.assertEqual(ledger['accounting_contract'], 'PAPER_RESEARCH_NOT_CERTIFIED'
-                         if ledger['accounting_contract'] == 'PAPER_RESEARCH_NOT_CERTIFIED'
-                         else ledger['accounting_contract'])
+        self.assertEqual(ledger['status'], 'PAPER_RESEARCH_NOT_CERTIFIED')
         self.assertEqual(replay(parsed)['eligible'], 1)
 
     def test_lookahead_rule_never_becomes_a_wager(self):
