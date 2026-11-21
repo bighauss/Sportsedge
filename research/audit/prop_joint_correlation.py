@@ -139,7 +139,14 @@ def classify(a, b):
             if a["side"] == b["side"] and a["line_num"] != b["line_num"]:
                 return "STRUCTURAL_NESTED_LADDER"
             return "STRUCTURAL_SAME_PLAYER_STAT_THRESHOLD"
-        if (a["stat"] in STAT_COMPONENTS and b["stat"] in STAT_COMPONENTS[a["stat"]]) or (b["stat"] in STAT_COMPONENTS and a["stat"] in STAT_COMPONENTS[b["stat"]]):
+        # A composite may share an underlying stat with ANOTHER composite,
+        # not only with an atomic prop: PR and PA both include PTS, while
+        # PR and RA share REB. These are structural input overlaps, not
+        # evidence that a separately fitted stochastic covariance exists.
+        # Unknown standalone stats remain distinct atomic labels.
+        components_a = STAT_COMPONENTS.get(a["stat"], {a["stat"]})
+        components_b = STAT_COMPONENTS.get(b["stat"], {b["stat"]})
+        if components_a & components_b:
             return "SAME_PLAYER_COMPOSITE_OVERLAP"
         return "SAME_PLAYER_DIFFERENT_STATS"
     if a["team_id"] == b["team_id"]:
