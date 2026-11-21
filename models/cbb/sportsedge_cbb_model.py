@@ -13,10 +13,18 @@ ODDS CSV: game_id, market, side, line, price_american, opp_price_american
   market in: ml, spread, total, team_total_home, team_total_away, h1_total, h1_spread
   side in: home/away/over/under.  For spread line is from `side` perspective (home -5.5).
 PROP ODDS CSV: game_id, player, stat (pts/reb/ast/tpm), line, over_price, under_price
+
+2026-11-21 fixes:
+  * LEAGUE oe/tempo now match the current Torvik D-I scale (107.0 / 69.0). The old 105.0 / 67.5
+    made every projected total ~8 points too high on the 11/21 slate. Both can be overridden per
+    run with set_league(oe=..., tempo=...) or league_from_teams(teams) (D-I mean of the team file).
+  * When a team row has no four-factor stats, the matchup leg used to collapse to the league
+    average and silently drag that team halfway to average. It now falls back to the ratings leg
+    alone (weight 1.0) and says so in the projection notes.
 """
 import csv, math, os, sys
 
-LEAGUE = dict(oe=105.0, tempo=67.5, three_p=0.34, efg=0.50, tov=0.18, orb=0.29, ftr=0.32)
+LEAGUE = dict(oe=107.0, tempo=69.0, three_p=0.34, efg=0.50, tov=0.18, orb=0.29, ftr=0.32)
 K_REG = 12.0           # regression to league mean, games
 K_3P = 30.0            # 3P% regressed harder
 PRESEASON_FADE = 12.0  # games until preseason prior fully faded
@@ -27,6 +35,7 @@ SD_MARGIN, SD_TOTAL, SD_TT, SD_H1, H1_FRAC = 11.0, 11.0, 8.0, 8.0, 0.47
 W_MODEL_MKT = 0.30
 PROP_ELAST = dict(pts=0.6, reb=0.6, ast=0.6, tpm=0.5)
 PROP_SD_FRAC = dict(pts=0.33, reb=0.40, ast=0.45, tpm=0.65)
+FOUR_FACTOR_KEYS = ("efg_o", "efg_d", "tov_o", "tov_d", "orb_o", "orb_d", "ftr_o", "ftr_d")
 
 ALIASES = {"team": ["team"], "games": ["games", "g"], "adjoe": ["adjoe", "adj_o", "adjo"],
            "adjde": ["adjde", "adj_d", "adjd"], "adj_t": ["adj_t", "adjt", "tempo", "adj t."],
@@ -39,6 +48,21 @@ ALIASES = {"team": ["team"], "games": ["games", "g"], "adjoe": ["adjoe", "adj_o"
            "pre_adj_t": ["pre_adj_t"], "venue_hca": ["venue_hca"], "altitude": ["altitude"],
            "player": ["player", "player_name"], "mpg": ["mpg", "min_per", "min"], "usg": ["usg", "usg%"],
            "pts40": ["pts40"], "reb40": ["reb40"], "ast40": ["ast40"], "tpm40": ["tpm40", "3pm40"]}
+
+def set_league(oe=None, tempo=None):
+    if oe is not None: LEAGUE["oe"] = float(oe)
+    if tempo is not None: LEAGUE["tempo"] = float(tempo)
+    return dict(LEAGUE)
+
+def league_from_teams(teams):
+    """D-I scale from a FULL team file: mean of (adjoe + adjde) / 2 and mean tempo.
+    Only meaningful when the file covers all of D-I, not just one slate."""
+    rows = [t for t in teams.values() if t.get("adjoe") and t.get("adjde") and t.get("adj_t")]
+    if len(rows) < 300:
+        raise ValueError(f"need the full D-I team file (>=300 teams), got {len(rows)}")
+    oe = sum((t["adjoe"] + t["adjde"]) / 2 for t in rows) / len(rows)
+    tempo = sum(t["adj_t"] for t in rows) / len(rows)
+    return set_league(oe, tempo)
 
 def _f(x, d=None):
     try: return float(x)
@@ -102,6 +126,9 @@ def ratings_ppp(off, de):
     o, _, _, _ = team_eff(off); _, d, _, _ = team_eff(de)
     return o * d / LEAGUE["oe"] / 100.0
 
+def has_four_factors(t):
+    return all(t.get(k) is not None for k in FOUR_FACTOR_KEYS)
+
 def matchup_ppp(off, de):
     """Advanced-stats leg: four factors + 3P matchup, regressed (k=12, 3P k=30)."""
     g = min(off.get("games") or 0, de.get("games") or 0)
@@ -149,9 +176,13 @@ def adjustments(game, home, away, inj, players):
 def project_game(game, teams, inj, players):
     h, a = teams[game["home"]], teams[game["away"]]
     poss = possessions(h, a)
-    ph = 0.5 * ratings_ppp(h, a) + 0.5 * matchup_ppp(h, a)
-    pa = 0.5 * ratings_ppp(a, h) + 0.5 * matchup_ppp(a, h)
+    ff = has_four_factors(h) and has_four_factors(a)
+    w_stats = 0.5 if ff else 0.0
+    ph = (1 - w_stats) * ratings_ppp(h, a) + w_stats * matchup_ppp(h, a)
+    pa = (1 - w_stats) * ratings_ppp(a, h) + w_stats * matchup_ppp(a, h)
     adj, notes = adjustments(game, h, a, inj, players)
+    if not ff:
+        notes.append("ratings-only (no four factors)")
     hp, ap = ph * poss + adj["home"], pa * poss + adj["away"]
     return dict(home_pts=hp, away_pts=ap, margin=hp - ap, total=hp + ap, poss=poss, notes=notes)
 
