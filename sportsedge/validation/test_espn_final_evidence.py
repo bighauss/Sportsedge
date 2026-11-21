@@ -214,5 +214,37 @@ class ESPNIntakeTests(unittest.TestCase):
         self.assertNotIn("301",r["candidate"]["roster_ids"])
 
 
+    def test_public_or_group_readable_output_is_blocked(self):
+        with TemporaryDirectory() as folder:
+            root=Path(folder)
+            root.chmod(0o755)
+            raw=json.dumps(summary()).encode()
+            r=run(summary())
+            with self.assertRaisesRegex(f.Reject,"OUTPUT_PARENT_NOT_OWNER_PRIVATE"):
+                f.save(raw,r,root/"unsafe",source_url="synthetic",import_kind="import")
+            self.assertFalse((root/"unsafe").exists())
+
+    def test_cross_team_athlete_id_is_quarantined(self):
+        x=summary()
+        copied=copy.deepcopy(x["boxscore"]["players"][0])
+        copied["team"]["id"]=A
+        x["boxscore"]["players"].append(copied)
+        r=run(x)
+        self.assertNotIn("301",r["candidate"]["player_stats"])
+        self.assertNotIn("301",r["candidate"]["roster_ids"])
+        self.assertIn("PLAYER_ID_BELONGS_TO_MULTIPLE_TEAMS",r["player_stat_warnings"])
+
+    def test_conflicting_player_stat_is_quarantined(self):
+        x=summary()
+        first=x["boxscore"]["players"][0]["statistics"][0]
+        duplicated=copy.deepcopy(first)
+        duplicated["athletes"][0]["stats"][1]="300"
+        x["boxscore"]["players"][0]["statistics"].append(duplicated)
+        r=run(x)
+        self.assertNotIn("PASS_YDS",r["candidate"]["player_stats"]["301"])
+        self.assertIn("CONFLICTING_PLAYER_STAT_VALUES",r["player_stat_warnings"])
+
+
+
 if __name__=="__main__":
     unittest.main(verbosity=2)
