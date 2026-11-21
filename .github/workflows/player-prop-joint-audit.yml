@@ -1,0 +1,22 @@
+name: SportsEdge player-prop joint audit (offline)
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  player-prop-joint-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile the joint audit and adversarial tests
+        run: python -m py_compile research/audit/prop_joint_correlation.py research/audit/test_prop_joint_correlation.py research/audit/test_prop_joint_hardening.py
+      - name: Explicitly execute all joint-prop regression tests (no network)
+        run: python -m unittest discover -s research/audit -p 'test_prop_joint*.py' -v
+      - name: Independent CLI self-test, synthetic only
+        run: python research/audit/prop_joint_correlation.py --self-test
