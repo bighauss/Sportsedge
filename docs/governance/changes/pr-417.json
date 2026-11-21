@@ -1,0 +1,67 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 417,
+  "base_commit": "478596f7f7e8527b09deb12009e8e9276a6a8bd6",
+  "protected_paths": [
+    ".github/workflows/cfb-run-it.yml",
+    "models/cfb/cfb_run_it.py",
+    "models/cfb/test_cfb_run_it.py",
+    "models/cfb/test_cfb_run_it_evidence.py",
+    "models/cfb/test_cfb_run_it_inputs.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
+  "change_summary": "CFB RUN IT P0: retain original Open-Meteo per-game forecasts and exact operator line-intake bytes under hash receipts; reject duplicate/unlisted capture receipts; after freeze recheck seal final raw+market card, receipt list, and private stdout/stderr in the encrypted artifact required for publication. Quarantine duplicate/missing completed game IDs from games-played denominators; explicit future/malformed injury-review times; live observation clock is post-capture. Preserve #415 frozen model pin and kickoff-date parity. PAPER / 0u.",
+  "assumptions": [
+    "Original weather response publication time is not independently authenticated; captured_utc receipts attest only acquisition clocks.",
+    "DK line intake remains operator-supplied and not independently source-authenticated.",
+    "All weights remain untested; no production model changes and no wagering promotion.",
+    "Provider-free tests with synthetic bodies are not live provider verification."
+  ],
+  "agent_identity": "ChatGPT (branch-only integration research)",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Authenticated CFB pregame card and evidence completion",
+    "before": null,
+    "unit": "No post-merge live validated CFB evidence run",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "PYTHONPATH=. python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_evidence",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "478596f7f7e8527b09deb12009e8e9276a6a8bd6",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "PYTHONPATH=. python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_evidence"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
