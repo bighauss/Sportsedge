@@ -96,6 +96,61 @@ class TestJointPropAudit(unittest.TestCase):
             self.assertEqual(report["pair_rows"],0)
             self.assertEqual(report["exclusion_counts"]["EVENT_ID_REUSED_FOR_DIFFERENT_GAME"],4)
 
+    def test_duplicate_frozen_joint_all_copies_quarantined_order_independently(self):
+        with TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            legs=[prediction("G1","A"),prediction("G1","B",stat="AST")]
+            write(d/"p.csv",list(REQ)+["model_mode"],legs)
+            for probs in (("0.2","0.4"),("0.3","0.3")):
+                for flipped in (False, True):
+                    with self.subTest(probs=probs,flipped=flipped):
+                        joints=[dict(event_id="G1",snapshot_id="s",
+                                    leg_id_a="A",leg_id_b="B",
+                                    asof_utc="2026-11-20T18:00:00Z",
+                                    joint_p=p) for p in probs]
+                        if flipped:
+                            joints.reverse()
+                        write(d/"j.csv",JOINT_REQ,joints)
+                        sub=d/("out_"+str(probs[0])+str(probs[1])+
+                               ("r" if flipped else "f"))
+                        result=audit(d/"p.csv",d/"j.csv",sub,iterations=100)
+                        self.assertEqual(result["pair_rows"],1)
+                        self.assertEqual(result["frozen_joint_matched_pair_rows"],0)
+                        self.assertEqual(
+                            result["exclusion_counts"]["DUPLICATE_FROZEN_JOINT_PAIR_ALL_COPIES"],2)
+                        with (sub/"pair_rows.csv").open() as handle:
+                            rows=list(csv.DictReader(handle))
+                        self.assertEqual(rows[0]["p_joint_frozen"],"")
+
+    def test_player_team_conflict_across_snapshots_quarantines_entire_event(self):
+        with TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            original=[prediction("G1","A",team="TEAM1"),
+                      prediction("G1","B",stat="AST",team="TEAM1")]
+            changed=[dict(x,snapshot_id="later",
+                          asof_utc="2026-11-20T18:30:00Z",
+                          team_id=("TEAM2" if x["player_id"]=="A" else "TEAM1"))
+                     for x in original]
+            for flipped in (False,True):
+                write(d/"p.csv",list(REQ)+["model_mode"],
+                      changed+original if flipped else original+changed)
+                result=audit(d/"p.csv",None,d/("reversed" if flipped else "normal"),iterations=100)
+                self.assertEqual(result["pair_rows"],0)
+                self.assertEqual(result["snapshot_groups_valid"],0)
+                self.assertEqual(
+                    result["exclusion_counts"]["PLAYER_ID_CROSS_SNAPSHOT_TEAM_CONFLICT"],4)
+
+    def test_missing_model_mode_does_not_count_as_independent_forecast(self):
+        with TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            legs=[prediction("G1","A",mode=""),
+                  prediction("G1","B",stat="AST",mode="")]
+            write(d/"p.csv",list(REQ)+["model_mode"],legs)
+            result=audit(d/"p.csv",None,d/"out",iterations=100)
+            self.assertEqual(result["pair_rows"],0)
+            self.assertEqual(result["accepted_rows_before_snapshot_checks"],0)
+            self.assertEqual(result["exclusion_counts"]["NON_INDEPENDENT_MODEL_MODE"],2)
+
     def test_structural_threshold_not_statistical_covariance(self):
         with TemporaryDirectory() as tmp:
             d=Path(tmp)
