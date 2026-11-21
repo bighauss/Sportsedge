@@ -1,0 +1,118 @@
+name: CFB GRADE (grade frozen RUN IT rows into the PAPER ledger)
+
+# After games finish: capture that week's CFBD /games and /games/players once, grade every frozen
+# RUN IT row by exact CFBD game / player ID (losses and pushes kept), evaluate against the same-time
+# market and save the extended encrypted ledger. Never edits a frozen row; never makes picks. 0u.
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        default: "2026"
+      week:
+        description: "CFB regular-season week to grade"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cfb-run-it
+  cancel-in-progress: false
+
+jobs:
+  grade:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Grading tests (offline)
+        run: python -m unittest -v models.cfb.test_cfb_run_it_grade
+      - name: Restore and verify encrypted paper ledger from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$RUNNER_TEMP/ledger"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cfb-run-it-ledger&per_page=1" --jq '[.artifacts[]|select(.expired==false)][0].id // empty')
+          if [ -z "$id" ]; then echo "no prior ledger artifact: new chain"; exit 0; fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger.zip"
+          unzip -q "$RUNNER_TEMP/ledger.zip" -d "$RUNNER_TEMP/ledger-enc"
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          from models.cfb import cfb_ledger as LG
+          t = pathlib.Path(os.environ['RUNNER_TEMP'])
+          raw = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).decrypt((t / 'ledger-enc' / 'ledger.jsonl.fernet').read_bytes())
+          p = t / 'ledger' / 'ledger.jsonl'
+          fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+          with os.fdopen(fd, 'wb') as f: f.write(raw)
+          print('restored ledger entries:', len(LG.verify(p)))
+          PY
+      - name: Capture finals and player stats, grade, evaluate
+        env:
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+          SEASON: ${{ inputs.season }}
+          WEEK: ${{ inputs.week }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [ -f "$RUNNER_TEMP/ledger/ledger.jsonl" ] || { echo "::error::NO_LEDGER_TO_GRADE"; exit 2; }
+          case "$WEEK" in ''|*[!0-9]*) echo "::error::WEEK_INVALID"; exit 2;; esac
+          install -d -m 0700 "$RUNNER_TEMP/finals"
+          python - <<'PY'
+          import datetime as dt, hashlib, json, os, pathlib, urllib.parse
+          from models.cfb import cfb_run_it as R
+          t = pathlib.Path(os.environ["RUNNER_TEMP"]) / "finals"; key = os.environ["CFBD_API_KEY"]
+          rec = []
+          for name, path, q in (("cfbd_games", "/games", {"year": os.environ["SEASON"], "week": os.environ["WEEK"], "seasonType": "regular"}),
+                                ("cfbd_game_players", "/games/players", {"year": os.environ["SEASON"], "week": os.environ["WEEK"], "seasonType": "regular"})):
+              b = R.http_bytes("https://api.collegefootballdata.com" + path + "?" + urllib.parse.urlencode(q), key)
+              (t / f"{name}.json").write_bytes(b)
+              rec.append({"source": name, "sha256": hashlib.sha256(b).hexdigest(), "bytes": len(b),
+                          "observed_utc": dt.datetime.now(dt.timezone.utc).isoformat()})
+          (t / "receipts.json").write_text(json.dumps(rec))
+          PY
+          python models/cfb/cfb_run_it_grade.py --ledger "$RUNNER_TEMP/ledger/ledger.jsonl" \
+            --finals "$RUNNER_TEMP/finals/cfbd_games.json" --players "$RUNNER_TEMP/finals/cfbd_game_players.json" \
+            --receipts "$RUNNER_TEMP/finals/receipts.json" --report "$RUNNER_TEMP/finals/eval.json" > /dev/null
+      - name: Sanitized grading summary
+        run: |
+          python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, os, pathlib
+          r = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "finals" / "eval.json").read_text())
+          print("## CFB grading — PAPER / 0u (losses and pushes kept)\n"); print("```json"); print(json.dumps(r, indent=1, sort_keys=True)[:8000]); print("```")
+          PY
+      - name: Encrypt extended ledger
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          install -d -m 0700 "$RUNNER_TEMP/ledger-out"
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          from models.cfb import cfb_ledger as LG
+          t = pathlib.Path(os.environ['RUNNER_TEMP'])
+          LG.verify(t / 'ledger' / 'ledger.jsonl')
+          f = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii'))
+          raw = (t / 'ledger' / 'ledger.jsonl').read_bytes(); tok = f.encrypt(raw)
+          if f.decrypt(tok) != raw: raise SystemExit('BLOCK_ENCRYPTION_ROUNDTRIP')
+          (t / 'ledger-out' / 'ledger.jsonl.fernet').write_bytes(tok)
+          PY
+      - name: Retain encrypted ledger
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfb-run-it-ledger
+          path: ${{ runner.temp }}/ledger-out/ledger.jsonl.fernet
+          retention-days: 90
+          if-no-files-found: error

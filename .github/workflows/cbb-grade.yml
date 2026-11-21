@@ -1,0 +1,124 @@
+name: CBB GRADE (attach finals to the PAPER ledger)
+
+# After games finish: capture that Central-time day's CBBD /games once (original bytes + manifest),
+# attach verified finals to frozen card rows by exact game ID (losers kept), evaluate the
+# ledger against the same-time market, and save the extended encrypted ledger. Never edits a
+# frozen card row; never produces picks. PAPER / 0u.
+on:
+  workflow_dispatch:
+    inputs:
+      date_ct:
+        description: "Central-time date to grade (YYYY-MM-DD)"
+        required: true
+      season:
+        default: "2027"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cbb-run-it
+  cancel-in-progress: false
+
+jobs:
+  grade:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Ledger tests (offline)
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbbd_paper_ledger
+      - name: Restore and verify encrypted paper ledger from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$RUNNER_TEMP/ledger"
+          # Never silently reset an existing chain: the newest artifact is authoritative.
+          artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cbb-run-it-ledger&per_page=1" \
+            --jq 'if (.artifacts | length) == 0 then "NONE" else "\(.artifacts[0].id) \(.artifacts[0].expired)" end')
+          if [ "$artifact" = "NONE" ]; then
+            # A genuine first run can bootstrap. Any earlier successful CBB RUN IT
+            # without a retained ledger is a continuity failure, not a fresh slate.
+            prior_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cbb-run-it.yml/runs?status=success&per_page=1" --jq '.total_count')
+            case "$prior_success" in ''|*[!0-9]*) echo "::error::CBB_LEDGER_HISTORY_UNVERIFIED"; exit 2;; esac
+            if [ "$prior_success" -ne 0 ]; then
+              echo "::error::CBB_LEDGER_MISSING_AFTER_PRIOR_SUCCESS"; exit 2
+            fi
+            echo "no prior successful CBB RUN IT: initialize PAPER chain"; exit 0
+          fi
+          read -r id expired <<< "$artifact"
+          case "$id" in ''|*[!0-9]*) echo "::error::CBB_LEDGER_ARTIFACT_ID_INVALID"; exit 2;; esac
+          if [ "$expired" != "false" ]; then
+            echo "::error::CBB_LEDGER_ARTIFACT_EXPIRED_OR_UNVERIFIED"; exit 2
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger.zip"
+          unzip -q "$RUNNER_TEMP/ledger.zip" -d "$RUNNER_TEMP/ledger-enc"
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          import cbbd_paper_ledger as LG
+          t = pathlib.Path(os.environ['RUNNER_TEMP'])
+          raw = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).decrypt((t / 'ledger-enc' / 'ledger.jsonl.fernet').read_bytes())
+          LG.parse_ledger(raw)
+          p = t / 'ledger' / 'ledger.jsonl'; p.write_bytes(raw); p.chmod(0o600)
+          PY
+      - name: Capture finals and attach to ledger
+        env:
+          CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
+          DATE_CT: ${{ inputs.date_ct }}
+          SEASON: ${{ inputs.season }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [ -f "$RUNNER_TEMP/ledger/ledger.jsonl" ] || { echo "::error::NO_LEDGER_TO_GRADE"; exit 2; }
+          python - <<'PY'
+          import datetime as dt, os, pathlib
+          from zoneinfo import ZoneInfo
+          import cbbd_prospective_capture as CAP
+          t = pathlib.Path(os.environ["RUNNER_TEMP"])
+          d = dt.date.fromisoformat(os.environ["DATE_CT"])
+          day0 = dt.datetime.combine(d, dt.time(0, 0), ZoneInfo("America/Chicago")).astimezone(dt.timezone.utc)
+          z = lambda x: x.strftime("%Y-%m-%dT%H:%M:%SZ")
+          cap = CAP.capture_games(season=int(os.environ["SEASON"]), start_utc=z(day0),
+                                  end_utc=z(day0 + dt.timedelta(hours=24)), private_dir=t / "finals")
+          (t / "paths").write_text(cap["raw_path"] + "\n" + cap["manifest_path"] + "\n")
+          PY
+          raw=$(sed -n 1p "$RUNNER_TEMP/paths"); man=$(sed -n 2p "$RUNNER_TEMP/paths")
+          python models/cbb/cbbd_prospective_capture.py finals --raw "$raw" --manifest "$man" --output "$RUNNER_TEMP/finals/finals.json"
+          python models/cbb/cbbd_paper_ledger.py attach-finals "$RUNNER_TEMP/ledger/ledger.jsonl" "$RUNNER_TEMP/finals/finals.json" \
+            --provider-raw "$raw" --provider-manifest "$man"
+          python models/cbb/cbbd_paper_ledger.py evaluate "$RUNNER_TEMP/ledger/ledger.jsonl" --report "$RUNNER_TEMP/finals/eval.json"
+      - name: Sanitized grading summary
+        run: |
+          python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, os, pathlib
+          r = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "finals" / "eval.json").read_text())
+          print("## CBB grading — PAPER / 0u (graded results, losses kept)\n")
+          print("```json"); print(json.dumps({k: v for k, v in r.items() if not isinstance(v, list)}, indent=1, sort_keys=True)[:6000]); print("```")
+          PY
+      - name: Encrypt extended ledger
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          install -d -m 0700 "$RUNNER_TEMP/ledger-out"
+          python -c "import os,pathlib;from cryptography.fernet import Fernet;import cbbd_paper_ledger as LG;t=pathlib.Path(os.environ['RUNNER_TEMP']);raw=(t/'ledger'/'ledger.jsonl').read_bytes();LG.parse_ledger(raw);(t/'ledger-out'/'ledger.jsonl.fernet').write_bytes(Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).encrypt(raw))"
+      - name: Retain encrypted ledger
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbb-run-it-ledger
+          path: ${{ runner.temp }}/ledger-out/ledger.jsonl.fernet
+          retention-days: 90
+          if-no-files-found: error
