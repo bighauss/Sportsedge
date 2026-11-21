@@ -17,6 +17,10 @@ on:
         description: "Run without an injury list (card says 'injuries: none supplied')"
         type: boolean
         default: false
+      injuries_path:
+        description: "Manual injury file in repo, e.g. models/cfb/injuries/2026-11-21.json (blank = none)"
+        required: false
+        default: ""
       issue:
         description: "Issue number to post the card to (blank = summary only)"
         required: false
@@ -25,6 +29,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: read
 
 concurrency:
   group: cfb-run-it
@@ -46,24 +51,48 @@ jobs:
           python-version: '3.12'
       - name: Install provider-free evidence-test dependency
         run: python -m pip install -q --disable-pip-version-check cryptography==46.0.4
-      - name: Offline end-to-end gate (fixture capture -> model -> card -> evidence)
-        run: python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_evidence -v
+      - name: Offline end-to-end gate (fixture capture -> model -> card -> ledger -> evidence)
+        run: python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_ledger models.cfb.test_cfb_run_it_parity models.cfb.test_cfb_injury_intake models.cfb.test_cfb_run_it_evidence -v
       - name: Encryption preflight (fail closed before any provider request)
         env:
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
         run: |
           [ -n "$SPORTSEDGE_ARCHIVE_FERNET_KEY" ] || { echo "::error::archive key not configured"; exit 2; }
           python -c "import os; from cryptography.fernet import Fernet; Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode()); print('archive key OK')"
+      - name: Restore and verify encrypted paper ledger from the previous run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$RUNNER_TEMP/ledger"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cfb-run-it-ledger&per_page=1" --jq '[.artifacts[]|select(.expired==false)][0].id // empty')
+          if [ -z "$id" ]; then echo "no prior ledger artifact: new chain"; exit 0; fi
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger.zip"
+          unzip -q "$RUNNER_TEMP/ledger.zip" -d "$RUNNER_TEMP/ledger-enc"
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          from models.cfb import cfb_ledger as LG
+          t = pathlib.Path(os.environ['RUNNER_TEMP'])
+          raw = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).decrypt((t / 'ledger-enc' / 'ledger.jsonl.fernet').read_bytes())
+          p = t / 'ledger' / 'ledger.jsonl'
+          fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+          with os.fdopen(fd, 'wb') as f: f.write(raw)
+          print('restored ledger entries:', len(LG.verify(p)))
+          PY
       - name: Live run
         env:
           CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
           LINES: ${{ inputs.lines_path }}
           SEASON: ${{ inputs.season }}
           NOINJ: ${{ inputs.allow_no_injury_feed }}
+          INJ: ${{ inputs.injuries_path }}
         run: |
           umask 077
           flag=""; [ "$NOINJ" = "true" ] && flag="--allow-no-injury-feed"
           install -d -m 0700 "$RUNNER_TEMP/private"
+          [ -n "$INJ" ] && flag="$flag --injuries $INJ"
           python models/cfb/cfb_run_it.py "$LINES" --season "$SEASON" --out out \
             --private-dir "$RUNNER_TEMP/private" $flag \
             > "$RUNNER_TEMP/private/stdout.log" 2> "$RUNNER_TEMP/private/stderr.log"
@@ -96,6 +125,8 @@ jobs:
           PY
       - name: Freeze recheck immediately before publication
         run: python models/cfb/cfb_run_it.py --recheck --out out
+      - name: Freeze rechecked card into the PAPER ledger (refuses tampered chain / re-frozen game)
+        run: python models/cfb/cfb_run_it.py --freeze-ledger "$RUNNER_TEMP/ledger/ledger.jsonl" --out out
       - name: Seal the final rechecked card and private logs
         id: seal
         if: ${{ success() && steps.encrypt.outcome == 'success' }}
@@ -105,6 +136,7 @@ jobs:
           python - <<'PY'
           import datetime as dt, hashlib, json, os, pathlib
           from cryptography.fernet import Fernet
+          from models.cfb import cfb_ledger as LG
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
           src, dst = root / "private", root / "private-enc"
           cipher = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode())
@@ -119,18 +151,40 @@ jobs:
               raise SystemExit("BLOCK_POST_KICKOFF_ROW")
           if doc["card"]["receipts"] != json.loads(pathlib.Path("out/receipts.json").read_bytes()):
               raise SystemExit("BLOCK_CARD_RECEIPTS_DISAGREE")
+          chain = LG.verify(root / "ledger" / "ledger.jsonl")
+          card_sha = hashlib.sha256(json.dumps(card, sort_keys=True, separators=(",", ":"),
+                                               allow_nan=False, default=str).encode()).hexdigest()
+          if not chain or chain[-1].get("type") != "CARD_FROZEN" or chain[-1].get("card_sha256") != card_sha:
+              raise SystemExit("BLOCK_CARD_LEDGER_HASH_MISMATCH")
           for name, src_path in {
               "cfb_run_it.json": pathlib.Path("out/cfb_run_it.json"),
               "cfb_card.md": pathlib.Path("out/cfb_card.md"),
               "receipts.json": pathlib.Path("out/receipts.json"),
               "stdout.log": src / "stdout.log",
               "stderr.log": src / "stderr.log",
+              "ledger.jsonl": root / "ledger" / "ledger.jsonl",
           }.items():
               data = src_path.read_bytes()
               sealed = cipher.encrypt(data)
               if hashlib.sha256(cipher.decrypt(sealed)).digest() != hashlib.sha256(data).digest():
                   raise SystemExit("BLOCK_SEAL_ROUNDTRIP:" + name)
               (dst / (name + ".fernet")).write_bytes(sealed)
+          PY
+      - name: Encrypt ledger for the next run
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          install -d -m 0700 "$RUNNER_TEMP/ledger-out"
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          from models.cfb import cfb_ledger as LG
+          t = pathlib.Path(os.environ['RUNNER_TEMP'])
+          LG.verify(t / 'ledger' / 'ledger.jsonl')
+          f = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii'))
+          raw = (t / 'ledger' / 'ledger.jsonl').read_bytes(); tok = f.encrypt(raw)
+          if f.decrypt(tok) != raw: raise SystemExit('BLOCK_ENCRYPTION_ROUNDTRIP')
+          (t / 'ledger-out' / 'ledger.jsonl.fernet').write_bytes(tok)
           PY
       - name: Retain encrypted source evidence
         id: evidence
@@ -141,8 +195,27 @@ jobs:
           path: ${{ runner.temp }}/private-enc
           retention-days: 90
           if-no-files-found: error
-      - name: Publish card after verified evidence retention
+      - name: Retain encrypted ledger
+        id: ledger_evidence
         if: ${{ success() && steps.evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfb-run-it-ledger
+          path: ${{ runner.temp }}/ledger-out/ledger.jsonl.fernet
+          retention-days: 90
+          if-no-files-found: error
+      - name: Final kickoff admission immediately before publication
+        if: ${{ success() && steps.evidence.outcome == 'success' && steps.ledger_evidence.outcome == 'success' }}
+        run: |
+          python - <<'PY'
+          import datetime as dt, json
+          c = json.load(open('out/cfb_run_it.json'))['card']
+          now = dt.datetime.now(dt.timezone.utc)
+          if any(dt.datetime.fromisoformat(r['kickoff_utc']) <= now for r in c['rows']):
+              raise SystemExit('BLOCK_KICKOFF_AT_PUBLICATION')
+          PY
+      - name: Publish card after verified evidence retention
+        if: ${{ success() && steps.evidence.outcome == 'success' && steps.ledger_evidence.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ inputs.issue }}

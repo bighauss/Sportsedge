@@ -1,0 +1,64 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 416,
+  "base_commit": "70442623374cb5a79560825888ba83cc24018fab",
+  "protected_paths": [
+    ".github/workflows/cbb-run-it.yml",
+    "models/cbb/test_cbb_run_it_parity.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
+  "change_summary": "Test-only: CBB RUN IT card equals cbbd_paper_card.run on equivalent files (excluding input_sha256/card_sha256). No code changes. Also: CBB workflow prints the sanitized BLOCKED reason code (uppercase code only) to the job summary when the model step fails.",
+  "assumptions": [
+    "Model weights are untested; this PR does not change them.",
+    "SP+ is centred on captured file means as model input; input mapping, not a weight change.",
+    "One-sided DK milestone props use implied probability including vig as market p.",
+    "Player usage is derived from CFBD season totals; not validated predictively."
+  ],
+  "agent_identity": "Claude coding agent",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Prospective untouched CFB forecast accuracy versus same-time market",
+    "before": null,
+    "unit": "No prospective CFB record",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it*.py",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "70442623374cb5a79560825888ba83cc24018fab",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it*.py"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

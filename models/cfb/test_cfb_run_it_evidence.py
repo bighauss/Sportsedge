@@ -89,6 +89,44 @@ class LiveCaptureIsOriginal(unittest.TestCase):
             self.assertEqual(doc['card']['eligibility']['state'], 'RESEARCH_ONLY')
             self.assertEqual(doc['card']['eligibility']['approved_stake_u'], 0)
 
+    def test_manual_injury_original_is_receipted_and_protected(self):
+        """A provided review file is archived by exact bytes, not just transformed rows."""
+        import cfb_injury_intake as INJ
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            intake_file = root / 'intake.json'
+            intake_file.write_bytes(json.dumps(F.INTAKE).encode())
+            manual = {'schema': INJ.SCHEMA,
+                      'reviewed_utc': '2026-11-21T15:00:00Z',
+                      'teams_reviewed': ['Michigan', 'UCLA'], 'injuries': []}
+            manual_bytes = json.dumps(manual, separators=(',', ':')).encode()
+            manual_file = root / 'injuries.json'
+            manual_file.write_bytes(manual_bytes)
+            cap = F.fixture()
+            now = dt.datetime.now(dt.timezone.utc)
+            for i, g in enumerate(cap['games'][:2]):
+                g['startDate'] = (now + dt.timedelta(hours=4+i)).isoformat()
+            weather_bytes = _weather_blob()
+            games_bytes = json.dumps(cap['games']).encode()
+            receipt = {'source': 'games', 'provider': 'collegefootballdata.com',
+                       'bytes': len(games_bytes), 'sha256': R.sha256(games_bytes),
+                       'observed_utc': now.isoformat()}
+            with mock.patch.object(R, 'capture_cfbd', return_value=(cap, {'games': games_bytes}, [receipt])), \
+                 mock.patch.object(R, 'http_bytes', return_value=weather_bytes), \
+                 mock.patch.dict(os.environ, {'CFBD_API_KEY': 'SYNTHETIC_TEST_ONLY'}):
+                code = R.main([str(intake_file), '--season', '2026', '--out', str(root/'out'),
+                               '--private-dir', str(root/'private'), '--injuries', str(manual_file)])
+            self.assertEqual(code, 0)
+            archived = root / 'private' / 'manual_injuries.json'
+            self.assertEqual(archived.read_bytes(), manual_bytes)
+            doc = json.loads((root/'out'/'cfb_run_it.json').read_bytes())
+            receipt_rows = [x for x in doc['card']['receipts'] if x['source'] == 'manual_injuries']
+            self.assertEqual(len(receipt_rows), 1)
+            self.assertEqual(receipt_rows[0]['bytes'], len(manual_bytes))
+            self.assertEqual(receipt_rows[0]['sha256'], R.sha256(manual_bytes))
+            self.assertEqual(doc['card']['eligibility']['state'], 'RESEARCH_ONLY')
+            self.assertEqual(doc['card']['eligibility']['approved_stake_u'], 0)
+
     def test_duplicate_completed_provider_id_quarantines_team_denominator(self):
         cap = F.fixture()
         duplicate = dict(cap['games'][2])  # completed UCLA game, duplicated by provider
@@ -140,10 +178,16 @@ class ExactWorkflowEvidence(unittest.TestCase):
         (root/'out'/'receipts.json').write_text(json.dumps(receipts))
         (root/'out'/'cfb_run_it.json').write_text(json.dumps(doc))
         (root/'out'/'cfb_card.md').write_text('RESEARCH ONLY - TEST')
+        from models.cfb import cfb_ledger as LG
+        card_sha = hashlib.sha256(json.dumps(doc['card'], sort_keys=True, separators=(',', ':'),
+                                             allow_nan=False, default=str).encode()).hexdigest()
+        LG.append(root/'ledger'/'ledger.jsonl', {'type': 'CARD_FROZEN', 'game_ids': ['3'],
+                                                 'card_sha256': card_sha, 'rows': []})
         return raw
 
     def _execute(self, step, root, key):
-        env = {**os.environ, 'RUNNER_TEMP': str(root), 'SPORTSEDGE_ARCHIVE_FERNET_KEY': key}
+        env = {**os.environ, 'RUNNER_TEMP': str(root), 'SPORTSEDGE_ARCHIVE_FERNET_KEY': key,
+               'PYTHONPATH': str(REPO) + os.pathsep + os.environ.get('PYTHONPATH', '')}
         return subprocess.run([sys.executable, '-c', _python(step)], cwd=root, env=env,
                               text=True, capture_output=True)
 
@@ -160,13 +204,17 @@ class ExactWorkflowEvidence(unittest.TestCase):
             self.assertEqual({p.name for p in encrypted.iterdir()},
                              {name+'.json.fernet' for name in original} |
                              {'cfb_card.md.fernet', 'cfb_run_it.json.fernet', 'receipts.json.fernet',
-                              'stdout.log.fernet', 'stderr.log.fernet'})
+                              'stdout.log.fernet', 'stderr.log.fernet', 'ledger.jsonl.fernet'})
             cipher = Fernet(key.encode())
             for name, value in original.items():
                 self.assertEqual(cipher.decrypt((encrypted/(name+'.json.fernet')).read_bytes()), value)
             self.assertEqual(cipher.decrypt((encrypted/'cfb_card.md.fernet').read_bytes()),
                              b'RESEARCH ONLY - TEST')
             self.assertEqual(cipher.decrypt((encrypted/'stdout.log.fernet').read_bytes()), b'private stdout')
+            from models.cfb import cfb_ledger as LG
+            self.assertEqual(cipher.decrypt((encrypted/'ledger.jsonl.fernet').read_bytes()),
+                             (root/'ledger'/'ledger.jsonl').read_bytes())
+            self.assertEqual(len(LG.verify(root/'ledger'/'ledger.jsonl')), 1)
 
     def test_unlisted_original_and_duplicate_receipt_block_encryption(self):
         from cryptography.fernet import Fernet
@@ -188,11 +236,44 @@ class ExactWorkflowEvidence(unittest.TestCase):
             self.assertNotEqual(b.returncode, 0)
             self.assertIn('BLOCK_POST_KICKOFF_ROW', b.stderr)
 
+    def test_card_change_after_ledger_freeze_blocks_seal(self):
+        from cryptography.fernet import Fernet
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); self._case(d)
+            key = Fernet.generate_key().decode()
+            a = self._execute('Encrypt private capture and verify against public receipts', root, key)
+            self.assertEqual(a.returncode, 0, a.stderr)
+            doc_path = root/'out'/'cfb_run_it.json'
+            doc = json.loads(doc_path.read_text())
+            doc['card']['rows'][0]['kickoff_utc'] = '2026-11-21T21:00:00+00:00'
+            doc_path.write_text(json.dumps(doc))
+            b = self._execute('Seal the final rechecked card and private logs', root, key)
+            self.assertNotEqual(b.returncode, 0)
+            self.assertIn('BLOCK_CARD_LEDGER_HASH_MISMATCH', b.stderr)
+
+    def test_last_publication_cutoff_blocks_started_rows(self):
+        from cryptography.fernet import Fernet
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); self._case(d)
+            doc_path = root/'out'/'cfb_run_it.json'
+            doc = json.loads(doc_path.read_text())
+            doc['card']['rows'][0]['kickoff_utc'] = '2099-11-21T20:30:00+00:00'
+            doc_path.write_text(json.dumps(doc))
+            key = Fernet.generate_key().decode()
+            good = self._execute('Final kickoff admission immediately before publication', root, key)
+            self.assertEqual(good.returncode, 0, good.stderr)
+            doc['card']['rows'][0]['kickoff_utc'] = '2001-11-21T20:30:00+00:00'
+            doc_path.write_text(json.dumps(doc))
+            bad = self._execute('Final kickoff admission immediately before publication', root, key)
+            self.assertNotEqual(bad.returncode, 0)
+            self.assertIn('BLOCK_KICKOFF_AT_PUBLICATION', bad.stderr)
+
     def test_workflow_never_publishes_without_encrypted_upload(self):
         workflow = WORKFLOW.read_text()
         assert 'if-no-files-found: error' in _section('Retain encrypted source evidence')
         self.assertIn("steps.seal.outcome == 'success'", _section('Retain encrypted source evidence'))
         self.assertIn("steps.evidence.outcome == 'success'", _section('Publish card after verified evidence retention'))
+        self.assertIn("steps.ledger_evidence.outcome == 'success'", _section('Publish card after verified evidence retention'))
         self.assertNotIn('cfb-run-it-card-${{', workflow)
         self.assertLess(workflow.index('Encryption preflight'), workflow.index('Live run'))
         self.assertLess(workflow.index('Freeze recheck'), workflow.index('Seal the final'))

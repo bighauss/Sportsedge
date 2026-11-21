@@ -1,0 +1,9 @@
+{
+ "schema": "sportsedge-cfb-injuries-v1",
+ "reviewed_utc": "2026-11-21T15:00:00Z",
+ "teams_reviewed": ["Michigan", "UCLA"],
+ "injuries": [
+  {"team": "Michigan", "player": "Example Quarterback", "position": "QB", "status": "OUT", "source": "team release"},
+  {"team": "UCLA", "player": "Example Receiver", "position": "WR", "starter": true, "status": "QUESTIONABLE", "source": "coach presser"}
+ ]
+}

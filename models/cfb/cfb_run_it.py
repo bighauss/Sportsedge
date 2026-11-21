@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sportsedge_cfb_model as M  # production model, imported unchanged
+import cfb_injury_intake as INJ
 
 CT = ZoneInfo("America/Chicago")
 # Frozen model file must match the reviewed research engine.
@@ -219,12 +220,10 @@ def match_player(name, teams, ptable, truncated=False):
     return hits[0] if len(hits) == 1 else None
 
 # ---------------------------------------------------------------- run
-def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=False, legacy_inputs=False):
+def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=False, legacy_inputs=False,
+        injury_file=None):
     if sha256(open(M.__file__, "rb").read()) != MODEL_SHA256_PIN:
         raise Fail("FROZEN_MODEL_FILE_SHA_DRIFT")
-    if "injuries" not in intake and not allow_no_injury_feed:
-        raise Fail("INJURY_INTAKE_MISSING")
-    inj = intake.get("injuries", [])
     adv = cap["advanced"] if legacy_inputs else with_games(cap["advanced"], games_played(cap["games"], now_utc))
     teamkey = {norm(r["team"]): r["team"] for r in adv}
     def resolve(name):
@@ -233,6 +232,12 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             if c in teamkey: return teamkey[c]
         c = [v for k, v in teamkey.items() if k.startswith(n)] if name.endswith("…") else []
         return c[0] if len(c) == 1 else None
+    if injury_file is not None:   # (doc, path): manual phone file overrides inline intake rows
+        merged = INJ.merge(intake.copy(), injury_file[0], injury_file[1], resolve)
+        intake.clear(); intake.update(merged)
+    if "injuries" not in intake and not allow_no_injury_feed:
+        raise Fail("INJURY_INTAKE_MISSING")
+    inj = intake.get("injuries", [])
     venues = {v.get("id"): v for v in cap["venues"]}
     ctx = {"adv": M.by(adv, "team"), "lm": M.league_means(adv),
            "talent": M.by(cap["talent"], "team"), "ret": M.by(cap["returning"], "team"),
@@ -289,6 +294,13 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             withheld.append((label, f"model error: {e}")); continue
         if "injuries" not in intake:
             pj["notes"].append("injuries: none supplied")
+        else:
+            gap = INJ.missing_coverage(intake, (A, H))
+            if gap: pj["notes"].append("injury coverage missing: " + ", ".join(gap))
+            for r in intake.get("injuries_listed", []):
+                if r["team"] in (A, H):
+                    pj["notes"].append(f"injury {r['team']} {r['player']} {r['status']} "
+                                       f"{'applied ' + r['role'] if r['applied'] else 'listed only'} [{r['source']}]")
         pj["kickoff_ct"] = f"{ko.astimezone(CT):%-I:%M %p} CT"; pj["kickoff_utc"] = ko.isoformat()
         projs.append(pj)
         rows += M.price_game(pj, line)
@@ -320,7 +332,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
 
 INJURY_MAX_AGE_H = 6
 
-def eligibility(intake, now_utc):
+def eligibility(intake, now_utc, teams=()):
     """Card-level eligibility. This runner never emits official wagers: the model is unvalidated.
     Reasons are listed so a missing input is never mistaken for a model finding."""
     reasons = ["MODEL_UNVALIDATED_PAPER_0U"]
@@ -341,6 +353,8 @@ def eligibility(intake, now_utc):
                     reasons.append("INJURY_REVIEW_FUTURE")
                 elif delta > INJURY_MAX_AGE_H * 3600:
                     reasons.append("INJURY_REVIEW_STALE")
+        gap = INJ.missing_coverage(intake, teams)
+        if gap: reasons.append("INJURY_COVERAGE_PARTIAL: " + ", ".join(gap))
     return {"state": "RESEARCH_ONLY", "official_counted": 0, "approved_stake_u": 0, "reasons": reasons}
 
 def to_doc(card, projs, withheld, intake, now_utc, receipts):
@@ -360,7 +374,7 @@ def to_doc(card, projs, withheld, intake, now_utc, receipts):
                                   "model_file_sha256": sha256(open(M.__file__, "rb").read()),
                                   "run_utc": now_utc.isoformat(), "games": raw},
             "card": {"schema": "sportsedge-cfb-run-it-card-v1", "run_utc": now_utc.isoformat(),
-                     "lines_captured": intake.get("captured"), "eligibility": eligibility(intake, now_utc),
+                     "lines_captured": intake.get("captured"), "eligibility": eligibility(intake, now_utc, [t for p in projs for t in (p["away"], p["home"])]),
                      "receipts": receipts, "rows": rows, "withheld": [list(w) for w in withheld]}}
 
 def recheck(doc, now_utc):
@@ -406,16 +420,67 @@ def render(doc):
     o += ["", "## Source receipts", ""] + [f"- {r['source']}: {r['bytes']} bytes, sha256 {r['sha256'][:16]}…" for r in c["receipts"]]
     return "\n".join(o) + "\n"
 
+def _repo_on_path():
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+
+def freeze_ledger(doc, ledger_path, now_utc=None):
+    """Append one PAPER CARD_FROZEN entry (card hash + post-recheck rows) to the CFB hash chain.
+
+    Requires the freeze recheck to have run. Refuses a tampered chain (cfb_ledger.verify) and any
+    game ID already frozen in an earlier CARD_FROZEN entry. official_counted / approved_stake_u stay 0.
+    """
+    _repo_on_path()
+    from models.cfb import cfb_ledger as ledger
+    from models.cfb import cfb_capture_store as store
+    c = doc["card"]
+    if not c.get("rechecked_utc"):
+        raise ledger.LedgerRefused("CARD_NOT_RECHECKED_BEFORE_FREEZE")
+    if c.get("eligibility", {}).get("official_counted", 0) != 0 or c.get("eligibility", {}).get("approved_stake_u", 0) != 0:
+        raise ledger.LedgerRefused("CARD_NON_PAPER")
+    ids = {g["game"]: str(g["cfbd_game_id"]) for g in doc["model_projections"]["games"]}
+    game_ids = sorted({ids[r["game"]] for r in c["rows"] if r["game"] in ids})
+    if any(r["game"] not in ids for r in c["rows"]):
+        raise ledger.LedgerRefused("CARD_ROW_WITHOUT_GAME_ID")
+    prior = ledger.verify(ledger_path)
+    seen = {str(g) for e in prior if e.get("type") == "CARD_FROZEN" for g in e.get("game_ids", [])}
+    dup = sorted(seen.intersection(game_ids))
+    if dup:
+        raise ledger.LedgerRefused("GAME_ALREADY_FROZEN:" + ",".join(dup))
+    card_sha = sha256(json.dumps(c, sort_keys=True, separators=(",", ":"), allow_nan=False, default=str).encode())
+    rows = [r | {"cfbd_game_id": ids[r["game"]]} for r in c["rows"]]
+    now = now_utc.astimezone(dt.timezone.utc) if now_utc else store.now_utc()
+    return ledger.append(ledger_path, {
+        "type": "CARD_FROZEN", "source": "cfb_run_it", "card_schema": c.get("schema"),
+        "card_sha256": card_sha, "card_run_utc": c["run_utc"], "card_rechecked_utc": c["rechecked_utc"],
+        "model_file_sha256": doc["model_projections"].get("model_file_sha256"),
+        "game_ids": game_ids, "rows": json.loads(json.dumps(rows, default=str))}, now=now)
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument("intake", nargs="?"); a.add_argument("--season", type=int)
     a.add_argument("--out", default="cfb_run_it_out"); a.add_argument("--private-dir", default=None)
     a.add_argument("--allow-no-injury-feed", action="store_true")
+    a.add_argument("--injuries", help="manual injury file models/cfb/injuries/<date>.json (overrides intake rows)")
     a.add_argument("--recheck", action="store_true", help="re-gate an existing --out card against the clock and re-render")
+    a.add_argument("--freeze-ledger", metavar="PATH", help="append the rechecked --out card to the PAPER hash-chained ledger")
+    a.add_argument("--ledger", metavar="PATH", help="alias of --freeze-ledger (run after --recheck)")
     a.add_argument("--fixture", help="offline CFBD capture JSON (tests only)")
     a.add_argument("--now", help="ISO UTC override (tests only)")
     x = a.parse_args(argv)
     now = dt.datetime.fromisoformat(x.now) if x.now else dt.datetime.now(dt.timezone.utc)
+    lp = x.freeze_ledger or x.ledger
+    if lp and not x.recheck:
+        _repo_on_path()
+        from models.cfb import cfb_ledger as ledger
+        from models.cfb import cfb_capture_store as store
+        try:
+            e = freeze_ledger(json.load(open(os.path.join(x.out, "cfb_run_it.json"))), lp,
+                              now if x.now else None)
+        except (ledger.LedgerRefused, store.CaptureRefused) as err:
+            print(f"LEDGER_BLOCKED {err}", file=sys.stderr); return 2
+        print(f"ledger: CARD_FROZEN seq {e['seq']} games {len(e['game_ids'])} rows {len(e['rows'])} PAPER 0u"); return 0
     if x.recheck:
         f = os.path.join(x.out, "cfb_run_it.json")
         doc = recheck(json.load(open(f)), now)
@@ -453,7 +518,20 @@ def main(argv=None):
                 return weather_values(json.loads(body), kickoff_utc)
         if not x.fixture:
             now = dt.datetime.now(dt.timezone.utc)  # actual provider observation is after the pre-fetch clock
-        card, projs, withheld, ctx = run(intake, cap, now, wf, x.allow_no_injury_feed)
+        injf = None
+        if x.injuries:
+            try:
+                doc_i, rec_i = INJ.load_manual(x.injuries)
+            except INJ.InjuryFileError as e:
+                raise Fail(str(e)) from None
+            injf = (doc_i, x.injuries)
+            # The original file must be in the same protected source/receipt census.
+            original_injuries = open(x.injuries, "rb").read()
+            raw["manual_injuries"] = original_injuries
+            receipts.append({**rec_i, "bytes": len(original_injuries),
+                             "sha256": sha256(original_injuries)})
+        card, projs, withheld, ctx = run(intake, cap, now, wf,
+                                         x.allow_no_injury_feed, injury_file=injf)
         if x.private_dir:
             os.makedirs(x.private_dir, mode=0o700, exist_ok=True)
             for name, b in raw.items():
