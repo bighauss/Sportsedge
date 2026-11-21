@@ -85,9 +85,42 @@ def fetch_weather(lat, lon, kickoff_utc, fetch=http_json):
     return {"windSpeed": round(wind, 1), "precipitation_type": ptype, "isForecast": True}
 
 # ---------------------------------------------------------------- model input shaping (no estimates)
+REQUIRED_ADV = ["offense.plays", "offense.drives", "offense.ppa", "offense.successRate",
+                "offense.explosiveness", "offense.pointsPerOpportunity", "offense.fieldPosition.averageStart",
+                "offense.rushingPlays.ppa", "offense.passingPlays.ppa", "offense.passingPlays.rate",
+                "defense.ppa", "defense.successRate", "defense.explosiveness",
+                "defense.pointsPerOpportunity", "defense.havoc.total",
+                "defense.rushingPlays.ppa", "defense.passingPlays.ppa"]
+
+def missing_adv(row):
+    return [k for k in REQUIRED_ADV if M.g(row, k) is None]
+
+def games_played(games, now_utc):
+    """Completed FBS-listed games per team that started before the run (point-in-time count).
+    Replaces the model's offense.drives/12 fallback, which is used only when `games` is absent."""
+    n = {}
+    for g in games:
+        ko = dt.datetime.fromisoformat(g["startDate"].replace("Z", "+00:00"))
+        if g.get("completed") and ko < now_utc:
+            for t in (g["homeTeam"], g["awayTeam"]):
+                n[t] = n.get(t, 0) + 1
+    return n
+
+def with_games(adv, gp):
+    """Copies of advanced rows with an explicit `games` count; rows lacking a count are left
+    without one and flagged by the caller (no estimate is inserted)."""
+    out = []
+    for r in adv:
+        r2 = dict(r)
+        if gp.get(r["team"]):
+            r2["games"] = gp[r["team"]]
+        out.append(r2)
+    return out
+
 def sp_relative(ratings):
     """CFBD SP+ offense/defense are absolute; the model expects points vs average team."""
-    ro = [g for g in ratings if M.g(g, "offense.rating") is not None and M.g(g, "defense.rating") is not None]
+    ro = [g for g in ratings if g.get("team") and g.get("team") != "nationalAverages"
+          and M.g(g, "offense.rating") is not None and M.g(g, "defense.rating") is not None]
     if not ro:
         return {}
     mo = sum(M.g(r, "offense.rating") for r in ro) / len(ro)
@@ -134,11 +167,11 @@ def match_player(name, teams, ptable):
     return hits[0] if len(hits) == 1 else None
 
 # ---------------------------------------------------------------- run
-def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=False):
+def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=False, legacy_inputs=False):
     if "injuries" not in intake and not allow_no_injury_feed:
         raise Fail("INJURY_INTAKE_MISSING")
     inj = intake.get("injuries", [])
-    adv = cap["advanced"]
+    adv = cap["advanced"] if legacy_inputs else with_games(cap["advanced"], games_played(cap["games"], now_utc))
     teamkey = {norm(r["team"]): r["team"] for r in adv}
     def resolve(name):
         n = norm(name.replace("…", ""))
@@ -159,6 +192,11 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
         A, H = resolve(L["awayTeam"]), resolve(L["homeTeam"])
         if not A or not H:
             withheld.append((label, "team not in CFBD FBS advanced stats (FCS or unmatched name)")); continue
+        if not legacy_inputs:
+            bad = [f"{t}: {', '.join(missing_adv(ctx['adv'][t]))}" for t in (A, H) if missing_adv(ctx["adv"][t])]
+            bad += [f"{t}: games played unknown" for t in (A, H) if not ctx["adv"][t].get("games")]
+            if bad:
+                withheld.append((label, "required input missing -> " + "; ".join(bad))); continue
         g = games_by_pair.get((A, H))
         if not g:
             withheld.append((label, "no CFBD game record")); continue

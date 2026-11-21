@@ -1,0 +1,65 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 410,
+  "base_commit": "d9aa30cacab7f8a0ac55f35e7af155611b349936",
+  "protected_paths": [
+    "models/cfb/cfb_run_it.py",
+    "models/cfb/test_cfb_run_it.py",
+    "models/cfb/test_cfb_run_it_inputs.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
+  "change_summary": "Step 1 CFB RUN IT input audit: source-to-model mapping table, hand-calculated fixtures, trace, legacy-vs-corrected comparison on the frozen model. Adapter fixes: point-in-time games-played count replaces drives/12 fallback, SP+ nationalAverages row excluded from centering, missing required advanced fields withhold the game. Frozen model hash pinned; no weight changes.",
+  "assumptions": [
+    "Model weights are untested; this PR does not change them.",
+    "SP+ is centred on captured file means as model input; input mapping, not a weight change.",
+    "One-sided DK milestone props use implied probability including vig as market p.",
+    "Player usage is derived from CFBD season totals; not validated predictively."
+  ],
+  "agent_identity": "Claude coding agent",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Prospective untouched CFB forecast accuracy versus same-time market",
+    "before": null,
+    "unit": "No prospective CFB record",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "d9aa30cacab7f8a0ac55f35e7af155611b349936",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest models.cfb.test_cfb_run_it"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
