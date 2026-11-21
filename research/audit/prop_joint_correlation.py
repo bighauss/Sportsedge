@@ -273,7 +273,9 @@ def audit(pred_csv, joint_csv, output_dir, iterations=2000, seed=20261120):
     for leg in accepted:
         all_decided_by_event[leg["event_id"]].append(leg)
     for event_id, legs in all_decided_by_event.items():
-        if contradictory_player_settlements(legs):
+        if event_id not in contaminated_events and contradictory_player_settlements(legs):
+            # Preserve the existing, more specific cross-snapshot grade/team
+            # refusal when present; novel impossible ladders use this reason.
             contaminated_events[event_id] = "PLAYER_FINAL_SETTLEMENT_CONTRADICTION"
 
     for (event_id, snap), legs in list(eligible_snapshots.items()):
