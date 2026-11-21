@@ -368,16 +368,66 @@ def render(doc):
     o += ["", "## Source receipts", ""] + [f"- {r['source']}: {r['bytes']} bytes, sha256 {r['sha256'][:16]}…" for r in c["receipts"]]
     return "\n".join(o) + "\n"
 
+def _repo_on_path():
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+
+def freeze_ledger(doc, ledger_path, now_utc=None):
+    """Append one PAPER CARD_FROZEN entry (card hash + post-recheck rows) to the CFB hash chain.
+
+    Requires the freeze recheck to have run. Refuses a tampered chain (cfb_ledger.verify) and any
+    game ID already frozen in an earlier CARD_FROZEN entry. official_counted / approved_stake_u stay 0.
+    """
+    _repo_on_path()
+    from models.cfb import cfb_ledger as ledger
+    from models.cfb import cfb_capture_store as store
+    c = doc["card"]
+    if not c.get("rechecked_utc"):
+        raise ledger.LedgerRefused("CARD_NOT_RECHECKED_BEFORE_FREEZE")
+    if c.get("eligibility", {}).get("official_counted", 0) != 0 or c.get("eligibility", {}).get("approved_stake_u", 0) != 0:
+        raise ledger.LedgerRefused("CARD_NON_PAPER")
+    ids = {g["game"]: str(g["cfbd_game_id"]) for g in doc["model_projections"]["games"]}
+    game_ids = sorted({ids[r["game"]] for r in c["rows"] if r["game"] in ids})
+    if any(r["game"] not in ids for r in c["rows"]):
+        raise ledger.LedgerRefused("CARD_ROW_WITHOUT_GAME_ID")
+    prior = ledger.verify(ledger_path)
+    seen = {str(g) for e in prior if e.get("type") == "CARD_FROZEN" for g in e.get("game_ids", [])}
+    dup = sorted(seen.intersection(game_ids))
+    if dup:
+        raise ledger.LedgerRefused("GAME_ALREADY_FROZEN:" + ",".join(dup))
+    card_sha = sha256(json.dumps(c, sort_keys=True, separators=(",", ":"), allow_nan=False, default=str).encode())
+    rows = [r | {"cfbd_game_id": ids[r["game"]]} for r in c["rows"]]
+    now = now_utc.astimezone(dt.timezone.utc) if now_utc else store.now_utc()
+    return ledger.append(ledger_path, {
+        "type": "CARD_FROZEN", "source": "cfb_run_it", "card_schema": c.get("schema"),
+        "card_sha256": card_sha, "card_run_utc": c["run_utc"], "card_rechecked_utc": c["rechecked_utc"],
+        "model_file_sha256": doc["model_projections"].get("model_file_sha256"),
+        "game_ids": game_ids, "rows": json.loads(json.dumps(rows, default=str))}, now=now)
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument("intake", nargs="?"); a.add_argument("--season", type=int)
     a.add_argument("--out", default="cfb_run_it_out"); a.add_argument("--private-dir", default=None)
     a.add_argument("--allow-no-injury-feed", action="store_true")
     a.add_argument("--recheck", action="store_true", help="re-gate an existing --out card against the clock and re-render")
+    a.add_argument("--freeze-ledger", metavar="PATH", help="append the rechecked --out card to the PAPER hash-chained ledger")
+    a.add_argument("--ledger", metavar="PATH", help="alias of --freeze-ledger (run after --recheck)")
     a.add_argument("--fixture", help="offline CFBD capture JSON (tests only)")
     a.add_argument("--now", help="ISO UTC override (tests only)")
     x = a.parse_args(argv)
     now = dt.datetime.fromisoformat(x.now) if x.now else dt.datetime.now(dt.timezone.utc)
+    lp = x.freeze_ledger or x.ledger
+    if lp and not x.recheck:
+        _repo_on_path()
+        from models.cfb import cfb_ledger as ledger
+        from models.cfb import cfb_capture_store as store
+        try:
+            e = freeze_ledger(json.load(open(os.path.join(x.out, "cfb_run_it.json"))), lp,
+                              now if x.now else None)
+        except (ledger.LedgerRefused, store.CaptureRefused) as err:
+            print(f"LEDGER_BLOCKED {err}", file=sys.stderr); return 2
+        print(f"ledger: CARD_FROZEN seq {e['seq']} games {len(e['game_ids'])} rows {len(e['rows'])} PAPER 0u"); return 0
     if x.recheck:
         f = os.path.join(x.out, "cfb_run_it.json")
         doc = recheck(json.load(open(f)), now)
