@@ -129,19 +129,19 @@ class Validation(unittest.TestCase):
 
     def test_duplicate_normalized_headers_and_ragged_rows_fail_closed(self):
         for raw,reason in [
-            (b'sport,SPORT\\nNFL,NFL\\n','CSV_DUPLICATE_NORMALIZED_HEADER'),
-            (b'sport,event_id\\nNFL\\n','RAGGED_CSV_RECORD'),
-            (b'sport,event_id\\nNFL,E,EXTRA\\n','RAGGED_CSV_RECORD'),
-            (b'sport,event_id\\nNFL,E\\n\\n','BLANK_CSV_RECORD')]:
+            (b'sport,SPORT\nNFL,NFL\n','CSV_DUPLICATE_NORMALIZED_HEADER'),
+            (b'sport,event_id\nNFL\n','RAGGED_CSV_RECORD'),
+            (b'sport,event_id\nNFL,E,EXTRA\n','RAGGED_CSV_RECORD'),
+            (b'sport,event_id\nNFL,E\n\n','BLANK_CSV_RECORD')]:
             with self.subTest(reason=reason):
                 with self.assertRaisesRegex(ValueError,reason):
                     strict_csv_rows(raw)
 
     def test_quoted_multiline_field_does_not_count_as_blank_record(self):
-        raw=b'sport,comment\\nNFL,"note\\n\\nwith a blank quoted line"\\n'
+        raw=b'sport,comment\nNFL,"note\n\nwith a blank quoted line"\n'
         z=strict_csv_rows(raw)
         self.assertEqual(len(z),1)
-        self.assertIn('\\n\\n',z[0]['comment'])
+        self.assertIn('\n\n',z[0]['comment'])
 
     def test_numeric_equivalent_spread_rungs_deduplicate(self):
         z=run(row(event_id='S',market='SPREAD',line='-3.50'),
