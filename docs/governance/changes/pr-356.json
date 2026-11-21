@@ -25,9 +25,9 @@
   },
   "baseline": {
     "metric": "orphan forecast CSV remaining after census write exception",
-    "before": "possible",
+    "before": null,
     "unit": "create-only private output pair",
-    "source_state": "SOURCE_INSPECTION_ONLY"
+    "source_state": "UNKNOWN"
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
