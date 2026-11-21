@@ -1,0 +1,97 @@
+name: CFB RUN IT (manual)
+
+# Phone-triggered: Actions -> CFB RUN IT -> Run workflow.
+# capture (CFBD + Open-Meteo) -> unmodified models/cfb/sportsedge_cfb_model.py -> ranked card.
+# Fails closed on missing key / injury intake. Raw captures are Fernet-encrypted before upload;
+# only the sanitized card (no keys, no raw captures) goes to the job summary and the issue comment.
+on:
+  workflow_dispatch:
+    inputs:
+      lines_path:
+        description: "Line intake JSON in repo"
+        default: "models/cfb/lines/2026-11-21_dk.json"
+      season:
+        description: "CFB season"
+        default: "2026"
+      allow_no_injury_feed:
+        description: "Run without an injury list (card says 'injuries: none supplied')"
+        type: boolean
+        default: false
+      issue:
+        description: "Issue number to post the card to (blank = summary only)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cfb-run-it
+  cancel-in-progress: false
+
+jobs:
+  run-it:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline end-to-end gate (fixture capture -> model -> card)
+        run: python -m unittest models.cfb.test_cfb_run_it -v
+      - name: Live run
+        env:
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+          LINES: ${{ inputs.lines_path }}
+          SEASON: ${{ inputs.season }}
+          NOINJ: ${{ inputs.allow_no_injury_feed }}
+        run: |
+          umask 077
+          flag=""; [ "$NOINJ" = "true" ] && flag="--allow-no-injury-feed"
+          python models/cfb/cfb_run_it.py "$LINES" --season "$SEASON" --out out \
+            --private-dir "$RUNNER_TEMP/private" $flag
+      - name: Encrypt private capture
+        if: ${{ !cancelled() }}
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          [ -n "$SPORTSEDGE_ARCHIVE_FERNET_KEY" ] || { echo "no archive key: private capture discarded"; rm -rf "$RUNNER_TEMP/private"; exit 0; }
+          [ -d "$RUNNER_TEMP/private" ] || exit 0
+          python -m pip install -q --disable-pip-version-check cryptography==46.0.4
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          f = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode())
+          src = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private"
+          dst = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private-enc"; dst.mkdir(mode=0o700)
+          for p in src.glob("*"):
+              (dst / (p.name + ".fernet")).write_bytes(f.encrypt(p.read_bytes())); p.unlink()
+          PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && hashFiles('out/cfb_card.md') != '' }}
+        with:
+          name: cfb-run-it-card-${{ github.run_id }}
+          path: out
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: cfb-run-it-private-encrypted-${{ github.run_id }}
+          path: ${{ runner.temp }}/private-enc
+          retention-days: 90
+          if-no-files-found: ignore
+      - name: Publish card
+        if: ${{ !cancelled() && hashFiles('out/cfb_card.md') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue }}
+        run: |
+          cat out/cfb_card.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$ISSUE" ]; then gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file out/cfb_card.md; fi
