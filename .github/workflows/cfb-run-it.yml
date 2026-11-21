@@ -65,7 +65,8 @@ jobs:
           python models/cfb/cfb_run_it.py "$LINES" --season "$SEASON" --out out \
             --private-dir "$RUNNER_TEMP/private" $flag
       - name: Encrypt private capture and verify against public receipts
-        if: ${{ !cancelled() && hashFiles('out/receipts.json') != '' }}
+        id: encrypt
+        if: ${{ success() }}
         env:
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
         run: |
@@ -76,6 +77,8 @@ jobs:
           src = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private"
           dst = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private-enc"; dst.mkdir(mode=0o700)
           want = {r["source"]: r["sha256"] for r in json.load(open("out/receipts.json"))}
+          if not want:
+              raise SystemExit("BLOCK_NO_SOURCE_RECEIPTS")
           for name, digest in want.items():
               p = src / f"{name}.json"
               enc = f.encrypt(p.read_bytes())
@@ -86,21 +89,17 @@ jobs:
           PY
       - name: Freeze recheck immediately before publication
         run: python models/cfb/cfb_run_it.py --recheck --out out
-      - uses: actions/upload-artifact@v4
-        if: ${{ success() }}
-        with:
-          name: cfb-run-it-card-${{ github.run_id }}
-          path: out
-          retention-days: 90
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+      - name: Retain encrypted source evidence
+        id: evidence
+        if: ${{ success() && steps.encrypt.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
         with:
           name: cfb-run-it-private-encrypted-${{ github.run_id }}
           path: ${{ runner.temp }}/private-enc
           retention-days: 90
-          if-no-files-found: ignore
-      - name: Publish card
-        if: ${{ success() }}
+          if-no-files-found: error
+      - name: Publish card after verified evidence retention
+        if: ${{ success() && steps.evidence.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ inputs.issue }}
