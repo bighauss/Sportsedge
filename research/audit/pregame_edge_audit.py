@@ -50,7 +50,8 @@ def identity_key(row):
         line='0'
     elif line and len(line)<=32 and re.fullmatch(r'[+-]?\d+(?:\.\d+)?',line):
         try:
-            line=format(Decimal(line).normalize(),'f')
+            number=Decimal(line)
+            line='0' if number.is_zero() else format(number.normalize(),'f')
         except InvalidOperation:
             pass
     return (val('sport'),val('event_id'),period,market,val('side'),
@@ -79,6 +80,9 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
         if (row.get('sport') or '').strip().upper() not in ALLOWED: flags.append('UNKNOWN_SPORT')
         if 'PROP' in (row.get('market') or '').upper() and not (row.get('player_id') or '').strip():
             flags.append('MISSING_PLAYER_ID')
+        line=str(row.get('line') or '').strip()
+        if line and not (len(line)<=32 and re.fullmatch(r'[+-]?\d+(?:\.\d+)?',line)):
+            flags.append('INVALID_OR_UNBOUNDED_LINE')
         for field in ('quote_sha256','model_sha256'):
             if not HASH.fullmatch((row.get(field) or '').strip()):
                 flags.append('INVALID_OR_MISSING_' + field.upper())
