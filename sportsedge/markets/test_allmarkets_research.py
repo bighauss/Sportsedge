@@ -180,6 +180,35 @@ class CompleteGameAndSynchronousQuotes(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"OVERTIME_WITHOUT_REGULATION_TIE"):
             settle(batch(),o,mk("SPREAD","HOME","-3.5"))
 
+    def test_mlb_partial_game_tied_moneyline_requires_explicit_two_way_push(self):
+        reg = {f"I{i}": (0, 0) for i in range(1, 10)}
+        reg["I7"] = (2, 0)
+        o = Outcome(reg)
+        b = SimulationBatch("MLB", "e1", "H", "A", frozenset(), H, S,
+                            D - timedelta(hours=1), D - timedelta(minutes=4), (o,))
+        for period in ("F5", "1IN"):
+            for side in ("HOME", "AWAY"):
+                with self.subTest(period=period, side=side):
+                    self.assertEqual(settle(b, o, mk("ML", side, "", sport="MLB",
+                                                     period=period, settlement="TIE_PUSH")), "P")
+                    for rule in ("REGULATION", "POSTED_RULES"):
+                        with self.assertRaisesRegex(ValueError, "MLB_PARTIAL_GAME_TIE_RULE_UNVERIFIED"):
+                            settle(b, o, mk("ML", side, "", sport="MLB", period=period, settlement=rule))
+        self.assertEqual(settle(b, o, mk("ML", "HOME", "", sport="MLB")), "W")
+        with self.assertRaisesRegex(ValueError, "TIE_PUSH_REQUIRES_MLB_PARTIAL_GAME_MONEYLINE"):
+            mk("ML", "HOME", "", sport="MLB", settlement="TIE_PUSH")
+        with self.assertRaisesRegex(ValueError, "TEAM_SIDE_REQUIRED"):
+            mk("ML", "YES", "", sport="MLB", period="F5", settlement="TIE_PUSH")
+
+    def test_mlb_posted_rules_do_not_unconditionally_include_extra_innings(self):
+        reg = {f"I{i}": (0, 0) for i in range(1, 10)}
+        o = Outcome({**reg, "EXTRA": (1, 0)})
+        b = SimulationBatch("MLB", "e1", "H", "A", frozenset(), H, S,
+                            D - timedelta(hours=1), D - timedelta(minutes=4), (o,))
+        with self.assertRaisesRegex(ValueError, "POSTED_SETTLEMENT_RULE_UNVERIFIED"):
+            settle(b, o, mk("ML", "HOME", "", sport="MLB", settlement="POSTED_RULES"))
+        self.assertEqual(settle(b, o, mk("ML", "HOME", "", sport="MLB", settlement="INCLUDES_OT")), "W")
+
     def test_mlb_nine_inning_tie_needs_extras_for_fg_markets(self):
         reg={"I"+str(i):(0,0) for i in range(1,10)}
         b=SimulationBatch("MLB","e1","H","A",frozenset(),H,S,

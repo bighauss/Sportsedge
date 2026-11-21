@@ -103,8 +103,12 @@ class Market:
             raise ValueError("UNKNOWN_SPORT_EVENT_OR_MARKET")
         if self.period not in PERIODS or self.selection not in SIDES:
             raise ValueError("UNKNOWN_PERIOD_OR_SIDE")
-        if self.settlement not in ("INCLUDES_OT", "REGULATION", "POSTED_RULES"):
+        if self.settlement not in ("INCLUDES_OT", "REGULATION", "POSTED_RULES", "TIE_PUSH"):
             raise ValueError("SETTLEMENT_RULE_MUST_BE_EXPLICIT")
+        if self.settlement == "TIE_PUSH" and not (
+            self.sport == "MLB" and self.kind == "ML" and self.period in ("F5", "1IN")
+        ):
+            raise ValueError("TIE_PUSH_REQUIRES_MLB_PARTIAL_GAME_MONEYLINE")
         if self.kind in ("NRFI", "YRFI") and (self.sport != "MLB" or self.period != "1IN"):
             raise ValueError("FIRST_INNING_ONLY_MLB")
         if self.kind in ("ATTD", "FIRST_TD", "TD_2PLUS") and self.sport not in FOOTBALL:
@@ -313,6 +317,8 @@ def _period_score(o: Outcome, sport: str, period: str, settlement: str) -> tuple
             if "EXTRA" in o.periods:
                 raise ValueError("EXTRA_INNINGS_WITHOUT_NINE_INNING_TIE")
             return home,away
+        if settlement=="POSTED_RULES":
+            raise ValueError("POSTED_SETTLEMENT_RULE_UNVERIFIED")
         if "EXTRA" not in o.periods:
             raise ValueError("MLB_EXTRA_INNINGS_OUTCOME_MISSING")
         home+=o.periods["EXTRA"][0]
@@ -382,7 +388,10 @@ def settle(batch: SimulationBatch, o: Outcome, market: Market) -> str:
         if market.kind=="ML":
             diff=Decimal(home-away if market.selection=="HOME" else away-home)
             if batch.sport=="MLB" and diff==0:
-                raise ValueError("MLB_FULL_GAME_TIE_NOT_SETTLEABLE")
+                if market.period=="FG":
+                    raise ValueError("MLB_FULL_GAME_TIE_NOT_SETTLEABLE")
+                if market.settlement!="TIE_PUSH":
+                    raise ValueError("MLB_PARTIAL_GAME_TIE_RULE_UNVERIFIED")
         elif market.kind=="SPREAD":
             diff=Decimal(home-away if market.selection=="HOME" else away-home)+_decimal(market.line)
         elif market.kind=="TOTAL":
