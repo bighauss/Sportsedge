@@ -57,7 +57,7 @@ def _leg(value):
     # Do not parse an unbounded exponent and then format it as fixed-point:
     # '1e9999999' is finite Decimal but can exhaust memory on format().
     if (type(raw_line) is not str or len(raw_line) > 40
-            or not re.fullmatch(r"[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)", raw_line)):
+            or not re.fullmatch(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)", raw_line)):
         raise ValueError("INVALID_PROP_LINE")
     try:
         line = Decimal(raw_line)
