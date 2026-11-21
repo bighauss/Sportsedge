@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 411,
-  "base_commit": "5b0a24eb550c84505e47cc06100c2e3d2d5df3da",
+  "base_commit": "ff6a453fa77a3f48095b8b0f1ff7000b24bb937b",
   "protected_paths": [
     ".github/workflows/cfb-run-it.yml",
     "models/cfb/cfb_run_it.py",
@@ -10,7 +10,7 @@
     "models/cfb/test_cfb_run_it_p0.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
-  "change_summary": "CFB RUN IT P0 remediation: provider-ID player identity (no name remap, conflicting/missing IDs quarantined), exact game identity (orientation, kickoff, pinned id, duplicates), RESEARCH_ONLY eligibility with injury missing/stale reasons, encryption preflight before any provider request, raw source bytes archived and verified against public sha256 receipts before publication, freeze recheck immediately before publication, raw model projections stored separately from market-adjusted card. Frozen model unchanged.",
+  "change_summary": "CFB RUN IT P0 remediation: provider-ID player identity (no name remap, conflicting/missing IDs quarantined), exact game identity (orientation, kickoff, pinned id, duplicates), RESEARCH_ONLY eligibility with injury missing/stale reasons, encryption preflight before any provider request, raw source bytes archived and verified against public sha256 receipts before publication, freeze recheck immediately before publication, raw model projections stored separately from market-adjusted card. Frozen model unchanged. Workflow publication now requires nonempty verified source receipts and successful encrypted artifact retention; no separate public card artifact.",
   "assumptions": [
     "Model weights are untested; this PR does not change them.",
     "SP+ is centred on captured file means as model input; input mapping, not a weight change.",
@@ -44,7 +44,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "5b0a24eb550c84505e47cc06100c2e3d2d5df3da",
+    "target_base_sha": "ff6a453fa77a3f48095b8b0f1ff7000b24bb937b",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0"
   },
