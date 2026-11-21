@@ -253,7 +253,7 @@ def _summary(records: list[dict]) -> dict:
                 'market_baseline_matched_n': 0,
                 'win_rate': None, 'win_wilson95': None, 'roi_event_cluster95': None,
                 'small_sample': True}
-    events = len({r['event_id'] for r in records})
+    events = len({(r['sport'], r['event_id']) for r in records})
     decided = [r for r in records if r['outcome'] != 'P']
     model_brier = mean((r['p']-int(r['outcome'] == 'W'))**2 for r in decided) if decided else None
     model_logloss = mean(-math.log(r['p'] if r['outcome'] == 'W' else (1-r['p'])) for r in decided) if decided else None
@@ -283,7 +283,8 @@ def _summary(records: list[dict]) -> dict:
     return {'n': n, 'decided_n': len(decided), 'events': events,
             'wins': n_w, 'losses': len(decided)-n_w, 'pushes': n-len(decided),
             'net_units': round(unit_total, 6), 'roi': round(unit_total/n, 6),
-            'roi_event_cluster95': _cluster_ci([(r['event_id'], r['unit']) for r in records]),
+            'roi_event_cluster95': _cluster_ci([
+                (r['sport'] + ':' + r['event_id'], r['unit']) for r in records]),
             'win_rate': round(n_w/len(decided), 6) if decided else None,
             'win_wilson95': _wilson(n_w, len(decided)),
             'brier': round(model_brier, 6) if model_brier is not None else None,
@@ -441,12 +442,13 @@ def bias_analysis(rows: list[dict]) -> dict:
                 groups[(d, str(r[d]))].append((r, error))
     report = []
     for (d, value), group in sorted(groups.items()):
-        event_count = len({r['event_id'] for r, e in group})
+        event_count = len({(r['sport'], r['event_id']) for r, e in group})
         errors = [e for r, e in group]
         report.append({'dimension': d, 'value': value, 'n': len(errors),
                        'distinct_events': event_count, 'mean_error_actual_minus_model': round(mean(errors), 6),
                        'mae': round(mean(abs(x) for x in errors), 6),
-                       'mean_error_cluster95': _cluster_ci([(r['event_id'], e) for r, e in group]),
+                       'mean_error_cluster95': _cluster_ci([
+                           (r['sport'] + ':' + r['event_id'], e) for r, e in group]),
                        'small_sample': event_count < 30})
     return {'status': 'PAPER_ERROR_DIAGNOSTIC_NO_MODEL_CHANGE', 'rows': len(rows),
             'accepted': len(valid), 'rejected': rejected, 'groups': report}
