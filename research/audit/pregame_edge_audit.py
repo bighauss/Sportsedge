@@ -8,12 +8,14 @@ All timestamps must be timezone-aware; receipt hashes must be 64 hex chars.
 """
 import argparse
 import csv
+import io
 import datetime as dt
 import hashlib
 import json
 import math
 import re
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 REQUIRED = ('sport','event_id','period','market','side','line','price_american',
@@ -37,20 +39,33 @@ def price(s):
     dec = 1 + (v / 100 if v > 0 else 100 / -v)
     return v, dec
 
+def identity_key(row):
+    """Structured selection key; never collapse distinct player stat markets."""
+    val=lambda k:str(row.get(k) or '').strip().casefold()
+    market=val('market').replace('moneyline','ml').replace('money_line','ml')
+    period={'full_game':'fg','fullgame':'fg','h1':'1h',
+            'first_half':'1h'}.get(val('period'),val('period'))
+    line=val('line')
+    if market=='ml' and line in ('','0','0.0','+0','-0'):
+        line='0'
+    elif line and len(line)<=32 and re.fullmatch(r'[+-]?\\d+(?:\\.\\d+)?',line):
+        try:
+            line=format(Decimal(line).normalize(),'f')
+        except InvalidOperation:
+            pass
+    return (val('sport'),val('event_id'),period,market,val('side'),
+            line,val('player_id'),val('team_id'),val('stat'))
+
 def identity(row):
-    val = lambda k:(row.get(k) or '').strip().casefold()
-    market = val('market').replace('moneyline','ml').replace('money_line','ml')
-    period = {'full_game':'fg','fullgame':'fg','h1':'1h','first_half':'1h'}.get(val('period'),val('period'))
-    line = val('line')
-    if market == 'ml' and line in ('', '0', '0.0', '+0', '-0'): line='0'
-    return '|'.join((val('sport'),val('event_id'),period,market,val('side'),line,val('player_id')))
+    """Printable diagnostic identity; duplicate detection uses the tuple."""
+    return '|'.join(identity_key(row))
 
 def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
     rows=list(rows)
     # Flag every copy of a duplicate, regardless of source row order.  Selecting
     # the first copy silently can favor a stale quote or retrospectively edited
     # probability; the operator must reconcile duplicate raw evidence instead.
-    identity_counts=Counter(identity(row) for row in rows)
+    identity_counts=Counter(identity_key(row) for row in rows)
     valid=[]; rejected=[]; claimed=[]
     cluster_by_row={}
     for number, row in enumerate(rows, 2):
@@ -60,7 +75,7 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
                  and not (name=='line' and is_ml)]
         if missing: flags.append('MISSING_FIELDS:' + ','.join(missing))
         key=identity(row)
-        if identity_counts[key] > 1: flags.append('DUPLICATE_CANONICAL_SELECTION')
+        if identity_counts[identity_key(row)] > 1: flags.append('DUPLICATE_CANONICAL_SELECTION')
         if (row.get('sport') or '').strip().upper() not in ALLOWED: flags.append('UNKNOWN_SPORT')
         if 'PROP' in (row.get('market') or '').upper() and not (row.get('player_id') or '').strip():
             flags.append('MISSING_PLAYER_ID')
@@ -150,9 +165,47 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
             'admission_allowed':False,'source_authenticated':False,
             'disclaimer':'Claims include rejected rows for investigation. Declared timestamps and hashes do not authenticate original sources, calibration, selection eligibility or actual EV. PAPER/0u.'}
 
+def strict_csv_rows(data: bytes):
+    """No dropped blank records, ragged rows, duplicate headers or broken CSV.
+
+    csv.reader understands quoted multiline fields, including blank physical
+    lines inside quotes, unlike text.splitlines() preflight shortcuts.
+    """
+    if not isinstance(data,bytes) or not data:
+        raise ValueError('EMPTY_OR_NONBYTES_CSV')
+    try:
+        text=data.decode('utf-8-sig')
+    except UnicodeDecodeError as exc:
+        raise ValueError('INVALID_UTF8_CSV') from exc
+    if '\\x00' in text:
+        raise ValueError('CSV_NUL_BYTE')
+    try:
+        reader=csv.reader(io.StringIO(text,newline=''),strict=True)
+        records=list(reader)
+    except csv.Error as exc:
+        raise ValueError('MALFORMED_CSV') from exc
+    if not records or not records[0]:
+        raise ValueError('CSV_HEADER_MISSING')
+    headers=records[0]
+    if any(not h.strip() for h in headers):
+        raise ValueError('CSV_BLANK_HEADER')
+    if len({h.strip().casefold() for h in headers}) != len(headers):
+        raise ValueError('CSV_DUPLICATE_NORMALIZED_HEADER')
+    if any(h != h.strip() for h in headers):
+        raise ValueError('CSV_UNNORMALIZED_HEADER')
+    rows=[]
+    for line_index,values in enumerate(records[1:],2):
+        if not values:
+            raise ValueError('BLANK_CSV_RECORD')
+        if len(values)!=len(headers):
+            raise ValueError('RAGGED_CSV_RECORD')
+        rows.append(dict(zip(headers,values)))
+    return rows
+
+
 def audit_file(source, *, max_age_minutes=120, top_n=20):
     data=Path(source).read_bytes()
-    rows=list(csv.DictReader(data.decode('utf-8-sig').splitlines()))
+    rows=strict_csv_rows(data)
     return audit_rows(rows, hashlib.sha256(data).hexdigest(),
                       max_age_minutes=max_age_minutes,top_n=top_n)
 
