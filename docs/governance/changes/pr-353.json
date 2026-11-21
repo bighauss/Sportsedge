@@ -1,0 +1,65 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 353,
+  "base_commit": "15ed244640595193fe8fe339bf71ce624d073043",
+  "protected_paths": [
+    ".github/workflows/offered-line-identity-audit.yml",
+    "sportsedge/odds/completeness_gate.py",
+    "sportsedge/odds/test_completeness_numeric_rung_v2.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/333",
+  "change_summary": "Research-only offered market rung identity audit: block absent, nonnumeric, nonfinite, overlarge, scientific exponent and overprecision spread/total/team-total lines; preserve ML blank and valid signed and quarter rungs; tests. No source authentication, card eligibility, formulas or stakes.",
+  "assumptions": [
+    "The allowed range and decimal precision are conservative safety bounds for an offline market-identity census, not an assertion about every future sportsbook product.",
+    "Original source and price claims are not independently authenticated by numeric line validation.",
+    "Regression tests use synthetic local data and cannot demonstrate true +EV or source provenance.",
+    "No production betting, frozen v5, prior projections, historic quote/grade artifacts or risk rules are changed."
+  ],
+  "agent_identity": "ChatGPT GPT-6 SportsEdge owner audit lane D (read-only research guard)",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "unbounded or invalid offered spread/total/TT numeric rung admission",
+    "before": null,
+    "unit": "synthetic malformed rung test cases",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest sportsedge.odds.test_completeness_numeric_rung_v2 -v && python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "15ed244640595193fe8fe339bf71ce624d073043",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest sportsedge.odds.test_completeness_numeric_rung_v2 -v && python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
