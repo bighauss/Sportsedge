@@ -123,6 +123,23 @@ class StrictSourceCsvTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'BLANK_CSV_RECORD'):
             parse_source_csv(blank)
 
+    def test_quoted_multiline_with_blank_physical_line_is_one_record(self):
+        record=self.valid_csv().decode()
+        rows=parse_source_csv(record)
+        self.assertEqual(len(rows),1)
+        # A standalone note demonstrates that a quoted physical empty line
+        # is not a new CSV record and must not change the denominator.
+        parsed=parse_source_csv(b'col_a,comment\nA,"one\n\nthree"\n')
+        self.assertEqual(parsed,[{'col_a':'A','comment':'one\n\nthree'}])
+
+    def test_genuinely_blank_logical_record_still_refused(self):
+        with self.assertRaisesRegex(ValueError,'BLANK_CSV_RECORD'):
+            parse_source_csv(b'col_a,comment\nA,hi\n\nB,there\n')
+
+    def test_unterminated_quoted_record_is_not_partially_accepted(self):
+        with self.assertRaisesRegex(ValueError,'MALFORMED_CSV'):
+            parse_source_csv(b'col_a,comment\nA,"unfinished\n')
+
     def test_non_utf8_capture_refused_before_cleaned_report(self):
         with self.assertRaisesRegex(ValueError,'INVALID_UTF8_CSV'):
             parse_source_csv(b'\xff\xfe')
