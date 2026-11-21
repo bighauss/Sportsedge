@@ -45,7 +45,14 @@ jobs:
         with:
           python-version: '3.12'
       - name: Offline end-to-end gate (fixture capture -> model -> card)
-        run: python -m unittest models.cfb.test_cfb_run_it -v
+        run: python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 -v
+      - name: Encryption preflight (fail closed before any provider request)
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          [ -n "$SPORTSEDGE_ARCHIVE_FERNET_KEY" ] || { echo "::error::archive key not configured"; exit 2; }
+          python -m pip install -q --disable-pip-version-check cryptography==46.0.4
+          python -c "import os; from cryptography.fernet import Fernet; Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode()); print('archive key OK')"
       - name: Live run
         env:
           CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
@@ -57,25 +64,30 @@ jobs:
           flag=""; [ "$NOINJ" = "true" ] && flag="--allow-no-injury-feed"
           python models/cfb/cfb_run_it.py "$LINES" --season "$SEASON" --out out \
             --private-dir "$RUNNER_TEMP/private" $flag
-      - name: Encrypt private capture
-        if: ${{ !cancelled() }}
+      - name: Encrypt private capture and verify against public receipts
+        if: ${{ !cancelled() && hashFiles('out/receipts.json') != '' }}
         env:
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
         run: |
-          [ -n "$SPORTSEDGE_ARCHIVE_FERNET_KEY" ] || { echo "no archive key: private capture discarded"; rm -rf "$RUNNER_TEMP/private"; exit 0; }
-          [ -d "$RUNNER_TEMP/private" ] || exit 0
-          python -m pip install -q --disable-pip-version-check cryptography==46.0.4
           python - <<'PY'
-          import os, pathlib
+          import hashlib, json, os, pathlib
           from cryptography.fernet import Fernet
           f = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode())
           src = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private"
           dst = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private-enc"; dst.mkdir(mode=0o700)
-          for p in src.glob("*"):
-              (dst / (p.name + ".fernet")).write_bytes(f.encrypt(p.read_bytes())); p.unlink()
+          want = {r["source"]: r["sha256"] for r in json.load(open("out/receipts.json"))}
+          for name, digest in want.items():
+              p = src / f"{name}.json"
+              enc = f.encrypt(p.read_bytes())
+              if hashlib.sha256(f.decrypt(enc)).hexdigest() != digest:
+                  raise SystemExit(f"RECEIPT_HASH_MISMATCH {name}")
+              (dst / (p.name + ".fernet")).write_bytes(enc); p.unlink()
+          print("verified", len(want), "sources")
           PY
+      - name: Freeze recheck immediately before publication
+        run: python models/cfb/cfb_run_it.py --recheck --out out
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && hashFiles('out/cfb_card.md') != '' }}
+        if: ${{ success() }}
         with:
           name: cfb-run-it-card-${{ github.run_id }}
           path: out
@@ -88,7 +100,7 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore
       - name: Publish card
-        if: ${{ !cancelled() && hashFiles('out/cfb_card.md') != '' }}
+        if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ inputs.issue }}
