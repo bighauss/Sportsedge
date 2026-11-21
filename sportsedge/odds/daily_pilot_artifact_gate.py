@@ -25,7 +25,6 @@ CT = ZoneInfo("America/Chicago")
 CLAIM_FILENAME = "nfl-daily-claim.json"
 HOLD_ARTIFACT_NAME = "nfl-daily-odds-quota-hold"
 REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
-NAME_RE = re.compile(r"nfl-daily-odds-attempt-\d{4}-\d{2}-\d{2}")
 
 
 class Blocked(ValueError):
@@ -90,18 +89,28 @@ def validate_artifacts(response, name):
     return response
 
 
-def reserve(root, *, repository, run_id, token, now=None, lookup=api_artifacts):
+def _profile(pilot):
+    if pilot == "nfl":
+        return "nfl-daily-odds-attempt-", CLAIM_FILENAME, HOLD_ARTIFACT_NAME
+    if pilot == "ratings":
+        return "daily-ratings-attempt-", "daily-ratings-claim.json", None
+    raise Blocked("UNKNOWN_PILOT")
+
+
+def reserve(root, *, repository, run_id, token, now=None, lookup=api_artifacts, pilot="nfl"):
     _repo_and_run(repository, run_id, token)
+    prefix, filename, hold_name = _profile(pilot)
     now = _utc(now)
     day = now.astimezone(CT).date().isoformat()
-    claim = "nfl-daily-odds-attempt-" + day
+    claim = prefix + day
     # Permission/metadata failures stop before we create an attempt or call a
     # paid source. Quota holds from prior attempts survive separate runners.
-    holds = lookup(repository, token, HOLD_ARTIFACT_NAME)
+    holds = lookup(repository, token, hold_name) if hold_name else None
     previous = lookup(repository, token, claim)
-    validate_artifacts(holds, HOLD_ARTIFACT_NAME)
+    if hold_name:
+        validate_artifacts(holds, hold_name)
     validate_artifacts(previous, claim)
-    if holds["total_count"]:
+    if holds and holds["total_count"]:
         raise Blocked("PILOT_QUOTA_HOLD_REVIEW_REQUIRED")
     if previous["total_count"]:
         raise Blocked("PILOT_ALREADY_ATTEMPTED_CENTRAL_DATE")
@@ -110,11 +119,11 @@ def reserve(root, *, repository, run_id, token, now=None, lookup=api_artifacts):
     root = Path(root)
     if not root.is_dir():
         raise Blocked("RUNNER_TEMP_MISSING")
-    payload = {"schema": "nfl-daily-odds-attempt-v1", "name": claim,
+    payload = {"schema": prefix + "v1", "name": claim,
                "date_ct": day, "created_utc": now.isoformat(),
                "repository": repository, "run_id": str(run_id),
                "message": "Claimed BEFORE optional billable request; deleting this record voids one-day guard"}
-    path = root / CLAIM_FILENAME
+    path = root / filename
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
         if hasattr(os, "O_NOFOLLOW"):
@@ -128,10 +137,13 @@ def reserve(root, *, repository, run_id, token, now=None, lookup=api_artifacts):
     return payload
 
 
-def verify(root, *, repository, run_id, token, now=None, lookup=api_artifacts):
+def verify(root, *, repository, run_id, token, now=None, lookup=api_artifacts, pilot="nfl"):
     _repo_and_run(repository, run_id, token)
+    prefix, filename, _ = _profile(pilot)
     now = _utc(now)
-    path = Path(root) / CLAIM_FILENAME
+    if root is None:
+        raise Blocked("RUNNER_TEMP_MISSING")
+    path = Path(root) / filename
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError) as exc:
@@ -139,11 +151,10 @@ def verify(root, *, repository, run_id, token, now=None, lookup=api_artifacts):
     if not isinstance(record, dict):
         raise Blocked("ATTEMPT_CLAIM_INVALID")
     claim = record.get("name")
-    if (not isinstance(claim, str) or not NAME_RE.fullmatch(claim)
-            or record.get("repository") != repository
+    if (record.get("schema") != prefix + "v1" or record.get("repository") != repository
             or record.get("run_id") != str(run_id)
             or record.get("date_ct") != now.astimezone(CT).date().isoformat()
-            or claim != "nfl-daily-odds-attempt-" + record.get("date_ct", "")):
+            or claim != prefix + record.get("date_ct", "")):
         raise Blocked("ATTEMPT_CLAIM_IDENTITY_OR_DAY_CHANGED")
     response = lookup(repository, token, claim)
     validate_artifacts(response, claim)
@@ -161,11 +172,12 @@ def verify(root, *, repository, run_id, token, now=None, lookup=api_artifacts):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("action", choices=("reserve", "verify"))
+    p.add_argument("--pilot", choices=("nfl", "ratings"), default="nfl")
     a = p.parse_args(argv)
     env = os.environ
     opts = dict(repository=env.get("GITHUB_REPOSITORY"),
                 run_id=env.get("GITHUB_RUN_ID"),
-                token=env.get("GH_ACTIONS_READ_TOKEN"))
+                token=env.get("GH_ACTIONS_READ_TOKEN"), pilot=a.pilot)
     try:
         if a.action == "reserve":
             r = reserve(env.get("RUNNER_TEMP"), **opts)
