@@ -1,12 +1,13 @@
 """CLI: python -m research.audit.master <command> <file.json|file.csv> [options]
 
 commands: leakage | quality | largest | calibration | clv | bias | disagreement |
-          backtest | bootstrap | correlation | gates | postgame | full
+          backtest | bootstrap | correlation | gates | postgame |
+          simnoise | dispersion | full
 Input: JSON list of prediction rows or CSV (inputs column may hold JSON).
 Output: JSON report to stdout (or --out file). Read-only.
 """
 import argparse, csv, json, sys
-from . import audits, stats, props_corr, pipeline
+from . import audits, stats, props_corr, pipeline, uncertainty
 
 
 def load(path):
@@ -50,6 +51,8 @@ def main(argv=None):
         "correlation": lambda: props_corr.joint_hit_rates(rows),
         "gates": lambda: pipeline.run_gates(rows, load(a.history) if a.history else (), a.now),
         "postgame": lambda: pipeline.postgame_report(rows, rules),
+        "simnoise": lambda: uncertainty.sim_noise_check(rows),
+        "dispersion": lambda: uncertainty.dispersion_audit(rows),
     }
     if a.cmd == "full":
         rep = {k: f() for k, f in cmds.items() if k not in ("gates",) and (k != "backtest" or rules)}
