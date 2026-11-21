@@ -367,31 +367,30 @@ def parse_source_csv(raw: bytes) -> list[dict]:
         text = raw.decode('utf-8-sig')
     except UnicodeDecodeError as exc:
         raise ValueError('INVALID_UTF8_CSV') from exc
-    # DictReader otherwise silently skips blank physical records; refuse a
-    # potentially incomplete row denominator rather than dropping evidence.
-    if any(not line.strip() for line in text.splitlines()):
-        raise ValueError('BLANK_CSV_RECORD')
+    # Use parsed logical records: physical blank lines *inside* quoted
+    # multiline fields must remain valid data; actual blank CSV records fail.
     try:
-        reader = csv.DictReader(io.StringIO(text, newline=''),
-                                restkey=None, restval=None, strict=True)
-        header = reader.fieldnames or []
-        if not header or any(not isinstance(h, str) or not h.strip()
+        reader=csv.reader(io.StringIO(text,newline=''),strict=True)
+        header=next(reader,None)
+        if not header or any(not isinstance(h,str) or not h.strip()
                              for h in header):
             raise ValueError('CSV_HEADER_MISSING_OR_BLANK')
-        normalized = [h.strip().casefold() for h in header]
-        if len(set(normalized)) != len(header):
+        normalized=[h.strip().casefold() for h in header]
+        if len(set(normalized))!=len(header):
             raise ValueError('CSV_DUPLICATE_NORMALIZED_HEADER')
-        # Reject header whitespace ambiguity instead of silently changing
-        # the original field identity before audit.
         if any(h != h.strip() for h in header):
             raise ValueError('CSV_UNNORMALIZED_HEADER')
-        rows = list(reader)
+        rows=[]
+        for values in reader:
+            if not values:
+                raise ValueError('BLANK_CSV_RECORD')
+            if len(values)>len(header):
+                raise ValueError('CSV_EXTRA_FIELD_NOT_IN_HEADER')
+            if len(values)<len(header):
+                raise ValueError('CSV_MISSING_FIELD_IN_RECORD')
+            rows.append(dict(zip(header,values)))
     except csv.Error as exc:
         raise ValueError('MALFORMED_CSV') from exc
-    if any(None in row for row in rows):
-        raise ValueError('CSV_EXTRA_FIELD_NOT_IN_HEADER')
-    if any(any(value is None for value in row.values()) for row in rows):
-        raise ValueError('CSV_MISSING_FIELD_IN_RECORD')
     return rows
 
 
