@@ -1,0 +1,113 @@
+name: CBB RUN IT (manual, PAPER / 0u)
+
+# Phone-triggered: Actions -> CBB RUN IT -> Run workflow.
+# CBBD ratings + /games + /games/teams and ESPN scoreboard -> unchanged cbbd_paper_card.build_card
+# (frozen CBBD-native model) -> hash-chained paper ledger -> sanitized card.
+# Fails closed before any provider request without CBBD_API_KEY or a valid archive key.
+on:
+  workflow_dispatch:
+    inputs:
+      board_path:
+        description: "DraftKings CBB board CSV in repo (price_a = home/over)"
+        default: "models/cbb/lines/board_2026-11-21_0914CT_CBB.csv"
+      board_captured_utc:
+        description: "When the board was captured (UTC, Z)"
+        default: "2026-11-21T15:14:00Z"
+      season:
+        description: "CBBD season (2026-27 = 2027)"
+        default: "2027"
+      issue:
+        description: "Issue number to post the card to (blank = summary only)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cbb-run-it
+  cancel-in-progress: false
+
+jobs:
+  run-it:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline end-to-end gate (synthetic captures -> frozen model -> ledger -> card)
+        working-directory: models/cbb
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+        run: python -m unittest -v test_cbb_run_it test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
+      - name: Key preflight (fail closed before any provider request)
+        env:
+          CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          [ -n "$CBBD_API_KEY" ] || { echo "::error::CBBD_API_KEY not configured"; exit 2; }
+          [ -n "$SPORTSEDGE_ARCHIVE_FERNET_KEY" ] || { echo "::error::archive key not configured"; exit 2; }
+          python -m pip install -q --disable-pip-version-check cryptography==46.0.4
+          python -c "import os; from cryptography.fernet import Fernet; Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode()); print('archive key OK')"
+      - name: Live run
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+          CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
+          BOARD: ${{ inputs.board_path }}
+          BOARD_AT: ${{ inputs.board_captured_utc }}
+          SEASON: ${{ inputs.season }}
+        run: |
+          umask 077
+          python models/cbb/cbb_run_it.py --board "$BOARD" --board-captured-utc "$BOARD_AT" --season "$SEASON" \
+            --private-dir "$RUNNER_TEMP/private" --out out --ledger "$RUNNER_TEMP/private/ledger.jsonl"
+      - name: Encrypt private capture and verify against public receipts
+        if: ${{ !cancelled() && hashFiles('out/receipts.json') != '' }}
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+          BOARD: ${{ inputs.board_path }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          from cryptography.fernet import Fernet
+          f = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode())
+          src = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private"
+          dst = pathlib.Path(os.environ["RUNNER_TEMP"]) / "private-enc"; dst.mkdir(mode=0o700)
+          want = {str(r["sha256"]).replace("sha256:", "") for r in json.load(open("out/receipts.json"))}
+          seen = set()
+          for p in sorted(x for x in src.rglob("*") if x.is_file()):
+              b = p.read_bytes(); enc = f.encrypt(b)
+              assert f.decrypt(enc) == b
+              seen.add(hashlib.sha256(b).hexdigest())
+              (dst / ("__".join(p.relative_to(src).parts) + ".fernet")).write_bytes(enc); p.unlink()
+          missing = want - seen - {hashlib.sha256(open(os.environ["BOARD"], "rb").read()).hexdigest()}
+          if missing:
+              raise SystemExit(f"RECEIPT_WITHOUT_ARCHIVED_BYTES {sorted(missing)}")
+          print("archived and verified", len(seen), "files")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: ${{ success() }}
+        with:
+          name: cbb-run-it-card-${{ github.run_id }}
+          path: out
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: cbb-run-it-private-encrypted-${{ github.run_id }}
+          path: ${{ runner.temp }}/private-enc
+          retention-days: 90
+          if-no-files-found: ignore
+      - name: Publish card
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue }}
+        run: |
+          cat out/cbb_card.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$ISSUE" ]; then gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file out/cbb_card.md; fi
