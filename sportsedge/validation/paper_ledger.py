@@ -154,6 +154,38 @@ def novig_pair(q):
     return m,implied_own/(implied_own+implied_other)
 
 
+def _settle_final(final, m):
+    if (not isinstance(final, dict) or final.get("final_status") != "FINAL"
+            or final.get("event_id") != m.event_id or final.get("sport") != m.sport):
+        raise Blocked("Final source not marked settled for same sport/event")
+    try:
+        teams = (final["home_id"], final["away_id"])
+        roster = final.get("roster_ids", [])
+        if (not all(isinstance(x, str) and x.strip() for x in teams) or teams[0] == teams[1]
+                or not isinstance(roster, list) or not all(isinstance(x, str) and x.strip() for x in roster)
+                or len(set(roster)) != len(roster) or type(final.get("events_complete", False)) is not bool):
+            raise ValueError("Invalid final team, roster, or event completeness data")
+        events = tuple(ScoreEvent(**e) for e in final.get("events", []))
+        outcome = Outcome(periods={k: tuple(v) for k, v in final["periods"].items()},
+                          player_stats=final.get("player_stats", {}), events=events,
+                          events_complete=final.get("events_complete", False),
+                          player_period_stats=final.get("player_period_stats", {}))
+        populated_players = set(outcome.player_stats)
+        for split in outcome.player_period_stats.values():
+            populated_players.update(split)
+        populated_players.update(e.player_id for e in events if e.player_id)
+        if not populated_players.issubset(roster):
+            raise ValueError("Final includes stats/events for an unknown player")
+        batch = SimpleNamespace(sport=m.sport, event_id=m.event_id,
+                                home_id=teams[0], away_id=teams[1], roster_ids=frozenset(roster))
+        grade = settle(batch, outcome, m)
+    except (AttributeError, KeyError, TypeError, ValueError) as ex:
+        raise Blocked("Postgame final unable to settle exact selection: " + str(ex)) from ex
+    if grade not in ("W", "L", "P"):
+        raise Blocked("Incomplete market result")
+    return grade
+
+
 def grade_bundle(bundle_path):
     bundle_path=private_file(bundle_path, "BUNDLE")
     if not 0 < bundle_path.stat().st_size <= MAX_EVIDENCE_BYTES:
@@ -185,24 +217,7 @@ def grade_bundle(bundle_path):
             raise Blocked("Closing quote missing later independent observation")
         closeid=close["quote_id"]
     final,fclock,fhash=source(root,b["final"],kickoff,"postgame")
-    if final.get("final_status")!="FINAL" or final.get("event_id")!=m.event_id or final.get("sport")!=m.sport:
-        raise Blocked("Final source not marked settled for same sport/event")
-    try:
-        events=tuple(ScoreEvent(**e) for e in final.get("events",[]))
-        outcome=Outcome(
-            periods={k:tuple(v) for k,v in final["periods"].items()},
-            player_stats=final.get("player_stats",{}),
-            events=events,
-            events_complete=final.get("events_complete",False),
-            player_period_stats=final.get("player_period_stats",{}))
-        batch=SimpleNamespace(sport=m.sport,event_id=m.event_id,
-                              home_id=final["home_id"],away_id=final["away_id"],
-                              roster_ids=frozenset(final.get("roster_ids",[])))
-        grade=settle(batch,outcome,m)
-    except (KeyError,TypeError,ValueError) as ex:
-        raise Blocked("Postgame final unable to settle exact selection: "+str(ex)) from ex
-    if grade not in ("W","L","P"):
-        raise Blocked("Incomplete market result")
+    grade=_settle_final(final,m)
     result={
         "pick_id":b["pick_id"],"status":"PAPER_GRADED_UNAUTHENTICATED",
         "selection_identity":list(m.identity()),"grade":grade,
