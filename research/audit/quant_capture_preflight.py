@@ -102,12 +102,66 @@ def manifest_for_capture(source: bytes, *, asof_utc: str,
                 raise ValueError('CAPTURE_TIME_AFTER_MANIFEST_ASOF')
             if freeze >= kickoff:
                 raise ValueError('CAPTURE_NOT_PREGAME')
+            # Optional provider and model clocks, when supplied, must still be
+            # temporally consistent. A missing clock never proves provenance.
+            published = (when(row['source_published_utc'])
+                         if row.get('source_published_utc') else None)
+            source_captured = (when(row['source_captured_utc'])
+                               if row.get('source_captured_utc') else None)
+            if published is not None and published > freeze:
+                raise ValueError('SOURCE_PUBLISHED_AFTER_LOCAL_CAPTURE')
+            if source_captured is not None and source_captured > freeze:
+                raise ValueError('SOURCE_CAPTURED_AFTER_LOCAL_CAPTURE')
+            if (published is not None and source_captured is not None
+                    and published > source_captured):
+                raise ValueError('SOURCE_CAPTURE_PRECEDES_PUBLICATION')
+            if row.get('model_asof_utc'):
+                model_time = when(row['model_asof_utc'])
+                if model_time >= kickoff:
+                    raise ValueError('MODEL_FORECAST_NOT_PREGAME')
+                if (row.get('feature_available_utc')
+                        and when(row['feature_available_utc']) > model_time):
+                    raise ValueError('FEATURE_AVAILABLE_AFTER_MODEL_FORECAST')
+                if (row.get('fitted_until_utc')
+                        and when(row['fitted_until_utc']) >= model_time):
+                    raise ValueError('MODEL_FITTED_USING_FUTURE_INFORMATION')
             if not digest_ok(row.get('quote_sha256')):
                 raise ValueError('QUOTE_DIGEST_MISSING')
             if 'prop' in str(row.get('market', '')).lower() and not row.get('player_id'):
                 raise ValueError('UNBOUND_PLAYER_ID')
         except (ValueError, KeyError, TypeError) as exc:
             flagged.append({'row': rownum, 'reason': str(exc)})
+    # All copies of an ambiguous original offer are marked, including the
+    # first occurrence; no first-row-wins selection or silent deletion.
+    # Require a genuine book and side before comparing offer identities:
+    # a family inventory alone does not describe a specific priced offer.
+    from decimal import Decimal, InvalidOperation
+    identity_rows = {}
+    for rownum, row in enumerate(rows, 2):
+        if not all(str(row.get(field) or '').strip() for field in (
+                'sport', 'event_id', 'book', 'period', 'market', 'side',
+                'captured_utc')):
+            continue
+        line = str(row.get('line') or '').strip()
+        if line:
+            try:
+                numeric = Decimal(line)
+                if not numeric.is_finite():
+                    raise InvalidOperation
+                line = format(numeric.normalize(), 'f')
+            except (InvalidOperation, ValueError):
+                flagged.append({'row': rownum, 'reason': 'INVALID_OFFER_LINE'})
+                continue
+        key = tuple(str(row.get(field) or '').strip().casefold() for field in (
+            'sport', 'event_id', 'book', 'period', 'market', 'side',
+            'captured_utc', 'player_id', 'team_id', 'stat')) + (line,)
+        identity_rows.setdefault(key, []).append(rownum)
+    for group in identity_rows.values():
+        if len(group) > 1:
+            flagged.extend({'row': rownum,
+                            'reason': 'DUPLICATE_OR_CONFLICTING_OFFER_IDENTITY'}
+                           for rownum in group)
+    flagged.sort(key=lambda entry: (entry['row'], entry['reason']))
     census = market_census(rows)
     return {'status': 'PAPER_0U_SNAPSHOT_PRECHECK', 'provider_label': provider.strip(),
             'source_sha256': hashlib.sha256(source).hexdigest(),
