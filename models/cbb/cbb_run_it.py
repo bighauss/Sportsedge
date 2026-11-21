@@ -264,19 +264,75 @@ def _archive(priv, name, b):
     fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as f: f.write(b)
 
+def replay(evidence_dir, season, out_dir):
+    """SHADOW REPLAY: rebuild a card from a stored, decrypted evidence bundle.
+    Read-only: never opens a ledger, never makes provider requests, reuses the original freeze
+    time, and reports whether the replayed card matches the frozen original."""
+    ev = Path(evidence_dir); cap = ev / "capture"
+    def one(pattern):
+        hits = sorted(cap.rglob(pattern))
+        if len(hits) != 1: raise Hold(f"REPLAY_SOURCE_{pattern}_COUNT_{len(hits)}")
+        return hits[0]
+    original = json.loads((ev / "card" / "cbb_card.json").read_text())
+    receipts = {r["source"]: r for r in json.loads((ev / "card" / "receipts.json").read_text())}
+    rrec = json.loads(one("receipt.json").read_text())
+    rec = [r for r in rrec["receipts"] if r.get("source") == "cbbd_ratings_adjusted"]
+    ratings = one("cbbd_ratings_adjusted.json").read_bytes()
+    today_raw = [p for p in cap.rglob("cbbd_games_*.raw.json") if not p.name.startswith(("cbbd_games_season", "cbbd_games_teams"))]
+    if len(today_raw) != 1: raise Hold("REPLAY_SOURCE_TODAY_GAMES")
+    man = json.loads(today_raw[0].with_name(today_raw[0].name.replace(".raw.json", ".manifest.json")).read_text())
+    raws = {"today": today_raw[0].read_bytes(), "season": one("cbbd_games_season.raw.json").read_bytes(),
+            "boxes": one("cbbd_games_teams.raw.json").read_bytes(), "espn": one("espn_scoreboard.raw.json").read_bytes(),
+            "board": (ev / "board.csv").read_bytes()}
+    checks = {"today": man.get("source_sha256"), "season": receipts.get("cbbd_games_season", {}).get("sha256"),
+              "boxes": receipts.get("cbbd_games_teams", {}).get("sha256"), "espn": receipts.get("espn_scoreboard", {}).get("sha256"),
+              "board": receipts.get("dk_board", {}).get("sha256")}
+    for k, want in checks.items():
+        if sha(raws[k]) != str(want).replace("sha256:", ""): raise Hold(f"REPLAY_SOURCE_HASH_MISMATCH_{k.upper()}")
+    by_id = {str(g.get("id")): g for g in json.loads(raws["season"])}
+    by_id.update({str(g.get("id")): g for g in json.loads(raws["today"])})
+    freeze = parse_z(original["freeze_utc"])
+    card, names, extra = build(work=Path(out_dir) / "work", season=season, now_utc=freeze, games=list(by_id.values()),
+                               boxes=json.loads(raws["boxes"]), observed_utc=man["local_observed_utc"],
+                               ratings_body=ratings, ratings_receipt=rec[0] if len(rec) == 1 else None,
+                               espn=json.loads(raws["espn"]), espn_sha=receipts["espn_scoreboard"]["sha256"],
+                               espn_captured=receipts["espn_scoreboard"]["observed_utc"],
+                               board_rows=list(csv.DictReader(io.StringIO(raws["board"].decode("utf-8-sig")))),
+                               board_captured_utc=receipts["dk_board"]["observed_utc"], ledger_path=None)
+    strip = lambda c: [{k: v for k, v in r.items()} for r in c["rows"]]
+    same = strip(card) == strip(original)
+    md = ("# SHADOW REPLAY / 0u — not a pick, not frozen, no ledger write\n\n"
+          f"Replay of card {original['card_sha256'][:12]} at its original freeze · rows identical to frozen card: **{same}**\n\n"
+          + render(card, names, extra).replace("# SportsEdge CBB RUN IT card", "## Replayed card"))
+    out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
+    (out / "cbb_replay.md").write_text(md)
+    (out / "cbb_replay.json").write_text(json.dumps({"label": "SHADOW_REPLAY_0U", "matches_frozen": same, "card": card}, indent=1, sort_keys=True))
+    return same
+
 def main(argv=None):
     a = argparse.ArgumentParser()
-    a.add_argument("--board", required=True); a.add_argument("--board-captured-utc", required=True)
+    a.add_argument("--replay-evidence", help="decrypted evidence dir: SHADOW REPLAY, read-only, no ledger")
+    a.add_argument("--board"); a.add_argument("--board-captured-utc")
     a.add_argument("--season", type=int, required=True)
-    a.add_argument("--private-dir", required=True); a.add_argument("--out", required=True)
+    a.add_argument("--private-dir"); a.add_argument("--out", required=True)
     a.add_argument("--ledger"); a.add_argument("--season-start-utc", default="2026-11-01T00:00:00Z")
     a.add_argument("--fixture-dir", help="offline captures (tests only): ratings.json receipt.json games.json boxes.json espn.json")
     a.add_argument("--now", help="ISO UTC override (tests only)")
     x = a.parse_args(argv)
+    if x.replay_evidence:
+        if x.ledger: print("BLOCKED Hold: REPLAY_NEVER_WRITES_LEDGER", file=sys.stderr); return 2
+        try:
+            same = replay(x.replay_evidence, x.season, x.out)
+        except (Hold, PC.Pass, ValueError, OSError, KeyError) as e:
+            print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
+        print(f"SHADOW REPLAY done; matches frozen card: {same}"); return 0
+    if not x.board or not x.board_captured_utc:
+        print("BLOCKED Hold: BOARD_REQUIRED", file=sys.stderr); return 2
     key = os.environ.get("CBBD_API_KEY")
     clock = (lambda: datetime.fromisoformat(x.now)) if x.now else (lambda: datetime.now(timezone.utc))
     try:
         if not key and not x.fixture_dir: raise Hold("CBBD_API_KEY_ABSENT")
+        if not x.private_dir: raise Hold("PRIVATE_DIR_REQUIRED")
         priv = Path(x.private_dir); priv.mkdir(mode=0o700, parents=True, exist_ok=False)
         if x.fixture_dir:
             fx = Path(x.fixture_dir); now = clock()

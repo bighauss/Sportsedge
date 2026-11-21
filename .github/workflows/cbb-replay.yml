@@ -1,0 +1,69 @@
+name: CBB SHADOW REPLAY (read-only, 0u)
+
+# Rebuilds a CBB card from a previous run's encrypted evidence. Never calls providers,
+# never reads or writes the paper ledger, never produces picks. Output: SHADOW REPLAY / 0u.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "CBB RUN IT run id whose evidence to replay"
+        required: true
+      season:
+        description: "CBBD season end year"
+        default: "2027"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  replay:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Replay tests (offline)
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbb_run_it_replay
+      - name: Fetch and decrypt evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          set -euo pipefail
+          case "$RUN_ID" in ''|*[!0-9]*) echo "::error::RUN_ID_INVALID"; exit 2;; esac
+          id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '[.artifacts[]|select(.name|startswith("cbb-research-evidence-"))|select(.expired==false)]|if length==1 then .[0].id else empty end')
+          [ -n "$id" ] || { echo "::error::EVIDENCE_ARTIFACT_NOT_UNIQUE_OR_EXPIRED"; exit 2; }
+          umask 077
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ev.zip"
+          unzip -q "$RUNNER_TEMP/ev.zip" -d "$RUNNER_TEMP/ev-enc"
+          python - <<'PY'
+          import io, os, pathlib, tarfile
+          from cryptography.fernet import Fernet
+          t = pathlib.Path(os.environ["RUNNER_TEMP"])
+          raw = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode("ascii")).decrypt((t / "ev-enc" / "cbb-evidence.tar.fernet").read_bytes())
+          dst = t / "ev"; dst.mkdir(mode=0o700)
+          with tarfile.open(fileobj=io.BytesIO(raw)) as tar:
+              for m in tar.getmembers():
+                  if not m.isfile() or m.name.startswith("/") or ".." in pathlib.PurePosixPath(m.name).parts:
+                      raise SystemExit("EVIDENCE_TAR_UNSAFE_MEMBER")
+              tar.extractall(dst, filter="data")
+          PY
+      - name: SHADOW REPLAY (no providers, no ledger)
+        env:
+          SEASON: ${{ inputs.season }}
+        run: |
+          python models/cbb/cbb_run_it.py --replay-evidence "$RUNNER_TEMP/ev" --season "$SEASON" --out "$RUNNER_TEMP/replay" 2> "$RUNNER_TEMP/replay-err.log" || {
+            grep -oE '^BLOCKED [A-Za-z]+: [A-Z][A-Z0-9_:]{2,80}' "$RUNNER_TEMP/replay-err.log" | head -3; exit 2; }
+          cat "$RUNNER_TEMP/replay/cbb_replay.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/replay/cbb_replay.md"
