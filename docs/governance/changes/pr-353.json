@@ -3,6 +3,7 @@
   "pr_number": 353,
   "base_commit": "15ed244640595193fe8fe339bf71ce624d073043",
   "protected_paths": [
+    ".github/workflows/offered-line-identity-audit.yml",
     "sportsedge/odds/completeness_gate.py",
     "sportsedge/odds/test_completeness_numeric_rung_v2.py"
   ],
@@ -36,14 +37,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python -m unittest sportsedge.odds.test_completeness_numeric_rung_v2 -v",
+    "test_command": "python -m unittest sportsedge.odds.test_completeness_numeric_rung_v2 -v && python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "15ed244640595193fe8fe339bf71ce624d073043",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "python -m unittest sportsedge.odds.test_completeness_numeric_rung_v2 -v"
+    "verification_command": "python -m unittest sportsedge.odds.test_completeness_numeric_rung_v2 -v && python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py -v"
   },
   "cost": {
     "currency": "USD",
