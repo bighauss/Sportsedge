@@ -151,7 +151,7 @@ class StrictSourceCsvTests(unittest.TestCase):
 
     def test_unterminated_multiline_quoted_cell_fails_closed(self):
         with self.assertRaisesRegex(ValueError, 'MALFORMED_CSV'):
-            parse_source_csv(b'event_id,note\\nE1,"unfinished\\n')
+            parse_source_csv(b'event_id,note\nE1,"unfinished\n')
 
     def test_non_utf8_capture_refused_before_cleaned_report(self):
         with self.assertRaisesRegex(ValueError,'INVALID_UTF8_CSV'):
