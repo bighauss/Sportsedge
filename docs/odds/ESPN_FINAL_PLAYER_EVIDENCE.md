@@ -65,4 +65,4 @@ If the exact ESPN schema or score-split naming differs from these source contrac
 python -m unittest sportsedge.validation.test_espn_final_evidence -v
 ```
 
-The 23 synthetic tests cover five sports, quarters/halves/innings, original bytes, exact event/home/away IDs, missing or contradictory athlete stats, insufficient final-score splits, incomplete events and private archive permissions. This PR has **not** authenticated any particular live ESPN response or graded actual picks; no provider call is made in CI.
+The 24 synthetic tests cover five sports, quarters/halves/innings, original bytes, exact event/home/away IDs, missing or contradictory athlete stats, insufficient final-score splits, incomplete events and private archive permissions. This PR has **not** authenticated any particular live ESPN response or graded actual picks; no provider call is made in CI.
