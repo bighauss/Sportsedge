@@ -14,7 +14,7 @@
   "assumptions": [
     "Sport keys, markets and cost formula come from The Odds API v4 documentation, not a live response; billing headers are re-checked after the call and mismatches create a quota hold.",
     "The free /v4/sports endpoint is documented to return x-requests-remaining without consuming quota.",
-    "Card compatibility: merged CBB card loader (PR #403) exercised in-repo by test; CFB loader (draft PR #404) checked locally with synthetic data only; both cards are unvalidated PAPER models.",
+    "Card compatibility: merged CBB (#403) and CFB (#404) paper-card Odds API loaders are exercised in-repo by synthetic tests only; both cards are unvalidated PAPER models.",
     "Aggregator quotes are not upstream sportsbook authentication; nothing here verifies an edge."
   ],
   "agent_identity": "Claude and Perplexity coding agents",

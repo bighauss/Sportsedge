@@ -76,7 +76,7 @@ pair counts, key slot (`primary`/`backup`). No remaining balance, teams, prices 
 
 ### Feeding the paper cards (after decrypting privately)
 
-CBB (`research/cbb-cbbd-paper-card`):
+CBB (merged #403):
 
 ```sh
 python models/cbb/cbbd_paper_card.py ... \
@@ -85,7 +85,7 @@ python models/cbb/cbbd_paper_card.py ... \
   --odds-api-crosswalk crosswalk.csv   # odds_event_id,game_id,odds_home_team,odds_away_team
 ```
 
-CFB (`research/cfb-paper-card`):
+CFB (merged #404):
 
 ```sh
 python -m models.cfb.cfb_paper_card <capture_dir> ... \
@@ -93,8 +93,9 @@ python -m models.cfb.cfb_paper_card <capture_dir> ... \
 ```
 
 The crosswalk is operator-built from the `events` list in the pairs file; no fuzzy
-matching. Both loaders were run locally against a synthetic archive produced by this
-intake and accepted it unchanged.
+matching. `test_real_cbb_paper_card_loader_accepts_archive` and
+`test_real_cfb_paper_card_loader_accepts_archive` feed a synthetic archive from this
+intake to both merged loaders unchanged.
 
 ## Quota holds
 

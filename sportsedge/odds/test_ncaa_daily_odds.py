@@ -332,6 +332,28 @@ class NcaaDailyOddsTests(unittest.TestCase):
         spread = [r for r in rows if r["market"] == "spread"][0]
         self.assertEqual((spread["line"], spread["price_a"], spread["price_b"]), (-3.5, -110, -110))
 
+    def test_real_cfb_paper_card_loader_accepts_archive(self):
+        """End-to-end with the merged models/cfb/cfb_paper_card.load_odds_api_archive."""
+        try:
+            card = importlib.import_module("models.cfb.cfb_paper_card")
+        except ImportError as exc:
+            self.skipTest("CFB paper card unavailable: " + type(exc).__name__)
+        out, _ = self.run_snap(sport="ncaaf")
+        raw = (self.root / out["archive"]["raw_filename"]).read_bytes()
+        man = json.loads((self.root / out["manifest_filename"]).read_text())
+        xw = {"schema": card.CROSSWALK_SCHEMA, "rows": [
+            {"odds_event_id": "evt_soon_00001", "cfbd_game_id": 401,
+             "home_team_odds_name": "Home U", "away_team_odds_name": "Away St"},
+            {"odds_event_id": "evt_later_0002", "cfbd_game_id": 402,
+             "home_team_odds_name": "North Tech", "away_team_odds_name": "South A&M"}]}
+        quotes = card.load_odds_api_archive(raw, man, xw)
+        pairs = json.loads((self.root / out["pairs_filename"]).read_text())
+        self.assertEqual(len(quotes), len(pairs["rows"]))
+        self.assertEqual(sorted((q["cfbd_game_id"], q["book"], q["market"]) for q in quotes),
+                         [(401, "draftkings", "ML"), (401, "draftkings", "SPREAD"),
+                          (401, "draftkings", "TOTAL"), (402, "pinnacle", "TOTAL")])
+        self.assertTrue(all(q["source_sha256"] == man["original_raw_sha256"] for q in quotes))
+
 
 class GateProfileTests(unittest.TestCase):
     def test_existing_profiles_unchanged(self):
