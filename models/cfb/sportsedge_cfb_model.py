@@ -250,7 +250,9 @@ def run_game(game, ctx):
     else:
         rh = ra = None; ph, pa = mh, ma; notes.append("no ratings row -> matchup only")
     # venue / home field
-    neutral = bool(game.get("neutralSite"))
+    if type(game.get("neutralSite")) is not bool:
+        raise ValueError("CFBD neutralSite missing or not boolean")
+    neutral = game["neutralSite"]
     ven = ctx["venues"].get(game.get("venue"), {})
     hfa = 0.0 if neutral else float(ven.get("hfa") or HFA_DEFAULT)
     hfa = max(0.0, min(4.0, hfa))
