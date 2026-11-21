@@ -38,8 +38,10 @@ Some prompts are reasoning prompts rather than math: Theo 5, 6, 11, 16, 18, 23, 
 ## How to run (phone-friendly)
 - **GitHub Actions → master-audit → Run workflow** (once the workflow file is installed: the GitHub app couldn't write to `.github/workflows/`, so copy `docs/research/master-audit.workflow.yml` to `.github/workflows/master-audit.yml` in the GitHub web editor). Point `file` at any prediction JSON/CSV in the repo. The full report downloads as the `master-audit-report` artifact.
 - CLI: `python -m research.audit.master <leakage|quality|largest|calibration|bias|disagreement|backtest|bootstrap|correlation|gates|postgame|simnoise|dispersion|challenge|full> FILE [--rules rules.json] [--history graded.json]`
-- Tests: `python research/audit/master/test_master_audit.py` (26 synthetic tests).
+- Tests: `python research/audit/master/test_master_audit.py` (27 synthetic tests).
 - **Universal Model Challenge** (Rusty's every-model prompt): `python -m research.audit.master challenge FILE [--rules rules.json]` runs every check and returns issues ranked by severity, each with how to test the fix on unseen data. It changes nothing.
+
+**Engine wiring (NBA / CBB / CFB, game lines + props):** `python -m research.audit.master.engine_adapter <nba|cbb|cfb> <sport>_card.csv --run-ts <ISO> [--games games.csv] [--results results.csv] --out rows.json` turns the RUN IT card each engine already writes into audit rows (props parsed into player + OVER/UNDER, decimal price → American, kickoff from games.csv, optional grading) and prints coverage by sport and market family so it's visible that props are included. Then run `challenge`, `gates` or `full` on `rows.json`. Default judges `model_p`; `--prob blend` audits the blended probability instead. Engines are read, never edited.
 
 **CLV removed (owner ruling 2026-11-21):** this layer does no closing-line value tracking or reporting (Theo 30 dropped).
 
