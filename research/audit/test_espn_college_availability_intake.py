@@ -120,7 +120,8 @@ class Intake(unittest.TestCase):
 
     def test_unknown_status_not_promoted(self):
         self.sources["CFB:league_injuries:league"]["injuries"][0]["status"] = "Clear"
-        q = self.report()[0]["candidate_injuries"][0]
+        q = [x for x in self.report()[0]["candidate_injuries"]
+             if x["sport"] == "CFB" and x["team"] == "Alpha State"][0]
         self.assertIn("UNKNOWN_INJURY_STATUS", q["reason_codes"])
 
     def test_duplicate_roster_names_quarantined(self):
