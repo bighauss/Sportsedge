@@ -51,8 +51,9 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertAlmostEqual(overall['market_brier'],.25)
         self.assertAlmostEqual(overall['paired_brier_delta_model_minus_market'],-.24)
         self.assertGreater(overall['brier'],.33)
-        self.assertAlmostEqual(overall['paired_brier_event_cluster95'][0],-.24)
-        self.assertAlmostEqual(overall['paired_brier_event_cluster95'][1],-.24)
+        self.assertIsNone(overall['paired_brier_event_cluster95'])
+        self.assertEqual(overall['paired_brier_unique_events'],2)
+        self.assertTrue(overall['paired_brier_small_sample'])
 
     def test_no_matched_quote_means_no_paired_brier_claim(self):
         overall=replay([dict(BASE)])['overall']
@@ -61,6 +62,59 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertIsNone(overall['paired_brier_delta_model_minus_market'])
         self.assertIsNone(overall['paired_brier_event_cluster95'])
         self.assertEqual(overall['market_baseline_matched_n'],0)
+        self.assertEqual(overall['paired_brier_unique_events'],0)
+        self.assertTrue(overall['paired_brier_small_sample'])
+
+    def test_paired_brier_ci_requires_thirty_distinct_sport_events(self):
+        paired = dict(market_p_no_vig='.5',paired_quote_sha256=H,
+                      paired_price_american='-110',
+                      paired_captured_utc='2026-11-15T12:05:00Z',
+                      paired_book='DK',paired_period='FG',
+                      paired_market='spread',paired_side='away',
+                      paired_line='3.5')
+        for size in (29, 30):
+            with self.subTest(distinct_games=size):
+                rows = [dict(BASE, **paired, event_id='E'+str(i),
+                             paired_event_id='E'+str(i),
+                             selection_id='B'+str(i),
+                             outcome='W' if i % 2 else 'L')
+                        for i in range(size)]
+                report = replay(rows)['overall']
+                self.assertEqual(report['market_baseline_matched_n'],size)
+                self.assertEqual(report['paired_brier_unique_events'],size)
+                self.assertEqual(report['paired_brier_small_sample'],size<30)
+                self.assertEqual(report['paired_brier_event_cluster95'] is None,
+                                 size<30)
+
+    def test_alt_line_ladder_does_not_inflate_independent_event_count(self):
+        paired = dict(market_p_no_vig='.5',paired_quote_sha256=H,
+                      paired_price_american='-110',
+                      paired_captured_utc='2026-11-15T12:05:00Z',
+                      paired_event_id='E1',paired_book='DK',paired_period='FG',
+                      paired_market='spread',paired_side='away')
+        rows = [dict(BASE, **paired,selection_id='B'+str(i),
+                     line=str(-(3.5+i)),paired_line=str(3.5+i))
+                for i in range(30)]
+        report = replay(rows)['overall']
+        self.assertEqual(report['market_baseline_matched_n'],30)
+        self.assertEqual(report['paired_brier_unique_events'],1)
+        self.assertIsNone(report['paired_brier_event_cluster95'])
+        self.assertTrue(report['paired_brier_small_sample'])
+
+    def test_same_event_id_from_different_sports_is_two_events(self):
+        paired = dict(market_p_no_vig='.5',paired_quote_sha256=H,
+                      paired_price_american='-110',
+                      paired_captured_utc='2026-11-15T12:05:00Z',
+                      paired_event_id='E1',paired_book='DK',paired_period='FG',
+                      paired_market='spread',paired_side='away',
+                      paired_line='3.5')
+        rows = [dict(BASE, **paired,sport=sport,selection_id='B'+sport)
+                for sport in ('NFL','CBB')]
+        report = replay(rows)['overall']
+        self.assertEqual(report['n'],2)
+        self.assertEqual(report['events'],2)
+        self.assertEqual(report['paired_brier_unique_events'],2)
+        self.assertIsNone(report['paired_brier_event_cluster95'])
 
     def test_missing_provenance_fails_closed(self):
         row=dict(BASE,source_published_utc='2026-11-15T12:01:00Z')
