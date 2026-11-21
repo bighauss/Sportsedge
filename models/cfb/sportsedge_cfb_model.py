@@ -230,6 +230,13 @@ def tz_of(team, teams):
     off = g(t, "location.tzOffset")
     return off if off is not None else TZ_STD.get(g(t, "location.timezone"))
 
+def checked_neutral_site(game):
+    """Reject absent or untyped CFBD venue status before assigning home field."""
+    if type(game.get("neutralSite")) is not bool:
+        raise ValueError("CFBD neutralSite missing or not boolean")
+    return game["neutralSite"]
+
+
 def run_game(game, ctx):
     H, A = game["homeTeam"], game["awayTeam"]
     week = int(game.get("week", 10))
@@ -250,9 +257,7 @@ def run_game(game, ctx):
     else:
         rh = ra = None; ph, pa = mh, ma; notes.append("no ratings row -> matchup only")
     # venue / home field
-    if type(game.get("neutralSite")) is not bool:
-        raise ValueError("CFBD neutralSite missing or not boolean")
-    neutral = game["neutralSite"]
+    neutral = checked_neutral_site(game)
     ven = ctx["venues"].get(game.get("venue"), {})
     hfa = 0.0 if neutral else float(ven.get("hfa") or HFA_DEFAULT)
     hfa = max(0.0, min(4.0, hfa))
