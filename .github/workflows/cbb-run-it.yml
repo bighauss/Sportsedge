@@ -196,6 +196,7 @@ jobs:
         run: |
           printf '%s\n' '## CBB diagnostic execution' 'Model command, evidence checks and encrypted upload succeeded.' 'PAPER / 0u. Not wager-eligible. Model calibration is unvalidated.' '' >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/evidence/card/cbb_card.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/evidence/card/cbb_card.md"
       - name: Sanitized block reason (codes only, no bodies or URLs)
         if: always() && steps.model.outcome == 'failure'
         run: |
