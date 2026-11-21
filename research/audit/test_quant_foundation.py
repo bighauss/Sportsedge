@@ -124,8 +124,7 @@ class StrictSourceCsvTests(unittest.TestCase):
             parse_source_csv(blank)
 
     def test_quoted_multiline_with_blank_physical_line_is_one_record(self):
-        record=self.valid_csv().decode()
-        rows=parse_source_csv(record)
+        rows=parse_source_csv(self.valid_csv())
         self.assertEqual(len(rows),1)
         # A standalone note demonstrates that a quoted physical empty line
         # is not a new CSV record and must not change the denominator.
