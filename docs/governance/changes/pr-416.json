@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 416,
-  "base_commit": "489245e5b50e16c714e271bb91ec8dc8fe447be9",
+  "base_commit": "70442623374cb5a79560825888ba83cc24018fab",
   "protected_paths": [
     "models/cbb/test_cbb_run_it_parity.py"
   ],
@@ -40,7 +40,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "489245e5b50e16c714e271bb91ec8dc8fe447be9",
+    "target_base_sha": "70442623374cb5a79560825888ba83cc24018fab",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it*.py"
   },
