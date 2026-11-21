@@ -52,5 +52,7 @@ if __name__ == "__main__":
     # through the GitHub connector. Exercise the new offline adapter suite here.
     import subprocess
     audit_dir = os.path.abspath(os.path.join(HERE, "..", "..", "research", "audit"))
-    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", audit_dir,
-                    "-p", "test_cfb_no_key_ratings_adapter.py", "-v"], check=True)
+    for test_pattern in ("test_cfb_no_key_ratings_adapter.py",
+                         "test_cfb_spplus_research_preflight.py"):
+        subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", audit_dir,
+                        "-p", test_pattern, "-v"], check=True)
