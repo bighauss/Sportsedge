@@ -4,16 +4,18 @@
   "base_commit": "1c2d9a258178158e772dd41e7c8aca4e03d3905f",
   "protected_paths": [
     ".github/workflows/daily-ratings-capture.yml",
+    ".github/workflows/tests.yml",
     "sportsedge/validation/daily_ratings_capture.py",
     "sportsedge/validation/test_daily_ratings_capture.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Manual-only daily capture of Torvik CBB team_results CSV and CFBD SP+ ratings (1 CFBD call/run). Exact bytes + SHA256 + UTC observation time; non-200/HTML/empty bodies recorded as BLOCKED; Fernet key validated before any request; only encrypted artifacts retained. No model, risk, frozen v5 or market promotion changes.",
+  "change_summary": "Manual-only encrypted Torvik CBB and CFBD SP+ source capture with strict full-team ratings schemas, no bearer redirects, bounded raw response, original-byte SHA256 and UTC receipt. Pull-request CI tests source validation. Only research/PAPER 0u; no model promotion.",
   "assumptions": [
     "Torvik and CFBD are third-party sources; capture time proves when SportsEdge saw the bytes, not when the provider published them.",
-    "Torvik may refuse automated runner requests; that is recorded as BLOCKED."
+    "Torvik may refuse automated runner requests; that is recorded as BLOCKED.",
+    "A 138-row CFBD SP+ snapshot and 350–420-row Torvik CSV with valid fields are structural checks only, not independent season-census or as-of publication authentication."
   ],
-  "agent_identity": "Claude (Anthropic) coding agent",
+  "agent_identity": "Claude (Anthropic) and ChatGPT (OpenAI) coding agents",
   "permissions": {
     "role": "CODING_AGENT",
     "repo_write": "BRANCH_ONLY",
