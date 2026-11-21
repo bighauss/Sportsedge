@@ -6,7 +6,8 @@ import unittest
 from pathlib import Path
 
 from forecast_scorecard_pit import (FORECAST_FIELDS, GAME_FIELDS, Inadmissible,
-                                    rows_from_csv, score)
+                                    rows_from_csv, score,
+                                    week_bootstrap)
 
 
 def game(gid, home="Alpha", away="Beta", home_score="24", away_score="20"):
@@ -186,6 +187,39 @@ class ScorecardTests(unittest.TestCase):
         with self.assertRaisesRegex(Inadmissible, "MIN_PAIRED_MUST_BE_POSITIVE"):
             score(g, f, min_paired=0)
 
+
+
+class WeekBootstrapTests(unittest.TestCase):
+    def _eligible(self, weeks):
+        out = []
+        for w in range(1, weeks + 1):
+            for i in range(3):
+                out.append({"game_id": f"{w}_{i}", "season": "2026", "week": str(w),
+                            "actual_margin": 3, "actual_total": 44, "home_win": 1,
+                            "forecasts": {"ridge": {"home_win_prob": .8, "home_margin": 3},
+                                          "elo": {"home_win_prob": .6, "home_margin": 0},
+                                          "epa": {"home_win_prob": .7, "home_margin": 2}}})
+        return out
+
+    def test_better_model_ci_below_zero(self):
+        r = week_bootstrap(self._eligible(6), "ridge", "elo")
+        self.assertEqual(r["weeks"], 6)
+        self.assertAlmostEqual(r["mean_diff"], .04 - .16)
+        self.assertLess(r["ci95"][1], 0)
+
+    def test_single_week_refuses_interval(self):
+        r = week_bootstrap(self._eligible(1), "ridge", "elo")
+        self.assertIsNone(r["ci95"])
+
+    def test_deterministic_seed(self):
+        e = self._eligible(4)
+        self.assertEqual(week_bootstrap(e, "epa", "elo", "margin_abs"),
+                         week_bootstrap(e, "epa", "elo", "margin_abs"))
+
+    def test_score_reports_bootstrap(self):
+        games, f = two_games()
+        x = score(games, f, min_paired=2)
+        self.assertIn("ridge_minus_elo", x["week_clustered_paired_bootstrap"])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

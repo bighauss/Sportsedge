@@ -149,6 +149,39 @@ def summarize(rows):
             "calibration": cal}
 
 
+def week_bootstrap(eligible, model_a, model_b, metric="brier", n_boot=2000, seed=7):
+    """Paired bootstrap of (model_a - model_b) per-game loss, resampling whole
+    (season, week) clusters so same-week games are not treated as independent.
+    Negative mean_diff favours model_a. Descriptive only."""
+    import random
+    def loss(x, m):
+        f = x["forecasts"][m]
+        if metric == "brier":
+            return (f["home_win_prob"] - x["home_win"]) ** 2
+        if metric == "margin_abs":
+            return abs(f["home_margin"] - x["actual_margin"])
+        raise Inadmissible("UNKNOWN_BOOTSTRAP_METRIC")
+    weeks = {}
+    for x in eligible:
+        weeks.setdefault((x["season"], x["week"]), []).append(
+            loss(x, model_a) - loss(x, model_b))
+    keys = sorted(weeks)
+    if len(keys) < 2:
+        return {"metric": metric, "weeks": len(keys), "ci95": None,
+                "note": "FEWER_THAN_TWO_WEEKS"}
+    rnd = random.Random(seed)
+    stats = []
+    for _ in range(n_boot):
+        d = [v for k in (rnd.choice(keys) for _ in keys) for v in weeks[k]]
+        stats.append(sum(d) / len(d))
+    stats.sort()
+    allv = [v for k in keys for v in weeks[k]]
+    return {"metric": metric, "weeks": len(keys), "n_games": len(allv),
+            "mean_diff": _round(sum(allv) / len(allv)),
+            "ci95": [_round(stats[int(0.025 * n_boot)]),
+                     _round(stats[int(0.975 * n_boot) - 1])]}
+
+
 def score(games, forecasts, min_paired=100, model_names=MODELS):
     """Paired-only metrics, no retrospective selection or changing denominator."""
     if not games:
@@ -207,6 +240,9 @@ def score(games, forecasts, min_paired=100, model_names=MODELS):
                     "actual_total": x["actual_total"],
                     "home_win": x["home_win"]} for x in eligible]
         scores[m] = summarize(metrics)
+    week_clustered = {f"{a}_minus_{b}": {mt: week_bootstrap(eligible, a, b, mt)
+                                         for mt in ("brier", "margin_abs")}
+                      for a, b in (("ridge", "elo"), ("epa", "elo"), ("ridge", "epa"))}
     reason_counts = dict(Counter(f"{m}:{r}" for x in rejections
                                  for m, r in x["reasons"].items()))
     n = len(eligible)
@@ -220,6 +256,7 @@ def score(games, forecasts, min_paired=100, model_names=MODELS):
             "blocked_reasons": reason_counts, "blocked_games": rejections,
             "paired_game_ids": [x["game_id"] for x in eligible],
             "scores": scores,
+            "week_clustered_paired_bootstrap": week_clustered,
             "limitations": [
                 "No independent authentication of the source/provider publication clock",
                 "SHA256 verifies archived bytes, not that those bytes existed before kickoff",
