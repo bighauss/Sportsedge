@@ -1,8 +1,10 @@
 import tempfile
 import unittest
 import csv
+import io
+import hashlib
 from pathlib import Path
-from pregame_edge_audit import audit_rows, audit_file
+from pregame_edge_audit import audit_rows, audit_file, parse_original_csv
 
 H='a'*64
 B='b'*64
@@ -136,5 +138,104 @@ class Validation(unittest.TestCase):
             self.assertEqual(f.read_bytes(),before)
             self.assertEqual(len(z['snapshot_sha256']),64)
             self.assertEqual(z['total_rows'],1)
+
+    @staticmethod
+    def original_csv(**changes):
+        """Build one source row without changing historical loader semantics."""
+        source_row=row(**changes)
+        out=io.StringIO(newline='')
+        writer=csv.writer(out)
+        fields=list(source_row)
+        writer.writerow(fields)
+        writer.writerow([source_row[k] for k in fields])
+        return out.getvalue().encode('utf-8')
+
+    def test_duplicated_original_probability_headers_block_before_ev_ranking(self):
+        # With DictReader, a later 0.95 silently overwrites 0.01, turning
+        # -97% raw EV at +200 into +185%. No order is eligible as evidence.
+        for alias in ('p_model', 'p_model ', 'P_MODEL', ' P_MODEL '):
+            with self.subTest(alias=alias):
+                d=row(p_model='0.01',price_american='+200')
+                out=io.StringIO(newline='')
+                writer=csv.writer(out)
+                cols=list(d)
+                writer.writerow(cols+[alias])
+                writer.writerow([d[k] for k in cols]+['0.95'])
+                with self.assertRaisesRegex(
+                    ValueError,'ORIGINAL_CSV_DUPLICATE_NORMALIZED_HEADER'):
+                    parse_original_csv(out.getvalue().encode())
+
+    def test_unnormalized_nonduplicate_header_rejected_without_silent_renaming(self):
+        original=self.original_csv()
+        altered=original.replace(b'price_american,',b'price_american ,',1)
+        with self.assertRaisesRegex(ValueError,'ORIGINAL_CSV_UNNORMALIZED_HEADER'):
+            parse_original_csv(altered)
+
+    def test_blank_logical_records_refused_without_dropping_denominator(self):
+        original=self.original_csv()
+        header,body=original.splitlines(keepends=True)
+        for bad in (header+b'\n'+body,header+body+b'\n'):
+            with self.subTest(length=len(bad)):
+                with self.assertRaisesRegex(ValueError,'ORIGINAL_CSV_BLANK_LOGICAL_RECORD'):
+                    parse_original_csv(bad)
+
+    def test_ragged_short_or_extra_original_rows_are_never_ranked(self):
+        d=row()
+        cols=list(d)
+        for trim in (1, -1):
+            stream=io.StringIO(newline='')
+            writer=csv.writer(stream)
+            writer.writerow(cols)
+            values=[d[k] for k in cols]
+            writer.writerow(values[:-1] if trim==1 else values+['extra'])
+            with self.subTest(trim=trim):
+                with self.assertRaisesRegex(ValueError,'ORIGINAL_CSV_RAGGED_RECORD'):
+                    parse_original_csv(stream.getvalue().encode())
+
+    def test_valid_multiline_quoted_field_does_not_trigger_false_blank_record(self):
+        # A quoted note containing an empty PHYSICAL line is one valid
+        # LOGICAL CSV record, and its source byte hash must remain unchanged.
+        d=row()
+        d['notes']='first observation\n\nsecond observation'
+        stream=io.StringIO(newline='')
+        writer=csv.writer(stream)
+        cols=list(d)
+        writer.writerow(cols)
+        writer.writerow([d[k] for k in cols])
+        raw=stream.getvalue().encode()
+        self.assertIn(b'\n\n',raw)
+        self.assertEqual(parse_original_csv(raw)[0]['notes'],d['notes'])
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)/'original.csv'
+            source.write_bytes(raw)
+            result=audit_file(source)
+            self.assertEqual(source.read_bytes(),raw)
+            self.assertEqual(result['snapshot_sha256'],hashlib.sha256(raw).hexdigest())
+            self.assertEqual(result['total_rows'],1)
+            self.assertEqual(result['diagnostic_eligible'],1)
+
+    def test_invalid_utf8_and_unclosed_quoted_field_refused(self):
+        with self.assertRaisesRegex(ValueError,'ORIGINAL_CSV_INVALID_UTF8'):
+            parse_original_csv(b'\xff\xfe')
+        broken=self.original_csv()+b'\"unterminated'
+        with self.assertRaisesRegex(ValueError,'ORIGINAL_CSV_MALFORMED'):
+            parse_original_csv(broken)
+
+    def test_clean_original_rows_retained_and_top_edge_order_preserved(self):
+        stream=io.StringIO(newline='')
+        first=row(event_id='A',p_model='0.30')
+        second=row(event_id='B',p_model='0.70')
+        writer=csv.DictWriter(stream,fieldnames=list(first))
+        writer.writeheader()
+        writer.writerows((first,second))
+        raw=stream.getvalue().encode()
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)/'original.csv'
+            source.write_bytes(raw)
+            result=audit_file(source)
+            self.assertEqual(result['total_rows'],2)
+            self.assertEqual(result['computable_claimed_edges'],2)
+            self.assertEqual(result['top_edges'][0]['identity'].split('|')[1],'b')
+            self.assertEqual(source.read_bytes(),raw)
 
 if __name__=='__main__':unittest.main()
