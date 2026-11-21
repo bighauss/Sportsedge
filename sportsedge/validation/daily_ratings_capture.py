@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse, csv, hashlib, io, json, os, sys, urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+import stat
 from zoneinfo import ZoneInfo
 
 UA = "SportsEdge-research/1.0 (+https://github.com/bighauss/Sportsedge)"
@@ -126,7 +127,7 @@ def _inspect(expect, body, season):
     return (None, len(names)) if 125 <= len(names) <= 175 else ("SP_CENSUS_OUT_OF_RANGE", len(names))
 
 
-def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None):
+def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None, *, local_torvik=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     srcs = tuple(srcs)
     sources_expected = {s["url"]: s for src in srcs for s in sources(src["season"], src["season"])}
@@ -134,22 +135,35 @@ def capture(root: Path, srcs, fetch=_fetch, clock=None, claim_date=None):
         raise ValueError("UNRECOGNIZED_RATINGS_SOURCE")
     if len({s["name"] for s in srcs}) != len(srcs):
         raise ValueError("DUPLICATE_RATINGS_SOURCE")
+    if local_torvik is not None and (len(srcs) != 1 or srcs[0]["name"] != "torvik_team_results"):
+        raise ValueError("LOCAL_IMPORT_ALLOWS_TORVIK_ONLY")
     root.mkdir(mode=0o700, exist_ok=False)
     receipts = []
     for s in srcs:
         key = os.environ.get(s["key_env"]) if s["key_env"] else None
         started = _utc(clock())
         rec = {"source": s["name"], "url": s["url"], "season": s["season"],
-               "request_started_utc": _stamp(started), "provider_published_utc": None}
+               "request_started_utc": _stamp(started), "provider_published_utc": None,
+               "observation_basis": "LOCAL_FILE_NOT_PROVIDER_ATTESTED" if local_torvik is not None
+               else "HTTPS_RETRIEVAL"}
         if claim_date is not None and started.astimezone(CT).date().isoformat() != claim_date:
             receipts.append({**rec, "state": "BLOCKED_CLAIM_DATE_CHANGED"})
             continue
         if s["key_env"] and not key:
             receipts.append({**rec, "state": "BLOCKED_KEY_ABSENT"})
             continue
-        status, body = fetch(s["url"], key)
+        if local_torvik is not None:
+            fd = os.open(local_torvik, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb") as source:
+                if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
+                    raise ValueError("LOCAL_INPUT_MUST_BE_REGULAR_FILE")
+                body = source.read(MAX_BYTES + 1)
+            status = None
+        else:
+            status, body = fetch(s["url"], key)
         observed = _utc(clock())
-        problem, count = ("HTTP_" + str(status), 0) if status != 200 else _inspect(s["expect"], body, s["season"])
+        problem, count = (_inspect(s["expect"], body, s["season"]) if status == 200 or local_torvik is not None
+                          else ("HTTP_" + str(status), 0))
         if started > observed:
             problem = "CLOCK_MOVED_BACKWARD"
         rec.update(http_status=status, observed_utc=_stamp(observed), bytes=len(body))
@@ -202,18 +216,22 @@ def main(argv=None):
     p.add_argument("--cbb-season", type=int)
     p.add_argument("--cfb-season", type=int)
     p.add_argument("--claim-date")
-    p.add_argument("--execute", action="store_true", help="permit requests to Torvik and CFBD")
+    modes = p.add_mutually_exclusive_group()
+    modes.add_argument("--execute", action="store_true", help="permit requests to Torvik and CFBD")
+    modes.add_argument("--import-torvik", type=Path, help="archive an original Torvik CSV locally without fetching")
     a = p.parse_args(argv)
-    if not a.execute:
+    if not a.execute and a.import_torvik is None:
         print("DRY_RUN: no requests or writes")
         return 0
     today = datetime.now(CT).date()
     cbb = a.cbb_season if a.cbb_season is not None else today.year + (today.month >= 9)
     cfb = a.cfb_season if a.cfb_season is not None else today.year - (today.month <= 1)
-    if os.getenv("GITHUB_ACTIONS") == "true" and not a.claim_date:
+    if os.getenv("GITHUB_ACTIONS") == "true" and (not a.claim_date or a.import_torvik is not None):
         return 2
     try:
-        out = capture(a.private_dir, sources(cbb, cfb), claim_date=a.claim_date)
+        srcs = sources(cbb, cfb)
+        out = capture(a.private_dir, srcs[:1] if a.import_torvik is not None else srcs,
+                      claim_date=a.claim_date, local_torvik=a.import_torvik)
     except (ValueError, OSError):
         print("BLOCKED_RATINGS_CAPTURE", file=sys.stderr)
         return 2

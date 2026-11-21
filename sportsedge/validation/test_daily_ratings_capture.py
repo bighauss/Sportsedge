@@ -108,6 +108,20 @@ class T(unittest.TestCase):
                         clock=lambda: NOW, claim_date="2026-11-20")
         self.assertEqual([r["state"] for r in out["receipts"]], ["BLOCKED_CLAIM_DATE_CHANGED"] * 2)
 
+    def test_original_torvik_file_import_never_fetches_or_backdates(self):
+        original = self.root.parent / "original.csv"
+        original.write_bytes(CSV)
+        os.utime(original, (1, 1))
+        src = d.sources(2027, 2026)[:1]
+        out = d.capture(self.root, src, local_torvik=original, clock=lambda: NOW,
+                        fetch=lambda *_: self.fail("must not call network"))
+        row = out["receipts"][0]
+        self.assertEqual(row["state"], "CAPTURED")
+        self.assertEqual(row["observed_utc"], "2026-11-21T16:00:00Z")
+        self.assertEqual(row["observation_basis"], "LOCAL_FILE_NOT_PROVIDER_ATTESTED")
+        self.assertIsNone(row["http_status"])
+        self.assertEqual((self.root / row["file"]).read_bytes(), CSV)
+
     def test_durable_ratings_claim_isolated_from_nfl(self):
         repo = "bighauss/Sportsedge"
         rates = "daily-ratings-attempt-2026-11-21"
