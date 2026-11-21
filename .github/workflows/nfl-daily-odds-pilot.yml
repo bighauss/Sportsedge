@@ -1,8 +1,7 @@
 name: NFL daily featured-odds pilot (encrypted, PAPER)
 
 on:
-  schedule:
-    - cron: '41 15 * * *'   # ~9:41 AM Central (CST); one attempt per day
+  # Manual-only until an externally durable quota lock and live opt-in are verified.
   workflow_dispatch:
 
 permissions:
@@ -39,6 +38,18 @@ jobs:
           fi
       - name: Install pinned encryption package
         run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Validate Fernet key before any billable API call
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, sys
+          from cryptography.fernet import Fernet
+          try:
+              Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode("ascii"))
+          except (KeyError, ValueError, TypeError):
+              print("::error::BLOCK_ARCHIVE_ENCRYPTION: invalid Fernet secret", file=sys.stderr)
+              sys.exit(2)
+          PY
       - name: Offline regression tests
         run: python -m unittest sportsedge.odds.test_daily_main_odds -v
       - name: One bounded live capture (3 credits max)
