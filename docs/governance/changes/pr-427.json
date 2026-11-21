@@ -1,0 +1,63 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 427,
+  "base_commit": "097f227ca6d363b3bf7c27db4116ed86fa98a63d",
+  "protected_paths": [
+    ".github/workflows/cbb-hca-backtest.yml"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
+  "change_summary": "Research-only walk-forward of the frozen CBBD-native model against final margins and CBBD lines. Diagnoses the 9.1-pt fitted HCA (mean residual absorbs rating compression in early-season buy games). Candidates computed in the script only: C1 intercept-of-OLS HCA, C2 intercept plus compression slope. Reports margin bias, MAE, home ATS pick rate, Brier/log loss vs market. Ratings are a current snapshot (leakage noted). No model changes.",
+  "assumptions": [
+    "CBBD possessions field requires live schema verification; absence must fail closed.",
+    "Board total side orientation remains unverified and must not support wagering eligibility.",
+    "ESPN venue declarations are not authenticated provider attestations.",
+    "Tests exercise synthetic evidence export, not complete live capture, model calibration or wager admission."
+  ],
+  "agent_identity": "Claude coding agent; Perplexity evidence security tests",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Prospective untouched CBB forecast accuracy versus same-time market",
+    "before": null,
+    "unit": "No verified prospective CBB record",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest research.cbb_hca.test_cbb_hca_backtest",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "097f227ca6d363b3bf7c27db4116ed86fa98a63d",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest research.cbb_hca.test_cbb_hca_backtest"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
