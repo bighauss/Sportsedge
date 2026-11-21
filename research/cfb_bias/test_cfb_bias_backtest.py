@@ -4,7 +4,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cfb_bias_backtest as B
 
 ROWS = [{"week": 5, "game": f"A{i} @ H{i}", "proj_total": 60.0 + i % 3, "proj_margin": 3.0, "pts_h": 31, "pts_a": 29,
-         "mkt_total": 52.5, "mkt_spread": -3.0, "act_h": 24 + i % 7, "act_a": 21 + i % 5} for i in range(40)]
+         "mkt_total": 52.5, "cand_total": 52.0 + i % 3, "cand_margin": 3.0, "pit_ppg": 25.5, "mkt_spread": -3.0, "act_h": 24 + i % 7, "act_a": 21 + i % 5} for i in range(40)]
 
 class T(unittest.TestCase):
     def test_bias_and_recentre(self):
@@ -12,7 +12,8 @@ class T(unittest.TestCase):
         self.assertGreater(js["frozen"]["bias_model_total_vs_actual"], 5)
         self.assertAlmostEqual(js["recentred"]["bias_model_total_vs_actual"], 0, places=6)
         self.assertEqual(js["frozen"]["model_says_over_rate"], 1.0)
-        self.assertIn("RESEARCH ONLY", md)
+        self.assertIn("RESEARCH ONLY", md); self.assertIn("Candidate C1", md)
+        self.assertLess(abs(js["candidate_c1"]["bias_model_total_vs_actual"]), abs(js["frozen"]["bias_model_total_vs_actual"]))
 
     def test_cli_fixture(self):
         with tempfile.TemporaryDirectory() as d:
