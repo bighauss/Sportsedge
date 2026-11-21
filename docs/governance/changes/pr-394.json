@@ -1,0 +1,65 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 394,
+  "base_commit": "1c2d9a258178158e772dd41e7c8aca4e03d3905f",
+  "protected_paths": [
+    ".github/workflows/daily-ratings-capture.yml",
+    ".github/workflows/tests.yml",
+    "sportsedge/validation/daily_ratings_capture.py",
+    "sportsedge/validation/test_daily_ratings_capture.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Manual-only encrypted Torvik CBB and CFBD SP+ source capture with strict full-team ratings schemas, no bearer redirects, bounded raw response, original-byte SHA256 and UTC receipt. Pull-request CI tests source validation. Only research/PAPER 0u; no model promotion.",
+  "assumptions": [
+    "Torvik and CFBD are third-party sources; capture time proves when SportsEdge saw the bytes, not when the provider published them.",
+    "Torvik may refuse automated runner requests; that is recorded as BLOCKED.",
+    "A 138-row CFBD SP+ snapshot and 350–420-row Torvik CSV with valid fields are structural checks only, not independent season-census or as-of publication authentication."
+  ],
+  "agent_identity": "Claude (Anthropic) and ChatGPT (OpenAI) coding agents",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Independently validated prospective research accuracy",
+    "before": null,
+    "unit": "No comparable authenticated baseline supplied",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest sportsedge.validation.test_daily_ratings_capture -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "1c2d9a258178158e772dd41e7c8aca4e03d3905f",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest sportsedge.validation.test_daily_ratings_capture -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

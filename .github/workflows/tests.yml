@@ -39,6 +39,8 @@ jobs:
         run: python test_cbb.py && python test_cbb_shared_possessions.py && python -m unittest -v test_torvik_point_in_time_baseline.py test_hoop_explorer_research.py test_hoop_explorer_intake.py
       - name: CBB PIT injury-source admission regression (synthetic)
         run: python -m unittest discover -s tests -p test_cbb_pit_injury_source_regression.py -v
+      - name: Daily Torvik and CFBD ratings capture schema/transport tests (offline)
+        run: python -m unittest sportsedge.validation.test_daily_ratings_capture -v
       - name: NFL daily odds pilot metadata/quota safety (offline)
         run: python -m unittest sportsedge.odds.test_daily_main_odds sportsedge.odds.test_daily_pilot_artifact_gate -v
       - name: Gate A original receipt hash completeness (synthetic)
