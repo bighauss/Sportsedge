@@ -48,7 +48,7 @@ def identity_key(row):
     line=val('line')
     if market=='ml' and line in ('','0','0.0','+0','-0'):
         line='0'
-    elif line and len(line)<=32 and re.fullmatch(r'[+-]?\\d+(?:\\.\\d+)?',line):
+    elif line and len(line)<=32 and re.fullmatch(r'[+-]?\d+(?:\.\d+)?',line):
         try:
             line=format(Decimal(line).normalize(),'f')
         except InvalidOperation:
@@ -177,7 +177,7 @@ def strict_csv_rows(data: bytes):
         text=data.decode('utf-8-sig')
     except UnicodeDecodeError as exc:
         raise ValueError('INVALID_UTF8_CSV') from exc
-    if '\\x00' in text:
+    if '\x00' in text:
         raise ValueError('CSV_NUL_BYTE')
     try:
         reader=csv.reader(io.StringIO(text,newline=''),strict=True)
