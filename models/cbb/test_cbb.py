@@ -122,3 +122,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # CI bridge while GitHub app lacks .github/workflows write access.
+    # Research-only offline public-ESPN source integrity tests.
+    import subprocess
+    audit_dir = os.path.abspath(os.path.join(HERE, "..", "..", "research", "audit"))
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", audit_dir,
+                    "-p", "test_espn_college_availability_intake.py", "-v"], check=True)
