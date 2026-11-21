@@ -11,7 +11,7 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 from research.audit.master import odds, stats, audits, props_corr as pc, projections as pj, pipeline  # noqa: E402
-from research.audit.master import uncertainty as un, ablation as ab  # noqa: E402
+from research.audit.master import uncertainty as un, ablation as ab, engine_adapter as ea  # noqa: E402
 
 T0 = "2026-11-16T12:00:00-06:00"
 KO = "2026-11-16T15:25:00-06:00"
@@ -322,6 +322,39 @@ class Challenge(unittest.TestCase):
         self.assertGreater(c["n_issues"], 0)
         self.assertEqual(c["issues"][0]["severity"], "CRITICAL")
         self.assertTrue(all("how_to_test_fix" in i for i in c["issues"]))
+
+
+class EngineAdapter(unittest.TestCase):
+    CARD = [
+        {"rank": "1", "stars": "5", "game_id": "G1", "market": "PROP_PTS", "selection": "Luka Doncic OVER",
+         "line": "33.5", "price_dec": "1.909", "model_p": "0.61", "novig_p": "0.5", "blend_p": "0.533",
+         "blend_ev": "0.02", "projection": "36.1", "note": "min 37.0"},
+        {"rank": "2", "stars": "3", "game_id": "G1", "market": "TOTAL", "selection": "UNDER",
+         "line": "229.5", "price_dec": "1.87", "model_p": "0.57", "novig_p": "0.49", "blend_p": "0.51",
+         "blend_ev": "0.01", "projection": "224.0", "note": "pace 98"},
+        {"rank": "3", "game_id": "G2", "market": "SPREAD", "selection": "BOS", "line": "-4.5",
+         "price": "-110", "model_p": "", "blend_p": "0.52"},
+    ]
+
+    def test_card_to_rows_and_audits(self):
+        games = ea._kickoffs([{"game_id": "G1", "date": "2026-11-21", "tipoff_et": "19:30"}])
+        res = {("G1", "PROP_PTS", "LUKA DONCIC OVER", 33.5): {"result": "W", "actual": "38"}}
+        rows, skipped = ea.card_to_rows(self.CARD, "nba", "2026-11-21T12:00:00-06:00",
+                                        kickoffs=games, results=res)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(skipped[0]["row"], 3)
+        prop = rows[0]
+        self.assertTrue(prop["is_prop"])
+        self.assertEqual((prop["player"], prop["side"]), ("Luka Doncic", "OVER"))
+        self.assertEqual(prop["odds"], -110)
+        self.assertEqual(prop["result"], "W")
+        self.assertEqual(prop["kickoff_ts"], "2026-11-21T19:30:00-05:00")
+        self.assertEqual(ea.coverage(rows), {"NBA:PROP": 1, "NBA:TOTAL": 1})
+        audits.assert_no_leakage(rows)
+        g = pipeline.run_gates(rows, now="2026-11-21T12:05:00-06:00")
+        self.assertEqual(g["summary"]["in"], 2)
+        blend, _ = ea.card_to_rows(self.CARD, "nba", "2026-11-21T12:00:00-06:00", prob="blend")
+        self.assertEqual(len(blend), 3)
 
 
 if __name__ == "__main__":
