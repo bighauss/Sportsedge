@@ -223,19 +223,60 @@ def bias_breakdown(rows: Sequence[dict], dims=("player", "team", "opponent", "ma
     return out
 
 
-def market_disagreement(rows: Sequence[dict], edges=(0, .02, .04, .06, .08, .10, .15, 1)) -> list[dict]:
-    """Rusty standalone: do bigger model-vs-market gaps do worse? ROI at original odds."""
-    out = []
+def market_disagreement(rows: Sequence[dict], edges=(0, .02, .04, .06, .08, .10, .15, 1),
+                        small_n: int = 50) -> dict:
+    """Rusty standalone: group by |model - market| gap; do bigger disagreements do worse?
+
+    Pregame only (pred_ts < kickoff, odds captured at/before pred_ts). ROI at the
+    ORIGINAL odds. Reports predicted vs actual win rate with a Wilson CI, the
+    overconfidence gap per bucket, and a weighted trend across buckets.
+    Read-only: never changes model parameters.
+    """
+    excluded = 0
+    pre = []
+    for r in rows:
+        p, k, o = ts(r.get("pred_ts")), ts(r.get("kickoff_ts")), ts(r.get("odds_ts"))
+        if p is None or (k and p >= k) or (o and o > p) or r.get("result") not in ("W", "L", "P"):
+            excluded += 1
+            continue
+        pre.append(r)
+    buckets = []
     for lo, hi in zip(edges, edges[1:]):
-        rs = [r for r in rows if r.get("result") in ("W", "L", "P") and lo <= abs(edge_of(r)) < hi]
+        rs = [r for r in pre if lo <= abs(edge_of(r)) < hi]
         if not rs:
             continue
         perf = stats.performance(rs)
-        out.append({"gap": f"{lo:.0%}-{hi:.0%}", "n": len(rs),
-                    "pred_win": sum(float(r["model_prob"]) for r in rs) / len(rs),
-                    "actual_win": perf["win_rate"], "roi": perf["roi"],
-                    "small_sample": len(rs) < 50})
-    return out
+        pw = sum(float(r["model_prob"]) for r in rs) / len(rs)
+        mk = sum(implied_prob(float(r["odds"])) for r in rs) / len(rs)
+        act = perf["win_rate"]
+        ci = perf["win_rate_ci"]
+        buckets.append({"gap": f"{lo:.0%}-{hi:.0%}", "mid": (lo + min(hi, .25)) / 2, "n": len(rs),
+                        "pred_win": pw, "market_implied": mk, "actual_win": act, "actual_ci": ci,
+                        "overconfidence": (pw - act) if act is not None else None,
+                        "beats_market": act is not None and act > mk,
+                        "roi": perf["roi"], "units": perf["units"],
+                        "small_sample": len(rs) < small_n,
+                        "verdict": ("SMALL_SAMPLE" if len(rs) < small_n else
+                                    "MODEL_WEAKNESS" if act is not None and ci[1] < pw else
+                                    "CONSISTENT")})
+    # weighted slope of overconfidence vs gap size (positive = bigger gaps do worse)
+    pts = [(b["mid"], b["overconfidence"], b["n"]) for b in buckets if b["overconfidence"] is not None]
+    slope = None
+    if len(pts) >= 2:
+        W = sum(w for *_, w in pts)
+        mx = sum(x * w for x, _, w in pts) / W
+        my = sum(y * w for _, y, w in pts) / W
+        vx = sum(w * (x - mx) ** 2 for x, _, w in pts)
+        slope = sum(w * (x - mx) * (y - my) for x, y, w in pts) / vx if vx else None
+    worse = [b["gap"] for b in buckets if b["verdict"] == "MODEL_WEAKNESS"]
+    rois = [b["roi"] for b in buckets if b["roi"] is not None and not b["small_sample"]]
+    trend = ("BIGGER_DISAGREEMENT_WORSE" if (slope is not None and slope > 0.2) or worse else
+             "NO_CLEAR_PATTERN")
+    return {"n_pregame": len(pre), "excluded_not_pregame_or_ungraded": excluded, "buckets": buckets,
+            "overconfidence_slope": slope, "weakness_buckets": worse, "trend": trend,
+            "roi_falls_with_gap": len(rois) >= 2 and rois[-1] < rois[0],
+            "note": "Disagreeing with the market is not an edge by itself; large gaps that underperform "
+                    "point to model weakness. No model parameters are changed."}
 
 # ---------------------------------------------------------------- P1.4 CLV
 
