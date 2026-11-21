@@ -48,3 +48,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # CI bridge: main's tests.yml invokes this file but cannot yet be edited
+    # through the GitHub connector. Exercise the new offline adapter suite here.
+    import subprocess
+    audit_dir = os.path.abspath(os.path.join(HERE, "..", "..", "research", "audit"))
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", audit_dir,
+                    "-p", "test_cfb_no_key_ratings_adapter.py", "-v"], check=True)
