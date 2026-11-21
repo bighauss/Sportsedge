@@ -1,0 +1,45 @@
+name: CFB Over-bias backtest (research only)
+
+# Point-in-time weekly backtest of the frozen CFB model vs final scores and consensus lines.
+# No model changes, no picks, no ledger. Results print to the job summary and log.
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        default: "2026"
+      start_week:
+        default: "4"
+      end_week:
+        default: "12"
+
+permissions:
+  contents: read
+
+jobs:
+  backtest:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline tests
+        run: python -m unittest -v research.cfb_bias.test_cfb_bias_backtest
+      - name: Backtest
+        env:
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+          SEASON: ${{ inputs.season }}
+          SW: ${{ inputs.start_week }}
+          EW: ${{ inputs.end_week }}
+        run: |
+          python research/cfb_bias/cfb_bias_backtest.py --season "$SEASON" --start-week "$SW" --end-week "$EW" --out out
+          cat out/bias.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cfb-bias-backtest-${{ github.run_id }}
+          path: out
+          retention-days: 90
