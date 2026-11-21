@@ -80,7 +80,7 @@ def _key(row):
     family = values[2].upper()
     if "SPREAD" in family or "TOTAL" in family:
         line_text = values[5].strip()
-        if not re.fullmatch(r"[+-]?\\d{1,5}(?:\\.\\d{1,4})?", line_text):
+        if not re.fullmatch(r"[+-]?\d{1,5}(?:\.\d{1,4})?", line_text):
             raise CompletenessError("NUMERIC_MARKET_LINE_INVALID")
         try:
             numeric_line = Decimal(line_text)
