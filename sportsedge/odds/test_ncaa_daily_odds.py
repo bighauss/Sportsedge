@@ -6,10 +6,12 @@ No real API key, no live provider, no paid credit.
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+import importlib
 import io
 import json
 from pathlib import Path
 import socket
+import sys
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -310,6 +312,25 @@ class NcaaDailyOddsTests(unittest.TestCase):
                 events = json.loads(raw)
                 self.assertIsInstance(events, list)
                 self.assertTrue(all(e["sport_key"] == ncaa.SPORTS[code] for e in events))
+
+    def test_real_cbb_paper_card_loader_accepts_archive(self):
+        """End-to-end with the merged models/cbb/cbbd_paper_card.odds_api_quotes."""
+        cbb_dir = str(Path(__file__).resolve().parents[2] / "models" / "cbb")
+        if cbb_dir not in sys.path:
+            sys.path.insert(0, cbb_dir)
+        try:
+            card = importlib.import_module("cbbd_paper_card")
+        except ImportError as exc:  # card not present on this base
+            self.skipTest("CBB paper card unavailable: " + type(exc).__name__)
+        out, _ = self.run_snap()
+        raw = (self.root / out["archive"]["raw_filename"]).read_bytes()
+        man = json.loads((self.root / out["manifest_filename"]).read_text())
+        xw = b"odds_event_id,game_id,odds_home_team,odds_away_team\nevt_soon_00001,123456,Home U,Away St\n"
+        rows, census = card.odds_api_quotes(raw, man, xw)
+        self.assertEqual(sorted(r["market"] for r in rows), ["moneyline", "spread", "total"])
+        self.assertEqual(census, {"NOT_TWO_SIDED_OR_LINES_DISAGREE": 2, "UNMAPPED_PROVIDER_EVENT": 1})
+        spread = [r for r in rows if r["market"] == "spread"][0]
+        self.assertEqual((spread["line"], spread["price_a"], spread["price_b"]), (-3.5, -110, -110))
 
 
 class GateProfileTests(unittest.TestCase):
