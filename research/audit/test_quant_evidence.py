@@ -51,8 +51,9 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertAlmostEqual(overall['market_brier'],.25)
         self.assertAlmostEqual(overall['paired_brier_delta_model_minus_market'],-.24)
         self.assertGreater(overall['brier'],.33)
-        self.assertAlmostEqual(overall['paired_brier_event_cluster95'][0],-.24)
-        self.assertAlmostEqual(overall['paired_brier_event_cluster95'][1],-.24)
+        self.assertEqual(overall['paired_brier_matched_events'],2)
+        self.assertTrue(overall['paired_brier_small_sample'])
+        self.assertIsNone(overall['paired_brier_event_cluster95'])
 
     def test_no_matched_quote_means_no_paired_brier_claim(self):
         overall=replay([dict(BASE)])['overall']
@@ -61,6 +62,28 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertIsNone(overall['paired_brier_delta_model_minus_market'])
         self.assertIsNone(overall['paired_brier_event_cluster95'])
         self.assertEqual(overall['market_baseline_matched_n'],0)
+        self.assertEqual(overall['paired_brier_matched_events'],0)
+        self.assertTrue(overall['paired_brier_small_sample'])
+
+    def test_paired_interval_requires_at_least_thirty_distinct_events(self):
+        rows = []
+        for i in range(30):
+            eid = f'E{i}'
+            outcome = 'W' if i % 2 else 'L'
+            rows.append(dict(
+                BASE, event_id=eid, selection_id=f'S{i}', outcome=outcome,
+                p_model='.9' if outcome == 'W' else '.1',
+                market_p_no_vig='.5', paired_quote_sha256=H,
+                paired_price_american='-110',
+                paired_captured_utc='2026-11-15T12:05:00Z',
+                paired_event_id=eid, paired_book='DK', paired_period='FG',
+                paired_market='spread', paired_side='away', paired_line='3.5'))
+        summary = replay(rows)['overall']
+        self.assertEqual(summary['market_baseline_matched_n'],30)
+        self.assertEqual(summary['paired_brier_matched_events'],30)
+        self.assertFalse(summary['paired_brier_small_sample'])
+        self.assertEqual(len(summary['paired_brier_event_cluster95']),2)
+        self.assertAlmostEqual(summary['paired_brier_delta_model_minus_market'],-.24)
 
     def test_missing_provenance_fails_closed(self):
         row=dict(BASE,source_published_utc='2026-11-15T12:01:00Z')
