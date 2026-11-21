@@ -170,6 +170,43 @@ class TestJointPropAudit(unittest.TestCase):
                 audit(d/"p.csv",None,unsafe,iterations=100)
             self.assertFalse(unsafe.exists())
 
+    def test_marginal_a_b_labels_are_invariant_to_csv_row_permutation(self):
+        # The relation string sorts stat labels (AST|PTS). Previously, A/B
+        # marginal columns depended on which raw CSV player line came first.
+        # Reordering identical frozen rows must not change paired reports.
+        with TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            raw=[]
+            for event, pts_p, ast_p, pts_result, ast_result in (
+                ("G1", "0.90", "0.10", "WIN", "LOSS"),
+                ("G2", "0.80", "0.20", "LOSS", "WIN"),
+            ):
+                pts=prediction(event,"A",result=pts_result,stat="PTS")
+                ast=prediction(event,"B",result=ast_result,stat="AST")
+                pts["predicted_p"]=pts_p
+                ast["predicted_p"]=ast_p
+                raw.extend((pts,ast))
+            inputs=(raw, list(reversed(raw)))
+            outputs=[]
+            for index, rows in enumerate(inputs):
+                inp=d/f"pred_{index}.csv"
+                out=d/f"out_{index}"
+                write(inp,list(REQ)+["model_mode"],rows)
+                report=audit(inp,None,out,iterations=100)
+                self.assertEqual(report["pair_rows"],2)
+                with (out/"relationships.csv").open(newline="") as handle:
+                    rel=list(csv.DictReader(handle))
+                with (out/"pair_rows.csv").open(newline="") as handle:
+                    pairs=list(csv.DictReader(handle))
+                self.assertEqual(len(rel),1)
+                # Sorted stat labels imply A is AST, B is PTS in every game.
+                self.assertAlmostEqual(float(rel[0]["marginal_a_pred_mean"]),0.15)
+                self.assertAlmostEqual(float(rel[0]["marginal_b_pred_mean"]),0.85)
+                self.assertTrue(all(p["leg_id_a"]=="B" for p in pairs))
+                self.assertTrue(all(p["leg_id_b"]=="A" for p in pairs))
+                outputs.append((rel,pairs))
+            self.assertEqual(outputs[0],outputs[1])
+
     def test_structural_threshold_not_statistical_covariance(self):
         with TemporaryDirectory() as tmp:
             d=Path(tmp)
