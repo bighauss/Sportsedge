@@ -1,0 +1,71 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 404,
+  "base_commit": "054c907e0d8bdbfef731525293fb43cdb986d3e4",
+  "protected_paths": [
+    ".github/workflows/cfb-paper-card.yml",
+    "models/cfb/cfb_baselines.py",
+    "models/cfb/cfb_capture_store.py",
+    "models/cfb/cfb_cfbd_capture.py",
+    "models/cfb/cfb_grading.py",
+    "models/cfb/cfb_ledger.py",
+    "models/cfb/cfb_paper_card.py",
+    "models/cfb/cfb_pregame_assembler.py",
+    "models/cfb/test_cfb_paper_card.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
+  "change_summary": "Add research-only CFB PAPER card pipeline: PIT pregame assembler (exact CFBD IDs, SP+ from daily capture, Open-Meteo forecast, operator QB/injuries with HOLD/PASS), hash-pinned frozen RUN IT baseline plus SP+ ratings-only baseline, two-sided quote card, append-only ledger, exact-ID grading, chronological evaluator, and a manual-only workflow. All PAPER / 0u.",
+  "assumptions": [
+    "Frozen RUN IT model weights are untested; pinning by file hash does not validate them.",
+    "SP+ ratings are centred on captured file means as model input; this is an input mapping, not a weight change.",
+    "CFBD field names come from public docs, not a live response in this PR; mismatches fail closed.",
+    "Operator QB and injury files are unauthenticated claims; passing synthetic tests is not predictive validation."
+  ],
+  "agent_identity": "Claude and Perplexity coding agents",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Prospective untouched CFB forecast accuracy versus same-time market",
+    "before": null,
+    "unit": "No prospective CFB record",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest models.cfb.test_cfb_paper_card models.cfb.test_cfb_source_pit_contract",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "054c907e0d8bdbfef731525293fb43cdb986d3e4",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest models.cfb.test_cfb_source_pit_contract"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
