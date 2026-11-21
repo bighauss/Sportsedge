@@ -53,17 +53,23 @@ def _leg(value):
             raise ValueError("LEG_IDENTITY_MISSING:" + k)
     if value["side"] not in SIDES:
         raise ValueError("INVALID_LEG_SIDE")
+    raw_line = value["line"]
+    # Do not parse an unbounded exponent and then format it as fixed-point:
+    # '1e9999999' is finite Decimal but can exhaust memory on format().
+    if (type(raw_line) is not str or len(raw_line) > 40
+            or not re.fullmatch(r"[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)", raw_line)):
+        raise ValueError("INVALID_PROP_LINE")
     try:
-        line = Decimal(value["line"])
-    except (TypeError, InvalidOperation, ValueError) as exc:
+        line = Decimal(raw_line)
+    except (InvalidOperation, ValueError) as exc:
         raise ValueError("INVALID_PROP_LINE") from exc
-    if not line.is_finite() or line < 0:
+    if not line.is_finite() or line < 0 or line > Decimal("1000000"):
         raise ValueError("INVALID_PROP_LINE")
     if value["side"] in ("YES", "NO") and line != 0:
         raise ValueError("YES_NO_LINE_MUST_BE_ZERO")
     return (value["player_id"].strip(), value["team_id"].strip(),
             value["market"].strip().upper(), value["stat"].strip().upper(),
-            format(line.normalize(), "f"), value["side"])
+            ("0" if line == 0 else format(line.normalize(), "f")), value["side"])
 
 
 def _record(row):
