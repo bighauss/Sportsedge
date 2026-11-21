@@ -29,6 +29,39 @@ class QuantEvidenceTests(unittest.TestCase):
         self.assertAlmostEqual(out['overall']['roi'],-.030303,places=5)
         self.assertEqual(out['max_drawdown_units'],1.0)
         self.assertIn('60-65%', [x['prob_bucket'] for x in out['calibration_5pp']])
+    def test_model_vs_market_brier_uses_identical_matched_decisions(self):
+        paired=dict(market_p_no_vig='.5',paired_quote_sha256=H,
+                    paired_price_american='-110',
+                    paired_captured_utc='2026-11-15T12:05:00Z',
+                    paired_book='DK',paired_period='FG',
+                    paired_market='spread',paired_side='away',
+                    paired_line='3.5')
+        first=dict(BASE,**paired,paired_event_id='E1',p_model='.9',
+                   selection_id='B1',outcome='W')
+        second=dict(BASE,**paired,paired_event_id='E2',event_id='E2',
+                    selection_id='B2',p_model='.1',outcome='L')
+        # Deliberately terrible model forecast has NO authenticated same-line
+        # market pair and must not contaminate the paired comparison.
+        third=dict(BASE,event_id='E3',selection_id='B3',
+                   p_model='.01',outcome='W')
+        overall=replay([first,second,third])['overall']
+        self.assertEqual(overall['n'],3)
+        self.assertEqual(overall['market_baseline_matched_n'],2)
+        self.assertAlmostEqual(overall['model_brier_on_market_matched_rows'],.01)
+        self.assertAlmostEqual(overall['market_brier'],.25)
+        self.assertAlmostEqual(overall['paired_brier_delta_model_minus_market'],-.24)
+        self.assertGreater(overall['brier'],.33)
+        self.assertAlmostEqual(overall['paired_brier_event_cluster95'][0],-.24)
+        self.assertAlmostEqual(overall['paired_brier_event_cluster95'][1],-.24)
+
+    def test_no_matched_quote_means_no_paired_brier_claim(self):
+        overall=replay([dict(BASE)])['overall']
+        self.assertIsNone(overall['model_brier_on_market_matched_rows'])
+        self.assertIsNone(overall['market_brier'])
+        self.assertIsNone(overall['paired_brier_delta_model_minus_market'])
+        self.assertIsNone(overall['paired_brier_event_cluster95'])
+        self.assertEqual(overall['market_baseline_matched_n'],0)
+
     def test_missing_provenance_fails_closed(self):
         row=dict(BASE,source_published_utc='2026-11-15T12:01:00Z')
         out=replay([row])
