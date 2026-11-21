@@ -40,7 +40,10 @@
     if (x === null || typeof x !== 'object' || Array.isArray(x)) throw new Error(label + ' must be an object');
   }
   function utc(value, label) {
-    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) {
+    const match = typeof value === 'string' && /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d{1,6})?Z$/.exec(value);
+    const second = match && new Date(match[1] + 'Z');
+    // A Date may normalize out-of-range parts. Compare the whole second, keeping the original fractional precision.
+    if (!match || match[0] !== value || !Number.isFinite(second.getTime()) || second.toISOString().slice(0, 19) !== match[1]) {
       throw new Error(label + ' must be a UTC ISO timestamp ending Z');
     }
     return value;

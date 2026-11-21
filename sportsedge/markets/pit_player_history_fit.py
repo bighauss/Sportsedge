@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from statistics import stdev
-from csv import DictReader
+from csv import DictReader, Error as CSVError
 import io
 import json
 import math
@@ -76,18 +76,18 @@ def _rate(value, field):
     return f
 
 
-def _read_rows(raw: bytes, sport: str, frozen_at: datetime,
+def _read_rows(raw: bytes, sport: str, target_event_id: str, frozen_at: datetime,
                published_at: datetime) -> tuple[list[dict], int]:
     if type(raw) is not bytes or not 0 < len(raw) <= MAX_CSV:
         raise ValueError("HISTORY_ARCHIVE_EMPTY_OR_OVERSIZED")
     try:
         reader = DictReader(io.StringIO(raw.decode("utf-8-sig"), newline=""),
-                            restkey=None, restval=None)
+                            restkey=None, restval=None, strict=True)
         header = reader.fieldnames or []
         if len(header) != len(CSV_COLUMNS) or set(header) != set(CSV_COLUMNS):
             raise ValueError("HISTORY_HEADER_MISSING_EXTRA_OR_DUPLICATE")
         parsed = list(reader)
-    except (UnicodeError, ValueError) as exc:
+    except (CSVError, ValueError) as exc:
         raise ValueError("HISTORY_INVALID_CSV") from exc
     if not parsed or len(parsed) > MAX_ROWS:
         raise ValueError("HISTORY_EMPTY_OR_TOO_MANY_ROWS")
@@ -97,6 +97,7 @@ def _read_rows(raw: bytes, sport: str, frozen_at: datetime,
     units = BASKETBALL_UNITS if sport == "CBB" else FOOTBALL_UNITS
     out = []
     seen = set()
+    game_ends = {}
     other_sport = 0
     for row in parsed:
         if row["sport"] != sport:
@@ -105,12 +106,17 @@ def _read_rows(raw: bytes, sport: str, frozen_at: datetime,
         for field in ("game_id", "player_id", "team_id"):
             if not row[field] or row[field].strip() != row[field]:
                 raise ValueError("HISTORY_ID_MISSING")
+        game_id = row["game_id"]
+        if game_id == target_event_id:
+            raise ValueError("HISTORY_TARGET_EVENT_IN_ARCHIVE")
         if row["stat"] not in units or row["opportunity_unit"] != units[row["stat"]]:
             raise ValueError("HISTORY_UNSUPPORTED_STAT_OR_UNIT")
         end = _utc(row["game_end_utc"], "game_end")
         if end >= frozen_at or end > published_at:
             raise ValueError("HISTORY_FUTURE_GAME_OR_SOURCE_LOOKAHEAD")
-        identity = (row["game_id"],row["player_id"],row["stat"])
+        if game_ends.setdefault(game_id, end) != end:
+            raise ValueError("HISTORY_INCONSISTENT_GAME_END")
+        identity = (game_id,row["player_id"],row["stat"])
         if identity in seen:
             raise ValueError("HISTORY_DUPLICATE_PLAYER_GAME_STAT")
         seen.add(identity)
@@ -119,7 +125,7 @@ def _read_rows(raw: bytes, sport: str, frozen_at: datetime,
         if exposure == 0 and actual != 0:
             raise ValueError("HISTORY_STAT_WITHOUT_OPPORTUNITY")
         out.append({
-            "game_id": row["game_id"], "player_id": row["player_id"],
+            "game_id": game_id, "player_id": row["player_id"],
             "team_id": row["team_id"], "stat": row["stat"],
             "game_end": end, "opportunities": exposure, "actual": actual,
         })
@@ -138,7 +144,8 @@ def fit_player_history(raw: bytes, context: dict) -> tuple[dict, dict]:
     if context["source_id"] not in SOURCES or SOURCES[context["source_id"]].sport != sport:
         raise ValueError("HISTORY_SOURCE_SPORT_MISMATCH")
     for field in ("event_id","home_id","away_id"):
-        if type(context[field]) is not str or not context[field].strip():
+        value = context[field]
+        if type(value) is not str or not value or value.strip() != value:
             raise ValueError("HISTORY_ID_MISSING:" + field)
     if context["home_id"] == context["away_id"]:
         raise ValueError("HISTORY_SAME_EVENT_TEAMS")
@@ -162,7 +169,7 @@ def fit_player_history(raw: bytes, context: dict) -> tuple[dict, dict]:
             team not in (context["home_id"],context["away_id"]) or
             type(active[player]) is not bool):
             raise ValueError("HISTORY_ROSTER_PLAYER_TEAM_OR_ACTIVE_INVALID")
-    hist, other_sport = _read_rows(raw, sport, freeze, published)
+    hist, other_sport = _read_rows(raw, sport, context["event_id"], freeze, published)
     units = BASKETBALL_UNITS if sport == "CBB" else FOOTBALL_UNITS
     by = {}
     for row in hist:

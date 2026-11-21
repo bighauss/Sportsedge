@@ -58,6 +58,16 @@ test('UTC timestamp must be explicit ISO Z',()=>{
   }
   assert.throws(()=>C.validateSnapshot({...fresh(),markets:[{...market(),event_start_utc:'2026-11-15T10:00:00'}]}),/UTC ISO/);
 });
+test('UTC timestamps reject calendar and clock rollover while preserving valid leap days and precision',()=>{
+  for(const stamp of ['2026-02-29T01:00:00Z','2026-02-30T01:00:00Z','2026-04-31T01:00:00.123456Z','2026-11-15T24:00:00Z']){
+    assert.throws(()=>C.validateSnapshot({...fresh(),generated_at_utc:stamp}),/generated_at_utc must be a UTC ISO/);
+    assert.throws(()=>C.validateSnapshot({...fresh(),markets:[{...market(),event_start_utc:stamp}]}),/event_start_utc must be a UTC ISO/);
+  }
+  const stamp='2024-02-29T23:59:59.123456Z';
+  const d=C.validateSnapshot({...fresh(),generated_at_utc:stamp,markets:[{...market(),event_start_utc:stamp}]});
+  assert.equal(d.generated_at_utc,stamp);
+  assert.equal(d.markets[0].event_start_utc,stamp);
+});
 test('unsupported sport is blocked',()=>{
   assert.throws(()=>C.validateSnapshot({...fresh(),markets:[{...market(),sport:'UFC'}]}),/unsupported sport/);
 });

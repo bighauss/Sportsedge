@@ -316,7 +316,7 @@ def run_slate(manifest, *, now=None, bestbook_report=None, bestbook_event_map=No
                     events.append(event_out)
                     continue
                 priced_manifest={**inputs[key],"markets":single_leg}
-                result=run_from_manifest(priced_manifest)
+                result=run_from_manifest(priced_manifest,now=when)
                 if result.get("sport")!=sport or result.get("event_id")!=event_id:
                     raise ValueError("RESEARCH_OUTPUT_EVENT_NOT_REGISTERED")
                 if result.get("approved_stake_u")!=0 or result.get("official_counted")!=0 or result.get("card") is not None:

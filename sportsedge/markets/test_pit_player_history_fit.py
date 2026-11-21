@@ -122,6 +122,34 @@ class PriorGamePlayerFit(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"HISTORY_FUTURE_GAME"):
             fit_player_history(raw,ctx("NFL",raw))
 
+    def test_target_event_cannot_be_a_prior_game(self):
+        history=four()
+        history[0]["game_id"]="NEXT-1"
+        raw=source(history)
+        with self.assertRaisesRegex(ValueError,"HISTORY_TARGET_EVENT_IN_ARCHIVE"):
+            fit_player_history(raw,ctx("NFL",raw))
+
+    def test_game_finish_time_must_agree_across_player_stat_rows(self):
+        history=four()
+        other=row("NFL",1,"COMPLETIONS","PASS_ATT",30,20)
+        other["game_end_utc"]=(F-timedelta(days=2)).isoformat()
+        raw=source(history+[other])
+        with self.assertRaisesRegex(ValueError,"HISTORY_INCONSISTENT_GAME_END"):
+            fit_player_history(raw,ctx("NFL",raw))
+
+    def test_matching_game_finish_times_accept_equivalent_utc_offsets(self):
+        other=row("NFL",1,"COMPLETIONS","PASS_ATT",30,20)
+        other["game_end_utc"]=other["game_end_utc"].replace("+00:00","Z")
+        raw=source(four()+[other])
+        _,report=fit_player_history(raw,ctx("NFL",raw))
+        self.assertEqual(report["forecast_rows"],1)
+
+    def test_malformed_csv_quotes_are_rejected(self):
+        raw=source(four()).rstrip(b"\n")
+        raw=raw[:raw.rfind(b",")]+b',"252'
+        with self.assertRaisesRegex(ValueError,"HISTORY_INVALID_CSV"):
+            fit_player_history(raw,ctx("NFL",raw))
+
     def test_source_snapshot_published_or_captured_late(self):
         raw=source(four())
         q=ctx("NFL",raw)

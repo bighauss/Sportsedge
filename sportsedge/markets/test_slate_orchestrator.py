@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from zoneinfo import ZoneInfo
 import json
 import unittest
+from unittest.mock import patch
 
 from sportsedge.markets.test_cli import manifest
 from sportsedge.markets.slate_orchestrator import SCHEMA,run_slate,main
@@ -15,17 +16,22 @@ from sportsedge.markets.slate_orchestrator import SCHEMA,run_slate,main
 CENTRAL=ZoneInfo("America/Chicago")
 
 
-def fixture():
-    now=datetime.now(timezone.utc)
+def fixture(*, now=None):
+    now=datetime.now(timezone.utc) if now is None else now
     day=(now.astimezone(CENTRAL).date()+timedelta(days=1))
     start=datetime.combine(day,time(15,0),tzinfo=CENTRAL).astimezone(timezone.utc)
     later=start+timedelta(hours=3)
     one=manifest()
     one["projection"]["asof_utc"]=(now-timedelta(hours=1)).isoformat()
+    one["distribution"]["training_end_utc"]=(now-timedelta(days=15)).isoformat()
     for c in one["markets"]:
         for k in ("dk_quote","dk_opposite_quote"):
-            c[k]["event_start_utc"]=start.isoformat()
-    two=manifest()
+            c[k].update(
+                event_start_utc=start.isoformat(),
+                observed_at_utc=(now-timedelta(minutes=2)).isoformat(),
+                received_at_utc=(now-timedelta(minutes=1)).isoformat(),
+            )
+    two=deepcopy(one)
     two["projection"].update(sport="NFL",event_id="NFL-E2",
                              home_id="HOME2",away_id="AWAY2",
                              expected_home=25,expected_away=22)
@@ -202,6 +208,31 @@ class FiveSportSlateContract(unittest.TestCase):
         self.assertEqual(out["counts"]["after_start"],2)
         self.assertTrue(all(e["status"]=="BLOCK" for e in out["events"]))
         self.assertEqual(out["approved_stake_u"],0)
+
+    def test_replay_clock_blocks_quote_received_after_decision(self):
+        clock=datetime(2024,1,15,16,tzinfo=timezone.utc)
+        f=fixture(now=clock)
+        decision=clock-timedelta(seconds=90)
+        with patch("sportsedge.markets.cli.datetime",wraps=datetime) as runner_clock:
+            runner_clock.now.return_value=clock
+            out=run_slate(f,now=decision)
+        row=out["events"][0]["research_rows"][0]
+        self.assertEqual(out["generated_at_utc"],decision.isoformat())
+        self.assertEqual(row["research_state"],"BLOCK")
+        self.assertIn("QUOTE_AFTER_DECISION_OR_START",row["research_reasons"])
+        self.assertEqual(out["counts"]["priced_research"],0)
+
+    def test_replay_clock_applies_exact_five_minute_quote_cutoff(self):
+        clock=datetime(2024,1,15,16,tzinfo=timezone.utc)
+        f=fixture(now=clock)
+        boundary=clock+timedelta(minutes=3)
+        at_limit=run_slate(f,now=boundary)
+        self.assertEqual(at_limit["counts"]["priced_research"],1)
+        self.assertEqual(at_limit,run_slate(f,now=boundary))
+        over_limit=run_slate(f,now=boundary+timedelta(microseconds=1))
+        row=over_limit["events"][0]["research_rows"][0]
+        self.assertEqual(row["research_state"],"BLOCK")
+        self.assertIn("STALE_QUOTE",row["research_reasons"])
 
     def test_invalid_model_distribution_is_visible_block(self):
         f=fixture()
