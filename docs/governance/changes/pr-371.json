@@ -1,0 +1,63 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 371,
+  "base_commit": "3888dbeb13a69bb9bd3b9ebacfc49a0ac2f710ad",
+  "protected_paths": [
+    "research/audit/test_quant_prop_joint_structural_guards.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Test-first synthetic adversarial research contract: same-player composite/shared-component classification and impossible half-point/monotone settled ladder outcomes must fail closed.",
+  "assumptions": [
+    "PTS is a literal included component of PRA for the same player and period, not an independent stochastic feature.",
+    "At the same non-push period and line, an OVER and UNDER selection cannot both win; same-player OVER at a higher threshold cannot win when lower OVER loses.",
+    "Existing standalone audit code may currently fail these synthetic tests; this is an intentionally RED research-only draft, not an approved implementation.",
+    "Test fixture labels and local SHA claims do not authenticate original game probability snapshots or final box scores; no market promotion permitted."
+  ],
+  "agent_identity": "GPT-6 SportsEdge joint-prop independent red-team tests",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "authenticated original same-event player prop joint forecast pairs and reliable structural grader checks",
+    "before": null,
+    "unit": "verified paired historical player props",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "TEST_FIRST_ADVERSARIAL",
+    "test_command": "python -m unittest discover -s research/audit -p 'test_quant_prop_joint_structural_guards.py' -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "3888dbeb13a69bb9bd3b9ebacfc49a0ac2f710ad",
+    "strategy": "CLOSE_UNMERGED_AFTER_INTEGRATION",
+    "verification_command": "python -m unittest discover -s research/audit -p 'test_quant_prop_joint_structural_guards.py' -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
