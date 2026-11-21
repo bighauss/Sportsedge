@@ -211,8 +211,13 @@ def _validate_market_pair(row: dict) -> float:
     if paired_time >= when(row['game_start_utc']) or abs((paired_time - captured_time).total_seconds()) > 300:
         raise ValueError('STALE_OR_LATE_OPPOSING_QUOTE')
     # A later opposing-side price is hindsight, not an available pregame benchmark.
-    if paired_time > when(row['selected_utc']):
+    selected_time = when(row['selected_utc'])
+    if paired_time > selected_time:
         raise ValueError('OPPOSING_QUOTE_AFTER_SELECTION')
+    # Both sides independently satisfy the pregame five-minute quote-age gate.
+    # Proximity to the selected-side capture alone is not sufficient.
+    if (selected_time - paired_time).total_seconds() > 300:
+        raise ValueError('STALE_OPPOSING_QUOTE_AT_SELECTION')
     supplied = _valid_probability(row['market_p_no_vig'], 'market_probability')
     computed = devig_two_way(row['price_american'],row['paired_price_american'])['no_vig_a']
     if abs(supplied - computed) > 1e-6:
