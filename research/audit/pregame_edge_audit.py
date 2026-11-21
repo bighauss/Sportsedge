@@ -8,6 +8,7 @@ All timestamps must be timezone-aware; receipt hashes must be 64 hex chars.
 """
 import argparse
 import csv
+import io
 import datetime as dt
 import hashlib
 import json
@@ -150,9 +151,44 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
             'admission_allowed':False,'source_authenticated':False,
             'disclaimer':'Claims include rejected rows for investigation. Declared timestamps and hashes do not authenticate original sources, calibration, selection eligibility or actual EV. PAPER/0u.'}
 
+def parse_original_csv(data: bytes) -> list[dict]:
+    """Parse immutable source bytes by LOGICAL CSV records, without repairs.
+
+    DictReader silently overwrites duplicate headers and skips blank source
+    records, which can change a claimed top-edge ranking or its denominator.
+    Preserve legitimate quoted multiline cells, including physical blank
+    lines inside quoted fields. Fail before calculating any EV if ambiguous.
+    """
+    if type(data) is not bytes or not data:
+        raise ValueError('EMPTY_OR_NONBYTES_ORIGINAL_CSV')
+    try:
+        parsed=csv.reader(io.StringIO(data.decode('utf-8-sig'), newline=''),
+                          strict=True)
+        fields=next(parsed, None)
+        if not fields or any(not name.strip() for name in fields):
+            raise ValueError('ORIGINAL_CSV_HEADER_MISSING_OR_BLANK')
+        normalized=[name.strip().casefold() for name in fields]
+        if len(set(normalized)) != len(fields):
+            raise ValueError('ORIGINAL_CSV_DUPLICATE_NORMALIZED_HEADER')
+        if any(name != name.strip() for name in fields):
+            raise ValueError('ORIGINAL_CSV_UNNORMALIZED_HEADER')
+        rows=[]
+        for cells in parsed:
+            if not cells or not any(cell.strip() for cell in cells):
+                raise ValueError('ORIGINAL_CSV_BLANK_LOGICAL_RECORD')
+            if len(cells) != len(fields):
+                raise ValueError('ORIGINAL_CSV_RAGGED_RECORD')
+            rows.append(dict(zip(fields,cells)))
+        return rows
+    except UnicodeError as exc:
+        raise ValueError('ORIGINAL_CSV_INVALID_UTF8') from exc
+    except csv.Error as exc:
+        raise ValueError('ORIGINAL_CSV_MALFORMED') from exc
+
+
 def audit_file(source, *, max_age_minutes=120, top_n=20):
     data=Path(source).read_bytes()
-    rows=list(csv.DictReader(data.decode('utf-8-sig').splitlines()))
+    rows=parse_original_csv(data)
     return audit_rows(rows, hashlib.sha256(data).hexdigest(),
                       max_age_minutes=max_age_minutes,top_n=top_n)
 
