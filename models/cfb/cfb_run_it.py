@@ -275,6 +275,8 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                 withheld.append((label, f"kickoff mismatch: DK {L['kickoff_ct']} CT vs CFBD {ko.astimezone(CT):%-I:%M %p} CT")); continue
         if g.get("completed") or ko <= now_utc:
             withheld.append((label, f"kicked off {ko.astimezone(CT):%-I:%M %p} CT before run")); continue
+        if type(g.get("neutralSite")) is not bool:
+            withheld.append((label, "CFBD neutralSite missing or not boolean")); continue
         ven = venues.get(g.get("venueId"), {})
         dome = bool(ven.get("dome"))
         if not dome:
