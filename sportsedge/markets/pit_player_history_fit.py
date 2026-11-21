@@ -284,8 +284,22 @@ def main(argv=None):
     second=(json.dumps(report,indent=2,sort_keys=True,allow_nan=False)+"\n").encode()
     if paths[2].exists() or paths[3].exists():
         raise ValueError("HISTORY_OUTPUT_CREATE_ONLY")
-    with paths[2].open("xb") as w: w.write(first)
-    with paths[3].open("xb") as w: w.write(second)
+    # A feature file without its paired census is incomplete evidence.
+    # Clean up only new outputs from this invocation on ordinary write errors;
+    # never overwrite existing source files or other researchers' artifacts.
+    import os
+    created = []
+    try:
+        for destination, payload in ((paths[2], first), (paths[3], second)):
+            with destination.open("xb") as w:
+                created.append(destination)
+                w.write(payload)
+                w.flush()
+                os.fsync(w.fileno())
+    except BaseException:
+        for destination in reversed(created):
+            destination.unlink(missing_ok=True)
+        raise
     return 0
 
 

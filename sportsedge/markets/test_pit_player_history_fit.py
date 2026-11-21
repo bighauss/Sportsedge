@@ -206,5 +206,42 @@ class PriorGamePlayerFit(unittest.TestCase):
                 main([str(src),str(context),str(features),str(census)])
 
 
+    def test_census_destination_failure_removes_orphan_features(self):
+        raw=source(four())
+        q=ctx("NFL",raw)
+        with TemporaryDirectory() as d:
+            directory=Path(d)
+            original=directory/"history.csv"
+            context=directory/"context.json"
+            features=directory/"features.json"
+            census=directory/"missing"/"census.json"
+            original.write_bytes(raw)
+            context.write_text(json.dumps(q))
+            with self.assertRaises((FileNotFoundError, NotADirectoryError)):
+                main([str(original),str(context),str(features),str(census)])
+            self.assertFalse(features.exists(),
+                "research feature file must not survive missing census")
+            self.assertFalse(census.exists())
+            self.assertEqual(original.read_bytes(),raw)
+            self.assertEqual(json.loads(context.read_text()),q)
+
+    def test_existing_census_never_overwritten_or_repaired_from_future(self):
+        raw=source(four())
+        q=ctx("NFL",raw)
+        with TemporaryDirectory() as d:
+            directory=Path(d)
+            original=directory/"history.csv"
+            context=directory/"context.json"
+            features=directory/"features.json"
+            census=directory/"census.json"
+            original.write_bytes(raw)
+            context.write_text(json.dumps(q))
+            census.write_text("ORIGINAL_CENSUS_UNCHANGED")
+            with self.assertRaisesRegex(ValueError,"HISTORY_OUTPUT_CREATE_ONLY"):
+                main([str(original),str(context),str(features),str(census)])
+            self.assertFalse(features.exists())
+            self.assertEqual(census.read_text(),"ORIGINAL_CENSUS_UNCHANGED")
+
+
 if __name__=="__main__":
     unittest.main()
