@@ -168,12 +168,19 @@ class CapturePreflightTests(unittest.TestCase):
                              for x in result['rejected_rows']))
 
     def test_invalid_numeric_line_in_quote_identity_visible_without_deletion(self):
-        result=manifest_for_capture(capture(book='DK',side='over',
-                                            line='not-a-number'),
+        for bad_line in ('not-a-number', '1e9999999', '-1e9999999',
+                         '1e-9999999', '9'*41, '1000001'):
+            with self.subTest(line=bad_line):
+                result=manifest_for_capture(capture(book='DK',side='over',
+                                                    line=bad_line),
+                     asof_utc='2026-11-15T18:00:00Z',provider='DK')
+                self.assertEqual(result['row_count'],1)
+                self.assertIn('INVALID_OFFER_LINE',
+                              [x['reason'] for x in result['rejected_rows']])
+        valid=manifest_for_capture(capture(book='DK',side='over',line='-0.25'),
              asof_utc='2026-11-15T18:00:00Z',provider='DK')
-        self.assertEqual(result['row_count'],1)
-        self.assertIn('INVALID_OFFER_LINE',
-                      [x['reason'] for x in result['rejected_rows']])
+        self.assertNotIn('INVALID_OFFER_LINE',
+                         [x['reason'] for x in valid['rejected_rows']])
 
     def test_capture_header_normalization_conflicts_fail_closed(self):
         original = capture(book='DK', side='over', line='44.5')
