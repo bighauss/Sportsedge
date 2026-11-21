@@ -158,6 +158,41 @@ class TestSlateProjectionOverlay(unittest.TestCase):
         self.assertFalse(matrix["CBB"]["all_market_families_verified"])
         self.assertEqual(out["approved_stake_u"], 0)
 
+    def test_four_sport_matrix_includes_mlb_without_inventing_offers(self):
+        from sportsedge.markets.projection_slate_audit import _four_sport_projection_matrix
+        # One synthetic MLB event has a declared ML candidate but no research
+        # output. This is not a positive model or a sportsbook offer receipt.
+        raw = {
+            "sport_coverage": {"MLB": {}},
+            "events": [{
+                "sport": "MLB", "event_id": "SYNTHETIC_MLB_1",
+                "families": {"ML": {"submitted_research_candidates": 1}},
+                "research_rows": [],
+            }],
+        }
+        matrix = _four_sport_projection_matrix(raw)
+        self.assertEqual(set(matrix), {"MLB", "NFL", "CFB", "CBB"})
+        mlb = matrix["MLB"]["families"]
+        self.assertEqual(set(mlb), {"ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"})
+        self.assertEqual(mlb["ML"]["status"], "BLOCK_MISSING_RESEARCH_OUTPUT_ROWS")
+        self.assertEqual(mlb["ML"]["missing_research_output_rows"], 1)
+        self.assertEqual(mlb["TEAM_TOTAL"]["status"],
+                         "MARKET_NOT_SUBMITTED_OFFERING_UNVERIFIED")
+        self.assertEqual(mlb["PLAYER_PROP"]["status"],
+                         "MARKET_NOT_SUBMITTED_OFFERING_UNVERIFIED")
+        self.assertFalse(matrix["MLB"]["all_market_families_verified"])
+        self.assertEqual(matrix["MLB"]["approved_stake_u"], 0)
+
+    def test_four_sport_matrix_preserves_original_three_sport_contract(self):
+        out = run_slate(fixture())
+        self.assertEqual(set(out["four_sport_projection_matrix"]),
+                         {"CBB", "CFB", "NFL", "MLB"})
+        for sport in ("CBB", "CFB", "NFL"):
+            self.assertEqual(out["four_sport_projection_matrix"][sport],
+                             out["cbb_cfb_nfl_projection_matrix"][sport])
+        self.assertEqual(out["four_sport_projection_matrix"]["MLB"]["approved_stake_u"], 0)
+        self.assertEqual(out["independent_projection_coverage"]["verified_model_ev_count"], 0)
+
     def test_three_sport_matrix_valid_receipt_is_still_paper_not_market_complete(self):
         f = fixture()
         f["projection_evidence"] = [make_receipt(f, run_slate(f))]

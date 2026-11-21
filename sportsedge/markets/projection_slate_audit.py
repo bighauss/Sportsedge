@@ -44,17 +44,23 @@ THREE_SPORT_FAMILIES = {
     "CFB": ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"),
     "NFL": ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"),
 }
+# Separate four-sport owner scope. Existing three-sport card contract stays
+# byte/semantics compatible; MLB coverage cannot be silently omitted.
+FOUR_SPORT_FAMILIES = {
+    **THREE_SPORT_FAMILIES,
+    "MLB": ("ML", "SPREAD", "TOTAL", "TEAM_TOTAL", "PLAYER_PROP"),
+}
 
 
-def _three_sport_projection_matrix(result: dict) -> dict:
-    """Report missing own-model receipts for every game/market family.
+def _projection_matrix(result: dict, family_map: dict) -> dict:
+    """Report own-model receipt gaps, not actual sportsbook offering coverage.
 
     Never infer independently modeled player props from a score projection.
     A valid receipt shape is not authenticated input or calibrated EV.
     """
     requested = result.get("sport_coverage", {})
     report = {}
-    for sport, families in THREE_SPORT_FAMILIES.items():
+    for sport, families in family_map.items():
         games = [e for e in result["events"] if e["sport"] == sport]
         family_report = {}
         for family in families:
@@ -107,6 +113,16 @@ def _three_sport_projection_matrix(result: dict) -> dict:
             "approved_stake_u": 0,
         }
     return report
+
+
+def _three_sport_projection_matrix(result: dict) -> dict:
+    """Keep the established NFL/CFB/CBB output unchanged."""
+    return _projection_matrix(result, THREE_SPORT_FAMILIES)
+
+
+def _four_sport_projection_matrix(result: dict) -> dict:
+    """Add MLB to the owner's core scope without inferring new markets."""
+    return _projection_matrix(result, FOUR_SPORT_FAMILIES)
 
 
 def attach_independent_projection_audit(result: dict, evidence: list[dict]) -> dict:
@@ -214,4 +230,5 @@ def attach_independent_projection_audit(result: dict, evidence: list[dict]) -> d
         "official_counted": 0, "approved_stake_u": 0,
     }
     result["cbb_cfb_nfl_projection_matrix"] = _three_sport_projection_matrix(result)
+    result["four_sport_projection_matrix"] = _four_sport_projection_matrix(result)
     return result
