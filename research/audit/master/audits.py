@@ -3,7 +3,7 @@
 Canonical prediction row (dict / CSV column), extra keys allowed:
   pred_id, game_id, sport, market, side, player, team, opponent,
   model_prob, odds, book, odds_ts, pred_ts, kickoff_ts,
-  close_odds, close_other_odds, result (W/L/P/V), projection, actual, line,
+  result (W/L/P/V), projection, actual, line,
   model_version, rule_version, inputs (list of {name, value, ts, source})
 Timestamps: ISO-8601 with offset, e.g. 2026-11-16T12:00:00-06:00.
 """
@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Sequence
 
 from . import stats
-from .odds import implied_prob, clv, ev_per_unit
+from .odds import implied_prob, ev_per_unit
 
 # ---------------------------------------------------------------- helpers
 
@@ -34,7 +34,7 @@ SEV = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
 
 # ---------------------------------------------------------------- P1.2 leakage
 
-POSTGAME_FIELDS = {"close_odds", "close_other_odds", "result", "actual", "final_score",
+POSTGAME_FIELDS = {"close_odds", "result", "actual", "final_score",
                    "closing_line", "box_score"}
 
 
@@ -277,31 +277,6 @@ def market_disagreement(rows: Sequence[dict], edges=(0, .02, .04, .06, .08, .10,
             "roi_falls_with_gap": len(rois) >= 2 and rois[-1] < rois[0],
             "note": "Disagreeing with the market is not an edge by itself; large gaps that underperform "
                     "point to model weakness. No model parameters are changed."}
-
-# ---------------------------------------------------------------- P1.4 CLV
-
-def clv_report(rows: Sequence[dict]) -> dict:
-    vals = []
-    for r in rows:
-        if r.get("close_odds") in (None, ""):
-            continue
-        try:
-            c = clv(float(r["odds"]), float(r["close_odds"]),
-                    float(r["close_other_odds"]) if r.get("close_other_odds") not in (None, "") else None)
-        except ValueError:
-            continue
-        vals.append({**c, "pred_id": r.get("pred_id"), "result": r.get("result")})
-    if not vals:
-        return {"n": 0, "coverage": 0.0}
-    n = len(vals)
-    mean = sum(v["clv_prob"] for v in vals) / n
-    perf = stats.performance([r for r in rows if r.get("result")])
-    warn = None
-    if perf["roi"] and perf["roi"] > 0 and mean < 0:
-        warn = "WINNING_WITH_NEGATIVE_CLV — likely variance, not edge"
-    return {"n": n, "coverage": n / len(rows), "mean_clv_prob": mean,
-            "beat_close_rate": sum(v["beat_close"] for v in vals) / n,
-            "mean_clv_ev": sum(v["clv_ev"] for v in vals) / n, "warning": warn}
 
 # ---------------------------------------------------------------- P1.5 backtest auditor + version tracker
 

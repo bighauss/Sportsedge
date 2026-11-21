@@ -122,7 +122,7 @@ def card_view(result: dict) -> list[dict]:
 
 LEDGER_FIELDS = ["pred_id", "logged_ts", "game_id", "sport", "market", "side", "player", "book",
                  "line", "odds", "model_prob", "pred_ts", "kickoff_ts", "rule_version",
-                 "model_version", "audit_status", "row_hash", "close_odds", "result", "net_units"]
+                 "model_version", "audit_status", "row_hash", "result", "net_units"]
 
 
 def row_hash(r: dict) -> str:
@@ -155,7 +155,7 @@ def ledger_append(path: str, rows: Sequence[dict]) -> int:
 
 
 def grade(ledger_rows: Sequence[dict], results: dict[str, dict]) -> list[dict]:
-    """results: {pred_id: {result, close_odds}}. Only fills grading fields; hashes verified."""
+    """results: {pred_id: {result}}. Only fills grading fields; hashes verified."""
     out = []
     for r in ledger_rows:
         g = dict(r)
@@ -164,14 +164,13 @@ def grade(ledger_rows: Sequence[dict], results: dict[str, dict]) -> list[dict]:
         res = results.get(r["pred_id"])
         if res:
             g["result"] = res["result"]
-            g["close_odds"] = res.get("close_odds", r.get("close_odds"))
             g["net_units"] = stats.bet_profit({"result": res["result"], "odds": r["odds"]})
         out.append(g)
     return out
 
 
 def postgame_report(graded: Sequence[dict], rules: Sequence[dict] = ()) -> dict:
-    """Mandatory post-game: every prediction graded incl. blocked; calibration, CLV, ROI, DD."""
+    """Mandatory post-game: every prediction graded incl. blocked; calibration, ROI, DD."""
     g = [r for r in graded if r.get("result") in ("W", "L", "P", "V")]
     wl = [r for r in g if r["result"] in ("W", "L")]
     rep = {"graded": len(g), "ungraded": len(graded) - len(g)}
@@ -185,7 +184,6 @@ def postgame_report(graded: Sequence[dict], rules: Sequence[dict] = ()) -> dict:
         oc = [int(r["result"] == "W") for r in wl]
         rep.update(brier=stats.brier(pr, oc), log_loss=stats.log_loss(pr, oc), ece=stats.ece(pr, oc),
                    calibration=stats.calibration_table(pr, oc))
-    rep["clv"] = audits.clv_report(g)
     if rules:
         rep["versions"] = audits.backtest_audit(g, rules)
     rep["bias"] = audits.bias_breakdown(g, dims=("market", "side", "edge_bucket"))
