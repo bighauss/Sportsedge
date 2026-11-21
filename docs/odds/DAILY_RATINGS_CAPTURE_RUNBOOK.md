@@ -1,0 +1,11 @@
+# Daily CBB and CFB ratings capture
+
+This manual-only pilot is research evidence collection, PAPER / 0u. It does not fetch odds, start a schedule, or activate a model.
+
+- **CBB**: Bart Torvik's original `team_results.csv` for the basketball season end year; validates unique teams and usable offense, defense and tempo. An access challenge, redirect, or malformed response is a blocker, not CSV.
+- **CFB**: [CFBD team SP+ ratings](https://api.collegefootballdata.com/api/ratings) for the football season year; validates rating fields, season and unique teams. This does not establish access to CFBD's advanced-stat endpoints.
+- **Launch**: On `main`, dispatch **Daily ratings capture** once on a Central calendar date. The workflow validates the archive key and persists a separate ratings claim before either provider request. Do not delete or retry around a claim. A failed attempt is still an attempt, and a privileged deletion or expired retention removes the claim protection.
+- **Retention**: The capture encrypts the exact accepted payloads and receipt, storing them as an artifact for 90 days. A failed source is recorded separately from a successfully saved source. The index contains plaintext checksums, not ratings or credentials. Preserve approved long-term copies outside GitHub artifact retention if needed.
+- **Replay**: In a private environment, decrypt the raw file and receipt. Call `eligible_bytes` with the exact source, season, decision time, kickoff and an explicit maximum age in seconds before adapting rows. A snapshot finishing after the decision cannot be used, even if its request started beforehand. Missing or failed snapshots stay missing, and matching team names to model IDs needs a versioned crosswalk.
+- **Publication**: Retrieval completion gives an observation time, not a provider publish time or an independently verified historical release. Never backdate a browser download, use a later snapshot to fill a missing earlier one, or treat a past season returned today as pregame evidence for that season.
+- **No-network check**: `python -m sportsedge.validation.daily_ratings_capture /private/new-directory` is dry-run unless `--execute` is supplied. Local execution does not use the workflow's GitHub attempt markers.

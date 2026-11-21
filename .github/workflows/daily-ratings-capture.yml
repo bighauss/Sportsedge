@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: daily-ratings-capture
@@ -31,15 +32,33 @@ jobs:
       - name: Validate archive key before any request
         run: python -c "import os; from cryptography.fernet import Fernet; Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode()); print('archive key OK')"
       - name: Offline regression tests
-        run: python -m unittest sportsedge.validation.test_daily_ratings_capture -v
+        run: python -m unittest sportsedge.validation.test_daily_ratings_capture sportsedge.odds.test_daily_pilot_artifact_gate -v
+      - name: Reserve Central date
+        id: claim
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: python -m sportsedge.odds.daily_pilot_artifact_gate reserve --pilot ratings
+      - name: Persist attempt before contacting providers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.claim.outputs.artifact_name }}
+          path: ${{ runner.temp }}/daily-ratings-claim.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Verify durable attempt and Central date
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: python -m sportsedge.odds.daily_pilot_artifact_gate verify --pilot ratings
       - name: Capture (one Torvik GET, one CFBD call)
         id: cap
         continue-on-error: true
+        env:
+          CLAIM_DATE_CT: ${{ steps.claim.outputs.date_ct }}
         run: |
           umask 077
-          python -m sportsedge.validation.daily_ratings_capture "$RUNNER_TEMP/ratings-private"
+          python -m sportsedge.validation.daily_ratings_capture "$RUNNER_TEMP/ratings-private" --claim-date "$CLAIM_DATE_CT" --execute
       - name: Encrypt archive
-        if: always()
+        if: ${{ !cancelled() && steps.cap.outcome != 'skipped' && steps.cap.outcome != '' }}
         run: |
           umask 077
           install -d -m 0700 "$RUNNER_TEMP/ratings-encrypted"
@@ -50,19 +69,24 @@ jobs:
           src = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ratings-private"
           dst = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ratings-encrypted"
           idx = []
-          for p in sorted(src.glob("*")) if src.exists() else []:
+          for p in sorted(src.glob("*")):
               b = p.read_bytes(); (dst / (p.name + ".fernet")).write_bytes(f.encrypt(b))
               idx.append({"file": p.name, "plaintext_sha256": "sha256:" + hashlib.sha256(b).hexdigest()})
+          if not idx:
+              raise SystemExit("No ratings capture files to encrypt")
           (dst / "index.json").write_text(json.dumps(idx, indent=2) + "\n")
           print("encrypted", len(idx), "file(s)")
           PY
+        id: encrypt
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ !cancelled() && steps.encrypt.outcome == 'success' }}
         with:
           name: daily-ratings-encrypted-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ratings-encrypted
           retention-days: 90
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Report partial capture
         if: steps.cap.outcome == 'failure'
-        run: echo "::warning::One or more sources BLOCKED; see the public log line above (states only)" ; exit 1
+        run: |
+          echo "::warning::One or more sources BLOCKED; see the public log line above (states only)"
+          exit 1
