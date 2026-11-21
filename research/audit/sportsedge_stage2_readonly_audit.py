@@ -16,6 +16,7 @@ import csv
 import hashlib
 import json
 import math
+import re
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -23,7 +24,7 @@ from pathlib import Path
 TABS = (
     "ACTUAL_LEDGER", "MODEL_OUTPUTS", "GAMES", "PITCHERS", "LINEUPS",
     "ODDS", "Odds_Flat", "ODDS_RAW", "SHADOW_LEDGER", "CANDIDATE_AUDIT",
-    "PICKS_DERIVED",
+    "PICKS_DERIVED", "MARKET_STATUS",
 )
 ERROR_TOKENS = {"#N/A", "#REF!", "#VALUE!", "#DIV/0!", "#ERROR!"}
 
@@ -81,9 +82,28 @@ def audit_ledger(rows: list[dict]) -> dict:
     arithmetic_issues = []
     nonstandard_prices = 0
     invalid_money = 0
+    parlay_market_legs = Counter()
+    parlay_unspecified_leg_count = 0
+    boosted_price_rows = 0
+    placed_counts = Counter(clean(r.get("Placed CDT")) for r in rows if clean(r.get("Placed CDT")))
     for i, r in enumerate(rows, 2):
         outcome = clean(r.get("Result")).upper()
         ctr[outcome] += 1
+        # Inventory categories before monetary validation: an invalid stake
+        # must never silently remove a captured wager from the denominator.
+        price = clean(r.get("Bet Price"))
+        market_name = clean(r.get("Market"))
+        if "parlay" in market_name.casefold():
+            match = re.fullmatch(r"([1-9][0-9]*)\s*[- ]\s*Pick\s+Parlay", market_name, re.IGNORECASE)
+            if match:
+                # Declared leg count is a historical label, not verified slip legs.
+                parlay_market_legs[match.group(1)] += 1
+            else:
+                parlay_unspecified_leg_count += 1
+        if "boost" in price.casefold():
+            boosted_price_rows += 1
+        if not (len(price) >= 4 and price[0] in "+-" and price[1:].isdigit()):
+            nonstandard_prices += 1
         s, p = _decimal(r.get("Stake", "")), _decimal(r.get("Profit", ""))
         if s is None or s <= 0 or p is None:
             invalid_money += 1
@@ -91,9 +111,6 @@ def audit_ledger(rows: list[dict]) -> dict:
             continue
         stake += s
         profit += p
-        price = clean(r.get("Bet Price"))
-        if not (len(price) >= 4 and price[0] in "+-" and price[1:].isdigit()):
-            nonstandard_prices += 1
         expected = None
         if outcome in ("L", "LOSS"):
             expected = -s
@@ -114,6 +131,12 @@ def audit_ledger(rows: list[dict]) -> dict:
         "recorded_profit": str(profit.quantize(Decimal("0.01"))),
         "recorded_roi_percent": float((profit / stake * 100).quantize(Decimal("0.01"))) if stake else None,
         "noncanonical_american_odds": nonstandard_prices,
+        "parlay_rows_by_declared_leg_count": dict(sorted(parlay_market_legs.items(), key=lambda k: int(k[0]))),
+        "parlay_rows_unknown_leg_count": parlay_unspecified_leg_count,
+        "boosted_price_text_rows": boosted_price_rows,
+        "duplicate_placed_time_groups": sum(n > 1 for n in placed_counts.values()),
+        "rows_sharing_placed_time": sum(n for n in placed_counts.values() if n > 1),
+        "placed_time_note": "A shared self-declared placement timestamp is a source-review flag, not proof of an invalid bet.",
         "invalid_monetary_rows": invalid_money,
         "arithmetic_issues": arithmetic_issues,
         "limitations": "Descriptive wager ledger only. No independent bookmaker authentication, prospective model proof or CLV can be inferred.",
@@ -146,6 +169,41 @@ def audit_other(tab: str, rows: list[dict]) -> dict:
         report["bound_player_rows"] = sum(bool(clean(r.get("PlayerID"))) for r in rows)
         report["batting_order_rows"] = sum(bool(clean(r.get("BatOrder"))) for r in rows)
         report["statuses"] = dict(Counter(clean(r.get("LineupStatus")) for r in rows))
+    elif tab == "MARKET_STATUS":
+        # Historical out-of-sample status cells are user-authored claims.
+        # Live readiness and independent evidence review are distinct concepts.
+        required = ("Market", "Status", "Validation", "Live_Output_Ready", "Execution_Gate")
+        report["missing_required_columns"] = sorted(k for k in required if any(k not in r for r in rows))
+        statuses = Counter(clean(r.get("Status")).upper() for r in rows)
+        def live_readiness(value):
+            flag = clean(value).casefold()
+            if flag in ("false", "0"):
+                return False
+            if flag in ("true", "1"):
+                return True
+            return None
+        ready = [live_readiness(r.get("Live_Output_Ready")) for r in rows]
+        report["status_claims"] = dict(sorted(statuses.items()))
+        report["historical_oos_claimed_rows"] = sum(
+            "OOS" in clean(r.get("Validation")).upper() for r in rows)
+        report["validated_historical_claims"] = statuses["VALIDATED"]
+        report["validated_but_live_not_ready_rows"] = sum(
+            clean(r.get("Status")).upper() == "VALIDATED" and is_ready is False
+            for r, is_ready in zip(rows, ready))
+        report["live_output_ready_false_rows"] = sum(is_ready is False for is_ready in ready)
+        report["live_output_ready_true_rows"] = sum(is_ready is True for is_ready in ready)
+        report["ambiguous_live_output_ready_rows"] = sum(is_ready is None for is_ready in ready)
+        report["not_validated_but_claimed_live_ready_rows"] = sum(
+            clean(r.get("Status")).upper() != "VALIDATED" and is_ready is True
+            for r, is_ready in zip(rows, ready))
+        report["independently_reproduced_historical_validation_rows"] = 0
+        report["authenticated_official_ready_rows"] = 0
+        report["approved_stake_u"] = 0
+        report["classification"] = "HISTORICAL_VALIDATION_CLAIMS_NOT_OFFICIAL_RELEASE_PROOF"
+        report["limitations"] = (
+            "MARKET_STATUS labels and Live_Output_Ready values are self-declared. "
+            "They cannot authenticate an out-of-sample evaluation, original live quote, "
+            "frozen model probability, rule effective time, independent approval, or execution gate.")
     elif tab == "PICKS_DERIVED":
         report["unique_games"] = len({clean(r.get("game")) for r in rows})
         report["games"] = dict(Counter(clean(r.get("game")) for r in rows))
