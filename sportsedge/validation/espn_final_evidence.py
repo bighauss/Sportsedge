@@ -22,7 +22,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
-from sportsedge.validation.paper_ledger import strict_json, time_utc, Blocked
+from sportsedge.validation.paper_ledger import strict_json, time_utc, Blocked, REPO_ROOT
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/"
 LEAGUES = {
@@ -312,7 +312,15 @@ def _fetch(sport,event_id):
 
 
 def save(raw, report, out, *, source_url, import_kind):
-    out=Path(out)
+    out=Path(os.path.abspath(os.fspath(out)))
+    resolved = out.resolve()
+    if (out == REPO_ROOT or REPO_ROOT in out.parents
+            or resolved == REPO_ROOT or REPO_ROOT in resolved.parents
+            or any(part.is_symlink() for part in (out, *out.parents))):
+        raise Reject("PUBLIC_OR_SYMLINKED_OUTPUT_PATH")
+    if (not out.parent.is_dir()
+            or stat.S_IMODE(out.parent.stat().st_mode) & 0o077):
+        raise Reject("OUTPUT_PARENT_NOT_OWNER_PRIVATE")
     out.mkdir(mode=0o700,parents=False,exist_ok=False)
     if stat.S_IMODE(out.stat().st_mode) & 0o077:
         raise Reject("OUTPUT_DIRECTORY_NOT_PRIVATE")
