@@ -103,6 +103,24 @@ class Stage2LegacyStatusTests(unittest.TestCase):
         self.assertEqual(got["recorded_stakes"], "63.32")
         self.assertEqual(got["recorded_profit"], "-46.70")
 
+    def test_invalid_money_still_retains_offer_category_and_price_warning(self):
+        rows = [
+            {"Market": "3-Pick Parlay", "Bet Price": "+395 boosted",
+             "Stake": "bad", "Profit": "", "Result": "LOSS",
+             "Placed CDT": "same", "BetID": "A"},
+            {"Market": "3-Pick Parlay", "Bet Price": "+295",
+             "Stake": "1", "Profit": "-1", "Result": "LOSS",
+             "Placed CDT": "same", "BetID": "B"},
+        ]
+        got = audit_ledger(rows)
+        self.assertEqual(got["wager_rows"], 2)
+        self.assertEqual(got["invalid_monetary_rows"], 1)
+        self.assertEqual(got["parlay_rows_by_declared_leg_count"], {"3": 2})
+        self.assertEqual(got["boosted_price_text_rows"], 1)
+        self.assertEqual(got["noncanonical_american_odds"], 1)
+        self.assertEqual(got["duplicate_placed_time_groups"], 1)
+        self.assertEqual(got["recorded_stakes"], "1.00")
+
     def test_unknown_parlay_size_and_missing_times_not_inferred(self):
         rows = [{
             "Market": "Parlay", "Bet Price": "+200", "Stake": "1",
