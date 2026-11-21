@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import datetime as dt
 import hashlib
 import json
 import os
 import math
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -80,11 +82,24 @@ def manifest_for_capture(source: bytes, *, asof_utc: str,
     if not isinstance(source,bytes) or not source or len(source)>20_000_000:
         raise ValueError('INVALID_SOURCE_BYTES')
     try:
-        reader = csv.DictReader(source.decode('utf-8-sig').splitlines())
-        fields = reader.fieldnames or []
-        if len(fields)!=len(set(fields)):
+        # csv.DictReader silently skips blank records and allows colliding
+        # headers such as captured_utc vs captured_utc<space>. Use a strict
+        # positional parser so the original denominator cannot silently shrink.
+        reader = csv.reader(io.StringIO(source.decode('utf-8-sig'), newline=''),
+                            strict=True)
+        records = list(reader)
+        fields = records[0] if records else []
+        if not fields or any(not name.strip() for name in fields):
+            raise ValueError('INVALID_CAPTURE_CSV_HEADERS')
+        if len(fields) != len(set(name.strip().casefold() for name in fields)):
             raise ValueError('DUPLICATE_CAPTURE_CSV_HEADERS')
-        rows = list(reader)
+        if any(name != name.strip() for name in fields):
+            raise ValueError('UNNORMALIZED_CAPTURE_CSV_HEADERS')
+        if any(len(record) > len(fields) for record in records[1:]):
+            raise ValueError('CAPTURE_CSV_EXTRA_FIELDS')
+        if any(len(record) < len(fields) for record in records[1:]):
+            raise ValueError('CAPTURE_CSV_MISSING_OR_BLANK_RECORD')
+        rows = [dict(zip(fields, record)) for record in records[1:]]
     except UnicodeError as exc:
         raise ValueError('NON_UTF8_CAPTURE') from exc
     except csv.Error as exc:
@@ -145,16 +160,35 @@ def manifest_for_capture(source: bytes, *, asof_utc: str,
         line = str(row.get('line') or '').strip()
         if line:
             try:
-                numeric = Decimal(line)
-                if not numeric.is_finite():
+                # Reject unbounded exponents/precision before creating or
+                # formatting a Decimal. Original quote bytes are never mutated.
+                if (len(line) > 40 or not re.fullmatch(
+                        r'[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)', line)):
                     raise InvalidOperation
-                line = format(numeric.normalize(), 'f')
+                numeric = Decimal(line)
+                if not numeric.is_finite() or abs(numeric) > Decimal('1000000'):
+                    raise InvalidOperation
+                line = ('0' if numeric == 0 else format(numeric.normalize(), 'f'))
             except (InvalidOperation, ValueError):
                 flagged.append({'row': rownum, 'reason': 'INVALID_OFFER_LINE'})
                 continue
-        key = tuple(str(row.get(field) or '').strip().casefold() for field in (
-            'sport', 'event_id', 'book', 'period', 'market', 'side',
-            'captured_utc', 'player_id', 'team_id', 'stat')) + (line,)
+        # Normalization is for duplicate detection only; the source bytes and
+        # exact original field values remain untouched in the capture manifest.
+        book = str(row['book']).strip().casefold()
+        book = {'dk': 'draftkings', 'draft kings': 'draftkings',
+                'fd': 'fanduel', 'fan duel': 'fanduel'}.get(book, book)
+        try:
+            captured_time = when(str(row['captured_utc'])).isoformat()
+        except (ValueError, TypeError):
+            flagged.append({'row': rownum, 'reason': 'INVALID_IDENTITY_CAPTURE_TIME'})
+            continue
+        key = tuple(
+            book if field == 'book' else
+            captured_time if field == 'captured_utc' else
+            str(row.get(field) or '').strip().casefold()
+            for field in ('sport', 'event_id', 'book', 'period', 'market',
+                          'side', 'captured_utc', 'player_id', 'team_id', 'stat')
+        ) + (line,)
         identity_rows.setdefault(key, []).append(rownum)
     for group in identity_rows.values():
         if len(group) > 1:

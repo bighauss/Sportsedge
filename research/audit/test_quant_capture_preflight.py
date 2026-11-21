@@ -168,12 +168,84 @@ class CapturePreflightTests(unittest.TestCase):
                              for x in result['rejected_rows']))
 
     def test_invalid_numeric_line_in_quote_identity_visible_without_deletion(self):
-        result=manifest_for_capture(capture(book='DK',side='over',
-                                            line='not-a-number'),
+        for bad_line in ('not-a-number', '1e9999999', '-1e9999999',
+                         '1e-9999999', '9'*41, '1000001'):
+            with self.subTest(line=bad_line):
+                result=manifest_for_capture(capture(book='DK',side='over',
+                                                    line=bad_line),
+                     asof_utc='2026-11-15T18:00:00Z',provider='DK')
+                self.assertEqual(result['row_count'],1)
+                self.assertIn('INVALID_OFFER_LINE',
+                              [x['reason'] for x in result['rejected_rows']])
+        valid=manifest_for_capture(capture(book='DK',side='over',line='-0.25'),
              asof_utc='2026-11-15T18:00:00Z',provider='DK')
-        self.assertEqual(result['row_count'],1)
-        self.assertIn('INVALID_OFFER_LINE',
-                      [x['reason'] for x in result['rejected_rows']])
+        self.assertNotIn('INVALID_OFFER_LINE',
+                         [x['reason'] for x in valid['rejected_rows']])
+
+    def test_capture_header_normalization_conflicts_fail_closed(self):
+        original = capture(book='DK', side='over', line='44.5')
+        header, body = original.splitlines()
+        for alias in (b'captured_utc ', b'CAPTURED_UTC'):
+            with self.subTest(alias=alias):
+                ambiguous = header.replace(
+                    b'captured_utc', b'captured_utc,' + alias, 1
+                ) + b'\n' + body + b'\n'
+                with self.assertRaisesRegex(
+                    ValueError, 'DUPLICATE_CAPTURE_CSV_HEADERS'
+                ):
+                    manifest_for_capture(ambiguous,
+                        asof_utc='2026-11-15T18:00:00Z', provider='DK')
+        unnormalized = header.replace(
+            b'captured_utc', b' captured_utc ', 1
+        ) + b'\n' + body + b'\n'
+        with self.assertRaisesRegex(
+            ValueError, 'UNNORMALIZED_CAPTURE_CSV_HEADERS'
+        ):
+            manifest_for_capture(unnormalized,
+                asof_utc='2026-11-15T18:00:00Z', provider='DK')
+
+    def test_short_and_blank_capture_records_never_disappear(self):
+        header, body = capture(book='DK',side='over',line='44.5').splitlines()
+        for original, expected in (
+            (header+b'\n'+body.rsplit(b',',1)[0]+b'\n',
+             'CAPTURE_CSV_MISSING_OR_BLANK_RECORD'),
+            (header+b'\n\n'+body+b'\n',
+             'CAPTURE_CSV_MISSING_OR_BLANK_RECORD'),
+        ):
+            with self.subTest(expected=expected):
+                with self.assertRaisesRegex(ValueError, expected):
+                    manifest_for_capture(original,
+                        asof_utc='2026-11-15T18:00:00Z',provider='DK')
+
+    def test_original_offer_aliases_and_signed_zero_quarantine_all_copies(self):
+        base = dict(sport='NFL', event_id='G1', book='DK', period='FG',
+                    market='total',side='over',line='44.5',price_american='-110',
+                    quote_sha256=H,captured_utc='2026-11-15T17:00:00Z',
+                    game_start_utc='2026-11-15T21:00:00Z',offered='1',
+                    captured='1',modeled='0',provenance='0')
+        variants = (
+            (dict(book='DraftKings'), dict()),
+            (dict(captured_utc='2026-11-15T17:00:00+00:00'), dict()),
+            (dict(captured_utc='2026-11-15T17:00:00.000Z'), dict()),
+            (dict(captured_utc='2026-11-15T11:00:00-06:00'), dict()),
+            (dict(line='-0.00'),dict(line='0.0')),
+        )
+        for updates, base_updates in variants:
+            with self.subTest(updates=updates):
+                first = dict(base, **base_updates)
+                second = dict(first, **updates, price_american='-105')
+                for rows in ([first,second],[second,first]):
+                    stream = io.StringIO()
+                    writer = csv.DictWriter(stream,fieldnames=list(first))
+                    writer.writeheader()
+                    writer.writerows(rows)
+                    result = manifest_for_capture(stream.getvalue().encode(),
+                        asof_utc='2026-11-15T18:00:00Z',provider='DK')
+                    duplicates = [x['row'] for x in result['rejected_rows']
+                        if x['reason']=='DUPLICATE_OR_CONFLICTING_OFFER_IDENTITY']
+                    self.assertEqual(duplicates,[2,3])
+                    self.assertEqual(result['row_count'],2)
+                    self.assertFalse(result['source_authenticated'])
 
     def test_future_api_call_denied(self):
         with self.assertRaises(ValueError):quota_decision('2026-11-15T18:00:00Z',
