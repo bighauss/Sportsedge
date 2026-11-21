@@ -109,5 +109,8 @@ class TestJointPropAudit(unittest.TestCase):
             self.assertEqual(r["flag"],"STRUCTURAL_NOT_STATISTICAL_EVIDENCE")
 
 
+# Include additional adversarial cases in the existing test entrypoint.
+from test_prop_joint_hardening import TestHardening
+
 if __name__=="__main__":
     unittest.main()
