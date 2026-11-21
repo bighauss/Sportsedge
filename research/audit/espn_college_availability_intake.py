@@ -195,7 +195,7 @@ def make_report(games, fetcher, at=None, fixtures=False):
             rec["bytes"] = len(raw)
             rec["raw"] = raw
             sources[key] = (data, rec)
-        except (HTTPError, URLError, TimeoutError, OSError, ValueError, TypeError, UnicodeError) as exc:
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError, TypeError, UnicodeError, KeyError) as exc:
             rec["reason"] = type(exc).__name__
             sources[key] = (None, rec)
         source_info[rec["key"]] = {k: v for k, v in rec.items() if k != "raw"}
