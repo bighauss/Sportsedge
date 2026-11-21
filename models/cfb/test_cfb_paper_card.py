@@ -719,6 +719,24 @@ class LedgerGradingTests(NetworkOff):
             rep = grading.evaluate(self.fx.ledger, self.fx.cards)
         self.assertEqual(rep["excluded"], {"PRE_REGISTRATION_NOT_UNTOUCHED_HOLDOUT": 2})
 
+    def test_holdout_floor_enforced_even_if_registration_moved_earlier(self):
+        self.assertEqual(baselines.HOLDOUT_START_UTC, "2026-11-23T06:00:00Z")
+        self.assertEqual(baselines.FROZEN_RUNIT["registered_utc"], baselines.HOLDOUT_START_UTC)
+        self.assertEqual(baselines.RATINGS_ONLY_SP["registered_utc"], baselines.HOLDOUT_START_UTC)
+        self.fx.standard()
+        self.frozen()
+        raw, rec = self.finals()
+        grading.grade(self.fx.ledger, self.fx.cards, raw, rec, now=T("2026-11-29T09:00:00Z"))
+        early = {"registered_utc": "2026-11-01T00:00:00Z"}
+        with mock.patch.dict(baselines.FROZEN_RUNIT, early), mock.patch.dict(baselines.RATINGS_ONLY_SP, early):
+            rep = grading.evaluate(self.fx.ledger, self.fx.cards)
+            self.assertEqual(rep["holdout_start_utc"], "2026-11-23T06:00:00Z")
+            with mock.patch.object(baselines, "HOLDOUT_START_UTC", "2026-11-28T21:00:00Z"):
+                rep = grading.evaluate(self.fx.ledger, self.fx.cards)
+        # 20:00Z kickoff precedes the floor and is excluded; 23:30Z kickoff stays.
+        self.assertEqual(rep["excluded"], {"PRE_REGISTRATION_NOT_UNTOUCHED_HOLDOUT": 1})
+        self.assertEqual(rep["games_evaluated"], 1)
+
     def test_card_registered_after_kickoff_excluded(self):
         self.fx.standard()
         # Freeze declared pregame, but ledger registration happens after the first kickoff.

@@ -43,6 +43,15 @@ jobs:
         run: python -m unittest sportsedge.odds.test_daily_main_odds sportsedge.odds.test_daily_pilot_artifact_gate -v
       - name: Daily ratings evidence and decision cutoff (offline)
         run: python -m unittest sportsedge.validation.test_daily_ratings_capture sportsedge.validation.test_cbbd_ratings_capture -v
+      - name: CBB CBBD paper card, ledger and evaluator (synthetic, offline)
+        working-directory: models/cbb
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+        run: python -m unittest -v test_cbbd_native_score_model test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_frozen_final_join test_point_in_time_score_walkforward test_cbbd_prospective_capture
+      - name: CFB paper card, ledger and evaluator (synthetic, offline)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -m unittest models.cfb.test_cfb_paper_card models.cfb.test_cfb_source_pit_contract -v
       - name: Gate A original receipt hash completeness (synthetic)
         run: python -m unittest discover -s sportsedge/odds -p test_completeness_gate.py -v
       - name: DFS historical slate coverage preflight

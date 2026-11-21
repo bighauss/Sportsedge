@@ -1,9 +1,10 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 404,
-  "base_commit": "054c907e0d8bdbfef731525293fb43cdb986d3e4",
+  "base_commit": "4bbdf7c7f5b41229767e50e362b196197477f5ec",
   "protected_paths": [
     ".github/workflows/cfb-paper-card.yml",
+    ".github/workflows/tests.yml",
     "models/cfb/cfb_baselines.py",
     "models/cfb/cfb_capture_store.py",
     "models/cfb/cfb_cfbd_capture.py",
@@ -14,7 +15,7 @@
     "models/cfb/test_cfb_paper_card.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/191",
-  "change_summary": "Add research-only CFB PAPER card pipeline: PIT pregame assembler (exact CFBD IDs, SP+ from daily capture, Open-Meteo forecast, operator QB/injuries with HOLD/PASS), hash-pinned frozen RUN IT baseline plus SP+ ratings-only baseline, two-sided quote card, append-only ledger, exact-ID grading, chronological evaluator, and a manual-only workflow. All PAPER / 0u.",
+  "change_summary": "Add research-only CFB PAPER card pipeline: PIT pregame assembler (exact CFBD IDs, SP+ from daily capture, Open-Meteo forecast, operator QB/injuries with HOLD/PASS), hash-pinned frozen RUN IT baseline plus SP+ ratings-only baseline, two-sided quote card, append-only ledger, exact-ID grading, chronological evaluator, and a manual-only workflow. All PAPER / 0u. Enforces CFB holdout floor 2026-11-23T06:00:00Z and runs CBB/CFB paper-card suites in PR CI.",
   "assumptions": [
     "Frozen RUN IT model weights are untested; pinning by file hash does not validate them.",
     "SP+ ratings are centred on captured file means as model input; this is an input mapping, not a weight change.",
@@ -48,7 +49,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "054c907e0d8bdbfef731525293fb43cdb986d3e4",
+    "target_base_sha": "4bbdf7c7f5b41229767e50e362b196197477f5ec",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest models.cfb.test_cfb_source_pit_contract"
   },

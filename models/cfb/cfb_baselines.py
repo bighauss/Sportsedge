@@ -25,6 +25,11 @@ HERE = Path(__file__).resolve().parent
 FROZEN_MODEL_FILE = HERE / "sportsedge_cfb_model.py"
 
 # Pinned at registration (origin/main 054c907e, file last changed in 0f38c3cb).
+# Untouched-holdout floor: first CFB games eligible as unseen tests kick off at or
+# after 2026-11-23 00:00 America/Chicago. Enforced in cfb_grading.evaluate even if a
+# registered_utc is later edited earlier.
+HOLDOUT_START_UTC = "2026-11-23T06:00:00Z"
+
 FROZEN_RUNIT = {
     "model_id": "sportsedge-cfb-runit-2026-11-15-untested-v1",
     "module": "models/cfb/sportsedge_cfb_model.py",
@@ -32,7 +37,7 @@ FROZEN_RUNIT = {
     "source_commit": "0f38c3cb23be540322cac4936eb2e249a196ba0b",
     # Games kicking off before this instant were available while the model's
     # untested constants were chosen, so they are never "untouched" holdout.
-    "registered_utc": "2026-11-22T00:00:00Z",
+    "registered_utc": HOLDOUT_START_UTC,
     "weights_validated": False,
     "markets": ["ML", "SPREAD", "TOTAL"],
 }
@@ -52,7 +57,7 @@ FROZEN_CONSTANTS = {
 RATINGS_ONLY_SP = {
     "model_id": "sportsedge-cfb-sp-ratings-only-v1",
     "description": "points = SP+ offense (centred) + opponent SP+ defense (centred) + league mean; HFA 2.5",
-    "registered_utc": "2026-11-22T00:00:00Z",
+    "registered_utc": HOLDOUT_START_UTC,
     "weights_validated": False,
     "markets": ["ML", "SPREAD", "TOTAL"],
 }

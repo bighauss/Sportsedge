@@ -203,7 +203,8 @@ def evaluate(ledger_path, cards_dir, *, holdout_start_utc=None):
     entries = ledger.verify(ledger_path)
     cards = load_frozen_cards(entries, cards_dir)
     fid, rid = baselines.FROZEN_RUNIT["model_id"], baselines.RATINGS_ONLY_SP["model_id"]
-    start = max(utc(baselines.FROZEN_RUNIT["registered_utc"]), utc(baselines.RATINGS_ONLY_SP["registered_utc"]))
+    start = max(utc(baselines.HOLDOUT_START_UTC), utc(baselines.FROZEN_RUNIT["registered_utc"]),
+                utc(baselines.RATINGS_ONLY_SP["registered_utc"]))
     if holdout_start_utc is not None:
         start = max(start, utc(holdout_start_utc))
     excluded, seen, rows = {}, set(), []
