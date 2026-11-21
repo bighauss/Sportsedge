@@ -23,8 +23,8 @@ SNAPSHOT_KEYS = frozenset({
     "home_lineup", "away_lineup",
 })
 LINEUP_KEYS = frozenset({"slot", "player_id", "team_id"})
-SHA = re.compile(r"sha256:[0-9a-f]{64}\\Z")
-MLBAM = re.compile(r"[1-9][0-9]*\\Z")
+SHA = re.compile(r"sha256:[0-9a-f]{64}\Z")
+MLBAM = re.compile(r"[1-9][0-9]*\Z")
 MAX_BYTES = 2_000_000
 
 
