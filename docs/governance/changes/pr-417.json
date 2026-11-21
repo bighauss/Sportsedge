@@ -39,14 +39,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "PYTHONPATH=. python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_evidence",
+    "test_command": "python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_evidence",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "478596f7f7e8527b09deb12009e8e9276a6a8bd6",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "PYTHONPATH=. python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_evidence"
+    "verification_command": "python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_evidence"
   },
   "cost": {
     "currency": "USD",
