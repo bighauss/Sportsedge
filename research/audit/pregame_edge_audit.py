@@ -199,7 +199,7 @@ def strict_csv_rows(data: bytes):
         raise ValueError('CSV_UNNORMALIZED_HEADER')
     rows=[]
     for line_index,values in enumerate(records[1:],2):
-        if not values:
+        if not values or all(not str(cell).strip() for cell in values):
             raise ValueError('BLANK_CSV_RECORD')
         if len(values)!=len(headers):
             raise ValueError('RAGGED_CSV_RECORD')
