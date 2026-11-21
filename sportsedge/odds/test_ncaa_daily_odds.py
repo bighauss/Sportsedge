@@ -274,6 +274,48 @@ class NcaaDailyOddsTests(unittest.TestCase):
                                 cfb.load_odds_api_archive(raw, candidate, {})
                     self.assertTrue((self.root / ncaa.HOLD_FILENAME).is_file())
 
+    def test_extra_outcome_discards_only_affected_market(self):
+        cbb_dir = str(Path(__file__).resolve().parents[2] / "models" / "cbb")
+        if cbb_dir not in sys.path:
+            sys.path.insert(0, cbb_dir)
+        cbb = importlib.import_module("cbbd_paper_card")
+        cfb = importlib.import_module("models.cfb.cfb_paper_card")
+        for sport in ("ncaab", "ncaaf"):
+            for index, market in enumerate(("h2h", "spreads", "totals")):
+                with self.subTest(sport=sport, market=market), TemporaryDirectory() as d:
+                    self.root = Path(d) / "private"
+                    provider = FakeProvider(ncaa.SPORTS[ncaa.SPORT_CODES[sport]], self.now)
+                    events = provider.odds()
+                    events[0]["bookmakers"][0]["markets"][index]["outcomes"].append(
+                        {"name": "Draw", "price": 220})
+                    with patch.object(provider, "odds", return_value=events):
+                        report, _ = self.run_snap(sport=sport, provider=provider)
+                    raw = (self.root / report["archive"]["raw_filename"]).read_bytes()
+                    receipt = json.loads((self.root / report["manifest_filename"]).read_text())
+                    sidecar = json.loads((self.root / report["pairs_filename"]).read_text())
+                    self.assertEqual(sidecar["census"]["UNEXPECTED_EXTRA_OUTCOME"], 1)
+                    names = {"h2h": "ML", "spreads": "SPREAD", "totals": "TOTAL"}
+                    expected = set(names.values()) - {names[market]}
+                    self.assertCountEqual([names[r["market"]] for r in sidecar["rows"]
+                                           if r["odds_event_id"] == events[0]["id"]], expected)
+                    if sport == "ncaab":
+                        xw = (b"odds_event_id,game_id,odds_home_team,odds_away_team\n"
+                              b"evt_soon_00001,123456,Home U,Away St\n")
+                        rows, census = cbb.odds_api_quotes(raw, receipt, xw)
+                        self.assertEqual(census["UNEXPECTED_EXTRA_OUTCOME"], 1)
+                        self.assertCountEqual([{"moneyline": "ML", "spread": "SPREAD",
+                                                "total": "TOTAL"}[r["market"]] for r in rows], expected)
+                    else:
+                        xw = {"schema": cfb.CROSSWALK_SCHEMA, "rows": [{
+                            "odds_event_id": events[0]["id"], "cfbd_game_id": 401,
+                            "home_team_odds_name": "Home U", "away_team_odds_name": "Away St"}]}
+                        rejected = []
+                        rows = cfb.load_odds_api_archive(raw, receipt, xw, rejections=rejected)
+                        self.assertEqual(rejected, [{"reason": "UNEXPECTED_EXTRA_OUTCOME",
+                                         "book": "draftkings", "market": market,
+                                         "odds_event_id": events[0]["id"]}])
+                        self.assertCountEqual([r["market"] for r in rows], expected)
+
     def test_http_error_is_not_retried_and_never_echoes_key(self):
         p = FakeProvider("basketball_ncaab", self.now)
         p.odds_error = 500

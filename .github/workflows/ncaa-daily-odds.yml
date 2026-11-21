@@ -124,18 +124,9 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Create fixed control marker after capture or export failure
+      - name: Persist shared stop signal
         id: hold
         if: always() && steps.capture.outcome != 'skipped' && (steps.capture.outcome != 'success' || steps.export.outcome != 'success')
-        run: |
-          set -eu
-          printf 'HOLD\n' > "$RUNNER_TEMP/ncaa-hold.txt"
-
-      - name: Persist shared stop signal
-        if: always() && steps.hold.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/ncaa-hold
         with:
-          name: ncaa-daily-odds-quota-hold
-          path: ${{ runner.temp }}/ncaa-hold.txt
-          retention-days: 90
-          if-no-files-found: error
+          artifact-name: ncaa-daily-odds-quota-hold

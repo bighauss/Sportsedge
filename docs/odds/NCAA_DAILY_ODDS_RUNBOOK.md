@@ -104,6 +104,12 @@ The daily claim and a five-byte shared control marker (`HOLD` plus newline) are 
 
 A failed capture, encryption or archive upload triggers a separate attempt to upload the fixed marker. The claim check blocks all four NCAA slots while the hold artifact exists. A failed marker upload fails the job. In that case shared protection is unconfirmed: suspend dispatches and inspect Actions artifact state before resuming. The same-slot claim survives the later failure. Cancellation or runner loss can interrupt later steps. Verify both the exported artifact and the claim against the run ID before recording a successful live capture.
 
+## Provider-free hosted rehearsal
+
+Manually apply the `rehearse-ncaa-405` label to draft #405 or manually dispatch the rehearsal workflow once registered. It uses synthetic files, no provider credentials and no provider intake entry point. Rehearsal artifact names include the run, attempt and fault to isolate every claim and hold from live captures. Expected evidence consists of three failed injection jobs, a successful verification job on a fresh runner, two visible shared markers and an explicit unconfirmed-protection error on the failed marker upload. Confirm individual step outcomes and archive the run URL before accepting this gate.
+
+For a market with more than two outcomes the loaders and sidecar reject the affected market with `UNEXPECTED_EXTRA_OUTCOME`. Other valid markets in the same event remain eligible.
+
 ## Limitations
 
 - One close snapshot per sport per day can only be "closing" for games within its

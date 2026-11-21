@@ -101,6 +101,11 @@ def _profile(pilot):
     if pilot in NCAA_PILOTS:
         return (pilot + "-daily-odds-attempt-", pilot + "-daily-claim.json",
                 NCAA_HOLD_ARTIFACT_NAME)
+    rehearsal = re.fullmatch(r"(rehearsal-[0-9]+-[0-9]+-(?:capture|export|marker))-(ncaab|ncaaf)-(pregame|close)", pilot)
+    if rehearsal:
+        prefix, filename, hold = _profile("-".join(rehearsal.groups()[1:]))
+        namespace = rehearsal.group(1) + "-"
+        return namespace + prefix, namespace + filename, namespace + hold
     raise Blocked("UNKNOWN_PILOT")
 
 
@@ -179,7 +184,7 @@ def verify(root, *, repository, run_id, token, now=None, lookup=api_artifacts, p
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("action", choices=("reserve", "verify"))
-    p.add_argument("--pilot", choices=("nfl", "ratings") + NCAA_PILOTS, default="nfl")
+    p.add_argument("--pilot", default="nfl")
     a = p.parse_args(argv)
     env = os.environ
     opts = dict(repository=env.get("GITHUB_REPOSITORY"),

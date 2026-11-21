@@ -54,14 +54,24 @@ class ExportTests(unittest.TestCase):
         marker = self.steps["hold"]
         self.assertEqual(marker["if"], "always() && steps.capture.outcome != 'skipped' && "
                          "(steps.capture.outcome != 'success' || steps.export.outcome != 'success')")
-        subprocess.run(["bash", "-eu", "-c", marker["run"]], check=True,
+        self.assertEqual(marker["uses"], "./.github/actions/ncaa-hold")
+        self.assertEqual(marker["with"]["artifact-name"], gate.NCAA_HOLD_ARTIFACT_NAME)
+        action = Path(__file__).resolve().parents[2] / ".github/actions/ncaa-hold/action.yml"
+        write, publish, failure = yaml.safe_load(action.read_text())["runs"]["steps"]
+        subprocess.run(["bash", "-eu", "-c", write["run"]], check=True,
                        env={**os.environ, "RUNNER_TEMP": str(self.runner)})
         self.assertEqual((self.runner / "ncaa-hold.txt").read_bytes(), b"HOLD\n")
-        publish = self.steps["Persist shared stop signal"]
         self.assertFalse(publish.get("continue-on-error", False))
         self.assertEqual(publish["with"]["if-no-files-found"], "error")
         self.assertEqual(publish["with"]["path"], "${{ runner.temp }}/ncaa-hold.txt")
-        self.assertEqual(publish["with"]["name"], gate.NCAA_HOLD_ARTIFACT_NAME)
+        self.assertEqual(publish["with"]["name"], "${{ inputs.artifact-name }}")
+        self.assertEqual(failure["if"], "always() && steps.publish.outcome != 'success'")
+        summary = self.runner / "summary"
+        result = subprocess.run(["bash", "-eu", "-c", failure["run"]], capture_output=True,
+                                env={**os.environ, "GITHUB_STEP_SUMMARY": str(summary)})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"NCAA_SHARED_PROTECTION_UNCONFIRMED", result.stdout)
+        self.assertIn("Shared protection unconfirmed", summary.read_text())
 
     def test_fresh_runner_blocks_every_slot_on_remote_hold_and_same_slot_on_claim(self):
         for pilot in gate.NCAA_PILOTS:

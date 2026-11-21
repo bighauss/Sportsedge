@@ -209,7 +209,7 @@ def two_sided_pairs(raw: bytes, manifest: dict, snapshot: str):
     captured = datetime.fromisoformat(manifest["captured_utc"]).astimezone(timezone.utc)
     events = strict_json(raw)
     census = {"partial_or_inconsistent_pairs": 0, "poststart_events_excluded": 0,
-              "events_outside_window": 0}
+              "events_outside_window": 0, "UNEXPECTED_EXTRA_OUTCOME": 0}
     rows, listing = [], []
     for ev in events:
         start = utc(ev["commence_time"])
@@ -225,6 +225,10 @@ def two_sided_pairs(raw: bytes, manifest: dict, snapshot: str):
         home, away = ev["home_team"], ev["away_team"]
         for book in ev["bookmakers"]:
             for m in book["markets"]:
+                if len(m["outcomes"]) > 2:
+                    census["UNEXPECTED_EXTRA_OUTCOME"] += 1
+                    census["partial_or_inconsistent_pairs"] += 1
+                    continue
                 by = {}
                 for o in m["outcomes"]:
                     by.setdefault(o["name"], []).append(o)

@@ -1,0 +1,30 @@
+name: Persist NCAA stop signal
+description: Upload a fixed control marker and explicitly report persistence failure
+inputs:
+  artifact-name:
+    description: Shared hold artifact name
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Write fixed marker
+      id: marker
+      shell: bash
+      run: |
+        set -eu
+        printf 'HOLD\n' > "$RUNNER_TEMP/ncaa-hold.txt"
+    - name: Upload shared stop signal
+      id: publish
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ runner.temp }}/ncaa-hold.txt
+        retention-days: 90
+        if-no-files-found: error
+    - name: Report unconfirmed shared protection
+      if: always() && steps.publish.outcome != 'success'
+      shell: bash
+      run: |
+        echo "::error::NCAA_SHARED_PROTECTION_UNCONFIRMED"
+        echo "Shared protection unconfirmed. Suspend subsequent dispatches." >> "$GITHUB_STEP_SUMMARY"
+        exit 1
