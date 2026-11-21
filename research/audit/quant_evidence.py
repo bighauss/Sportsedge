@@ -245,6 +245,10 @@ def _summary(records: list[dict]) -> dict:
     if not n:
         return {'n': 0, 'events': 0, 'wins': 0, 'losses': 0, 'pushes': 0, 'roi': None, 'net_units': 0.0,
                 'brier': None, 'log_loss': None, 'market_brier': None,
+                'model_brier_on_market_matched_rows': None,
+                'paired_brier_delta_model_minus_market': None,
+                'paired_brier_event_cluster95': None,
+                'market_baseline_matched_n': 0,
                 'win_rate': None, 'win_wilson95': None, 'roi_event_cluster95': None,
                 'small_sample': True}
     events = len({r['event_id'] for r in records})
@@ -253,6 +257,21 @@ def _summary(records: list[dict]) -> dict:
     model_logloss = mean(-math.log(r['p'] if r['outcome'] == 'W' else (1-r['p'])) for r in decided) if decided else None
     market = [r for r in decided if r.get('q') is not None]
     market_brier = (mean((r['q']-int(r['outcome'] == 'W'))**2 for r in market) if market else None)
+    # An all-decided-rows model Brier is NOT comparable to market Brier
+    # computed only where the exact same-line original two-way quote exists.
+    # Score both probabilities on the identical matched decided rows.
+    model_matched_brier = (
+        mean((r['p']-int(r['outcome'] == 'W'))**2 for r in market)
+        if market else None)
+    paired_differences = [
+        (r['p']-int(r['outcome'] == 'W'))**2
+        - (r['q']-int(r['outcome'] == 'W'))**2 for r in market
+    ]
+    paired_brier_delta = mean(paired_differences) if market else None
+    paired_brier_ci = _cluster_ci([
+        (str(row['sport']) + ':' + str(row['event_id']), delta)
+        for row, delta in zip(market, paired_differences)
+    ])
     unit_total = sum(r['unit'] for r in records)
     n_w = sum(r['outcome'] == 'W' for r in decided)
     return {'n': n, 'decided_n': len(decided), 'events': events,
@@ -264,6 +283,11 @@ def _summary(records: list[dict]) -> dict:
             'brier': round(model_brier, 6) if model_brier is not None else None,
             'log_loss': round(model_logloss, 6) if model_logloss is not None else None,
             'market_brier': round(market_brier, 6) if market_brier is not None else None,
+            'model_brier_on_market_matched_rows': (
+                round(model_matched_brier, 6) if model_matched_brier is not None else None),
+            'paired_brier_delta_model_minus_market': (
+                round(paired_brier_delta, 6) if paired_brier_delta is not None else None),
+            'paired_brier_event_cluster95': paired_brier_ci,
             'market_baseline_matched_n': len(market),
             'small_sample': events < 30}
 
