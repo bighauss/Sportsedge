@@ -157,7 +157,9 @@ def registry(slate_rows, espn, espn_sha, captured_utc):
                 hit.append(c)
         if len(hit) != 1:
             miss.append((r["game_id"], "ESPN event not uniquely matched")); continue
-        rows.append({"game_id": r["game_id"], "neutral": "1" if hit[0].get("neutralSite") else "0",
+        if type(hit[0].get("neutralSite")) is not bool:
+            miss.append((r["game_id"], "ESPN neutral-site flag missing or not boolean")); continue
+        rows.append({"game_id": r["game_id"], "neutral": "1" if hit[0]["neutralSite"] else "0",
                      "source": "ESPN", "source_sha256": espn_sha, "published_utc": captured_utc,
                      "captured_utc": captured_utc, "tipoff_utc": r["tipoff_utc"]})
     return rows, miss
