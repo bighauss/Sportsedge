@@ -28,7 +28,7 @@ def fixture():
         "talent": [{"team": t, "talent": 800} for t in teams], "returning": [],
         "ratings": [{"team": t, "rating": 10, "offense": {"rating": 30}, "defense": {"rating": 20}} for t in teams],
         "teams": [], "venues": [{"id": 10, "dome": False, "location": {"x": 42.26, "y": -83.75}},
-                                {"id": 11, "dome": False, "location": {"x": 35.95, "y": -83.92}}],
+                                {"id": 11, "dome": False, "latitude": 35.95, "longitude": -83.92}],
         "player_rushing": [pl("rushing", "Michigan", "Wayne Knight", "CAR", 150), pl("rushing", "Michigan", "Wayne Knight", "YDS", 800)],
         "player_passing": [], "player_receiving": [],
         "_weather": {"windSpeed": 8, "precipitation_type": "none", "isForecast": True}}
