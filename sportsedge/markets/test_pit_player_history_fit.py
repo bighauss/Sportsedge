@@ -61,6 +61,29 @@ def four(sport="NFL",stat="PASS_YDS",unit="PASS_ATT",values=None):
 
 
 class PriorGamePlayerFit(unittest.TestCase):
+
+    def test_blank_logical_records_are_not_silently_removed(self):
+        baseline = source(four())
+        header, remainder = baseline.split(b"\n", 1)
+        for suffix in (b"\n", b",,,,,,,,\n", b"   \n"):
+            with self.subTest(suffix=suffix):
+                raw = header + b"\n" + suffix + remainder
+                with self.assertRaisesRegex(ValueError, "HISTORY_INVALID_CSV"):
+                    fit_player_history(raw, ctx("NFL", raw))
+
+    def test_quoted_multiline_history_cell_is_one_logical_record(self):
+        history = four()
+        history[0]["game_id"] = "HISTORY\n\n1"
+        raw = source(history)
+        features, report = fit_player_history(raw, ctx("NFL", raw))
+        self.assertEqual(report["forecast_rows"], 1)
+        self.assertEqual(features["players"][0]["stat"], "PASS_YDS")
+
+    def test_unterminated_quoted_history_cell_refused(self):
+        raw = source(four()) + b'"unterminated\n'
+        with self.assertRaisesRegex(ValueError, "HISTORY_INVALID_CSV"):
+            fit_player_history(raw, ctx("NFL", raw))
+
     def test_nfl_qb_pass_yards_prior_only_to_existing_builder(self):
         raw=source(four())
         features,report=fit_player_history(raw,ctx("NFL",raw))

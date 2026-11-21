@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from statistics import stdev
-from csv import DictReader
+import csv
 import io
 import json
 import math
@@ -81,13 +81,19 @@ def _read_rows(raw: bytes, sport: str, frozen_at: datetime,
     if type(raw) is not bytes or not 0 < len(raw) <= MAX_CSV:
         raise ValueError("HISTORY_ARCHIVE_EMPTY_OR_OVERSIZED")
     try:
-        reader = DictReader(io.StringIO(raw.decode("utf-8-sig"), newline=""),
-                            restkey=None, restval=None)
-        header = reader.fieldnames or []
+        # csv.DictReader silently skips empty logical records. Never shrink a
+        # frozen prior-game training ledger without an explicit refusal.
+        records = list(csv.reader(
+            io.StringIO(raw.decode("utf-8-sig"), newline=""), strict=True))
+        header = records[0] if records else []
         if len(header) != len(CSV_COLUMNS) or set(header) != set(CSV_COLUMNS):
             raise ValueError("HISTORY_HEADER_MISSING_EXTRA_OR_DUPLICATE")
-        parsed = list(reader)
-    except (UnicodeError, ValueError) as exc:
+        if any(len(values) != len(header) or
+               all(not value.strip() for value in values)
+               for values in records[1:]):
+            raise ValueError("HISTORY_BLANK_OR_RAGGED_LOGICAL_RECORD")
+        parsed = [dict(zip(header, values)) for values in records[1:]]
+    except (UnicodeError, ValueError, csv.Error) as exc:
         raise ValueError("HISTORY_INVALID_CSV") from exc
     if not parsed or len(parsed) > MAX_ROWS:
         raise ValueError("HISTORY_EMPTY_OR_TOO_MANY_ROWS")
