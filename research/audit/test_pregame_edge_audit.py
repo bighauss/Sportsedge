@@ -137,6 +137,14 @@ class Validation(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,reason):
                     strict_csv_rows(raw)
 
+    def test_whitespace_and_comma_only_logical_csv_records_refused(self):
+        for raw in (b'sport,event_id\nNFL,E\n , \n',
+                    b'sport,event_id\nNFL,E\n,,\n',
+                    b'sport,event_id\nNFL,E\n  \n'):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(ValueError,'BLANK_CSV_RECORD'):
+                    strict_csv_rows(raw)
+
     def test_quoted_multiline_field_does_not_count_as_blank_record(self):
         raw=b'sport,comment\nNFL,"note\n\nwith a blank quoted line"\n'
         z=strict_csv_rows(raw)
