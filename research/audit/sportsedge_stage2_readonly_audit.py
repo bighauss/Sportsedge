@@ -89,13 +89,8 @@ def audit_ledger(rows: list[dict]) -> dict:
     for i, r in enumerate(rows, 2):
         outcome = clean(r.get("Result")).upper()
         ctr[outcome] += 1
-        s, p = _decimal(r.get("Stake", "")), _decimal(r.get("Profit", ""))
-        if s is None or s <= 0 or p is None:
-            invalid_money += 1
-            arithmetic_issues.append({"row": i, "code": "INVALID_STAKE_OR_PROFIT"})
-            continue
-        stake += s
-        profit += p
+        # Inventory categories before monetary validation: an invalid stake
+        # must never silently remove a captured wager from the denominator.
         price = clean(r.get("Bet Price"))
         market_name = clean(r.get("Market"))
         if "parlay" in market_name.casefold():
@@ -109,6 +104,13 @@ def audit_ledger(rows: list[dict]) -> dict:
             boosted_price_rows += 1
         if not (len(price) >= 4 and price[0] in "+-" and price[1:].isdigit()):
             nonstandard_prices += 1
+        s, p = _decimal(r.get("Stake", "")), _decimal(r.get("Profit", ""))
+        if s is None or s <= 0 or p is None:
+            invalid_money += 1
+            arithmetic_issues.append({"row": i, "code": "INVALID_STAKE_OR_PROFIT"})
+            continue
+        stake += s
+        profit += p
         expected = None
         if outcome in ("L", "LOSS"):
             expected = -s
