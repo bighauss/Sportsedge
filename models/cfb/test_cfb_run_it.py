@@ -14,14 +14,17 @@ def adv(team, ppa_o, ppa_d):
 
 def fixture():
     teams = ["UCLA", "Michigan", "LSU", "Tennessee"]
-    pl = lambda cat, team, player, st, v: {"team": team, "player": player, "category": cat, "statType": st, "stat": v}
+    pl = lambda cat, team, player, st, v, pid="501": {"team": team, "player": player, "playerId": pid,
+                                                        "category": cat, "statType": st, "stat": v}
     return {
         "games": [{"id": 1, "season": 2026, "week": 13, "homeTeam": "Michigan", "awayTeam": "UCLA",
                    "neutralSite": False, "venueId": 10, "venue": "Michigan Stadium",
                    "startDate": "2026-11-21T20:30:00Z", "completed": False},
                   {"id": 2, "season": 2026, "week": 13, "homeTeam": "Tennessee", "awayTeam": "LSU",
                    "neutralSite": False, "venueId": 11, "venue": "Neyland", "startDate": "2026-11-21T16:00:00Z",
-                   "completed": False}],
+                   "completed": False}] + [
+            {"id": 100 + i, "homeTeam": t, "awayTeam": "Filler", "startDate": f"2026-10-{i+1:02d}T18:00:00Z",
+             "completed": True} for t in teams for i in range(10)],
         "advanced": [adv("UCLA", .25, .10), adv("Michigan", .05, .12), adv("LSU", .2, .1), adv("Tennessee", .2, .1)],
         "team_stats": [{"team": t, "statName": n, "statValue": v} for t in teams
                        for n, v in (("rushingAttempts", 400), ("passAttempts", 350))],
