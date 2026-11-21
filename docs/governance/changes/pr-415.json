@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 415,
-  "base_commit": "dc495f8bbda4e6eeb405459b8233dc0efc44e9e9",
+  "base_commit": "98a52a957a98643226d0541b39fa8a7f86bbf379",
   "protected_paths": [
     "models/cfb/cfb_run_it.py",
     "models/cfb/test_cfb_run_it_parity.py"
@@ -41,7 +41,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "dc495f8bbda4e6eeb405459b8233dc0efc44e9e9",
+    "target_base_sha": "98a52a957a98643226d0541b39fa8a7f86bbf379",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest models.cfb.test_cfb_run_it models.cfb.test_cfb_run_it_inputs models.cfb.test_cfb_run_it_p0 models.cfb.test_cfb_run_it_parity"
   },
