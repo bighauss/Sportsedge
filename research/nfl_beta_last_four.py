@@ -5,9 +5,9 @@ Does not alter the frozen engine or override NFL_FULL_MARKET_GATE_R1.
 All output is PAPER / 0u; absent evidence remains explicitly blocked.
 """
 from __future__ import annotations
-from collections import Counter
 from datetime import datetime, timezone
 from math import isfinite, sqrt
+import re
 
 STATS = frozenset(("pass_yds", "rush_yds", "rec_yds", "receptions"))
 KINDS = frozenset(("XPLUS", "FIRST_TD", "SGP"))
@@ -108,8 +108,8 @@ def price_beta(scenarios, offers, *, decision_utc, min_scenarios=1000):
                 reasons.append("STALE_QUOTE")
         except (KeyError, ValueError, TypeError):
             reasons.append("TIMESTAMP_INVALID")
-        if not offer.get("source_sha256") or not offer.get("model_sha256"):
-            reasons.append("PROVENANCE_MISSING")
+        if not all(isinstance(offer.get(k), str) and re.fullmatch(r"sha256:[0-9a-f]{64}", offer[k]) for k in ("source_sha256", "model_sha256")):
+            reasons.append("PROVENANCE_HASH_INVALID")
         if len(scenarios) < min_scenarios:
             reasons.append("INSUFFICIENT_JOINT_SCENARIOS")
         if offer.get("kind") == "SGP" and not offer.get("joint_simulation"):
@@ -134,7 +134,7 @@ def price_beta(scenarios, offers, *, decision_utc, min_scenarios=1000):
                 # Never rank noisy tail bets as validated edges.
                 if se > 0.02:
                     reasons.append("MONTE_CARLO_UNCERTAINTY_HIGH")
-            except (KeyError, TypeError, ValueError, IndexError) as exc:
+            except (KeyError, TypeError, ValueError, IndexError):
                 reasons.append("INCOMPLETE_OR_INVALID_JOINT_SCENARIOS")
         if not reasons:
             reasons.append("BETA_UNCALIBRATED_NO_VALIDATED_EV")
