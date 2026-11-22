@@ -25,9 +25,9 @@
   },
   "baseline": {
     "metric": "Push mass on integer CFB lines",
-    "before": 0,
+    "before": null,
     "unit": "probability",
-    "source_state": "INSPECTED_CODE"
+    "source_state": "UNKNOWN"
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
