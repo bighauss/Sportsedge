@@ -87,6 +87,14 @@ def compare(ledger_rows, results, reps=2000, seed=7,
             not 1 <= min_rows <= 1000000):
         raise ValueError("INVALID_SAMPLE_OR_BOOTSTRAP_CONTRACT")
     props = [r for r in ledger_rows if r.get("kind") == "prop"]
+    # Identity must be unique in the COMPLETE attempted prop universe.
+    # A duplicate hidden outside the card cohort cannot authenticate its
+    # apparently unique on-card counterpart.
+    keys = Counter(
+        (r.get("game"), r.get("selection")) for r in props
+        if isinstance(r.get("game"), str) and
+        isinstance(r.get("selection"), str)
+    )
     out = {}
     for cohort in COHORTS:
         rows = props if cohort == "priced" else [
@@ -94,11 +102,6 @@ def compare(ledger_rows, results, reps=2000, seed=7,
         ]
         census = dict(attempted=len(rows), graded=0, pending=0, invalid_prob=0,
                       blocked=0, ambiguous_identity=0, push=0, void=0)
-        keys = Counter(
-            (r.get("game"), r.get("selection")) for r in rows
-            if isinstance(r.get("game"), str) and
-            isinstance(r.get("selection"), str)
-        )
         graded = []
         for r in rows:
             key = (r.get("game"), r.get("selection"))
