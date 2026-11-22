@@ -1,0 +1,22 @@
+name: NFL last-four research beta
+on:
+  pull_request:
+    paths:
+      - 'research/nfl_beta_last_four.py'
+      - 'research/test_nfl_beta_last_four.py'
+      - '.github/workflows/nfl-last-four-beta.yml'
+  workflow_dispatch:
+jobs:
+  offline-synthetic:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile research pricer
+        run: python -m py_compile research/nfl_beta_last_four.py research/test_nfl_beta_last_four.py
+      - name: Run fail-closed synthetic tests
+        run: python -m unittest discover -s research -p 'test_nfl_beta_last_four.py' -v
