@@ -262,10 +262,8 @@ def inspect(raw, *, event_id, sport, home_espn_id, away_espn_id,
     stype = status.get("type") if isinstance(status, dict) else None
     if not isinstance(stype, dict) or stype.get("completed") is not True or stype.get("name") not in ("STATUS_FINAL",):
         raise Reject("FINAL_STATUS_NOT_CONFIRMED")
-    if isinstance(comp.get("date"), str) and comp["date"]:
-        source_date = _utc(comp["date"], "ESPN_KICKOFF")
-        if source_date != kickoff:
-            raise Reject("KICKOFF_IDENTITY_MISMATCH")
+    if _utc(comp.get("date"), "ESPN_KICKOFF") != kickoff:
+        raise Reject("KICKOFF_IDENTITY_MISMATCH")
     parts = comp.get("competitors")
     if not isinstance(parts, list) or len(parts)!=2:
         raise Reject("TWO_COMPETITORS_REQUIRED")

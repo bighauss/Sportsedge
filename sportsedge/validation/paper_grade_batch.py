@@ -72,7 +72,7 @@ def _result(root, row, market, pick, kickoff, pick_hash, asof):
     }
 
 
-def run_batch(manifest, *, database=None, now=None):
+def run_batch(manifest, *, database=None, now=None, rejected_final_indices=frozenset()):
     asof = now if now is not None else datetime.now(timezone.utc)
     if not isinstance(asof, datetime) or asof.utcoffset() is None:
         raise ledger.Blocked("ASOF_REQUIRES_OFFSET")
@@ -85,7 +85,7 @@ def run_batch(manifest, *, database=None, now=None):
         raise ledger.Blocked("INVALID_GRADE_BATCH_MANIFEST")
     rows, seen, duplicates = [], set(), set()
     picks, finals, prices, writes = Counter(), Counter(), Counter(), Counter()
-    for row in doc["entries"]:
+    for index, row in enumerate(doc["entries"]):
         try:
             market, pick, kickoff, decision, pick_hash = _pick(path.parent, row, asof)
         except BAD_INPUT:
@@ -94,13 +94,16 @@ def run_batch(manifest, *, database=None, now=None):
         keys = (("pick", pick["pick_id"]), ("market", market.identity()))
         duplicates.update(k for k in keys if k in seen)
         seen.update(keys)
-        rows.append((row, market, pick, kickoff, decision, pick_hash, keys))
-    for row, market, pick, kickoff, decision, pick_hash, keys in rows:
+        rows.append((index, row, market, pick, kickoff, decision, pick_hash, keys))
+    for index, row, market, pick, kickoff, decision, pick_hash, keys in rows:
         if any(k in duplicates for k in keys):
             picks["DUPLICATE_PICK_OR_MARKET_BLOCKED"] += 1
             continue
         picks["PICK_ACCEPTED"] += 1
         prices[_price(path.parent, row, market, kickoff, decision)] += 1
+        if index in rejected_final_indices:
+            finals["FINAL_INPUT_BLOCKED"] += 1
+            continue
         try:
             state, result = _result(path.parent, row, market, pick, kickoff, pick_hash, asof)
         except BAD_INPUT:

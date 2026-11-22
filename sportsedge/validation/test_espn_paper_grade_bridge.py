@@ -50,10 +50,32 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(report['results'], {'PAPER_RESULT_GRADED': 1})
         self.assertEqual(report['ledger'], {'DRY_RUN': 1})
 
-    def test_unreviewed_mapping_stays_pending(self):
+    def test_unreviewed_mapping_is_blocked(self):
         report = self.run_rows(dict(self.row, espn_ids_reviewed=False))
         self.assertEqual(report['espn_intake'], {'FINAL_INPUT_BLOCKED': 1})
-        self.assertEqual(report['results'], {'PENDING_FINAL': 1})
+        self.assertEqual(report['results'], {'FINAL_INPUT_BLOCKED': 1})
+
+    def test_private_receipt_distinguishes_missing_and_rejected(self):
+        missing = dict(self.row)
+        del missing['espn_original']
+        pick = json.loads((self.root / 'pick.json').read_bytes())
+        pick['pick_id'] = 'second'
+        pick['market']['line'] = '21'
+        rejected = dict(self.row, espn_ids_reviewed=False,
+                        pick=self.source('second.json', pick, '17:10'))
+        manifest = self.source('bridge.json', dict(schema=bridge.SCHEMA,
+                               entries=[missing, rejected, {}, None]), '22:00')
+        receipt = self.root / 'receipt.json'
+        report = bridge.dry_run(self.root / 'bridge.json', now=self.now, private_receipt=receipt)
+        self.assertEqual(report['results'], {'PENDING_FINAL': 1, 'FINAL_INPUT_BLOCKED': 1})
+        detail = json.loads(receipt.read_bytes())
+        self.assertEqual(detail['manifest_sha256'], manifest['sha256'])
+        self.assertEqual(detail['intake_by_entry'], ['NO_FINAL_SOURCE', 'FINAL_INPUT_BLOCKED',
+                                                    'NO_FINAL_SOURCE', 'INVALID_ENTRY'])
+        self.assertNotIn('intake_by_entry', report)
+        self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+        with self.assertRaises(FileExistsError):
+            bridge.dry_run(self.root / 'bridge.json', now=self.now, private_receipt=receipt)
 
     def test_tampered_raw_does_not_grade(self):
         (self.root / 'original.json').write_text('{}')

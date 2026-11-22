@@ -151,6 +151,16 @@ class ESPNIntakeTests(unittest.TestCase):
         with self.assertRaisesRegex(f.Reject,"CAPTURE_NOT_POSTGAME"):
             run(summary(),captured_utc="2026-11-21T17:59:59Z")
 
+    def test_missing_or_invalid_source_kickoff(self):
+        for fields in ({}, {"date": None}, {"date": ""}, {"date": 123}, {"date": "2026-11-21T18:00:00"}):
+            with self.subTest(fields=fields):
+                doc = summary()
+                comp = doc["header"]["competitions"][0]
+                del comp["date"]
+                comp.update(fields)
+                with self.assertRaisesRegex(f.Reject, "ESPN_KICKOFF_INVALID"):
+                    run(doc)
+
     def test_kickoff_identity_mismatch(self):
         x=summary()
         x["header"]["competitions"][0]["date"]="2026-11-21T19:00:00Z"
