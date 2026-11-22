@@ -2,7 +2,7 @@
 
 Logging/audit only. Does NOT change any model formula, weight, threshold or rule.
 
-Every "run it" should call log_run(rows) BEFORE games start: one row per priced side.
+Every "run it" logs one row per priced side (see log_picks.py).
 Row fields: ts_utc, sport, game, start_utc, market, pick, price_american, model_p, market_p_novig
 Later: grade(game, pick, result) with result in {W, L, P}.
 Audit: python ledger/prediction_log.py audit   (uses only rows logged before start_utc)
@@ -28,15 +28,6 @@ def _write(rows):
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(rows)
-
-
-def novig_two_way(price_a, price_b):
-    """No-vig probability of side A from two American prices."""
-    def imp(p):
-        p = float(p)
-        return 100 / (p + 100) if p > 0 else -p / (-p + 100)
-    a, b = imp(price_a), imp(price_b)
-    return a / (a + b)
 
 
 def log_run(new_rows):
@@ -70,11 +61,11 @@ def _profit(price, res):
     return p / 100 if p > 0 else 100 / -p
 
 
-def audit(rows=None, edges=(0.0, 0.02, 0.05, 0.10, 1.0)):
+def audit(rows=None, edges=(-1.0, 0.0, 0.02, 0.05, 0.10, 1.0)):
     rows = rows if rows is not None else _read()
-    clean = [r for r in rows if r["result"] in ("W", "L")
-             and r["start_utc"] and r["ts_utc"] < r["start_utc"]]  # pre-game only
-    print(f"graded pre-game rows: {len(clean)}")
+    clean = [r for r in rows if r["result"] in ("W", "L") and r["market_p_novig"]
+             and r["start_utc"] and r["ts_utc"] < r["start_utc"]]  # pre-game, two-sided only
+    print(f"graded pre-game two-sided rows: {len(clean)}")
     for lo, hi in zip(edges, edges[1:]):
         b = [r for r in clean if lo <= float(r["model_p"]) - float(r["market_p_novig"]) < hi]
         if not b:
@@ -83,14 +74,13 @@ def audit(rows=None, edges=(0.0, 0.02, 0.05, 0.10, 1.0)):
         y = [1.0 if r["result"] == "W" else 0.0 for r in b]
         mp = [float(r["model_p"]) for r in b]
         kp = [float(r["market_p_novig"]) for r in b]
-        brier_m = sum((p - o) ** 2 for p, o in zip(mp, y)) / n
-        brier_k = sum((p - o) ** 2 for p, o in zip(kp, y)) / n
+        brier = lambda ps: sum((p - o) ** 2 for p, o in zip(ps, y)) / n
         ll = lambda ps: -sum(o * math.log(max(p, 1e-6)) + (1 - o) * math.log(max(1 - p, 1e-6))
                              for p, o in zip(ps, y)) / n
         roi = sum(_profit(r["price_american"], r["result"]) for r in b) / n
         flag = "  SMALL SAMPLE" if n < 50 else ""
-        print(f"edge {lo:.0%}-{hi:.0%}: n={n} model={sum(mp)/n:.3f} actual={sum(y)/n:.3f} "
-              f"mkt={sum(kp)/n:.3f} ROI={roi:+.1%} Brier m/k={brier_m:.4f}/{brier_k:.4f} "
+        print(f"edge {lo:+.0%}..{hi:+.0%}: n={n} model={sum(mp)/n:.3f} actual={sum(y)/n:.3f} "
+              f"mkt={sum(kp)/n:.3f} ROI={roi:+.1%} Brier m/k={brier(mp):.4f}/{brier(kp):.4f} "
               f"LL m/k={ll(mp):.4f}/{ll(kp):.4f}{flag}")
 
 
