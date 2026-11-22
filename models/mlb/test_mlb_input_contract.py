@@ -1,4 +1,6 @@
 """MLB original-input structural tests; fake fixtures, not sportsbook proofs."""
+import os
+import tempfile
 import unittest
 import sportsedge_mlb_model as m
 
@@ -20,6 +22,32 @@ def sample():
 def quote(side, book, line="8.5", market="TOTAL"):
     return {"game_id": "G", "market": market, "selection": side,
             "line": line, "price": "-110", "book": book}
+
+
+class KeyedInputDuplicateTest(unittest.TestCase):
+    def _csv(self, body):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "pitchers.csv")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(body)
+        return p
+
+    def test_unique_keys_load(self):
+        p = self._csv("player_id,team\na,A\nb,H\n")
+        self.assertEqual(sorted(m.load_keyed(p, "player_id")), ["a", "b"])
+
+    def test_duplicate_key_refused_not_overwritten(self):
+        p = self._csv("player_id,team,k9\na,A,9.1\na,A,4.0\n")
+        with self.assertRaisesRegex(m.DuplicateInputKey, "line 3: duplicate player_id=a"):
+            m.load_keyed(p, "player_id")
+
+    def test_blank_key_refused(self):
+        p = self._csv("player_id,team\n,A\n")
+        with self.assertRaisesRegex(m.DuplicateInputKey, "missing player_id"):
+            m.load_keyed(p, "player_id")
+
+    def test_missing_file_still_empty(self):
+        self.assertEqual(m.load_keyed("/nonexistent/x.csv", "player_id"), {})
 
 
 class MLBSourceInputTest(unittest.TestCase):

@@ -123,8 +123,20 @@ def load_csv(path):
                 for r in csv.DictReader(f)]
 
 
+class DuplicateInputKey(ValueError):
+    """A keyed input file repeats a key; never let the later row silently win."""
+
+
 def load_keyed(path, key):
-    return {r[key]: r for r in load_csv(path)}
+    out = {}
+    for i, r in enumerate(load_csv(path), start=2):   # line 1 is the CSV header
+        k = r.get(key)
+        if k in (None, ""):
+            raise DuplicateInputKey(f"{os.path.basename(path)} line {i}: missing {key}")
+        if k in out:
+            raise DuplicateInputKey(f"{os.path.basename(path)} line {i}: duplicate {key}={k}")
+        out[k] = r
+    return out
 
 
 def load_inputs(folder):
