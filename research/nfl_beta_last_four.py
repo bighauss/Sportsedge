@@ -66,7 +66,9 @@ def _evaluate(scenario, offer):
             raise ValueError("SGP_LEGS_REQUIRED")
         if any(leg.get("kind") not in ("XPLUS", "FIRST_TD") for leg in legs):
             raise ValueError("UNSUPPORTED_SGP_LEG")
-        return all(_leg_hit(scenario, leg) for leg in legs)
+        # Evaluate every leg: short-circuiting can conceal missing scenario data.
+        outcomes = [_leg_hit(scenario, leg) for leg in legs]
+        return all(outcomes)
     return _leg_hit(scenario, offer)
 
 
