@@ -6,6 +6,8 @@ on:
       - 'research/audit/test_all_sports_market_census.py'
       - 'research/audit/all_sports_beta_compare.py'
       - 'research/audit/test_all_sports_beta_compare.py'
+      - 'research/audit/cbb_two_sided_denominator.py'
+      - 'research/audit/test_cbb_two_sided_denominator.py'
       - '.github/workflows/all-sports-market-census.yml'
       - 'docs/governance/changes/pr-*.json'
   workflow_dispatch:
@@ -26,5 +28,7 @@ jobs:
         run: python -m unittest research.audit.test_all_sports_market_census -v
       - name: Run exact-offer and model beta research comparison tests
         run: python -m unittest research.audit.test_all_sports_beta_compare -v
+      - name: Verify every CBB quoted two-sided market keeps both outcomes
+        run: python -m unittest research.audit.test_cbb_two_sided_denominator -v
       - name: Verify existing master audit tests alongside census
         run: python -m unittest research.audit.master.test_master_audit -v
