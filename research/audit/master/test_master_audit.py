@@ -6,6 +6,7 @@ import os
 import random
 import sys
 import tempfile
+from datetime import datetime, timezone, timedelta
 import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
@@ -253,9 +254,10 @@ class Pipeline(unittest.TestCase):
         self.assertFalse(card[0]["release_ready"])
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "ledger.csv")
-            # Synthetic 2099 kickoffs exercise the actual pre-kickoff write guard.
-            future = [{**r, "pred_ts": "2099-11-16T12:00:00-06:00",
-                       "kickoff_ts": "2099-11-16T15:25:00-06:00"}
+            # Fresh synthetic timestamps test the real wall-clock append guard.
+            clock = datetime.now(timezone.utc)
+            future = [{**r, "pred_ts": (clock - timedelta(minutes=1)).isoformat(),
+                       "kickoff_ts": (clock + timedelta(hours=5)).isoformat()}
                       for r in res["candidates"] + res["blocked"]]
             self.assertEqual(pipeline.ledger_append(path, future), 4)
             self.assertEqual(pipeline.ledger_append(path, future), 0)
@@ -287,8 +289,9 @@ class ResearchReleaseSafety(unittest.TestCase):
         self.assertIn("FUTURE_PRICE_CAPTURE", result["blocked"][0]["reason_codes"])
 
     def test_ledger_preflight_is_atomic_and_rejects_backdated_entries(self):
-        good = row(702, kickoff_ts="2099-11-16T15:25:00-06:00",
-                   pred_ts="2099-11-16T12:00:00-06:00")
+        clock = datetime.now(timezone.utc)
+        good = row(702, kickoff_ts=(clock + timedelta(hours=5)).isoformat(),
+                   pred_ts=(clock - timedelta(minutes=1)).isoformat())
         old = row(703)  # original game date is already in the past
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "ledger.csv")
@@ -297,6 +300,9 @@ class ResearchReleaseSafety(unittest.TestCase):
             self.assertFalse(os.path.exists(path))
             with self.assertRaises(ValueError):
                 pipeline.ledger_append(path, [dict(good, pred_id="missing", kickoff_ts=None)])
+            with self.assertRaises(ValueError):
+                pipeline.ledger_append(path, [dict(good, pred_id="future_pred",
+                                                   pred_ts=(clock + timedelta(minutes=1)).isoformat())])
             self.assertEqual(pipeline.ledger_append(path, [good]), 1)
 
 
