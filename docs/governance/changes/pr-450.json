@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 450,
-  "base_commit": "d618ecd5993a2780a6c6fb47806d547bc1325116",
+  "base_commit": "b73874a2ecf8d558780bacf6b636b70e409f2cb4",
   "protected_paths": [
     ".github/workflows/cfb-push-challenger.yml",
     "models/cfb/cfb_push_challenger.py",
@@ -41,7 +41,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "d618ecd5993a2780a6c6fb47806d547bc1325116",
+    "target_base_sha": "b73874a2ecf8d558780bacf6b636b70e409f2cb4",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest models.cfb.test_cfb_run_it -v"
   },
