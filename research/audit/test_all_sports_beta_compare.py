@@ -153,6 +153,15 @@ class BetaSevenSportTests(unittest.TestCase):
         r = beta.evaluate(intake([o],[forecast(o,model_asof_utc="2026-12-01T16:05:00Z")],[price(o)]))
         self.assertIn("QUOTE_CLOCK_NOT_PREGAME",r["rows"][0]["reasons"])
 
+    def test_invalid_quote_clock_is_retained_not_crash(self):
+        o = offer(source_observed_utc="2026-12-01T14:00:00Z",
+                  source_captured_utc="not-a-timestamp")
+        r = beta.evaluate(intake([o], [forecast(o)], [price(o)]))
+        self.assertEqual(r["submitted_outcomes"], 1)
+        self.assertEqual(r["blocked"], 1)
+        self.assertIn("INVALID_QUOTE_CLOCK", r["rows"][0]["reasons"])
+        self.assertIn("QUOTE_CLOCK_UNPARSEABLE", r["rows"][0]["reasons"])
+
     def test_bad_probabilities_fail_closed(self):
         o=offer()
         for v,pp in ((1.1,0),(.6,.5),(float("nan"),0),(True,0)):
