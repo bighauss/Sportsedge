@@ -1,0 +1,59 @@
+away,home,sp_away,sp_home,neutral,dk_home_spread,dk_home_price,dk_away_price,dk_total,dk_over,dk_under,dk_home_ml,dk_away_ml,status,home_pts,away_pts,total,home_margin
+BYU,Kansas,BYU,Kansas,0,5.5,-115.0,-105.0,46.5,-115.0,-105.0,180.0,-218.0,PRICED,19.8,30.0,49.9,-10.2
+Ohio State,Nebraska,Ohio St.,Nebraska,0,3.5,-112.0,-108.0,41.5,-110.0,-110.0,140.0,-166.0,PRICED,19.1,23.6,42.8,-4.5
+Wake Forest,Georgia Tech,Wake Forest,Ga. Tech,0,21.0,-105.0,-115.0,55.5,-112.0,-108.0,950.0,-1650.0,PRICED,15.8,40.7,56.6,-24.9
+Vanderbilt,Florida,Vanderbilt,Florida,0,-13.5,-105.0,-115.0,46.5,-112.0,-108.0,-535.0,400.0,PRICED,31.5,20.2,51.8,11.3
+Colorado,Cincinnati,Colorado,Cincinnati,0,-3.0,-112.0,-108.0,57.5,-105.0,-115.0,-155.0,130.0,PRICED,34.7,28.5,63.3,6.2
+Northwestern,Minnesota,Northwestern,Minnesota,0,2.5,-112.0,-108.0,41.5,-110.0,-110.0,110.0,-130.0,PRICED,16.3,26.6,43.0,-10.3
+Memphis,Navy,Memphis,Navy,0,2.5,-105.0,-115.0,67.5,-112.0,-108.0,124.0,-148.0,PRICED,32.2,42.2,74.5,-10.0
+Wisconsin,Purdue,Wisconsin,Purdue,0,6.0,-112.0,-108.0,46.5,-108.0,-112.0,190.0,-230.0,PRICED,18.4,28.0,46.5,-9.6
+North Texas,Tulane,North Texas,Tulane,0,6.5,-108.0,-112.0,55.5,-115.0,-105.0,205.0,-250.0,PRICED,27.4,38.7,66.2,-11.3
+Syracuse,Boston College,Syracuse,Boston Coll.,0,3.0,-112.0,-108.0,52.5,-105.0,-115.0,130.0,-155.0,PRICED,24.2,27.2,51.5,-3.0
+East Carolina,Army,ECU,Army,0,-6.0,-110.0,-110.0,45.5,-110.0,-110.0,-238.0,195.0,PRICED,28.2,24.5,52.8,3.7
+Wofford,Ole Miss,,Ole Miss,0,-49.5,-108.0,-112.0,59.5,-112.0,-108.0,,,BLOCKED:NO_SP_PLUS (FCS or unmapped),,,,
+North Carolina,Virginia,N. Carolina,Virginia,0,-1.5,-112.0,-108.0,41.5,-112.0,-108.0,-120.0,100.0,PRICED,23.7,22.6,46.4,1.1
+Houston,West Virginia,Houston,W. Virginia,0,7.0,-110.0,-110.0,70.5,-115.0,-105.0,230.0,-285.0,PRICED,32.5,45.1,77.7,-12.6
+Western Kentucky,Liberty,WKU,Liberty,0,-17.5,-112.0,-108.0,53.5,-110.0,-110.0,-1000.0,650.0,PRICED,41.1,11.5,52.7,29.6
+Tennessee Tech,Mississippi State,,Miss. St.,0,-31.5,-110.0,-110.0,59.5,-112.0,-108.0,-2800.0,1300.0,BLOCKED:NO_SP_PLUS (FCS or unmapped),,,,
+Missouri State,Jacksonville State,Missouri St.,Jax St.,0,-10.5,-110.0,-110.0,52.5,-112.0,-108.0,-410.0,320.0,PRICED,34.8,17.3,52.2,17.5
+Charlotte,Tulsa,Charlotte,Tulsa,0,-22.5,-110.0,-110.0,51.5,-115.0,-105.0,-2100.0,1100.0,PRICED,44.4,13.7,58.2,30.7
+Chattanooga,Alabama,,Alabama,0,-48.5,-112.0,-108.0,57.5,-112.0,-108.0,,,BLOCKED:NO_SP_PLUS (FCS or unmapped),,,,
+Middle Tennessee,Sam Houston,MTSU,Sam Houston,0,6.5,-110.0,-110.0,48.5,-105.0,-115.0,190.0,-230.0,PRICED,22.4,26.8,49.3,-4.4
+Iowa,Illinois,Iowa,Illinois,0,8.5,-110.0,-110.0,40.5,-118.0,-102.0,260.0,-325.0,PRICED,16.3,24.5,40.9,-8.2
+ULM,Appalachian State,ULM,App. St.,0,-14.0,-108.0,-112.0,50.5,-105.0,-115.0,-625.0,455.0,PRICED,36.8,15.4,52.3,21.4
+South Florida,Florida Atlantic,USF,FAU,0,1.5,-112.0,-108.0,63.5,-112.0,-108.0,-105.0,-115.0,PRICED,31.0,34.8,65.9,-3.8
+Coastal Carolina,Louisiana,Coastal Caro.,Louisiana,0,-10.5,-105.0,-115.0,49.5,-112.0,-108.0,-395.0,310.0,PRICED,35.9,21.3,57.3,14.6
+FIU,Kennesaw State,FIU,Kennesaw,0,-2.5,-115.0,-105.0,44.5,-110.0,-110.0,-125.0,105.0,PRICED,23.0,18.8,41.9,4.2
+Delaware,New Mexico…,Delaware,N. Mex. St.,0,3.0,-112.0,-108.0,53.5,-115.0,-105.0,130.0,-155.0,PRICED,24.7,30.2,55.0,-5.5
+UCLA,Michigan,UCLA,Michigan,0,3.5,-110.0,-110.0,36.5,-118.0,-102.0,150.0,-180.0,PRICED,8.1,19.0,27.2,-10.9
+Indiana,Washington,Indiana,Washington,0,7.5,-110.0,-110.0,44.5,-105.0,-115.0,250.0,-310.0,PRICED,13.4,24.8,38.3,-11.4
+LSU,Tennessee,LSU,Tennessee,0,1.5,-115.0,-105.0,45.5,-112.0,-108.0,-105.0,-115.0,PRICED,22.9,22.1,45.1,0.8
+Texas Tech,Baylor,Texas Tech,Baylor,0,5.5,-115.0,-105.0,57.5,-105.0,-115.0,170.0,-205.0,PRICED,25.4,31.1,56.6,-5.7
+Arkansas,Texas,Arkansas,Texas,0,-20.5,-108.0,-112.0,47.5,-118.0,-102.0,-1600.0,900.0,PRICED,35.5,10.0,45.6,25.5
+Rutgers,Penn State,Rutgers,Penn St.,0,-26.5,-110.0,-110.0,49.5,-112.0,-108.0,-3200.0,1400.0,PRICED,40.5,14.0,54.6,26.5
+NC State,Florida State,NC St.,Florida St.,0,-10.5,-108.0,-112.0,56.5,-108.0,-112.0,-395.0,310.0,PRICED,37.6,27.2,64.9,10.4
+Old Dominion,UConn,ODU,UConn,0,-13.5,-118.0,-102.0,47.5,-110.0,-110.0,-575.0,425.0,PRICED,33.7,15.7,49.5,18.0
+Samford,Auburn,,Auburn,0,-48.5,-110.0,-110.0,59.5,-110.0,-110.0,,,BLOCKED:NO_SP_PLUS (FCS or unmapped),,,,
+Texas A&M,Oklahoma,Texas A&M,Oklahoma,0,-7.0,-112.0,-108.0,37.5,-112.0,-108.0,-290.0,235.0,PRICED,17.0,13.8,30.9,3.2
+Georgia State,Marshall,Georgia St.,Marshall,0,-2.5,-118.0,-102.0,55.5,-105.0,-115.0,-142.0,120.0,PRICED,30.9,32.2,63.2,-1.3
+Northern Illinois,North Dakota…,N. Illinois,N. Dakota St,0,-25.5,-105.0,-115.0,44.5,-115.0,-105.0,-3200.0,1400.0,PRICED,40.7,3.0,43.7,37.7
+Georgia Southern,Troy,Ga. Southern,Troy,0,9.5,-112.0,-108.0,47.5,-110.0,-110.0,280.0,-355.0,PRICED,15.4,29.8,45.3,-14.4
+South Alabama,Southern Miss,S. Alabama,So. Miss,0,4.5,-105.0,-115.0,66.5,-108.0,-112.0,164.0,-198.0,PRICED,32.0,36.7,68.8,-4.7
+Washington State,Texas State,Wash. St.,Texas St.,0,-13.5,-112.0,-108.0,62.5,-108.0,-112.0,-535.0,400.0,PRICED,40.8,21.3,62.2,19.5
+Maryland,USC,Maryland,USC,0,-17.5,-110.0,-110.0,56.5,-115.0,-105.0,-950.0,625.0,PRICED,37.7,20.5,58.3,17.2
+Virginia Tech,Miami F,Va. Tech,Miami,0,-20.5,-115.0,-105.0,60.5,-115.0,-105.0,-1650.0,950.0,PRICED,44.0,21.5,65.6,22.5
+Arizona,Kansas State,Arizona,Kansas St.,0,7.5,-115.0,-105.0,52.5,-108.0,-112.0,235.0,-290.0,PRICED,26.7,35.1,61.9,-8.4
+Arkansas State,Louisiana Tech,Arkansas St.,La. Tech,0,-14.5,-110.0,-110.0,54.5,-118.0,-102.0,-600.0,440.0,PRICED,36.0,21.6,57.7,14.4
+UNLV,San Jose State,UNLV,San Jose St.,0,6.5,-105.0,-115.0,47.5,-112.0,-108.0,200.0,-245.0,PRICED,17.1,23.6,40.8,-6.5
+Georgia,South Carolin,Georgia,S. Carolina,0,14.5,-105.0,-115.0,51.5,-102.0,-118.0,525.0,-750.0,PRICED,16.4,35.4,51.9,-19.0
+SMU,Notre Dame,SMU,Notre Dame,0,-20.5,-112.0,-108.0,56.5,-108.0,-112.0,-1650.0,950.0,PRICED,38.0,22.1,60.2,15.9
+Kentucky,Missouri,Kentucky,Missouri,0,-4.5,-115.0,-105.0,48.5,-110.0,-110.0,-205.0,170.0,PRICED,27.4,21.8,49.3,5.6
+Pittsburgh,Louisvi e,Pittsburgh,Louisville,0,-13.5,-112.0,-108.0,50.5,-110.0,-110.0,-550.0,410.0,PRICED,34.6,23.1,57.8,11.5
+Colorado State,Fresno State,Colorado St.,Fresno St.,0,-20.5,-105.0,-115.0,66.5,-108.0,-112.0,-1450.0,850.0,PRICED,44.6,25.5,70.2,19.1
+Stanford,California,Stanford,California,0,2.5,-105.0,-115.0,55.5,-110.0,-110.0,114.0,-135.0,PRICED,26.5,27.3,53.9,-0.8
+UTSA,UAB,UTSA,UAB,0,6.0,-112.0,-108.0,49.5,-112.0,-108.0,185.0,-225.0,PRICED,24.9,30.4,55.4,-5.5
+Utah,TCU,Utah,TCU,0,8.5,-112.0,-108.0,46.5,-108.0,-112.0,260.0,-325.0,PRICED,17.2,28.2,45.5,-11.0
+San Diego State,Boise State,San Diego St.,Boise St.,0,-17.5,-108.0,-112.0,60.5,-115.0,-105.0,-950.0,625.0,PRICED,44.5,23.3,67.9,21.2
+Oklahoma State,Arizona State,Oklahoma St.,Arizona St.,0,2.5,-105.0,-115.0,59.5,-112.0,-108.0,114.0,-135.0,PRICED,28.5,35.3,63.9,-6.8
+Utah State,Oregon State,Utah St.,Oregon St.,0,-8.5,-105.0,-115.0,50.5,-108.0,-112.0,-325.0,260.0,PRICED,31.7,18.6,50.4,13.1
+Hawaii,Nevada,Hawaii,Nevada,0,-6.0,-112.0,-108.0,40.5,-110.0,-110.0,-238.0,195.0,PRICED,21.4,13.2,34.7,8.2
