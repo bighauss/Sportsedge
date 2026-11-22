@@ -1,0 +1,65 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 443,
+  "base_commit": "40552ff292731b17828ab1ca50b5a5754d7a25a9",
+  "protected_paths": [
+    ".github/workflows/cbb-run-it.yml",
+    "models/cbb/cbb_run_it.py",
+    "models/cbb/test_cbb_run_it_neutral_unknown.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/326",
+  "change_summary": "Reconciles #424 onto current main. Main already rejects non-boolean ESPN neutral flags; this adds the missing prior_games() quarantine of CBBD prior finals with missing/non-boolean neutralSite before home-court estimation, plus six regressions wired into the CBB RUN IT fixture gate. Frozen model, card and ledger untouched.",
+  "assumptions": [
+    "Synthetic fixtures establish adapter behavior only; sources are not provider-authenticated.",
+    "Real-input coverage impact is unmeasured without an authorized read-only replay of encrypted evidence.",
+    "Does not establish the full cause of the 52/59 home-side skew.",
+    "No re-freeze of any existing card is authorized."
+  ],
+  "agent_identity": "Claude coding assistant",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Prospective CBB home-side calibration versus contemporaneous market",
+    "before": null,
+    "unit": "No independently graded prospective CBB sample",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "cd models/cbb && python -m unittest -v test_cbb_run_it test_cbb_run_it_neutral_unknown",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "40552ff292731b17828ab1ca50b5a5754d7a25a9",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "cd models/cbb && python -m unittest -v test_cbb_run_it"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
