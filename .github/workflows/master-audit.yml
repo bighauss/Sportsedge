@@ -1,0 +1,50 @@
+name: Master audit research (offline)
+on:
+  pull_request:
+    paths:
+      - 'research/audit/master/**'
+      - '.github/workflows/master-audit.yml'
+      - 'docs/governance/changes/pr-382.json'
+  workflow_dispatch:
+    inputs:
+      file:
+        description: 'Checked-in relative JSON/CSV path (no private data)'
+        required: false
+        default: 'research/audit/master/examples/sample_predictions.json'
+permissions:
+  contents: read
+jobs:
+  synthetic-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic unit tests — no model/edge certification
+        run: python -m unittest research.audit.master.test_master_audit -v
+      - name: Generate explicitly synthetic fixture
+        run: python research/audit/master/examples/make_sample.py
+      - name: Generate synthetic read-only audit report
+        env:
+          AUDIT_FILE: ${{ github.event.inputs.file || 'research/audit/master/examples/sample_predictions.json' }}
+        run: |
+          python - <<'PY'
+          import os, pathlib, subprocess, sys
+          root = pathlib.Path.cwd().resolve()
+          raw = os.environ["AUDIT_FILE"]
+          path = (root / raw).resolve(strict=True)
+          if not path.is_relative_to(root) or path.suffix not in (".csv", ".json"):
+              raise SystemExit("Audit input must be a checked-in repository JSON/CSV file")
+          subprocess.run([
+              sys.executable, "-m", "research.audit.master", "full",
+              str(path), "--rules", "research/audit/master/examples/rules.json",
+              "--out", "master_audit_report.json"
+          ], check=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: master-audit-synthetic-report
+          path: master_audit_report.json
