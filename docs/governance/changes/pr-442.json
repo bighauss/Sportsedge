@@ -12,6 +12,6 @@
   "golden": {"sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0", "cases": 9, "suite": "SYNTHETIC_AGENT_SAFETY"},
   "evaluation": {"method": "DETERMINISTIC_REGRESSION", "test_command": "python -m unittest -v sportsedge.validation.test_espn_paper_grade_bridge sportsedge.validation.test_espn_final_evidence sportsedge.validation.test_paper_grade_batch", "external_review_state": "NOT_VERIFIED", "unseen_data_verified": false},
   "rollback": {"target_base_sha": "f31755e4c0f6b8cee94b7715bb0194c119db687c", "strategy": "REVIEWED_REVERT_PR", "verification_command": "python -m unittest -v sportsedge.validation.test_espn_final_evidence sportsedge.validation.test_paper_grade_batch"},
-  "cost": {"currency": "USD", "measurement": "UNKNOWN", "usd": null, "receipt_sha256": null, "cost_per_outcome_usd": null},
+  "cost": {"currency": "USD", "measurement": "UNKNOWN", "usd": null, "receipt_sha256": null, "outcome_per_dollar": null},
   "release_claims": {"policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1", "production_ready": false, "external_owner_approval_verified": false, "source_authenticated": false, "model_release_certified": false, "official_counted": 0, "approved_stake_u": 0}
 }
