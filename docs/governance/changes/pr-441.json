@@ -3,8 +3,7 @@
   "pr_number": 441,
   "base_commit": "98e61d227a8989a87c463434e394a3ce6ce2a648",
   "protected_paths": [
-    ".github/workflows/tests.yml",
-    "tests/test_cross_sport_parity_guardrails.py"
+    ".github/workflows/tests.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
   "change_summary": "Add a provider-free cross-sport adversarial regression suite to existing CI; synthetic tests only, no changes to frozen CBB/CFB/MLB models, odds, graders, selections, or release policy.",
