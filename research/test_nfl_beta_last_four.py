@@ -63,6 +63,38 @@ class BetaTests(unittest.TestCase):
                          decision_utc=stamp(0))["rows"][0]
         self.assertIsNone(row["beta_ev"])
 
+
+    def test_bad_provenance_hash_blocks_ev(self):
+        row = price_beta(sims(), [offer(source_sha256="sha256:unverified")],
+                         decision_utc=stamp(0))["rows"][0]
+        self.assertIsNone(row["beta_ev"])
+        self.assertIn("PROVENANCE_HASH_INVALID", row["reasons"])
+
+    def test_stale_price_blocks_ev(self):
+        row = price_beta(sims(), [offer(captured_at_utc=stamp(-6))],
+                         decision_utc=stamp(0))["rows"][0]
+        self.assertIsNone(row["beta_ev"])
+        self.assertIn("STALE_QUOTE", row["reasons"])
+
+    def test_no_ordered_events_blocks_first_td(self):
+        ss = sims()
+        for s in ss:
+            del s["ordered_touchdowns"]
+        row = price_beta(ss, [offer("FIRST_TD")],
+                         decision_utc=stamp(0))["rows"][0]
+        self.assertIsNone(row["beta_ev"])
+        self.assertIn("INCOMPLETE_OR_INVALID_JOINT_SCENARIOS", row["reasons"])
+
+    def test_sgp_requires_all_leg_outcomes(self):
+        ss = sims()
+        for s in ss:
+            del s["players"]["p1"]["rec_yds"]
+        legs = [dict(kind="XPLUS", player_id="p1", stat="rec_yds", threshold=50),
+                dict(kind="FIRST_TD", player_id="p1")]
+        row = price_beta(ss, [offer("SGP", legs=legs)],
+                         decision_utc=stamp(0))["rows"][0]
+        self.assertIsNone(row["beta_ev"])
+
     def test_duplicate_quote_rejected(self):
         with self.assertRaises(ValueError):
             price_beta(sims(), [offer(), offer()], decision_utc=stamp(0))
