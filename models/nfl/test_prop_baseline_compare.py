@@ -65,6 +65,14 @@ class Census(unittest.TestCase):
         self.assertEqual(r["census"]["graded"], 1)
         self.assertEqual(r["census"]["attempted"], 3)
 
+    def test_on_card_duplicate_hidden_outside_cohort_still_blocks(self):
+        rs = [row("A@B", "x", .7, .5, qualifies=True),
+              row("A@B", "x", .6, .5, qualifies=False)]
+        r = C.compare(rs, {("A@B", "x"): True})
+        self.assertEqual(r["priced"]["census"]["ambiguous_identity"], 2)
+        self.assertEqual(r["on_card"]["census"]["ambiguous_identity"], 1)
+        self.assertEqual(r["on_card"]["census"]["graded"], 0)
+
     def test_bad_identity_unresolvable(self):
         r = C.compare([row("A@B", "", .6, .5)], {})["priced"]
         self.assertEqual(r["census"]["ambiguous_identity"], 1)
