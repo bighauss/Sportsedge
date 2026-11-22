@@ -39,6 +39,17 @@ def norm(s):
 class Fail(Exception):
     pass
 
+
+def require_cfbd_neutral_flag(game):
+    """Fail closed before the unchanged frozen model can coerce unknown -> home.
+
+    This protects the CFB RUN IT entrypoint; it does not rewrite or certify the
+    separately SHA-pinned legacy model's direct-call behavior.
+    """
+    if type(game.get("neutralSite")) is not bool:
+        raise Fail("CFBD neutralSite missing or not boolean")
+    return game["neutralSite"]
+
 # ---------------------------------------------------------------- fetch
 def http_bytes(url, key=None, timeout=60):
     req = urllib.request.Request(url, headers={"Accept": "application/json",
@@ -275,6 +286,12 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                 withheld.append((label, f"kickoff mismatch: DK {L['kickoff_ct']} CT vs CFBD {ko.astimezone(CT):%-I:%M %p} CT")); continue
         if g.get("completed") or ko <= now_utc:
             withheld.append((label, f"kicked off {ko.astimezone(CT):%-I:%M %p} CT before run")); continue
+        # Unknown venue status is not an eligible home game; quarantine before
+        # weather/adjustments/projection rather than bool(None) -> False.
+        try:
+            require_cfbd_neutral_flag(g)
+        except Fail as exc:
+            withheld.append((label, str(exc))); continue
         ven = venues.get(g.get("venueId"), {})
         dome = bool(ven.get("dome"))
         if not dome:
