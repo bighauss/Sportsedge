@@ -11,8 +11,8 @@ def offer(kind="XPLUS", **kw):
     x = dict(event_id="event-1", book="DraftKings", quote_id="q1",
              kind=kind, player_id="p1", stat="rec_yds", threshold=50,
              captured_at_utc=stamp(-1), kickoff_utc=stamp(60),
-             model_asof_utc=stamp(-10), source_sha256="sha256:receipt",
-             model_sha256="sha256:model", odds_american=150,
+             model_asof_utc=stamp(-10), source_sha256="sha256:" + "a" * 64,
+             model_sha256="sha256:" + "b" * 64, odds_american=150,
              joint_simulation=True)
     x.update(kw)
     return x
