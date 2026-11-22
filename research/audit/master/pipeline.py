@@ -29,8 +29,12 @@ def freshness(rows: Sequence[dict], now=None, max_age_min: float = 30) -> list[d
         o = audits.ts(r.get("odds_ts"))
         if o is None or (now - o).total_seconds() / 60 > max_age_min:
             out.append(audits.finding("STALE_DATA", "HIGH", r, f"odds_ts={r.get('odds_ts')}"))
+        if o is not None and o > now:
+            out.append(audits.finding("FUTURE_PRICE_CAPTURE", "CRITICAL", r))
         k = audits.ts(r.get("kickoff_ts"))
-        if k and k <= now:
+        if k is None:
+            out.append(audits.finding("KICKOFF_NOT_VERIFIED", "CRITICAL", r))
+        elif k <= now:
             out.append(audits.finding("LIVE_OR_CLOSED", "CRITICAL", r))
     return out
 
@@ -64,7 +68,13 @@ def run_gates(candidates: Sequence[dict], calib_history: Sequence[dict] = (), no
             calib[row["bucket"]] = row
     out, blocked = [], []
     for c in candidates:
-        codes, sev = [], []
+        # This research helper cannot authenticate provider originals, independently
+        # certify calibration, or authorize betting. It must NEVER self-certify PASS.
+        codes, sev = ["RESEARCH_ONLY_NO_INDEPENDENT_ATTESTATION"], ["HIGH"]
+        if not c.get("inputs"):
+            codes.append("MISSING_INPUT_LINEAGE"); sev.append("HIGH")
+        if not calib_history:
+            codes.append("CALIB_NO_HISTORY"); sev.append("HIGH")
         for f in leak.get(c.get("pred_id"), []) + fresh.get(c.get("pred_id"), []) + dq.get(c.get("pred_id"), []):
             codes.append(f["code"]); sev.append(f["severity"])
         prices = c.get("prices") or {c.get("book", "book"): c["odds"]}
@@ -90,7 +100,7 @@ def run_gates(candidates: Sequence[dict], calib_history: Sequence[dict] = (), no
             codes.append("CORRELATED")
         unc = float(c.get("prob_sd") or (b and (b["ci_hi"] - b["ci_lo"]) / 4) or 0.03)
         status = ("BLOCKED" if "CRITICAL" in sev or "NO_POSITIVE_EV" in codes
-                  else "FLAGGED" if sev else "PASSED")
+                  else "FLAGGED")
         other = c.get("other_side_odds")
         rec = {**c, "model_prob": mp, "fair_odds": round(prob_to_american(mp)),
                "market_no_vig": no_vig([best, float(other)])[0] if other not in (None, "") else None,
@@ -98,9 +108,11 @@ def run_gates(candidates: Sequence[dict], calib_history: Sequence[dict] = (), no
                "uncertainty": unc, "stars": stars(ev, unc), "price_ts": c.get("odds_ts"),
                "audit_status": status, "reason_codes": sorted(set(codes)),
                "correlation_flags": c.get("correlated_with") or [],
-               "input_timestamps": {i["name"]: i.get("ts") for i in c.get("inputs") or []}}
+               "input_timestamps": {i["name"]: i.get("ts") for i in c.get("inputs") or []},
+               "release_ready": False, "official_counted": 0, "approved_stake_u": 0}
         (blocked if status == "BLOCKED" else out).append(rec)
     out.sort(key=lambda r: -r["ev_per_unit"])
+    blocked.sort(key=lambda r: -r["ev_per_unit"])
     return {"candidates": out, "blocked": blocked,
             "summary": {"in": len(candidates), "passed": sum(r["audit_status"] == "PASSED" for r in out),
                         "flagged": sum(r["audit_status"] == "FLAGGED" for r in out),
@@ -114,7 +126,9 @@ def card_view(result: dict) -> list[dict]:
         rows.append({"rank": i + 1, "pick": f"{r.get('market')} {r.get('side')}".strip(),
                      "player": r.get("player"), "price": r["best_price"], "book": r["best_book"],
                      "win_pct": round(100 * r["model_prob"], 1), "ev_pct": round(100 * r["ev_per_unit"], 1),
-                     "stars": r["stars"], "flame": r["stars"] >= 4})
+                     "stars": r["stars"], "flame": r["stars"] >= 4,
+                     "audit_status": r["audit_status"], "reason_codes": r["reason_codes"],
+                     "release_ready": False, "approved_stake_u": 0})
     return rows
 
 
@@ -131,27 +145,40 @@ def row_hash(r: dict) -> str:
 
 
 def ledger_append(path: str, rows: Sequence[dict]) -> int:
-    """Append selections BEFORE kickoff, including blocked ones. Refuses post-kickoff rows."""
-    existing = set()
+    """Preflight all new rows before append. Never backdate an after-kickoff log.
+
+    Local research CSVs are not immutable, independently authenticated receipts.
+    """
     try:
         with open(path, newline="") as f:
             existing = {r["pred_id"] for r in csv.DictReader(f)}
     except FileNotFoundError:
-        with open(path, "w", newline="") as f:
-            csv.DictWriter(f, LEDGER_FIELDS).writeheader()
-    now = datetime.now(timezone.utc).isoformat()
-    n = 0
-    with open(path, "a", newline="") as f:
-        w = csv.DictWriter(f, LEDGER_FIELDS, extrasaction="ignore")
-        for r in rows:
-            if r.get("pred_id") in existing:
-                continue
+        existing = set()
+    now_dt = datetime.now(timezone.utc)
+    prepared, seen = [], set()
+    for r in rows:
+        identity = r.get("pred_id")
+        if not isinstance(identity, str) or not identity.strip() or identity in seen:
+            raise ValueError("missing or duplicated prediction identity")
+        seen.add(identity)
+        if identity in existing:
+            continue
+        try:
             k, p = audits.ts(r.get("kickoff_ts")), audits.ts(r.get("pred_ts"))
-            if k and p and p >= k:
-                raise ValueError(f"refusing post-kickoff selection {r.get('pred_id')}")
-            w.writerow({**r, "logged_ts": now, "row_hash": row_hash(r)})
-            n += 1
-    return n
+            if (k is None or p is None or k.utcoffset() is None or p.utcoffset() is None
+                    or p >= k or now_dt >= k):
+                raise ValueError("missing, naive or post-kickoff timestamps")
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"refusing unverifiable or late selection {identity}") from exc
+        prepared.append({**r, "logged_ts": now_dt.isoformat(), "row_hash": row_hash(r)})
+    if not prepared:
+        return 0
+    with open(path, "a", newline="") as f:
+        writer = csv.DictWriter(f, LEDGER_FIELDS, extrasaction="ignore")
+        if f.tell() == 0:
+            writer.writeheader()
+        writer.writerows(prepared)
+    return len(prepared)
 
 
 def grade(ledger_rows: Sequence[dict], results: dict[str, dict]) -> list[dict]:
