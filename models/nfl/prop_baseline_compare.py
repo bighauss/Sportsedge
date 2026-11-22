@@ -125,7 +125,7 @@ def compare(ledger_rows, results, reps=2000, seed=7,
                 else:
                     census["graded"] += 1
                     graded.append(dict(r, _y=y))
-        assert sum(census.values()) - census["attempted"] == census["attempted"]
+        assert sum(value for key, value in census.items() if key != "attempted") == census["attempted"]
         rep = {
             "census": census, "model_validated": False,
             "source_authenticated": False, "calibration_verified": False,
