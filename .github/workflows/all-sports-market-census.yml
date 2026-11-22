@@ -1,0 +1,26 @@
+name: All sports and markets structural census (offline)
+on:
+  pull_request:
+    paths:
+      - 'research/audit/all_sports_market_census.py'
+      - 'research/audit/test_all_sports_market_census.py'
+      - '.github/workflows/all-sports-market-census.yml'
+      - 'docs/governance/changes/pr-*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  seven-sport-market-census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run all exact-identity census and fail-closed synthetic tests
+        run: python -m unittest research.audit.test_all_sports_market_census -v
+      - name: Verify existing master audit tests alongside census
+        run: python -m unittest research.audit.master.test_master_audit -v
