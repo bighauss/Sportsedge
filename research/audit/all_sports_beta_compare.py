@@ -146,9 +146,13 @@ def evaluate(data, *, max_quote_age_minutes=30):
             observed = entry["source_observed_utc"]
             captured = entry["source_captured_utc"]
             if observed is not None and captured is not None:
-                clock = universe._utc(captured, "quote_capture")
-                if (asof - clock).total_seconds() > max_quote_age_minutes * 60:
-                    errors.append("QUOTE_STALE_RELATIVE_TO_MODEL")
+                try:
+                    clock = universe._utc(captured, "quote_capture")
+                except ValueError:
+                    errors.append("QUOTE_CLOCK_UNPARSEABLE")
+                else:
+                    if (asof - clock).total_seconds() > max_quote_age_minutes * 60:
+                        errors.append("QUOTE_STALE_RELATIVE_TO_MODEL")
         critical = list(dict.fromkeys(errors))
         # Only positive/nonpositive research hypotheses for structurally
         # matched models + prices. Never a verified or official selection.
