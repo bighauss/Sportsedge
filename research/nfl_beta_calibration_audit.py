@@ -1,42 +1,82 @@
-"""Prospective NFL beta calibration ledger, with no post-hoc pick selection.
-
-Requires pregame frozen prediction records and later separate outcomes.
-A result alone cannot establish that a pregame probability was recorded.
-"""
+"""Prospective PAPER calibration; receipts prove integrity, not capture time."""
+import hashlib
 import json
 import math
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
-import re
+from copy import deepcopy
 
 
 def _utc(value):
     if not isinstance(value, str):
-        raise ValueError('UTC_TIMESTAMP_REQUIRED')
-    dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        raise ValueError("UTC_TIMESTAMP_REQUIRED")
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if dt.tzinfo is None or dt.utcoffset().total_seconds() != 0:
-        raise ValueError('UTC_TIMESTAMP_REQUIRED')
+        raise ValueError("UTC_TIMESTAMP_REQUIRED")
     return dt.astimezone(timezone.utc)
+
+
+def freeze_predictions(result, *, frozen_at_utc):
+    """Return records plus canonical receipt bytes to persist before kickoff.
+
+    No external timestamp/authentication is established by this function.
+    Persist returned bytes in an independently timestamped append-only store.
+    """
+    frozen = _utc(frozen_at_utc)
+    if not isinstance(result, dict) or result.get("status") != "RESEARCH_PAPER_0U" or not isinstance(result.get("rows"), list):
+        raise ValueError("INVALID_PRICING_RESULT")
+    records, seen = [], set()
+    for row in result["rows"]:
+        if not isinstance(row, dict) or row.get("status") != "PAPER_HOLD_0U" or type(row.get("stake_u")) is not int or row["stake_u"] != 0:
+            raise ValueError("NOT_PAPER")
+        offer = row.get("offer")
+        if not isinstance(offer, dict):
+            raise ValueError("EXACT_OFFER_REQUIRED")
+        if not _utc(offer["model_asof_utc"]) <= _utc(offer["captured_at_utc"]) <= _utc(row["decision_utc"]) <= frozen < _utc(offer["kickoff_utc"]):
+            raise ValueError("NO_VERIFIABLE_PREGAME_FREEZE")
+        identity = [offer.get(k) for k in ("event_id", "book", "quote_id")]
+        if any(not isinstance(x, str) or not x for x in identity):
+            raise ValueError("INVALID_PREDICTION_IDENTITY")
+        if row.get("event_id") != identity[0] or row.get("offer_id") != identity[2] or row.get("kind") != offer.get("kind"):
+            raise ValueError("OFFER_IDENTITY_MISMATCH")
+        key = "sha256:" + hashlib.sha256(json.dumps(identity, separators=(",", ":")).encode()).hexdigest()
+        if key in seen:
+            raise ValueError("DUPLICATE_PREDICTION")
+        seen.add(key)
+        record = deepcopy(row)
+        record.update(prediction_id=key, frozen_at_utc=frozen_at_utc,
+                      kickoff_utc=offer["kickoff_utc"])
+        records.append(record)
+    receipt = json.dumps({"schema": "nfl-beta-freeze-v1", "predictions": records}, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    digest = "sha256:" + hashlib.sha256(receipt).hexdigest()
+    for record in records:
+        record["receipt_sha256"] = digest
+    return records, receipt
 
 
 def audit(predictions, outcomes, *, min_graded=100):
     if not isinstance(predictions, list) or not isinstance(outcomes, list):
         raise ValueError("INVALID_LEDGER")
+    if type(min_graded) is not int or min_graded < 1:
+        raise ValueError("INVALID_SAMPLE_FLOOR")
     actual = {}
     for o in outcomes:
+        if not isinstance(o, dict) or not isinstance(o.get("prediction_id"), str) or not o["prediction_id"]:
+            raise ValueError("INVALID_OUTCOME_ID")
         k = o["prediction_id"]
-        if k in actual or o.get("result") not in (0, 1):
+        if k in actual or type(o.get("result")) is not int or o["result"] not in (0, 1):
             raise ValueError("DUPLICATE_OR_INVALID_OUTCOME")
         actual[k] = o["result"]
-    seen = set()
-    buckets = defaultdict(list)
-    ungraded = 0
+    seen, buckets, ungraded = set(), defaultdict(list), 0
     for p in predictions:
+        if not isinstance(p, dict) or not isinstance(p.get("prediction_id"), str) or not p["prediction_id"]:
+            raise ValueError("INVALID_PREDICTION_ID")
         k = p["prediction_id"]
         if k in seen:
             raise ValueError("DUPLICATE_PREDICTION")
         seen.add(k)
-        if p.get("status") != "PAPER_HOLD_0U" or p.get("stake_u") != 0:
+        if p.get("status") != "PAPER_HOLD_0U" or type(p.get("stake_u")) is not int or p["stake_u"] != 0:
             raise ValueError("NOT_PAPER")
         prob = p.get("beta_probability")
         if prob is None:
@@ -51,10 +91,14 @@ def audit(predictions, outcomes, *, min_graded=100):
             raise ValueError("NO_VERIFIABLE_PREGAME_FREEZE") from exc
         if not isinstance(p.get("receipt_sha256"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", p["receipt_sha256"]):
             raise ValueError("NO_FROZEN_RECEIPT")
+        if p.get("kind") not in ("XPLUS", "FIRST_TD", "SGP"):
+            raise ValueError("INVALID_MARKET_KIND")
         if k not in actual:
             ungraded += 1
             continue
         buckets[p["kind"]].append((prob, actual[k]))
+    if set(actual) - seen:
+        raise ValueError("ORPHAN_OUTCOME")
     summary = {}
     for kind, pairs in sorted(buckets.items()):
         n = len(pairs)
@@ -64,6 +108,8 @@ def audit(predictions, outcomes, *, min_graded=100):
         summary[kind] = dict(n=n, brier=round(brier, 6),
                              observed_hit_rate=round(base, 6),
                              baseline_brier=round(base_brier, 6),
+                             baseline_scope="IN_SAMPLE_DESCRIPTIVE_NOT_PROSPECTIVE",
+                             prospective_baseline_brier=None,
                              validated=False,
                              reason=("INSUFFICIENT_PROSPECTIVE_SAMPLE" if n < min_graded
                                      else "NEEDS_CHRONOLOGICAL_HOLDOUT_AND_CLV"))

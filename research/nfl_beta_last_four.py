@@ -1,12 +1,7 @@
-"""Research-only NFL beta pricer for X+ ladders, first TD and SGP.
-
-Requires independently produced, point-in-time, joint scenario samples.
-Does not alter the frozen engine or override NFL_FULL_MARKET_GATE_R1.
-All output is PAPER / 0u; absent evidence remains explicitly blocked.
-"""
-from __future__ import annotations
+"""Research-only NFL beta pricing. All output remains PAPER / 0u."""
 from datetime import datetime, timezone
 from math import isfinite, sqrt
+from copy import deepcopy
 import re
 
 STATS = frozenset(("pass_yds", "rush_yds", "rec_yds", "receptions"))
@@ -33,6 +28,8 @@ def _decimal(american):
 
 
 def _leg_hit(scenario, leg):
+    if not isinstance(scenario, dict) or not isinstance(leg, dict):
+        raise ValueError("INVALID_SCENARIO_OR_LEG")
     kind = leg["kind"]
     if kind == "XPLUS":
         if leg.get("stat") not in STATS or type(leg.get("threshold")) is not int or leg["threshold"] < 1:
@@ -40,8 +37,10 @@ def _leg_hit(scenario, leg):
         player = leg.get("player_id")
         if not isinstance(player, str) or not player:
             raise ValueError("PLAYER_ID_REQUIRED")
-        stats = scenario["players"][player]
-        v = stats[leg["stat"]]
+        players = scenario["players"]
+        if not isinstance(players, dict) or not isinstance(players.get(player), dict):
+            raise ValueError("INVALID_PLAYER_SAMPLES")
+        v = players[player][leg["stat"]]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not isfinite(v) or v < 0:
             raise ValueError("INVALID_STAT_SAMPLE")
         return v >= leg["threshold"]
@@ -49,7 +48,6 @@ def _leg_hit(scenario, leg):
         scorer = leg.get("player_id")
         if not isinstance(scorer, str) or not scorer:
             raise ValueError("PLAYER_ID_REQUIRED")
-        # Ordered events must include defensive/return scores and a no-TD outcome.
         events = scenario["ordered_touchdowns"]
         if not isinstance(events, list):
             raise ValueError("ORDERED_EVENTS_REQUIRED")
@@ -64,20 +62,15 @@ def _evaluate(scenario, offer):
         legs = offer.get("legs")
         if not isinstance(legs, list) or len(legs) < 2:
             raise ValueError("SGP_LEGS_REQUIRED")
-        if any(leg.get("kind") not in ("XPLUS", "FIRST_TD") for leg in legs):
+        if any(not isinstance(leg, dict) or leg.get("kind") not in ("XPLUS", "FIRST_TD") for leg in legs):
             raise ValueError("UNSUPPORTED_SGP_LEG")
-        # Evaluate every leg: short-circuiting can conceal missing scenario data.
         outcomes = [_leg_hit(scenario, leg) for leg in legs]
         return all(outcomes)
     return _leg_hit(scenario, offer)
 
 
 def price_beta(scenarios, offers, *, decision_utc, min_scenarios=1000):
-    """One row per exact offer. No fallback to independence for SGP.
-
-    Scenario provenance must be validated upstream; this routine enforces
-    pre-kickoff, pre-quote model timestamps and complete joint outcomes.
-    """
+    """Price exact joint offers; upstream provenance remains unverified."""
     decision = _utc(decision_utc)
     if not isinstance(scenarios, list) or not isinstance(offers, list):
         raise ValueError("INVALID_INPUT")
@@ -94,9 +87,10 @@ def price_beta(scenarios, offers, *, decision_utc, min_scenarios=1000):
         seen.add(identity)
         row = dict(offer_id=identity[2], event_id=identity[0], kind=offer.get("kind"),
                    status="PAPER_HOLD_0U", stake_u=0, official_counted=0,
-                   beta_ev=None, beta_probability=None, reasons=[])
+                   beta_ev=None, beta_probability=None, reasons=[],
+                   decision_utc=decision_utc, offer=deepcopy(offer))
         reasons = row["reasons"]
-        if offer.get("kind") not in KINDS:
+        if not isinstance(offer.get("kind"), str) or offer["kind"] not in KINDS:
             reasons.append("UNSUPPORTED_MARKET")
         if identity[1].casefold() != "draftkings":
             reasons.append("NOT_DRAFTKINGS")
@@ -114,17 +108,17 @@ def price_beta(scenarios, offers, *, decision_utc, min_scenarios=1000):
             reasons.append("PROVENANCE_HASH_INVALID")
         if len(scenarios) < min_scenarios:
             reasons.append("INSUFFICIENT_JOINT_SCENARIOS")
-        if offer.get("kind") == "SGP" and not offer.get("joint_simulation"):
+        if offer.get("kind") == "SGP" and offer.get("joint_simulation") is not True:
             reasons.append("JOINT_SIMULATION_NOT_ATTESTED")
         try:
-            d = _decimal(offer["odds_american"])
             _implied(offer["odds_american"])
-        except (KeyError, ValueError, TypeError):
+            d = _decimal(offer["odds_american"])
+        except (KeyError, ValueError, TypeError, OverflowError):
             reasons.append("PRICE_INVALID")
         if not reasons:
             try:
-                if any(s.get("event_id") != identity[0] for s in scenarios):
-                    raise ValueError("MIXED_EVENT_SCENARIOS")
+                if any(not isinstance(s, dict) or s.get("event_id") != identity[0] for s in scenarios):
+                    raise ValueError("MIXED_OR_INVALID_EVENT_SCENARIOS")
                 hits = sum(bool(_evaluate(s, offer)) for s in scenarios)
                 p = hits / len(scenarios)
                 se = sqrt(p * (1 - p) / len(scenarios))
@@ -133,10 +127,9 @@ def price_beta(scenarios, offers, *, decision_utc, min_scenarios=1000):
                 row["mc_se"] = round(se, 6)
                 if hits == 0 or hits == len(scenarios):
                     reasons.append("EXTREME_MC_ESTIMATE")
-                # Never rank noisy tail bets as validated edges.
                 if se > 0.02:
                     reasons.append("MONTE_CARLO_UNCERTAINTY_HIGH")
-            except (KeyError, TypeError, ValueError, IndexError):
+            except (KeyError, TypeError, ValueError, IndexError, OverflowError):
                 reasons.append("INCOMPLETE_OR_INVALID_JOINT_SCENARIOS")
         if not reasons:
             reasons.append("BETA_UNCALIBRATED_NO_VALIDATED_EV")
