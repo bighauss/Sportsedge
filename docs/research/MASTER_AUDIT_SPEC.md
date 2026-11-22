@@ -9,7 +9,7 @@ The code uses only the Python standard library. It is a **read-only audit layer*
 |---|---|
 | 1. No invented advantages | `projections.AdjustmentRegistry`. Any adjustment applies 0 points unless it is registered with n ≥ 200, \|effect\| ≥ 1.96·SE and an out-of-sample confirmation. Motivation, revenge, narrative, sharp money, trap lines, momentum, public fade, rivalry, look-ahead and must-win are `BLOCKED: NARRATIVE_UNQUANTIFIED` by default. `props_corr.over_under`/`prop_projection` raise an error rather than invent a missing SD or game log. |
 | 2. No data leakage | `audits.leakage_audit` / `assert_no_leakage` check pred_ts < kickoff, odds_ts ≤ pred_ts, every input ts ≤ pred_ts, and that no postgame fields are used as inputs. `audits.point_in_time` filters training rows. `pipeline.ledger_append` refuses rows logged after kickoff. |
-| 3. No unverified +EV | `pipeline.run_gates` sets the status: an EV is shown as PASSED only after leakage, freshness, data-quality, large-edge and calibration-bucket checks. All odds-module EVs are only candidates. |
+| 3. No unverified +EV | `pipeline.run_gates` never self-certifies a candidate as PASSED: absent independent source attestation it labels research rows FLAGGED (or BLOCKED for critical defects), shows reason codes, and keeps release_ready=false / approved_stake_u=0. Odds-derived EV is only a hypothesis. |
 | 4. No silent model changes | Nothing here writes to the engine. `stats.platt_fit` only *recommends* a recalibration, fit on holdout data. `audits.append_only_check` flags any historical row that was removed or rewritten. `pipeline.row_hash` and `grade()` detect edited ledger rows. |
 
 ## Module → code map
@@ -29,21 +29,21 @@ The code uses only the Python standard library. It is a **read-only audit layer*
 | P7 Live / prediction markets | Research lane only. Uses the same `odds`/`stats` helpers; there is no live pipeline (as the spec requires). | Theo 32–35, 49 |
 | Uncertainty: sim count + spread | `uncertainty.sim_noise_check` (flags picks where sim noise > 10% of edge, gives sims needed), `sim_convergence` (seed × count test), `dispersion_audit` (z-score SD → share of real spread used, interval coverage, extreme-probability share, SD multiplier fit on earlier half / validated on later half, recommendation only) | Owner posts 2026-11-21 |
 | Feature-group ablation | `ablation.ablation` (walk-forward, refit without each variable group, paired-bootstrap CI on holdout Brier change → KEEP_HELPS / SIMPLIFY_CANDIDATE; recommendation only; any model via `fit_fn`) | Owner post 2026-11-21 |
-| P8 Daily RUN IT gates | `pipeline.freshness`, `run_gates` → candidates (ranked by EV) + blocked list with reason codes, `card_view` (price, win %, EV, stars, flames; no status labels), `ledger_append` (append-only, hashed), `grade`, `postgame_report` (grades blocked picks too) | Rusty T1#8; Theo 50 |
+| P8 Daily RUN IT gates | `pipeline.freshness`, `run_gates` → research candidates (ranked by EV) + blocked list with reason codes, `card_view` (price, win %, EV, research status and reasons), `ledger_append` (append-only, hashed), `grade`, `postgame_report` (grades blocked picks too) | Rusty T1#8; Theo 50 |
 
 Every candidate carries the fields in `pipeline.REQUIRED_OUTPUT`: model_prob, fair_odds, edge, EV, best price/book, uncertainty, price_ts, audit_status, reason_codes, correlation_flags, input_timestamps.
 
 Some prompts are reasoning prompts rather than math: Theo 5, 6, 11, 16, 18, 23, 25, 33–35, 41. Their quantifiable parts are covered: public bias ↔ blocked narratives, tilt/streaks ↔ `streak_probability`, autopsy ↔ `postgame_report`. Any narrative claim stays blocked until it is registered with evidence.
 
 ## How to run (phone-friendly)
-- **GitHub Actions → master-audit → Run workflow** (once the workflow file is installed: the GitHub app couldn't write to `.github/workflows/`, so copy `docs/research/master-audit.workflow.yml` to `.github/workflows/master-audit.yml` in the GitHub web editor). Point `file` at any prediction JSON/CSV in the repo. The full report downloads as the `master-audit-report` artifact.
+- **GitHub Actions → Master audit research (offline) → Run workflow**, after the PR is merged and workflow is enabled. The workflow is included in this PR and only accepts checked-in JSON/CSV inputs; never upload private sportsbook screenshots or secrets. Point `file` at any prediction JSON/CSV in the repo. The full report downloads as the `master-audit-report` artifact.
 - CLI: `python -m research.audit.master <leakage|quality|largest|calibration|bias|disagreement|backtest|bootstrap|correlation|gates|postgame|simnoise|dispersion|challenge|full> FILE [--rules rules.json] [--history graded.json]`
-- Tests: `python research/audit/master/test_master_audit.py` (27 synthetic tests).
+- Tests: `python research/audit/master/test_master_audit.py` (synthetic tests, including fail-closed late-ledger and release gates).
 - **Universal Model Challenge** (Rusty's every-model prompt): `python -m research.audit.master challenge FILE [--rules rules.json]` runs every check and returns issues ranked by severity, each with how to test the fix on unseen data. It changes nothing.
 
 **Engine wiring (NBA / CBB / CFB, game lines + props):** `python -m research.audit.master.engine_adapter <nba|cbb|cfb> <sport>_card.csv --run-ts <ISO> [--games games.csv] [--results results.csv] --out rows.json` turns the RUN IT card each engine already writes into audit rows (props parsed into player + OVER/UNDER, decimal price → American, kickoff from games.csv, optional grading) and prints coverage by sport and market family so it's visible that props are included. Then run `challenge`, `gates` or `full` on `rows.json`. Default judges `model_p`; `--prob blend` audits the blended probability instead. Engines are read, never edited.
 
-**CLV removed (owner ruling 2026-11-21):** this layer does no closing-line value tracking or reporting (Theo 30 dropped).
+**CLV status:** not implemented as an independently evidenced report in this PR. Theo 30 / the owner's CLV tracking request remains OPEN until each selection is joined to independently time-attested pregame and closing quotes, with voids, market identity and book recorded. Do not infer closing prices.
 
 ## Gap matrix (next step)
 | Module | Status in this PR | Evidence still required |
@@ -51,10 +51,10 @@ Some prompts are reasoning prompts rather than math: Theo 5, 6, 11, 16, 18, 23, 
 | P1.1–P1.6 | Implemented as an audit layer | Run it on real Drive ledgers with true pred/odds timestamps |
 | P2 | Reference/challenger calculators | Measured HFA/K-factor/SD per sport, fit walk-forward |
 | P3 | Distributions + correlation engine | Historical prop SDs; joint hit-rate data per pair |
-| P4 | Done | Authenticated historical quotes for `ev_inspector` |
+| P4 | Research odds/EV helpers only | Authenticated pregame quotes, independently captured closing quotes for CLV, and execution-cost receipts |
 | P5 | Registry built; it starts **empty**, so every adjustment is blocked | Register each effect with n/SE/out-of-sample results |
 | P6 | Done (recommendations only) | none |
 | P7 | Research only | Live data pipeline + latency |
-| P8 | Gates/ledger/grading done | Wire the engine's output rows into `run_gates` |
+| P8 | Research-only gates/ledger/grading; no release certification | Wire and authenticate engine output rows, ensure prospective capture and immutable evidence, verify on unseen outcomes |
 
-The sample data in `examples/` is synthetic. Passing these checks does not show a real betting edge.
+The sample data in `examples/` is synthetic. Passing these checks does not show a real betting edge. The audit CSV ledger is NOT immutable or independently time-attested; never import after-kickoff predictions as if they were prospective.
