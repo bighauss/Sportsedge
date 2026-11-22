@@ -1,0 +1,26 @@
+name: CFB unknown-neutral input guard (offline)
+on:
+  pull_request:
+    paths:
+      - 'models/cfb/cfb_run_it.py'
+      - 'models/cfb/test_cfb_neutral_site_guard.py'
+      - '.github/workflows/cfb-neutral-site-guard.yml'
+      - 'docs/governance/changes/pr-*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  typed-neutral-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Nine typed-neutral and withhold regressions
+        run: python -m unittest models.cfb.test_cfb_neutral_site_guard -v
+      - name: Existing CFB RUN IT adapter fixtures
+        run: python -m unittest models.cfb.test_cfb_run_it -v
