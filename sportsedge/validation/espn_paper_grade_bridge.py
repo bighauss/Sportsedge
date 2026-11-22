@@ -50,7 +50,8 @@ def dry_run(manifest, *, now=None):
                 market, pick, kickoff, _, _ = batch._pick(path.parent, row, asof)
                 if src.get('espn_ids_reviewed') is not True:
                     raise ledger.Blocked('EXACT_ESPN_IDS_REVIEW_REQUIRED')
-                if getattr(market, 'player_id', None) is not None:
+                # Market uses an empty string for a non-player selection.
+                if market.player_id != '':
                     raise ledger.Blocked('PLAYER_ID_CROSSWALK_NOT_ADMITTED')
                 spec = src['espn_original']
                 _, captured, digest = ledger.source(path.parent, spec, kickoff, 'postgame')
