@@ -13,7 +13,7 @@
     "sportsedge/validation/test_espn_paper_grade_bridge.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Exercise the stacked ESPN-to-paper grading bridge in dedicated offline CI. No ledger writes, live inputs, or release. Scope now also covers the ESPN final-evidence parser, batch grader, paper-ledger helper and the NFL frozen-CSV grader added on this branch.",
+  "change_summary": "Offline ESPN-to-frozen-paper grading bridge, ESPN summary parser updates, original NFL v3 CSV grading, batch and ledger helpers, and dedicated tests. Research only; no official count, real-source attestation, ledger writes, or model release.",
   "assumptions": [
     "Synthetic tests do not authenticate a source or prove calibration.",
     "Exact ID review, required source kickoff, and a private per-pick reconciliation remain acceptance requirements before a real slate dry run."
