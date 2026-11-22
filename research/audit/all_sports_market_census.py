@@ -49,6 +49,8 @@ ATTEMPT_FIELDS = {
     "source_observed_utc", "source_captured_utc", "quote_sha256",
     "model_sha256", "close_sha256", "final_sha256",
 }
+OPTIONAL_ATTEMPT_FIELDS = {"settlement_rule", "joint_leg_ids"}
+JOINT_FAMILIES = {"SGP", "MATCHUP", "THREE_BALL"}
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+~-]{0,127}$")
 PERIOD = re.compile(r"^[A-Z0-9_]{1,24}$")
 SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -131,7 +133,9 @@ def assess(data):
     seen_offers, seen_outcomes = set(), set()
     count, reason_count, rows = Counter(), Counter(), []
     for row in attempts:
-        _exact(row, ATTEMPT_FIELDS, "attempt")
+        if type(row) is not dict or not ATTEMPT_FIELDS.issubset(row) or (
+                set(row) - ATTEMPT_FIELDS - OPTIONAL_ATTEMPT_FIELDS):
+            raise ValueError("FIELDS_MISMATCH:attempt")
         sport = row["sport"]
         if type(sport) is not str or sport not in SPORTS:
             raise ValueError("UNKNOWN_SPORT")
@@ -150,11 +154,20 @@ def assess(data):
         stat = _id(row["stat"], "stat", empty=True)
         book = _id(row["book"], "book", empty=True)
         line = _line(row["line"])
+        settlement = row.get("settlement_rule")
+        if settlement is not None:
+            _id(settlement, "settlement_rule")
+        raw_legs = row.get("joint_leg_ids")
+        if raw_legs is not None and (type(raw_legs) is not list or len(raw_legs) > 20 or
+                any(type(x) is not str or ID.fullmatch(x) is None for x in raw_legs) or
+                len(set(raw_legs)) != len(raw_legs)):
+            raise ValueError("INVALID_JOINT_LEG_IDENTITIES")
+        legs = tuple(raw_legs or ())
         offer_key = (sport, book, offer_id)
         if offer_key in seen_offers:
             raise ValueError("DUPLICATE_PROVIDER_OFFER_ID")
         seen_offers.add(offer_key)
-        identity = (key, family, period, selection, participant, stat, line, book)
+        identity = (key, family, period, selection, participant, stat, line, book, settlement, legs)
         if identity in seen_outcomes:
             raise ValueError("DUPLICATE_EXACT_OUTCOME")
         seen_outcomes.add(identity)
@@ -162,6 +175,15 @@ def assess(data):
             _hash(row[field], field)
         observed, captured = row["source_observed_utc"], row["source_captured_utc"]
         reasons = []
+        if settlement is None:
+            reasons.append("MARKET_SETTLEMENT_ID_MISSING")
+        if family in JOINT_FAMILIES and (
+                len(legs) < 2 or
+                (family == "MATCHUP" and len(legs) != 2) or
+                (family == "THREE_BALL" and len(legs) != 3)):
+            reasons.append("JOINT_COMPONENT_IDENTITIES_MISSING")
+        elif family not in JOINT_FAMILIES and legs:
+            reasons.append("JOINT_COMPONENTS_ON_SINGLE_MARKET")
         if (observed is None) != (captured is None):
             reasons.append("INCOMPLETE_QUOTE_CLOCK_PAIR")
         elif observed is not None:
@@ -184,6 +206,18 @@ def assess(data):
             reasons.append("PLAYER_ID_NOT_BOUND")
         if family == "PLAYER_PROP" and not stat:
             reasons.append("PLAYER_STAT_NOT_BOUND")
+        if stat and not participant:
+            reasons.append("STAT_MARKET_PARTICIPANT_MISSING")
+        if family == "ALTERNATE" and not line:
+            reasons.append("ALTERNATE_THRESHOLD_MISSING")
+        if family == "PERIOD" and period == "FG":
+            reasons.append("PERIOD_MARKET_PERIOD_MISSING")
+        if sport == "PGA" and family in (
+                "OUTRIGHT", "TOP5", "TOP10", "TOP20", "MAKE_CUT",
+                "MISS_CUT", "ROUND_LEADER", "FIRST_ROUND_LEADER",
+                "ROUND_SCORE", "TOURNAMENT_SCORE", "BIRDIES", "BOGEYS",
+                "EAGLES", "HOLE_IN_ONE") and not participant:
+            reasons.append("PGA_GOLFER_ID_MISSING")
         if not reasons:
             reasons.append("RECEIPT_METADATA_NOT_INDEPENDENTLY_AUTHENTICATED")
         count[(sport, family)] += 1
@@ -191,6 +225,9 @@ def assess(data):
         rows.append({
             "sport": sport, "event_id": key[1], "offer_id": offer_id,
             "market_family": family, "period": period, "selection_id": selection,
+            "participant_id": participant, "stat": stat, "line": line,
+            "book": book, "settlement_rule": settlement,
+            "joint_leg_ids": list(legs),
             "status": "PAPER_0U_UNVERIFIED", "reasons": reasons,
             "source_authenticated": False, "model_calibrated": False,
             "clv_authenticated": False, "approved_stake_u": 0,

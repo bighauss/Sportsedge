@@ -4,6 +4,8 @@ on:
     paths:
       - 'research/audit/all_sports_market_census.py'
       - 'research/audit/test_all_sports_market_census.py'
+      - 'research/audit/all_sports_beta_compare.py'
+      - 'research/audit/test_all_sports_beta_compare.py'
       - '.github/workflows/all-sports-market-census.yml'
       - 'docs/governance/changes/pr-*.json'
   workflow_dispatch:
@@ -22,5 +24,7 @@ jobs:
           python-version: '3.12'
       - name: Run all exact-identity census and fail-closed synthetic tests
         run: python -m unittest research.audit.test_all_sports_market_census -v
+      - name: Run exact-offer and model beta research comparison tests
+        run: python -m unittest research.audit.test_all_sports_beta_compare -v
       - name: Verify existing master audit tests alongside census
         run: python -m unittest research.audit.master.test_master_audit -v
