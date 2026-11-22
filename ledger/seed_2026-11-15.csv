@@ -1,0 +1,18 @@
+card,sport,market,pick,price_american,result,note
+morning,NFL,ML,Jets ML vs BUF,350,L,
+morning,NFL,ML,Browns ML vs HOU,185,W,
+morning,NFL,ML,Dolphins ML vs IND,185,L,
+morning,NFL,ML,Packers ML vs MIN,-142,L,
+2:15pm,NFL,ML,Raiders ML,240,L,
+2:15pm,NFL,ML,Cardinals ML,380,L,
+2:15pm,NFL,total,LAR-ARI Over 38.5,-108,W,
+2:15pm,NFL,spread,Raiders +6.5,-110,L,
+2:15pm,NFL,spread,Cardinals +9.5,-105,L,
+2:15pm,NFL,total,SEA-LV Over 40.5,-108,L,
+2:15pm,NFL,prop,Beck 180+ pass yds,101,L,inferred from team pass yds
+2:15pm,NFL,prop,Mendoza 190+ pass yds,108,L,inferred from team pass yds
+cbb,CBB,total,Air Force @ Pacific U164.5,-115,W,
+cbb,CBB,spread,Chicago State +18.5,-118,L,
+cbb,CBB,total,NM(State) @ SDSU O143.5,-115,L,assumes NMSU
+cbb,CBB,spread,New Haven +24.5,-115,L,
+cbb,CBB,total,Cal Poly @ Montana St U165.5,-115,W,
