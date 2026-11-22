@@ -3,7 +3,9 @@
   "pr_number": 452,
   "base_commit": "a368f8644b7fd4ba8881feef818f8cae88c29c2c",
   "protected_paths": [
-    ".github/workflows/nfl-prop-baseline.yml"
+    ".github/workflows/nfl-prop-baseline.yml",
+    "models/nfl/prop_baseline_compare.py",
+    "models/nfl/test_prop_baseline_compare.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/445",
   "change_summary": "Research-only NFL v3 prop model versus market baseline, refusing duplicate exact outcomes, void/push misgrading and unreliable tiny-sample verdicts; offline tests; no model/odds/stakes changed.",
