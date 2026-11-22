@@ -1,0 +1,24 @@
+name: NFL key-number margin challenger tests
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/key_number_margin.py'
+      - 'models/nfl/test_key_number_margin.py'
+      - '.github/workflows/nfl-key-number-margin.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  keys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Key-number distribution checks
+        working-directory: models/nfl
+        run: python -m unittest -v test_key_number_margin
