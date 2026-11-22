@@ -1,0 +1,25 @@
+name: NFL neutral venue challenger (synthetic)
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/neutral_venue_challenger.py'
+      - 'models/nfl/test_neutral_venue_challenger.py'
+      - '.github/workflows/nfl-neutral-venue-challenger.yml'
+      - 'docs/research/NFL_NEUTRAL_VENUE_CHALLENGER.md'
+      - 'docs/governance/changes/pr-*.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  neutral-challenger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fail-closed Boolean venue tests (synthetic only)
+        run: python -m unittest discover -s models/nfl -p 'test_neutral_venue_challenger.py' -v
