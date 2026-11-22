@@ -199,6 +199,18 @@ def game_rows(g, proj, legacy_note_rounding=True):
     return out
 
 
+def game_offers(g):
+    """The 12 original offers of a well-formed game input, in game_rows order,
+    without pricing: used to keep each known offer when the game is rejected."""
+    a, h, sp, s1 = g["away"], g["home"], g["spread"], g["h1_spread"]
+    return [("Spread", f"{h} {sp:+g}", g["sp_h"]), ("Spread", f"{a} {-sp:+g}", g["sp_a"]),
+            ("Total", f"Over {g['total']}", g["o"]), ("Total", f"Under {g['total']}", g["u"]),
+            ("Moneyline", f"{h} ML", g["ml_h"]), ("Moneyline", f"{a} ML", g["ml_a"]),
+            ("1H Spread", f"{h} 1H {s1:+g}", g["h1_h"]), ("1H Spread", f"{a} 1H {-s1:+g}", g["h1_a"]),
+            ("1H Total", f"1H Over {g['h1_total']}", g["h1_o"]), ("1H Total", f"1H Under {g['h1_total']}", g["h1_u"]),
+            ("1H ML", f"{h} 1H ML", g["h1_ml_h"]), ("1H ML", f"{a} 1H ML", g["h1_ml_a"])]
+
+
 def prop_row(x, gm, proj, market_total):
     name, cv, el, kind = PROP_MARKETS[x["file"]]
     ap, hp = proj
@@ -244,11 +256,14 @@ def team_abbr(name, abbr):
 def build_ledger(games, props, projections, abbr, legacy_note_rounding=True):
     """games: list of dicts with GAME_FIELDS; props: list of dicts with PROP_FIELDS;
     projections: {'AWAY@HOME': (away_pts, home_pts)}; abbr: nickname->abbr map.
-    Returns (rows, summary). len(rows) == 12*valid_games + rejected_games + len(props)."""
+    Returns (rows, summary). len(rows) == 12*well_formed_games + malformed_games + len(props):
+    a well-formed game that is rejected (duplicate, no projection, pricing error) keeps
+    one rejected row per known original offer; only a malformed input collapses to one row."""
     rows, proj, mtot = [], {}, {}
-    seen_games, rejected_games = set(), 0
+    seen_games, rejected_offer_rows, malformed_games = set(), 0, 0
     for i, g in enumerate(games):
         reason = _bad_game(g)
+        well_formed = not reason
         gm = f"{g.get('away')}@{g.get('home')}" if isinstance(g, dict) else f"game input #{i}"
         if not reason:
             if gm in seen_games:
@@ -263,11 +278,18 @@ def build_ledger(games, props, projections, abbr, legacy_note_rounding=True):
                 built = game_rows(g, projections[gm], legacy_note_rounding)
             except (ArithmeticError, ValueError, TypeError) as exc:
                 reason = f"pricing_error:{type(exc).__name__}"
+        if reason and well_formed:
+            for mkt, sel, odds in game_offers(g):
+                rows.append(dict(game=gm, kind="game", market=mkt, selection=sel, odds=odds,
+                                 status="rejected_input", reject_reason=reason, input_index=i,
+                                 qualifies=False, on_image=False, display_rank=None))
+            rejected_offer_rows += 12
+            continue
         if reason:
             rows.append(dict(game=gm, kind="game", market="ALL", selection=f"game input #{i}",
                              odds=None, status="rejected_input", reject_reason=reason,
                              qualifies=False, on_image=False, display_rank=None))
-            rejected_games += 1
+            malformed_games += 1
             continue
         seen_games.add(gm)
         proj[gm], mtot[gm] = projections[gm], g["total"]
@@ -331,7 +353,7 @@ def build_ledger(games, props, projections, abbr, legacy_note_rounding=True):
         rank += 1
         r["on_image"], r["display_rank"] = True, rank
 
-    attempted = 12 * len(seen_games) + rejected_games + len(props)
+    attempted = 12 * len(seen_games) + rejected_offer_rows + malformed_games + len(props)
     from collections import Counter
     summary = dict(filter_basis="v3_note_1dp" if legacy_note_rounding else "full_precision",
                    games_input=len(games), props_input=len(props), attempted_rows=attempted,

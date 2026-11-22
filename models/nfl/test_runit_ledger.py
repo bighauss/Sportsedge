@@ -145,9 +145,28 @@ class MalformedInputTests(unittest.TestCase):
     def test_bad_projection_rejected(self):
         rows, s = L.build_ledger([GAME], [prop("P", 200, -110)],
                                  {"AAA@BBB": (float("nan"), 20)}, ABBR)
-        self.assertEqual(rows[0]["reject_reason"], "invalid_input:projection")
-        self.assertEqual(rows[1]["reject_reason"], "game_not_on_slate")
-        self.assertEqual(len(rows), 2)
+        game = [r for r in rows if r["kind"] == "game"]
+        self.assertEqual(len(game), 12)
+        self.assertTrue(all(r["reject_reason"] == "invalid_input:projection" for r in game))
+        self.assertEqual(rows[12]["reject_reason"], "game_not_on_slate")
+        self.assertEqual(len(rows), 13)
+
+    def test_rejected_well_formed_game_keeps_each_original_offer(self):
+        # duplicate and missing-projection games keep all 12 known offers with odds
+        other = dict(GAME, away="CCC", home="DDD")
+        rows, s = L.build_ledger([GAME, GAME, other], [], dict(PROJ), ABBR)
+        self.assertEqual(s["ledger_rows"], s["attempted_rows"])
+        self.assertEqual(len(rows), 36)
+        for reason, gm in (("duplicate_offer", "AAA@BBB"), ("missing_input:projection", "CCC@DDD")):
+            rej = [r for r in rows if r.get("reject_reason") == reason]
+            self.assertEqual(len(rej), 12)
+            self.assertEqual({r["game"] for r in rej}, {gm})
+            self.assertEqual([r["market"] for r in rej][::2],
+                             ["Spread", "Total", "Moneyline", "1H Spread", "1H Total", "1H ML"])
+            self.assertTrue(all(r["odds"] is not None and r["selection"] for r in rej))
+        priced = [r for r in rows if r["game"] == "AAA@BBB" and r["status"] != "rejected_input"]
+        self.assertEqual([(r["market"], r["selection"], r["odds"]) for r in priced],
+                         L.game_offers(GAME))
 
 
 class LegacyRoundingBoundaryTests(unittest.TestCase):
