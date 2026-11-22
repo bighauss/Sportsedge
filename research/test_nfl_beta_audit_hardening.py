@@ -3,7 +3,7 @@ import hashlib
 import json
 import unittest
 from research.nfl_beta_last_four import price_beta
-from research.nfl_beta_calibration_audit import audit, freeze_predictions
+from research.nfl_beta_calibration_audit import audit, freeze_predictions, verify_frozen_receipt
 
 
 def offer(kind="XPLUS", **extra):
@@ -101,6 +101,44 @@ class HardeningTests(unittest.TestCase):
     def test_duplicate_freeze_rejected(self):
         result = price(); result["rows"].append(result["rows"][0])
         with self.assertRaisesRegex(ValueError, "DUPLICATE_PREDICTION"):
+            freeze_predictions(result, frozen_at_utc="2026-11-22T13:03:00Z")
+
+
+    def test_receipt_record_exact_link(self):
+        records, receipt = freeze_predictions(price(), frozen_at_utc="2026-11-22T13:03:00Z")
+        digest = "sha256:" + hashlib.sha256(receipt).hexdigest()
+        self.assertEqual(verify_frozen_receipt(records, receipt), digest)
+        records[0]["offer"]["threshold"] = 51
+        with self.assertRaisesRegex(ValueError, "RECEIPT_RECORD_LINK_MISMATCH"):
+            verify_frozen_receipt(records, receipt)
+
+    def test_receipt_bytes_tamper_rejected(self):
+        records, receipt = freeze_predictions(price(), frozen_at_utc="2026-11-22T13:03:00Z")
+        with self.assertRaisesRegex(ValueError, "RECEIPT_RECORD_LINK_MISMATCH"):
+            verify_frozen_receipt(records, receipt + b" ")
+
+    def test_missing_freeze_timestamps_fail_closed(self):
+        for key, location in (("decision_utc", "row"),
+                              ("captured_at_utc", "offer"),
+                              ("kickoff_utc", "offer")):
+            with self.subTest(key=key):
+                result = price()
+                row = result["rows"][0]
+                if location == "row":
+                    del row[key]
+                else:
+                    del row["offer"][key]
+                with self.assertRaisesRegex(ValueError, "NO_VERIFIABLE_PREGAME_FREEZE"):
+                    freeze_predictions(result, frozen_at_utc="2026-11-22T13:03:00Z")
+
+    def test_quote_must_be_fresh_at_freeze(self):
+        with self.assertRaisesRegex(ValueError, "NO_VERIFIABLE_PREGAME_FREEZE"):
+            freeze_predictions(price(), frozen_at_utc="2026-11-22T13:06:01Z")
+
+    def test_unserializable_freeze_input_rejected(self):
+        result = price()
+        result["rows"][0]["offer"]["invalid_extra"] = {"not-json"}
+        with self.assertRaisesRegex(ValueError, "NON_CANONICAL_FREEZE_INPUT"):
             freeze_predictions(result, frozen_at_utc="2026-11-22T13:03:00Z")
 
 
