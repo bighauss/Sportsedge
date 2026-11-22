@@ -235,6 +235,11 @@ class Pipeline(unittest.TestCase):
         res = pipeline.run_gates(cands, now=now)
         ids = {r["pred_id"]: r for r in res["candidates"] + res["blocked"]}
         self.assertEqual(ids["p0"]["best_book"], "FD")
+        self.assertEqual(ids["p0"]["audit_status"], "FLAGGED")
+        self.assertIn("RESEARCH_ONLY_NO_INDEPENDENT_ATTESTATION", ids["p0"]["reason_codes"])
+        self.assertIn("CALIB_NO_HISTORY", ids["p0"]["reason_codes"])
+        self.assertFalse(ids["p0"]["release_ready"])
+        self.assertEqual(res["summary"]["passed"], 0)
         self.assertEqual(ids["p1"]["audit_status"], "BLOCKED")
         self.assertEqual(ids["p2"]["audit_status"], "BLOCKED")
         self.assertIn("LARGE_EDGE_REVIEW", ids["p3"]["reason_codes"])
@@ -244,11 +249,16 @@ class Pipeline(unittest.TestCase):
         evs = [r["ev_per_unit"] for r in res["candidates"]]
         self.assertEqual(evs, sorted(evs, reverse=True))
         card = pipeline.card_view(res)
-        self.assertNotIn("audit_status", card[0])
+        self.assertEqual(card[0]["audit_status"], "FLAGGED")
+        self.assertFalse(card[0]["release_ready"])
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "ledger.csv")
-            self.assertEqual(pipeline.ledger_append(path, res["candidates"] + res["blocked"]), 4)
-            self.assertEqual(pipeline.ledger_append(path, res["candidates"]), 0)
+            # Synthetic 2099 kickoffs exercise the actual pre-kickoff write guard.
+            future = [{**r, "pred_ts": "2099-11-16T12:00:00-06:00",
+                       "kickoff_ts": "2099-11-16T15:25:00-06:00"}
+                      for r in res["candidates"] + res["blocked"]]
+            self.assertEqual(pipeline.ledger_append(path, future), 4)
+            self.assertEqual(pipeline.ledger_append(path, future), 0)
             with self.assertRaises(ValueError):
                 pipeline.ledger_append(path, [row(9, pred_ts=KO)])
             import csv
@@ -258,6 +268,36 @@ class Pipeline(unittest.TestCase):
             rep = pipeline.postgame_report(g)
             self.assertEqual(rep["graded"], 2)
             self.assertIn("performance_BLOCKED", rep)
+
+
+class ResearchReleaseSafety(unittest.TestCase):
+    def test_missing_kickoff_and_input_provenance_blocked(self):
+        r = row(700, p=.6, res="", kickoff_ts=None, inputs=[])
+        result = pipeline.run_gates([r], now="2026-11-16T12:10:00-06:00")
+        self.assertEqual(result["summary"]["passed"], 0)
+        self.assertEqual(result["summary"]["blocked"], 1)
+        self.assertIn("KICKOFF_NOT_VERIFIED", result["blocked"][0]["reason_codes"])
+        self.assertIn("MISSING_INPUT_LINEAGE", result["blocked"][0]["reason_codes"])
+        self.assertFalse(result["blocked"][0]["release_ready"])
+
+    def test_future_price_capture_is_critical(self):
+        r = row(701, p=.6, res="", odds_ts="2026-11-16T12:20:00-06:00")
+        result = pipeline.run_gates([r], now="2026-11-16T12:10:00-06:00")
+        self.assertEqual(result["summary"]["blocked"], 1)
+        self.assertIn("FUTURE_PRICE_CAPTURE", result["blocked"][0]["reason_codes"])
+
+    def test_ledger_preflight_is_atomic_and_rejects_backdated_entries(self):
+        good = row(702, kickoff_ts="2099-11-16T15:25:00-06:00",
+                   pred_ts="2099-11-16T12:00:00-06:00")
+        old = row(703)  # original game date is already in the past
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "ledger.csv")
+            with self.assertRaises(ValueError):
+                pipeline.ledger_append(path, [good, old])
+            self.assertFalse(os.path.exists(path))
+            with self.assertRaises(ValueError):
+                pipeline.ledger_append(path, [dict(good, pred_id="missing", kickoff_ts=None)])
+            self.assertEqual(pipeline.ledger_append(path, [good]), 1)
 
 
 class Uncertainty(unittest.TestCase):
