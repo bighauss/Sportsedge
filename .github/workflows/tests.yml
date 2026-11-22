@@ -25,6 +25,8 @@ jobs:
       - name: MLB
         working-directory: models/mlb
         run: python make_samples.py && python test_sportsedge_mlb_model.py
+      - name: Cross-sport CBB/CFB/MLB intake adversarial guards (offline)
+        run: python -m unittest discover -s tests -p test_cross_sport_parity_guardrails.py -v
       - name: NBA
         working-directory: models/nba
         run: python make_samples.py && python test_sportsedge_nba_model.py
