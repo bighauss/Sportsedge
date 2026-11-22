@@ -33,7 +33,7 @@ jobs:
           python-version: '3.12'
       - name: Fixture gate
         working-directory: models/cbb
-        run: python -m unittest -v test_cbb_run_it test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
+        run: python -m unittest -v test_cbb_run_it test_cbb_run_it_neutral_unknown test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
       - name: Install encryption
         run: python -m pip install --disable-pip-version-check cryptography==46.0.4
       - name: Provider-free CBB ledger continuity regressions
