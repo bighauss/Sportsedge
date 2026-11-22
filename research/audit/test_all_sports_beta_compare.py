@@ -148,10 +148,9 @@ class BetaSevenSportTests(unittest.TestCase):
         self.assertIsNone(r["rows"][0]["research_ev_per_unit_unverified"])
 
     def test_bad_quote_clock_retained_blocked(self):
-        o = offer(source_observed_utc="2026-12-01T16:00:00Z",
-                  source_captured_utc="2026-12-01T16:01:00Z")
+        o = offer(source_observed_utc="2026-12-01T19:00:00Z",
+                  source_captured_utc="2026-12-01T19:01:00Z")
         r = beta.evaluate(intake([o],[forecast(o,model_asof_utc="2026-12-01T16:05:00Z")],[price(o)]))
-        self.assertIn("QUOTE_STALE_RELATIVE_TO_MODEL",r["rows"][0]["reasons"]) if False else None
         self.assertIn("QUOTE_CLOCK_NOT_PREGAME",r["rows"][0]["reasons"])
 
     def test_bad_probabilities_fail_closed(self):
