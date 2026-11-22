@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'research/nfl_beta_last_four.py'
+      - 'research/nfl_beta_dfs_adapter.py'
+      - 'research/run_nfl_beta_last_four.py'
       - 'research/test_nfl_beta_last_four.py'
       - '.github/workflows/nfl-last-four-beta.yml'
   workflow_dispatch:
@@ -17,6 +19,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile research pricer
-        run: python -m py_compile research/nfl_beta_last_four.py research/test_nfl_beta_last_four.py
+        run: python -m py_compile research/nfl_beta_last_four.py research/nfl_beta_dfs_adapter.py research/run_nfl_beta_last_four.py research/test_nfl_beta_last_four.py
       - name: Run fail-closed synthetic tests
         run: python -m unittest discover -s research -p 'test_nfl_beta_last_four.py' -v
