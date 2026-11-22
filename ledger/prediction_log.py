@@ -2,17 +2,17 @@
 
 Logging/audit only. Does NOT change any model formula, weight, threshold or rule.
 
-Every "run it" logs one row per priced side (see log_picks.py).
-Row fields: ts_utc, sport, game, start_utc, market, pick, price_american, model_p, market_p_novig
-Later: grade(game, pick, result) with result in {W, L, P}.
-Audit: python ledger/prediction_log.py audit   (uses only rows logged before start_utc)
+Every "run it" logs one row per priced side (ledger/run_it.py does it automatically).
+Grade:  grade(bet_key, "W"|"L"|"P")   - matches exactly one side via bet_key
+Audit:  python ledger/prediction_log.py audit
+        only rows saved before kickoff, two-sided (has no-vig price), latest pre-game row per bet_key.
 CLV is intentionally not used (Isaac removed it).
 """
 import csv, math, os, sys
 from datetime import datetime, timezone
 
 PATH = os.path.join(os.path.dirname(__file__), "prediction_log.csv")
-FIELDS = ["ts_utc", "sport", "game", "start_utc", "market", "pick",
+FIELDS = ["ts_utc", "sport", "game", "start_utc", "market", "player", "pick", "bet_key",
           "price_american", "model_p", "market_p_novig", "result"]
 
 
@@ -20,7 +20,7 @@ def _read():
     if not os.path.exists(PATH):
         return []
     with open(PATH, newline="") as f:
-        return list(csv.DictReader(f))
+        return [{k: r.get(k, "") for k in FIELDS} for r in csv.DictReader(f)]
 
 
 def _write(rows):
@@ -41,11 +41,13 @@ def log_run(new_rows):
     _write(rows)
 
 
-def grade(game, pick, result, market=None):
+def grade(bet_key, result):
+    """Set result on every logged row with this exact bet_key. Returns rows updated."""
+    assert result in ("W", "L", "P")
     rows = _read()
     n = 0
     for r in rows:
-        if r["game"] == game and r["pick"] == pick and (market is None or r["market"] == market):
+        if r["bet_key"] == bet_key:
             r["result"] = result
             n += 1
     _write(rows)
@@ -61,11 +63,23 @@ def _profit(price, res):
     return p / 100 if p > 0 else 100 / -p
 
 
+def _ts(s):
+    return datetime.fromisoformat(s)
+
+
 def audit(rows=None, edges=(-1.0, 0.0, 0.02, 0.05, 0.10, 1.0)):
     rows = rows if rows is not None else _read()
-    clean = [r for r in rows if r["result"] in ("W", "L") and r["market_p_novig"]
-             and r["start_utc"] and r["ts_utc"] < r["start_utc"]]  # pre-game, two-sided only
-    print(f"graded pre-game two-sided rows: {len(clean)}")
+    latest = {}
+    for r in rows:
+        if r["result"] not in ("W", "L") or not r["market_p_novig"] or not r["start_utc"]:
+            continue
+        if _ts(r["ts_utc"]) >= _ts(r["start_utc"]):
+            continue                                   # saved after kickoff -> not pre-game
+        k = r["bet_key"] or r["pick"]
+        if k not in latest or r["ts_utc"] > latest[k]["ts_utc"]:
+            latest[k] = r
+    clean = list(latest.values())
+    print(f"graded pre-game two-sided sides: {len(clean)}")
     for lo, hi in zip(edges, edges[1:]):
         b = [r for r in clean if lo <= float(r["model_p"]) - float(r["market_p_novig"]) < hi]
         if not b:
