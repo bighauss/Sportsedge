@@ -67,7 +67,7 @@ def reconcile(board_rows, prediction_rows):
         raise ValueError("ROW_LISTS_REQUIRED")
     if len(board_rows) > 100000 or len(prediction_rows) > 200000:
         raise ValueError("ROW_LIMIT_EXCEEDED")
-    expected = {}
+    expected, seen_markets = {}, set()
     for row in board_rows:
         if type(row) is not dict or set(row) != BOARD:
             raise ValueError("BOARD_ROW_SCHEMA_INVALID")
@@ -81,8 +81,9 @@ def reconcile(board_rows, prediction_rows):
         if row["market"] in ("ML", "1H_ML") and row["line"] not in ("",):
             raise ValueError("ML_LINE_MUST_BE_EMPTY")
         key = (game, row["market"])
-        if key in expected:
+        if key in seen_markets:
             raise ValueError("DUPLICATE_BOARD_MARKET")
+        seen_markets.add(key)
         price_a, price_b = _money(row["price_a"]), _money(row["price_b"])
         expected[(game, row["market"], 0)] = price_a
         expected[(game, row["market"], 1)] = price_b
