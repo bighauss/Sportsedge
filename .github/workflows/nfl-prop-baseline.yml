@@ -1,0 +1,23 @@
+name: NFL prop baseline complete-denominator tests
+on:
+  pull_request:
+    paths:
+      - 'models/nfl/prop_baseline_compare.py'
+      - 'models/nfl/test_prop_baseline_compare.py'
+      - '.github/workflows/nfl-prop-baseline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synthetic scoring and census checks
+        run: python -m unittest discover -s models/nfl -p 'test_prop_baseline_compare.py' -v
