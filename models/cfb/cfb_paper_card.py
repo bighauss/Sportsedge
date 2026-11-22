@@ -139,7 +139,7 @@ def load_operator_quotes(raw: bytes, *, name="operator_quotes"):
     return [_quote(r, source="operator:" + name, source_sha256=digest) for r in rows]
 
 
-def load_odds_api_archive(raw: bytes, summary: dict, crosswalk: dict):
+def load_odds_api_archive(raw: bytes, summary: dict, crosswalk: dict, *, rejections=None):
     """Odds API v4 CFB archive -> two-sided quotes, joined only via the exact crosswalk."""
     digest = "sha256:" + sha256(raw).hexdigest()
     if (not isinstance(summary, dict) or summary.get("sport") != "CFB"
@@ -173,7 +173,13 @@ def load_odds_api_archive(raw: bytes, summary: dict, crosswalk: dict):
         H, A = ev["home_team"], ev["away_team"]
         for book in ev.get("bookmakers", []):
             for m in book.get("markets", []):
-                oc = {o.get("name"): o for o in m.get("outcomes", [])}
+                outcomes = m.get("outcomes", [])
+                if len(outcomes) > 2:
+                    if rejections is not None:
+                        rejections.append({"reason": "UNEXPECTED_EXTRA_OUTCOME", "odds_event_id": ev["id"],
+                                           "book": book.get("key"), "market": m.get("key")})
+                    continue
+                oc = {o.get("name"): o for o in outcomes}
                 row = {"cfbd_game_id": x["cfbd_game_id"], "book": book.get("key"), "captured_utc": captured,
                        "provider_last_update_utc": m.get("last_update") or book.get("last_update")}
                 if m.get("key") == "h2h" and H in oc and A in oc:
@@ -353,12 +359,15 @@ def main(argv=None):
         quotes = []
         for path in a.operator_quotes:
             quotes += load_operator_quotes(store.read_private(Path(path)), name=Path(path).stem)
+        rejections = []
         for raw, summ, xw in a.odds_archive:
             quotes += load_odds_api_archive(store.read_private(Path(raw)),
                                             store.strict_json(store.read_private(Path(summ))),
-                                            store.strict_json(store.read_private(Path(xw))))
+                                            store.strict_json(store.read_private(Path(xw))), rejections=rejections)
         card = build_card(a.capture_dir, frozen_utc=frozen, quotes=quotes,
                           ratings_dirs=a.ratings_dir, weather_dir=a.weather_dir)
+        if rejections:
+            card["odds_archive_rejections"] = rejections
         res = freeze_card(card, a.out_dir, a.ledger)
     except (CaptureRefused, QuoteRefused, baselines.ModelRefused, ledger.LedgerRefused, OSError) as exc:
         print("CFB_CARD_BLOCKED " + (str(exc) if not isinstance(exc, OSError) else "OS_ERROR"), file=sys.stderr)

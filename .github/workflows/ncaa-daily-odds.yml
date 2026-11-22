@@ -1,0 +1,132 @@
+name: NCAA daily odds snapshot (CBB/CFB, encrypted, PAPER)
+
+on:
+  # Manual-only. No schedule: each dispatch is one claimed, budgeted attempt.
+  workflow_dispatch:
+    inputs:
+      sport:
+        description: 'ncaab = basketball_ncaab (CBB), ncaaf = americanfootball_ncaaf (CFB)'
+        required: true
+        type: choice
+        options: [ncaab, ncaaf]
+      snapshot:
+        description: 'pregame = morning pre-freeze quote; close = dispatch within 90 min of start'
+        required: true
+        type: choice
+        options: [pregame, close]
+
+permissions:
+  contents: read
+  actions: read  # list prior claim/hold artifacts before any provider call
+
+concurrency:
+  # Serialize every NCAA run: both sports share one Odds API quota.
+  group: ncaa-daily-odds
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    # Secrets never reach pull-request jobs or non-main branches.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NCAA_SPORT: ${{ inputs.sport }}
+      NCAA_SNAPSHOT: ${{ inputs.snapshot }}
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate dispatch inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$NCAA_SPORT" in ncaab|ncaaf) ;; *) echo "::error::BLOCK_INPUT_SPORT"; exit 2;; esac
+          case "$NCAA_SNAPSHOT" in pregame|close) ;; *) echo "::error::BLOCK_INPUT_SNAPSHOT"; exit 2;; esac
+      - name: Install pinned encryption package
+        run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Validate Fernet key before any provider call
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, sys
+          from cryptography.fernet import Fernet
+          try:
+              Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode("ascii"))
+          except (KeyError, ValueError, TypeError):
+              print("::error::BLOCK_ARCHIVE_ENCRYPTION: invalid Fernet secret", file=sys.stderr)
+              sys.exit(2)
+          PY
+      - name: Offline regression tests
+        run: python -m unittest sportsedge.odds.test_ncaa_daily_odds sportsedge.odds.test_daily_pilot_artifact_gate -v
+      - name: Check prior claims/holds and reserve sport+snapshot+Central date
+        id: daily_claim
+        shell: bash
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m sportsedge.odds.daily_pilot_artifact_gate reserve --pilot "${NCAA_SPORT}-${NCAA_SNAPSHOT}"
+      - name: Persist claim artifact BEFORE any provider request
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.daily_claim.outputs.artifact_name }}
+          path: ${{ runner.temp }}/${{ inputs.sport }}-${{ inputs.snapshot }}-daily-claim.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Confirm claim belongs to this run and same Central date
+        shell: bash
+        env:
+          GH_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m sportsedge.odds.daily_pilot_artifact_gate verify --pilot "${NCAA_SPORT}-${NCAA_SNAPSHOT}"
+      - name: One budgeted snapshot (free preflight, then at most 3 credits)
+        id: capture
+        shell: bash
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          ODDS_API_KEY_BACKUP: ${{ secrets.ODDS_API_KEY_BACKUP }}
+          PRIVATE_ROOT: ${{ runner.temp }}/sportsedge-private-ncaa-odds
+          SPORTSEDGE_DAILY_CLAIM_DATE_CT: ${{ steps.daily_claim.outputs.date_ct }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "${ODDS_API_KEY:-}" && -z "${ODDS_API_KEY_BACKUP:-}" ]]; then
+            echo "::error::BLOCK_SOURCE_AUTH: configure ODDS_API_KEY (or ODDS_API_KEY_BACKUP)"
+            exit 2
+          fi
+          python -m sportsedge.odds.ncaa_daily_odds "$PRIVATE_ROOT" \
+            --sport "$NCAA_SPORT" --snapshot "$NCAA_SNAPSHOT" --execute
+      - name: Encrypt the complete private evidence bundle
+        id: encrypt
+        if: always() && steps.capture.outcome != 'skipped'
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          set -eu
+          umask 077
+          python -m sportsedge.odds.ncaa_archive_export "$RUNNER_TEMP/sportsedge-private-ncaa-odds" "$RUNNER_TEMP/ncaa-evidence.tar.fernet"
+
+      - name: Persist the complete encrypted bundle
+        id: export
+        if: always() && steps.encrypt.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncaa-odds-encrypted-${{ inputs.sport }}-${{ inputs.snapshot }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ncaa-evidence.tar.fernet
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Persist shared stop signal
+        id: hold
+        if: always() && steps.capture.outcome != 'skipped' && (steps.capture.outcome != 'success' || steps.export.outcome != 'success')
+        uses: ./.github/actions/ncaa-hold
+        with:
+          artifact-name: ncaa-daily-odds-quota-hold
