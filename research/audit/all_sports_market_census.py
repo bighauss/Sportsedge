@@ -192,6 +192,18 @@ def assess(data):
             reasons.append("PLAYER_ID_NOT_BOUND")
         if family == "PLAYER_PROP" and not stat:
             reasons.append("PLAYER_STAT_NOT_BOUND")
+        if stat and not participant:
+            reasons.append("STAT_MARKET_PARTICIPANT_MISSING")
+        if family == "ALTERNATE" and not line:
+            reasons.append("ALTERNATE_THRESHOLD_MISSING")
+        if family == "PERIOD" and period == "FG":
+            reasons.append("PERIOD_MARKET_PERIOD_MISSING")
+        if sport == "PGA" and family in (
+                "OUTRIGHT", "TOP5", "TOP10", "TOP20", "MAKE_CUT",
+                "MISS_CUT", "ROUND_LEADER", "FIRST_ROUND_LEADER",
+                "ROUND_SCORE", "TOURNAMENT_SCORE", "BIRDIES", "BOGEYS",
+                "EAGLES", "HOLE_IN_ONE") and not participant:
+            reasons.append("PGA_GOLFER_ID_MISSING")
         if not reasons:
             reasons.append("RECEIPT_METADATA_NOT_INDEPENDENTLY_AUTHENTICATED")
         count[(sport, family)] += 1
