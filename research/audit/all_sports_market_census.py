@@ -49,6 +49,7 @@ ATTEMPT_FIELDS = {
     "source_observed_utc", "source_captured_utc", "quote_sha256",
     "model_sha256", "close_sha256", "final_sha256",
 }
+OPTIONAL_ATTEMPT_FIELDS = {"settlement_rule"}
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+~-]{0,127}$")
 PERIOD = re.compile(r"^[A-Z0-9_]{1,24}$")
 SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -131,7 +132,9 @@ def assess(data):
     seen_offers, seen_outcomes = set(), set()
     count, reason_count, rows = Counter(), Counter(), []
     for row in attempts:
-        _exact(row, ATTEMPT_FIELDS, "attempt")
+        if type(row) is not dict or set(row) not in (
+                ATTEMPT_FIELDS, ATTEMPT_FIELDS | OPTIONAL_ATTEMPT_FIELDS):
+            raise ValueError("FIELDS_MISMATCH:attempt")
         sport = row["sport"]
         if type(sport) is not str or sport not in SPORTS:
             raise ValueError("UNKNOWN_SPORT")
@@ -150,11 +153,14 @@ def assess(data):
         stat = _id(row["stat"], "stat", empty=True)
         book = _id(row["book"], "book", empty=True)
         line = _line(row["line"])
+        settlement = row.get("settlement_rule")
+        if settlement is not None:
+            _id(settlement, "settlement_rule")
         offer_key = (sport, book, offer_id)
         if offer_key in seen_offers:
             raise ValueError("DUPLICATE_PROVIDER_OFFER_ID")
         seen_offers.add(offer_key)
-        identity = (key, family, period, selection, participant, stat, line, book)
+        identity = (key, family, period, selection, participant, stat, line, book, settlement)
         if identity in seen_outcomes:
             raise ValueError("DUPLICATE_EXACT_OUTCOME")
         seen_outcomes.add(identity)
@@ -162,6 +168,8 @@ def assess(data):
             _hash(row[field], field)
         observed, captured = row["source_observed_utc"], row["source_captured_utc"]
         reasons = []
+        if settlement is None:
+            reasons.append("MARKET_SETTLEMENT_ID_MISSING")
         if (observed is None) != (captured is None):
             reasons.append("INCOMPLETE_QUOTE_CLOCK_PAIR")
         elif observed is not None:
@@ -191,6 +199,8 @@ def assess(data):
         rows.append({
             "sport": sport, "event_id": key[1], "offer_id": offer_id,
             "market_family": family, "period": period, "selection_id": selection,
+            "participant_id": participant, "stat": stat, "line": line,
+            "book": book, "settlement_rule": settlement,
             "status": "PAPER_0U_UNVERIFIED", "reasons": reasons,
             "source_authenticated": False, "model_calibrated": False,
             "clv_authenticated": False, "approved_stake_u": 0,
