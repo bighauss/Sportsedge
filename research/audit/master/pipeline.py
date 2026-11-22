@@ -166,7 +166,7 @@ def ledger_append(path: str, rows: Sequence[dict]) -> int:
         try:
             k, p = audits.ts(r.get("kickoff_ts")), audits.ts(r.get("pred_ts"))
             if (k is None or p is None or k.utcoffset() is None or p.utcoffset() is None
-                    or p >= k or now_dt >= k):
+                    or p > now_dt or p >= k or now_dt >= k):
                 raise ValueError("missing, naive or post-kickoff timestamps")
         except (TypeError, ValueError) as exc:
             raise ValueError(f"refusing unverifiable or late selection {identity}") from exc
