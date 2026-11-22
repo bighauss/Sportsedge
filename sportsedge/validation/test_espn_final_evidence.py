@@ -134,6 +134,23 @@ class ESPNIntakeTests(unittest.TestCase):
         x["header"]["competitions"][0]["competitors"][0]["linescores"].pop()
         with self.assertRaisesRegex(f.Reject,"PERIOD_LINESCORES_MISSING_OR_MISMATCH"):run(x)
 
+    def test_summary_display_scores(self):
+        doc = summary()
+        expected = run(doc)["candidate"]["periods"]
+        for team in doc["header"]["competitions"][0]["competitors"]:
+            for score in team["linescores"]:
+                score["displayValue"] = str(score.pop("value"))
+        self.assertEqual(run(doc)["candidate"]["periods"], expected)
+        cell = doc["header"]["competitions"][0]["competitors"][0]["linescores"][0]
+        for invalid in ("", "-", "1.5", "1000"):
+            with self.subTest(invalid=invalid):
+                cell["displayValue"] = invalid
+                with self.assertRaises(f.Reject):
+                    run(doc)
+        cell.update(value=2, displayValue="3")
+        with self.assertRaisesRegex(f.Reject, "PERIOD_SCORE_MISMATCH"):
+            run(doc)
+
     def test_bad_period_index_refused(self):
         x=summary()
         x["header"]["competitions"][0]["competitors"][0]["linescores"][0]["period"]=2

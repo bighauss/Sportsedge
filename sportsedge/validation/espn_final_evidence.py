@@ -101,13 +101,16 @@ def _final_periods(sport, home, away):
     def parse(side):
         values = []
         for idx, raw in enumerate(side["linescores"], 1):
-            if not isinstance(raw, dict) or "value" not in raw:
+            if not isinstance(raw, dict) or not ("value" in raw or "displayValue" in raw):
                 raise Reject("PERIOD_SCORE_MISSING")
-            value = raw["value"]
+            display = _score(raw["displayValue"], "PERIOD_SCORE") if "displayValue" in raw else None
+            value = raw.get("value", display)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 raise Reject("PERIOD_SCORE_INVALID")
             if int(value) != value or value < 0 or value > 999:
                 raise Reject("PERIOD_SCORE_INVALID")
+            if display is not None and display != value:
+                raise Reject("PERIOD_SCORE_MISMATCH")
             if "period" in raw and raw["period"] != idx:
                 raise Reject("PERIOD_ORDER_MISMATCH")
             values.append(int(value))
