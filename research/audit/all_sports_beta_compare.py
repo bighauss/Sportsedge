@@ -24,7 +24,7 @@ MODEL_FIELDS = {
     "model_sha256", "distribution_sha256", "model_asof_utc",
     "p_win", "p_push", "period_distribution_sha256",
     "ordered_events_sha256", "count_distribution_sha256",
-    "joint_distribution_sha256",
+    "joint_distribution_sha256", "joint_leg_ids",
 }
 PRICE_FIELDS = {"sport", "book", "offer_id", "price_american"}
 EVENT_CLASSES_ORDERED = frozenset(("FIRST_TD", "FIRST_BASKET", "FIRST_GOAL"))
@@ -35,7 +35,8 @@ EVENT_CLASSES_JOINT = frozenset(("SGP", "MATCHUP", "THREE_BALL"))
 def _forecast_key(row):
     return (row["sport"], row["event_id"], row["market_family"],
             row["period"], row["selection_id"], row["participant_id"],
-            row["stat"], universe._line(row["line"]), row["settlement_rule"])
+            row["stat"], universe._line(row["line"]), row["settlement_rule"],
+            tuple(row["joint_leg_ids"]))
 
 
 def _prob(v, label):
@@ -78,6 +79,11 @@ def evaluate(data, *, max_quote_age_minutes=30):
             raise ValueError("UNKNOWN_MODEL_MARKET_FAMILY")
         if (p["sport"], p["event_id"]) not in events:
             raise ValueError("FORECAST_OUTSIDE_EXPECTED_EVENTS")
+        raw_legs = p["joint_leg_ids"]
+        if type(raw_legs) is not list or len(raw_legs) > 20 or (
+                any(type(x) is not str or universe.ID.fullmatch(x) is None
+                    for x in raw_legs)) or len(set(raw_legs)) != len(raw_legs):
+            raise ValueError("INVALID_FORECAST_JOINT_LEGS")
         if p["origin"] != "SPORTSEDGE_INDEPENDENT":
             # Explicitly refuse third-party, book-anchored or unlabeled forecasts.
             raise ValueError("NOT_AN_ASSERTED_INDEPENDENT_MODEL")
@@ -114,6 +120,7 @@ def evaluate(data, *, max_quote_age_minutes=30):
             censused["sport"], censused["event_id"], censused["market_family"],
             censused["period"], censused["selection_id"], censused["participant_id"],
             censused["stat"], censused["line"], censused["settlement_rule"],
+            tuple(censused["joint_leg_ids"]),
         )
         offer_key = (censused["sport"], censused["book"], censused["offer_id"])
         market_keys.add(key)
@@ -168,6 +175,7 @@ def evaluate(data, *, max_quote_age_minutes=30):
             "selection_id": censused["selection_id"],
             "participant_id": censused["participant_id"], "stat": censused["stat"],
             "line": censused["line"], "settlement_rule": censused["settlement_rule"],
+            "joint_leg_ids": censused["joint_leg_ids"],
             "status": status, "reasons": critical,
             "claimed_model_p_win": pw if model is not None else None,
             "claimed_model_p_push": pp if model is not None else None,
