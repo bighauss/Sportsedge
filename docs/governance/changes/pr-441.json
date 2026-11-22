@@ -11,7 +11,8 @@
     "Synthetic fixtures test only incumbent code-path guards; they do not establish successful complete-denominator ledger integration.",
     "CBB historical missing neutralSite coercion remains open in draft PR #424; these tests check only strict pregame slate admission, not the historical neutral fix.",
     "MLB duplicate-key overwrites in load_keyed, missing/rejected-offer denominator, CFB filtered candidate ledger and player/team time-matching remain open work items.",
-    "No actual completed-game results, screenshots, private odds, prospective source authentication, calibration or CLV were used."
+    "No actual completed-game results, screenshots, private odds, prospective source authentication, calibration or CLV were used.",
+    "The governance golden pin is the repository's shared nine-case synthetic agent-safety fixture, not the new twelve cross-sport regressions."
   ],
   "agent_identity": "ChatGPT independent contract-review agent",
   "permissions": {
@@ -24,13 +25,13 @@
   },
   "baseline": {
     "metric": "Cross-sport adversarial intake tests explicitly executed by generic CI",
-    "before": 0,
+    "before": null,
     "unit": "tests",
-    "source_state": "CODE_INSPECTED"
+    "source_state": "UNKNOWN"
   },
   "golden": {
-    "sha256": "sha256:ecec738243048fefec4315fabb2cc522f2aa9001b753cb551d1b84cc870eb12a",
-    "cases": 12,
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
     "suite": "SYNTHETIC_AGENT_SAFETY"
   },
   "evaluation": {
