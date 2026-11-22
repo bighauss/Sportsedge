@@ -6,6 +6,17 @@ A result alone cannot establish that a pregame probability was recorded.
 import json
 import math
 from collections import defaultdict
+from datetime import datetime, timezone
+import re
+
+
+def _utc(value):
+    if not isinstance(value, str):
+        raise ValueError('UTC_TIMESTAMP_REQUIRED')
+    dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if dt.tzinfo is None or dt.utcoffset().total_seconds() != 0:
+        raise ValueError('UTC_TIMESTAMP_REQUIRED')
+    return dt.astimezone(timezone.utc)
 
 
 def audit(predictions, outcomes, *, min_graded=100):
@@ -33,9 +44,12 @@ def audit(predictions, outcomes, *, min_graded=100):
             continue
         if isinstance(prob, bool) or not isinstance(prob, (float, int)) or not math.isfinite(prob) or not 0 <= prob <= 1:
             raise ValueError("INVALID_PROBABILITY")
-        if not p.get("frozen_at_utc") or not p.get("kickoff_utc") or p["frozen_at_utc"] >= p["kickoff_utc"]:
-            raise ValueError("NO_VERIFIABLE_PREGAME_FREEZE")
-        if not p.get("receipt_sha256"):
+        try:
+            if _utc(p["frozen_at_utc"]) >= _utc(p["kickoff_utc"]):
+                raise ValueError("NO_VERIFIABLE_PREGAME_FREEZE")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("NO_VERIFIABLE_PREGAME_FREEZE") from exc
+        if not isinstance(p.get("receipt_sha256"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", p["receipt_sha256"]):
             raise ValueError("NO_FROZEN_RECEIPT")
         if k not in actual:
             ungraded += 1
