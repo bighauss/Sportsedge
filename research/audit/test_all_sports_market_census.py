@@ -93,6 +93,27 @@ class SevenSportMarketTests(unittest.TestCase):
         self.assertEqual(next(r for r in result["matrix"] if r["sport"] == "NFL"
                               and r["family"] == "ALTERNATE")["submitted_outcomes"], 2)
 
+    def test_joint_components_unique_and_exact_for_sgp_and_pga(self):
+        a = offer(family="SGP", suffix="a", selection_id="yes",
+                  joint_leg_ids=["TD_A","REC_OVER"])
+        b = offer(family="SGP", suffix="b", selection_id="yes",
+                  joint_leg_ids=["TD_A","RUSH_OVER"])
+        r = m.assess(census([a,b]))
+        self.assertEqual(r["attempted_outcomes"], 2)
+        self.assertEqual(r["attempts"][0]["joint_leg_ids"], ["TD_A","REC_OVER"])
+        self.assertEqual(r["attempts"][1]["joint_leg_ids"], ["TD_A","RUSH_OVER"])
+        missing = m.assess(census([offer("PGA","THREE_BALL")]))
+        self.assertIn("JOINT_COMPONENT_IDENTITIES_MISSING",
+                      missing["attempts"][0]["reasons"])
+        with self.assertRaisesRegex(ValueError,"INVALID_JOINT_LEG_IDENTITIES"):
+            m.assess(census([offer(family="SGP",
+                                   joint_leg_ids=["TD_A","TD_A"])]))
+
+    def test_non_joint_market_with_unrelated_legs_is_blocked(self):
+        r = m.assess(census([offer(joint_leg_ids=["x","y"])]))
+        self.assertIn("JOINT_COMPONENTS_ON_SINGLE_MARKET",
+                      r["attempts"][0]["reasons"])
+
     def test_missing_prop_identity_has_reason(self):
         r = m.assess(census([offer(family="PLAYER_PROP")]))
         self.assertIn("PLAYER_ID_NOT_BOUND", r["attempts"][0]["reasons"])
