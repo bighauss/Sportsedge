@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 453,
-  "base_commit": "a368f8644b7fd4ba8881feef818f8cae88c29c2c",
+  "base_commit": "8608477fbd2cff7b86e2ca69ef0700ce5476ed94",
   "protected_paths": [
     ".github/workflows/nfl-key-number-margin.yml",
     "models/nfl/key_number_margin.py",
@@ -41,7 +41,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "a368f8644b7fd4ba8881feef818f8cae88c29c2c",
+    "target_base_sha": "8608477fbd2cff7b86e2ca69ef0700ce5476ed94",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest discover -s models/nfl -p test_runit_ledger.py -v"
   },
