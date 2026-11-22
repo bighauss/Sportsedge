@@ -20,6 +20,7 @@ def forecast(o=None, *, p=.6, pp=0, **changes):
         "p_win": p, "p_push": pp, "period_distribution_sha256": None,
         "ordered_events_sha256": None, "count_distribution_sha256": None,
         "joint_distribution_sha256": None,
+        "joint_leg_ids": o.get("joint_leg_ids") or [],
     }
     base.update(changes)
     return base
@@ -128,6 +129,29 @@ class BetaSevenSportTests(unittest.TestCase):
         self.assertTrue(all("NO_JOINT_DISTRIBUTION" in x["reasons"]
                             for x in r["rows"]))
 
+    def test_joint_leg_ids_bounded_and_required(self):
+        a = offer(family="SGP", joint_leg_ids=["q1", "q2"])
+        r = beta.evaluate(intake([a], [forecast(a, joint_distribution_sha256=HASH)],
+                                 [price(a)]))
+        self.assertEqual(r["research_comparisons"], 1)
+        self.assertFalse(r["rows"][0]["bet_eligible"])
+        b = offer("PGA", "THREE_BALL", joint_leg_ids=["g1", "g2", "g3"])
+        x = beta.evaluate(intake([b], [forecast(b, joint_distribution_sha256=HASH)],
+                                 [price(b)]))
+        self.assertEqual(x["research_comparisons"], 1)
+        self.assertEqual(x["official_counted"], 0)
+
+    def test_mismatched_joint_component_identity_is_refused(self):
+        a = offer(family="SGP", joint_leg_ids=["q1", "q2"])
+        with self.assertRaisesRegex(ValueError, "ORPHAN_FORECAST"):
+            beta.evaluate(intake([a], [forecast(a, joint_leg_ids=["q1","wrong"],
+                                           joint_distribution_sha256=HASH)], [price(a)]))
+
+    def test_pga_golfer_id_required_for_single_outcome(self):
+        a = offer("PGA", "OUTRIGHT")
+        r = beta.evaluate(intake([a], [forecast(a)], [price(a)]))
+        self.assertIn("PGA_GOLFER_ID_MISSING", r["rows"][0]["reasons"])
+
     def test_half_requires_own_period_distribution(self):
         o = offer(family="TOTAL", period="1H")
         r = beta.evaluate(intake([o],[forecast(o)],[price(o)]))
@@ -190,7 +214,8 @@ class BetaSevenSportTests(unittest.TestCase):
             beta.evaluate(intake([o],[forecast(o)],[price(o),price(o)]))
 
     def test_seven_sports_research_hypotheses_no_actual_bets(self):
-        os=[offer(s,"OUTRIGHT" if s=="PGA" else "ML")
+        os=[offer(s,"OUTRIGHT" if s=="PGA" else "ML",
+                  participant_id="GOLFER1" if s=="PGA" else "")
             for s in beta.universe.SPORTS]
         r=beta.evaluate(intake(os,[forecast(o) for o in os],
                                [price(o) for o in os]))
