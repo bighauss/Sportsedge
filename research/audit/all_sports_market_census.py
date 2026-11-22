@@ -49,7 +49,8 @@ ATTEMPT_FIELDS = {
     "source_observed_utc", "source_captured_utc", "quote_sha256",
     "model_sha256", "close_sha256", "final_sha256",
 }
-OPTIONAL_ATTEMPT_FIELDS = {"settlement_rule"}
+OPTIONAL_ATTEMPT_FIELDS = {"settlement_rule", "joint_leg_ids"}
+JOINT_FAMILIES = {"SGP", "MATCHUP", "THREE_BALL"}
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+~-]{0,127}$")
 PERIOD = re.compile(r"^[A-Z0-9_]{1,24}$")
 SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -132,8 +133,8 @@ def assess(data):
     seen_offers, seen_outcomes = set(), set()
     count, reason_count, rows = Counter(), Counter(), []
     for row in attempts:
-        if type(row) is not dict or set(row) not in (
-                ATTEMPT_FIELDS, ATTEMPT_FIELDS | OPTIONAL_ATTEMPT_FIELDS):
+        if type(row) is not dict or not ATTEMPT_FIELDS.issubset(row) or (
+                set(row) - ATTEMPT_FIELDS - OPTIONAL_ATTEMPT_FIELDS):
             raise ValueError("FIELDS_MISMATCH:attempt")
         sport = row["sport"]
         if type(sport) is not str or sport not in SPORTS:
@@ -156,11 +157,17 @@ def assess(data):
         settlement = row.get("settlement_rule")
         if settlement is not None:
             _id(settlement, "settlement_rule")
+        raw_legs = row.get("joint_leg_ids")
+        if raw_legs is not None and (type(raw_legs) is not list or len(raw_legs) > 20 or
+                any(type(x) is not str or ID.fullmatch(x) is None for x in raw_legs) or
+                len(set(raw_legs)) != len(raw_legs)):
+            raise ValueError("INVALID_JOINT_LEG_IDENTITIES")
+        legs = tuple(raw_legs or ())
         offer_key = (sport, book, offer_id)
         if offer_key in seen_offers:
             raise ValueError("DUPLICATE_PROVIDER_OFFER_ID")
         seen_offers.add(offer_key)
-        identity = (key, family, period, selection, participant, stat, line, book, settlement)
+        identity = (key, family, period, selection, participant, stat, line, book, settlement, legs)
         if identity in seen_outcomes:
             raise ValueError("DUPLICATE_EXACT_OUTCOME")
         seen_outcomes.add(identity)
@@ -170,6 +177,13 @@ def assess(data):
         reasons = []
         if settlement is None:
             reasons.append("MARKET_SETTLEMENT_ID_MISSING")
+        if family in JOINT_FAMILIES and (
+                len(legs) < 2 or
+                (family == "MATCHUP" and len(legs) != 2) or
+                (family == "THREE_BALL" and len(legs) != 3)):
+            reasons.append("JOINT_COMPONENT_IDENTITIES_MISSING")
+        elif family not in JOINT_FAMILIES and legs:
+            reasons.append("JOINT_COMPONENTS_ON_SINGLE_MARKET")
         if (observed is None) != (captured is None):
             reasons.append("INCOMPLETE_QUOTE_CLOCK_PAIR")
         elif observed is not None:
@@ -213,6 +227,7 @@ def assess(data):
             "market_family": family, "period": period, "selection_id": selection,
             "participant_id": participant, "stat": stat, "line": line,
             "book": book, "settlement_rule": settlement,
+            "joint_leg_ids": list(legs),
             "status": "PAPER_0U_UNVERIFIED", "reasons": reasons,
             "source_authenticated": False, "model_calibrated": False,
             "clv_authenticated": False, "approved_stake_u": 0,
