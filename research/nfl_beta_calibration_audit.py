@@ -17,30 +17,53 @@ def _utc(value):
     return dt.astimezone(timezone.utc)
 
 
-def freeze_predictions(result, *, frozen_at_utc):
-    """Return records plus canonical receipt bytes to persist before kickoff.
+def _canonical_receipt(predictions):
+    return json.dumps(
+        {"schema": "nfl-beta-freeze-v1", "predictions": predictions},
+        sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")
 
-    No external timestamp/authentication is established by this function.
-    Persist returned bytes in an independently timestamped append-only store.
+
+def freeze_predictions(result, *, frozen_at_utc):
+    """Return pregame PAPER records and exact canonical bytes for external storage.
+
+    A local digest is an integrity link, not proof of source authenticity or
+    independent capture/freeze time. Persist the receipt in an independently
+    timestamped, append-only system before kickoff.
     """
     frozen = _utc(frozen_at_utc)
-    if not isinstance(result, dict) or result.get("status") != "RESEARCH_PAPER_0U" or not isinstance(result.get("rows"), list):
+    if (not isinstance(result, dict) or result.get("status") != "RESEARCH_PAPER_0U"
+            or not isinstance(result.get("rows"), list)):
         raise ValueError("INVALID_PRICING_RESULT")
     records, seen = [], set()
     for row in result["rows"]:
-        if not isinstance(row, dict) or row.get("status") != "PAPER_HOLD_0U" or type(row.get("stake_u")) is not int or row["stake_u"] != 0:
+        if (not isinstance(row, dict) or row.get("status") != "PAPER_HOLD_0U"
+                or type(row.get("stake_u")) is not int or row["stake_u"] != 0):
             raise ValueError("NOT_PAPER")
         offer = row.get("offer")
         if not isinstance(offer, dict):
             raise ValueError("EXACT_OFFER_REQUIRED")
-        if not _utc(offer["model_asof_utc"]) <= _utc(offer["captured_at_utc"]) <= _utc(row["decision_utc"]) <= frozen < _utc(offer["kickoff_utc"]):
-            raise ValueError("NO_VERIFIABLE_PREGAME_FREEZE")
+        try:
+            model_at = _utc(offer["model_asof_utc"])
+            captured = _utc(offer["captured_at_utc"])
+            decided = _utc(row["decision_utc"])
+            kickoff = _utc(offer["kickoff_utc"])
+            if not (model_at <= captured <= decided <= frozen < kickoff):
+                raise ValueError("TIMESTAMP_ORDER")
+            if (frozen - captured).total_seconds() > 300:
+                raise ValueError("STALE_FREEZE_QUOTE")
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("NO_VERIFIABLE_PREGAME_FREEZE") from exc
         identity = [offer.get(k) for k in ("event_id", "book", "quote_id")]
-        if any(not isinstance(x, str) or not x for x in identity):
+        if any(type(x) is not str or not x for x in identity):
             raise ValueError("INVALID_PREDICTION_IDENTITY")
-        if row.get("event_id") != identity[0] or row.get("offer_id") != identity[2] or row.get("kind") != offer.get("kind"):
+        if (row.get("event_id") != identity[0]
+                or row.get("offer_id") != identity[2]
+                or row.get("kind") != offer.get("kind")):
             raise ValueError("OFFER_IDENTITY_MISMATCH")
-        key = "sha256:" + hashlib.sha256(json.dumps(identity, separators=(",", ":")).encode()).hexdigest()
+        key = "sha256:" + hashlib.sha256(
+            json.dumps(identity, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
         if key in seen:
             raise ValueError("DUPLICATE_PREDICTION")
         seen.add(key)
@@ -48,11 +71,37 @@ def freeze_predictions(result, *, frozen_at_utc):
         record.update(prediction_id=key, frozen_at_utc=frozen_at_utc,
                       kickoff_utc=offer["kickoff_utc"])
         records.append(record)
-    receipt = json.dumps({"schema": "nfl-beta-freeze-v1", "predictions": records}, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    try:
+        receipt = _canonical_receipt(records)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("NON_CANONICAL_FREEZE_INPUT") from exc
     digest = "sha256:" + hashlib.sha256(receipt).hexdigest()
+    # The receipt hash is deliberately external to the hashed payload:
+    # including its own SHA inside the bytes would be self-referential.
     for record in records:
         record["receipt_sha256"] = digest
     return records, receipt
+
+
+def verify_frozen_receipt(records, receipt):
+    """Check an exact receipt/record pair; does NOT authenticate its origin."""
+    if type(records) is not list or type(receipt) is not bytes:
+        raise ValueError("INVALID_FREEZE_RECEIPT")
+    digest = "sha256:" + hashlib.sha256(receipt).hexdigest()
+    payload = []
+    for record in records:
+        if type(record) is not dict or record.get("receipt_sha256") != digest:
+            raise ValueError("RECEIPT_RECORD_LINK_MISMATCH")
+        canonical_record = deepcopy(record)
+        del canonical_record["receipt_sha256"]
+        payload.append(canonical_record)
+    try:
+        reconstructed = _canonical_receipt(payload)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("NON_CANONICAL_RECEIPT_RECORD") from exc
+    if reconstructed != receipt:
+        raise ValueError("RECEIPT_RECORD_LINK_MISMATCH")
+    return digest
 
 
 def audit(predictions, outcomes, *, min_graded=100):
