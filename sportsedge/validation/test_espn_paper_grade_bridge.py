@@ -37,9 +37,10 @@ class BridgeTests(unittest.TestCase):
         return dict(path=name, sha256=hashlib.sha256(raw).hexdigest(),
                     captured_at_utc='2026-11-22T' + clock + ':00Z')
 
-    def run_rows(self, *rows):
+    def run_rows(self, *rows, include_intake_rows=False):
         self.source('bridge.json', dict(schema=bridge.SCHEMA, entries=rows), '22:00')
-        report = bridge.dry_run(self.root / 'bridge.json', now=self.now)
+        report = bridge.dry_run(self.root / 'bridge.json', now=self.now,
+                                include_intake_rows=include_intake_rows)
         self.assertFalse(list(self.root.glob('.paper-bridge-*')))
         self.assertFalse(list(self.root.glob('*.sqlite*')))
         return report
@@ -49,33 +50,12 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(report['espn_intake'], {'FINAL_STAGED': 1})
         self.assertEqual(report['results'], {'PAPER_RESULT_GRADED': 1})
         self.assertEqual(report['ledger'], {'DRY_RUN': 1})
+        self.assertNotIn('espn_intake_rows', report)
 
-    def test_unreviewed_mapping_is_blocked(self):
+    def test_unreviewed_mapping_stays_pending(self):
         report = self.run_rows(dict(self.row, espn_ids_reviewed=False))
         self.assertEqual(report['espn_intake'], {'FINAL_INPUT_BLOCKED': 1})
-        self.assertEqual(report['results'], {'FINAL_INPUT_BLOCKED': 1})
-
-    def test_private_receipt_distinguishes_missing_and_rejected(self):
-        missing = dict(self.row)
-        del missing['espn_original']
-        pick = json.loads((self.root / 'pick.json').read_bytes())
-        pick['pick_id'] = 'second'
-        pick['market']['line'] = '21'
-        rejected = dict(self.row, espn_ids_reviewed=False,
-                        pick=self.source('second.json', pick, '17:10'))
-        manifest = self.source('bridge.json', dict(schema=bridge.SCHEMA,
-                               entries=[missing, rejected, {}, None]), '22:00')
-        receipt = self.root / 'receipt.json'
-        report = bridge.dry_run(self.root / 'bridge.json', now=self.now, private_receipt=receipt)
-        self.assertEqual(report['results'], {'PENDING_FINAL': 1, 'FINAL_INPUT_BLOCKED': 1})
-        detail = json.loads(receipt.read_bytes())
-        self.assertEqual(detail['manifest_sha256'], manifest['sha256'])
-        self.assertEqual(detail['intake_by_entry'], ['NO_FINAL_SOURCE', 'FINAL_INPUT_BLOCKED',
-                                                    'NO_FINAL_SOURCE', 'INVALID_ENTRY'])
-        self.assertNotIn('intake_by_entry', report)
-        self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
-        with self.assertRaises(FileExistsError):
-            bridge.dry_run(self.root / 'bridge.json', now=self.now, private_receipt=receipt)
+        self.assertEqual(report['results'], {'PENDING_FINAL': 1})
 
     def test_tampered_raw_does_not_grade(self):
         (self.root / 'original.json').write_text('{}')
@@ -85,6 +65,30 @@ class BridgeTests(unittest.TestCase):
         report = self.run_rows(self.row, self.row, {'invalid': True})
         self.assertEqual(report['manifest_entries'], 3)
         self.assertEqual(report['picks'], {'DUPLICATE_PICK_OR_MARKET_BLOCKED': 2, 'PICK_EVIDENCE_BLOCKED': 1})
+
+    def test_missing_or_wrong_source_kickoff_cannot_grade(self):
+        for date in (None, '', 123, '2026-11-22T18:01:00Z'):
+            with self.subTest(date=date):
+                raw = json.loads((self.root / 'original.json').read_bytes())
+                competition = raw['header']['competitions'][0]
+                if date is None:
+                    competition.pop('date')
+                else:
+                    competition['date'] = date
+                receipt = self.source('changed.json', raw, '21:10')
+                report = self.run_rows(dict(self.row, espn_original=receipt))
+                self.assertEqual(report['espn_intake'], {'FINAL_INPUT_BLOCKED': 1})
+                self.assertEqual(report['results'], {'PENDING_FINAL': 1})
+                self.assertFalse(report['ledger'])
+
+    def test_private_intake_distinguishes_missing_and_rejected_by_row(self):
+        report = self.run_rows(dict(self.row, espn_original=None),
+                               dict(self.row, espn_ids_reviewed=False),
+                               {'invalid': True}, self.row, include_intake_rows=True)
+        self.assertEqual(report['espn_intake_rows'],
+                         ['NO_FINAL_SOURCE', 'FINAL_INPUT_BLOCKED', 'INVALID_ENTRY', 'FINAL_STAGED'])
+        self.assertEqual(sum(report['espn_intake'].values()), report['manifest_entries'])
+        self.assertFalse(report['ledger'])  # duplicate picks remain blocked
 
 
 if __name__ == '__main__':

@@ -4,7 +4,6 @@ from collections import Counter
 from datetime import datetime, timezone
 import hashlib
 import json
-import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -15,12 +14,12 @@ from sportsedge.validation import paper_ledger as ledger
 SCHEMA = 'sportsedge-espn-paper-bridge-v1'
 
 
-def dry_run(manifest, *, now=None, private_receipt=None):
+def dry_run(manifest, *, now=None, include_intake_rows=False):
+    """Optionally return intake states in private manifest order, without identifiers."""
     path = ledger.private_file(manifest, 'BRIDGE_MANIFEST')
     if not 0 < path.stat().st_size <= ledger.MAX_EVIDENCE_BYTES:
         raise ledger.Blocked('BRIDGE_MANIFEST_SIZE_INVALID')
-    manifest_bytes = path.read_bytes()
-    plan = ledger.strict_json(manifest_bytes)
+    plan = ledger.strict_json(path.read_bytes())
     if (not isinstance(plan, dict) or set(plan) != {'schema', 'entries'}
             or plan['schema'] != SCHEMA or not isinstance(plan['entries'], list)
             or not 0 < len(plan['entries']) <= batch.MAX_PICKS):
@@ -56,7 +55,7 @@ def dry_run(manifest, *, now=None, private_receipt=None):
                 if market.player_id != '':
                     raise ledger.Blocked('PLAYER_ID_CROSSWALK_NOT_ADMITTED')
                 spec = src['espn_original']
-                _, captured, digest = ledger.source(path.parent, spec, kickoff, 'postgame')
+                original, captured, digest = ledger.source(path.parent, spec, kickoff, 'postgame')
                 if captured > asof:
                     raise ledger.Blocked('FINAL_AFTER_ASOF')
                 raw = ledger.private_file(path.parent / spec['path'], 'ESPN_ORIGINAL').read_bytes()
@@ -65,26 +64,23 @@ def dry_run(manifest, *, now=None, private_receipt=None):
                 report = espn.inspect(raw, event_id=market.event_id, sport=market.sport,
                                       home_espn_id=pick['home_id'], away_espn_id=pick['away_id'],
                                       captured_utc=captured.isoformat(), kickoff_utc=kickoff.isoformat())
+                # The common importer allows an absent date; the grading bridge does not.
+                source_tip = original['header']['competitions'][0].get('date')
+                if not isinstance(source_tip, str) or not source_tip.strip():
+                    raise ledger.Blocked('SOURCE_KICKOFF_REQUIRED')
                 final = dict(report['candidate'], source_original_sha256=digest)
                 row['final'] = dict(write(final), captured_at_utc=captured.isoformat())
                 intake.append('FINAL_STAGED')
             except batch.BAD_INPUT:
                 intake.append('FINAL_INPUT_BLOCKED')
         spec = write(dict(schema=batch.SCHEMA, entries=staged))
-        rejected = {i for i, status in enumerate(intake) if status == 'FINAL_INPUT_BLOCKED'}
-        result = batch.run_batch(path.parent / spec['path'], now=asof, rejected_final_indices=rejected)
+        result = batch.run_batch(path.parent / spec['path'], now=asof)
         result['espn_intake'] = dict(Counter(intake))
         result['manifest_entries'] = len(staged)
-        if sum(result['picks'].values()) != len(staged):
+        if not sum(result['picks'].values()) == len(intake) == len(staged) == len(plan['entries']):
             raise ledger.Blocked('GRADE_DENOMINATOR_MISMATCH')
-        if private_receipt is not None:
-            target = ledger.private_file(private_receipt, 'INTAKE_RECEIPT', required=False)
-            detail = dict(manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
-                          intake_by_entry=intake)
-            with NamedTemporaryFile(dir=target.parent, delete=False) as receipt:
-                temporary.append(Path(receipt.name))
-                receipt.write(json.dumps(detail).encode())
-            os.link(receipt.name, target)
+        if include_intake_rows:
+            result['espn_intake_rows'] = intake
         return result
     finally:
         for p in temporary:
@@ -94,10 +90,9 @@ def dry_run(manifest, *, now=None, private_receipt=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('manifest', type=Path)
-    parser.add_argument('--private-receipt', type=Path, help='new owner-only JSON file with intake status in manifest order')
     args = parser.parse_args(argv)
     try:
-        result = dry_run(args.manifest, private_receipt=args.private_receipt)
+        result = dry_run(args.manifest)
     except batch.BAD_INPUT:
         print('ESPN_PAPER_BRIDGE_BLOCKED')
         return 2
