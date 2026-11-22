@@ -1,0 +1,64 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 441,
+  "base_commit": "98e61d227a8989a87c463434e394a3ce6ce2a648",
+  "protected_paths": [
+    ".github/workflows/tests.yml"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Add a provider-free cross-sport adversarial regression suite to existing CI; synthetic tests only, no changes to frozen CBB/CFB/MLB models, odds, graders, selections, or release policy.",
+  "assumptions": [
+    "Synthetic fixtures test only incumbent code-path guards; they do not establish successful complete-denominator ledger integration.",
+    "CBB historical missing neutralSite coercion remains open in draft PR #424; these tests check only strict pregame slate admission, not the historical neutral fix.",
+    "MLB duplicate-key overwrites in load_keyed, missing/rejected-offer denominator, CFB filtered candidate ledger and player/team time-matching remain open work items.",
+    "No actual completed-game results, screenshots, private odds, prospective source authentication, calibration or CLV were used.",
+    "The governance golden pin is the repository's shared nine-case synthetic agent-safety fixture, not the new twelve cross-sport regressions."
+  ],
+  "agent_identity": "ChatGPT independent contract-review agent",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Cross-sport adversarial intake tests explicitly executed by generic CI",
+    "before": null,
+    "unit": "tests",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s tests -p test_cross_sport_parity_guardrails.py -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "98e61d227a8989a87c463434e394a3ce6ce2a648",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s tests -p test_cross_sport_parity_guardrails.py -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
