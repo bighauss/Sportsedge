@@ -45,6 +45,56 @@ class BridgeTests(unittest.TestCase):
         self.assertFalse(list(self.root.glob('*.sqlite*')))
         return report
 
+    def csv_plan(self, markets):
+        original = json.loads((self.root / 'original.json').read_bytes())
+        sides = original['header']['competitions'][0]['competitors']
+        for side, code in zip(sides, ('HH', 'AA')):
+            side['team']['abbreviation'] = code
+        cfg = self.source('final.json', original, '21:10')
+        header = ','.join(bridge.nfl_frozen_csv.HEADER)
+        lines = [f'AA@HH,{market},{selection},-110,0.5,0,0,,{status}'
+                 for market, selection, status in markets]
+        raw = ('\n'.join([header, *lines]) + '\n').encode()
+        path = self.root / 'original.csv'
+        path.write_bytes(raw)
+        path.chmod(0o600)
+        return dict(schema=bridge.nfl_frozen_csv.SCHEMA,
+                    csv=dict(path=path.name, sha256=hashlib.sha256(raw).hexdigest(),
+                             captured_at_utc='2026-11-22T17:10:00Z'),
+                    games={'AA@HH': dict(event_id='123', home_id='22', away_id='23',
+                                         kickoff_utc=self.row['kickoff_utc'],
+                                         ids_reviewed=True, espn_original=cfg)})
+
+    def grade_csv(self, plan):
+        self.source('csv-plan.json', plan, '22:00')
+        return bridge.dry_run(self.root / 'csv-plan.json', now=self.now, include_intake_rows=True)
+
+    def test_csv_census_and_period_settlement(self):
+        plan = self.csv_plan([('Total', 'Over 25.5', 'on_card'),
+                              ('1H Total', '1H Over 20', 'on_card'),
+                              ('Receptions', 'unmapped', 'on_card'),
+                              ('Spread', 'AA +3', 'negative_ev')])
+        report = self.grade_csv(plan)
+        self.assertEqual(report['candidate_rows'], 4)
+        self.assertEqual([r['status'] for r in report['csv_rows']], ['W', 'P', 'PLAYER_ID_BLOCKED'])
+        self.assertEqual(report['approved_stake_u'], 0)
+        plan['games']['AA@HH']['espn_original'] = None
+        self.assertEqual(self.grade_csv(plan)['results']['PENDING_FINAL'], 2)
+        plan['csv']['captured_at_utc'] = self.row['kickoff_utc']
+        self.assertEqual(self.grade_csv(plan)['results'], {'PICK_EVIDENCE_BLOCKED': 3})
+        plan['csv']['sha256'] = '0' * 64
+        with self.assertRaises(bridge.ledger.Blocked):
+            self.grade_csv(plan)
+
+    def test_csv_duplicates_malformed_selection_and_wrong_teams(self):
+        plan = self.csv_plan([('Moneyline', 'AA ML', 'on_card')] * 2 +
+                             [('1H Total', 'Over 11', 'on_card'),
+                              ('Total', 'Over 30', 'on_card')])
+        plan['games']['AA@HH']['home_id'] = '33'
+        self.assertEqual(self.grade_csv(plan)['results'],
+                         {'DUPLICATE_MARKET_BLOCKED': 2, 'PICK_EVIDENCE_BLOCKED': 1,
+                          'FINAL_OR_SETTLEMENT_BLOCKED': 1})
+
     def test_exact_original_reaches_existing_dry_run_grader(self):
         report = self.run_rows(self.row)
         self.assertEqual(report['espn_intake'], {'FINAL_STAGED': 1})

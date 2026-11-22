@@ -93,7 +93,7 @@ def time_utc(raw):
         raise Blocked("timezone-qualified UTC timestamp required") from ex
 
 
-def source(root, cfg, cutoff, direction):
+def source_bytes(root, cfg):
     if not isinstance(cfg,dict) or not all(k in cfg for k in
            ("path","sha256","captured_at_utc")):
         raise Blocked("Original evidence path/hash/capture missing")
@@ -115,6 +115,11 @@ def source(root, cfg, cutoff, direction):
     if digest!=cfg["sha256"] or len(cfg["sha256"])!=64:
         raise Blocked("Original evidence bytes mismatch")
     clock=time_utc(cfg["captured_at_utc"])
+    return raw, clock, digest
+
+
+def source(root, cfg, cutoff, direction):
+    raw, clock, digest = source_bytes(root, cfg)
     if direction=="pregame" and not clock<cutoff:
         raise Blocked("Pregame quote captured at/after kickoff")
     if direction=="postgame" and not clock>cutoff:

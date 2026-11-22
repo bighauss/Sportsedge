@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from sportsedge.validation import nfl_frozen_csv
 from sportsedge.validation import espn_final_evidence as espn
 from sportsedge.validation import paper_grade_batch as batch
 from sportsedge.validation import paper_ledger as ledger
@@ -21,13 +22,20 @@ def dry_run(manifest, *, now=None, private_receipt=None, include_intake_rows=Fal
         raise ledger.Blocked('BRIDGE_MANIFEST_SIZE_INVALID')
     manifest_bytes = path.read_bytes()
     plan = ledger.strict_json(manifest_bytes)
+    asof = now if now is not None else datetime.now(timezone.utc)
+    if not isinstance(asof, datetime) or asof.utcoffset() is None:
+        raise ledger.Blocked('ASOF_REQUIRES_OFFSET')
+    if isinstance(plan, dict) and plan.get('schema') == nfl_frozen_csv.SCHEMA:
+        result, rows = nfl_frozen_csv.grade(path.parent, plan, asof)
+        if private_receipt is not None:
+            _receipt(private_receipt, manifest_bytes, {'csv_sha256': result['csv_sha256'], 'rows': rows})
+        if include_intake_rows:
+            result['csv_rows'] = rows
+        return result
     if (not isinstance(plan, dict) or set(plan) != {'schema', 'entries'}
             or plan['schema'] != SCHEMA or not isinstance(plan['entries'], list)
             or not 0 < len(plan['entries']) <= batch.MAX_PICKS):
         raise ledger.Blocked('INVALID_BRIDGE_MANIFEST')
-    asof = now if now is not None else datetime.now(timezone.utc)
-    if not isinstance(asof, datetime) or asof.utcoffset() is None:
-        raise ledger.Blocked('ASOF_REQUIRES_OFFSET')
     staged, intake, temporary = [], [], []
 
     def write(doc):
@@ -80,17 +88,20 @@ def dry_run(manifest, *, now=None, private_receipt=None, include_intake_rows=Fal
         if include_intake_rows:
             result['espn_intake_rows'] = intake
         if private_receipt is not None:
-            target = ledger.private_file(private_receipt, 'INTAKE_RECEIPT', required=False)
-            detail = dict(manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
-                          intake_by_entry=intake)
-            with NamedTemporaryFile(dir=target.parent, delete=False) as receipt:
-                temporary.append(Path(receipt.name))
-                receipt.write(json.dumps(detail).encode())
-            os.link(receipt.name, target)
+            _receipt(private_receipt, manifest_bytes, {'intake_by_entry': intake})
         return result
     finally:
         for p in temporary:
             p.unlink(missing_ok=True)
+
+
+def _receipt(path, manifest_bytes, fields):
+    target = ledger.private_file(path, 'INTAKE_RECEIPT', required=False)
+    fields['manifest_sha256'] = hashlib.sha256(manifest_bytes).hexdigest()
+    with NamedTemporaryFile(dir=target.parent) as receipt:
+        receipt.write(json.dumps(fields).encode())
+        receipt.flush()
+        os.link(receipt.name, target)
 
 
 def main(argv=None):
@@ -105,7 +116,7 @@ def main(argv=None):
         return 2
     print(json.dumps(result, sort_keys=True))
     return 2 if any(('BLOCKED' in k or k == 'INVALID_ENTRY')
-                    for group in ('picks', 'results', 'prices', 'espn_intake') for k in result[group]) else 0
+                    for group in ('picks', 'results', 'prices', 'espn_intake') for k in result.get(group, {})) else 0
 
 
 if __name__ == '__main__':
