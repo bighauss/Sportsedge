@@ -95,5 +95,85 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(rows[-1]["reject_reason"], "missing_input:total")
 
 
+
+class MalformedInputTests(unittest.TestCase):
+    """Bad offers become retained rejection rows; valid offers keep pricing."""
+
+    BAD = [
+        ("zero odds", prop("Zero", 200, 0), "invalid_odds:odds"),
+        ("small odds", prop("Small", 200, 50), "invalid_odds:odds"),
+        ("string odds", prop("Str", 200, "-110"), "invalid_odds:odds"),
+        ("bool odds", prop("Bool", 200, True), "invalid_odds:odds"),
+        ("nan odds", prop("NaN", 200, float("nan")), "invalid_odds:odds"),
+        ("empty game", dict(file="8.03.30", game=[], player="E", line=200, odds=-110), "invalid_input:game"),
+        ("one-team game", dict(file="8.03.30", game=["AAA Alphas"], player="O", line=200, odds=-110), "invalid_input:game"),
+        ("non-list game", dict(file="8.03.30", game="AAA@BBB", player="S", line=200, odds=-110), "invalid_input:game"),
+        ("unknown team", prop("U", 200, -110, game=("ZZZ Zebras", "BBB Bravos")), "unknown_team"),
+        ("negative line", prop("Neg", -5, -110), "invalid_input:line"),
+        ("inf line", prop("Inf", float("inf"), -110), "invalid_input:line"),
+        ("fractional TD line", prop("Frac", 1.5, -110, file="8.03.53"), "invalid_input:line"),
+        ("blank player", prop("  ", 200, -110), "invalid_input:player"),
+        ("not a dict", ["junk"], "invalid_input:not_a_mapping"),
+    ]
+
+    def test_each_bad_prop_rejected_and_batch_survives(self):
+        props = [prop("Good QB", 240, -105)] + [b[1] for b in self.BAD]
+        rows, s = L.build_ledger([GAME], props, PROJ, ABBR)
+        self.assertEqual(len(rows), 12 + len(props))
+        good = [r for r in rows if r["selection"].startswith("Good QB")]
+        self.assertEqual(len(good), 1)
+        self.assertNotEqual(good[0]["status"], "rejected_input")
+        by_index = {r.get("input_index"): r for r in rows if r["status"] == "rejected_input"}
+        for i, (label, _, reason) in enumerate(self.BAD, start=1):
+            self.assertIn(i, by_index, label)
+            self.assertEqual(by_index[i]["reject_reason"], reason, label)
+
+    def test_bad_game_quotes_rejected_others_priced(self):
+        good2 = dict(GAME, away="CCC", home="DDD")
+        bads = [dict(GAME, away="EEE", home="FFF", ml_h=0),
+                dict(GAME, away="GGG", home="HHH", total="44.5"),
+                dict(GAME, away="III", home="III"),
+                "junk"]
+        projs = dict(PROJ, **{"CCC@DDD": (20.0, 21.0), "EEE@FFF": (20, 20),
+                              "GGG@HHH": (20, 20), "III@III": (20, 20)})
+        rows, s = L.build_ledger([GAME, good2] + bads, [], projs, ABBR)
+        self.assertEqual(len(rows), 24 + len(bads))
+        reasons = [r["reject_reason"] for r in rows if r["status"] == "rejected_input"]
+        self.assertEqual(reasons, ["invalid_odds:ml_h", "invalid_input:total",
+                                   "invalid_input:teams", "invalid_input:not_a_mapping"])
+
+    def test_bad_projection_rejected(self):
+        rows, s = L.build_ledger([GAME], [prop("P", 200, -110)],
+                                 {"AAA@BBB": (float("nan"), 20)}, ABBR)
+        self.assertEqual(rows[0]["reject_reason"], "invalid_input:projection")
+        self.assertEqual(rows[1]["reject_reason"], "game_not_on_slate")
+        self.assertEqual(len(rows), 2)
+
+
+class LegacyRoundingBoundaryTests(unittest.TestCase):
+    """Frozen v3 compared totals against the 1-decimal note."""
+    PROJ = {"AAA@BBB": (22.27, 22.27)}          # T = 44.54 vs line 44.5
+
+    def _totals(self, legacy):
+        rows, s = L.build_ledger([GAME], [], self.PROJ, ABBR, legacy_note_rounding=legacy)
+        return {r["selection"]: r for r in rows if r["market"] == "Total"}, s
+
+    def test_legacy_filters_both_sides_at_boundary(self):
+        t, s = self._totals(True)
+        self.assertEqual(s["filter_basis"], "v3_note_1dp")
+        self.assertEqual(t["Over 44.5"]["status"], "filtered_contradicts_projection")
+        self.assertEqual(t["Under 44.5"]["status"], "filtered_contradicts_projection")
+
+    def test_full_precision_is_a_different_version(self):
+        t, s = self._totals(False)
+        self.assertEqual(s["filter_basis"], "full_precision")
+        self.assertNotEqual(t["Over 44.5"]["status"], "filtered_contradicts_projection")
+        self.assertEqual(t["Under 44.5"]["status"], "filtered_contradicts_projection")
+
+    def test_default_is_legacy(self):
+        rows, s = L.build_ledger([GAME], [], self.PROJ, ABBR)
+        self.assertEqual(s["filter_basis"], "v3_note_1dp")
+
+
 if __name__ == "__main__":
     unittest.main()

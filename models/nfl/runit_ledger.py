@@ -8,7 +8,9 @@ subset) are separate fields.
 
 The pricing formulas and constants below are copied unchanged from the frozen
 v3 runner (sportsedge_nfl_wk11_run_v3.py, sha256 d252e22e...). This module
-does not change v3; it only stops v3's early `continue`s from discarding rows.
+does not change v3; it only stops v3's early `continue`s from discarding rows
+and turns malformed offers into retained rejection rows. The total-direction
+filter reproduces v3's one-decimal note comparison by default (see game_rows).
 No quotes or private data live in this file.
 """
 from __future__ import annotations
@@ -78,8 +80,78 @@ def _missing(d, fields):
     return [f for f in fields if d.get(f) in (None, "")]
 
 
-def game_rows(g, proj):
-    """12 rows per game; proj = (away_pts, home_pts)."""
+def _num(v):
+    return type(v) in (int, float) and math.isfinite(v)
+
+
+def _american(v):
+    return _num(v) and abs(v) >= 100
+
+
+GAME_ODDS = ("sp_a", "sp_h", "o", "u", "ml_a", "ml_h", "h1_a", "h1_h",
+             "h1_o", "h1_u", "h1_ml_a", "h1_ml_h")
+
+
+def _bad_game(g):
+    """Return a rejection reason for a malformed game quote, else ''."""
+    if not isinstance(g, dict):
+        return "invalid_input:not_a_mapping"
+    miss = _missing(g, GAME_FIELDS)
+    if miss:
+        return f"missing_input:{','.join(miss)}"
+    if type(g["away"]) is not str or type(g["home"]) is not str or g["away"] == g["home"]:
+        return "invalid_input:teams"
+    for f in GAME_ODDS:
+        if not _american(g[f]):
+            return f"invalid_odds:{f}"
+    for f in ("spread", "h1_spread"):
+        if not _num(g[f]):
+            return f"invalid_input:{f}"
+    for f in ("total", "h1_total"):
+        if not _num(g[f]) or g[f] <= 0:
+            return f"invalid_input:{f}"
+    return ""
+
+
+def _bad_proj(p):
+    if (not isinstance(p, (tuple, list)) or len(p) != 2 or
+            not all(_num(v) and v >= 0 for v in p)):
+        return "invalid_input:projection"
+    return ""
+
+
+def _bad_prop(x):
+    if not isinstance(x, dict):
+        return "invalid_input:not_a_mapping"
+    miss = _missing(x, PROP_FIELDS)
+    if miss:
+        return f"missing_input:{','.join(miss)}"
+    if type(x["file"]) is not str:
+        return "invalid_input:file"
+    if x["file"] not in PROP_MARKETS:
+        return f"unsupported_market:{x['file']}"
+    g = x["game"]
+    if (not isinstance(g, (list, tuple)) or len(g) != 2 or
+            not all(type(t) is str and t for t in g)):
+        return "invalid_input:game"
+    if type(x["player"]) is not str or not x["player"].strip():
+        return "invalid_input:player"
+    if not _american(x["odds"]):
+        return "invalid_odds:odds"
+    k = x["line"]
+    kind = PROP_MARKETS[x["file"]][3]
+    if not _num(k) or k <= 0 or (kind == "p" and k != int(k)) or k > 1000:
+        return "invalid_input:line"
+    return ""
+
+
+def game_rows(g, proj, legacy_note_rounding=True):
+    """12 rows per game; proj = (away_pts, home_pts).
+
+    legacy_note_rounding=True reproduces frozen v3 exactly: v3 parsed the
+    projection back out of the one-decimal `note`, so 44.54 vs a 44.5 line
+    compares as 44.5 and BOTH Over and Under are filtered. False compares
+    full precision (a separate, versioned correction; not v3)."""
     a, h = g["away"], g["home"]
     gm = f"{a}@{h}"
     ap, hp = proj
@@ -117,10 +189,13 @@ def game_rows(g, proj):
     for r in out:
         if r["market"] in ("Total", "1H Total"):
             over = "Over" in r["selection"]
-            ok = r["proj_value"] > r["line"] if over else r["proj_value"] < r["line"]
+            t = float(f"{r['proj_value']:.1f}") if legacy_note_rounding else r["proj_value"]
+            ok = t > r["line"] if over else t < r["line"]
+            r["filter_basis"] = "v3_note_1dp" if legacy_note_rounding else "full_precision"
             if not ok:
                 r["status"] = "filtered_contradicts_projection"
-                r["reject_reason"] = f"projection {r['proj_value']:.3f} on other side of {r['line']}"
+                r["reject_reason"] = (f"projection {r['proj_value']:.3f} "
+                                      f"(compared as {t}) not on {'Over' if over else 'Under'} side of {r['line']}")
     return out
 
 
@@ -166,43 +241,64 @@ def team_abbr(name, abbr):
     return None
 
 
-def build_ledger(games, props, projections, abbr):
+def build_ledger(games, props, projections, abbr, legacy_note_rounding=True):
     """games: list of dicts with GAME_FIELDS; props: list of dicts with PROP_FIELDS;
     projections: {'AWAY@HOME': (away_pts, home_pts)}; abbr: nickname->abbr map.
     Returns (rows, summary). len(rows) == 12*valid_games + rejected_games + len(props)."""
     rows, proj, mtot = [], {}, {}
-    seen_games = set()
+    seen_games, rejected_games = set(), 0
     for i, g in enumerate(games):
-        miss = _missing(g, GAME_FIELDS)
-        gm = f"{g.get('away')}@{g.get('home')}"
-        if miss or gm in seen_games or gm not in projections:
-            reason = (f"missing_input:{','.join(miss)}" if miss else
-                      "duplicate_offer" if gm in seen_games else "missing_input:projection")
+        reason = _bad_game(g)
+        gm = f"{g.get('away')}@{g.get('home')}" if isinstance(g, dict) else f"game input #{i}"
+        if not reason:
+            if gm in seen_games:
+                reason = "duplicate_offer"
+            elif gm not in projections:
+                reason = "missing_input:projection"
+            else:
+                reason = _bad_proj(projections[gm])
+        built = None
+        if not reason:
+            try:
+                built = game_rows(g, projections[gm], legacy_note_rounding)
+            except (ArithmeticError, ValueError, TypeError) as exc:
+                reason = f"pricing_error:{type(exc).__name__}"
+        if reason:
             rows.append(dict(game=gm, kind="game", market="ALL", selection=f"game input #{i}",
                              odds=None, status="rejected_input", reject_reason=reason,
                              qualifies=False, on_image=False, display_rank=None))
+            rejected_games += 1
             continue
         seen_games.add(gm)
         proj[gm], mtot[gm] = projections[gm], g["total"]
-        rows.extend(game_rows(g, projections[gm]))
+        rows.extend(built)
     seen_props = set()
     for i, x in enumerate(props):
-        miss = _missing(x, PROP_FIELDS)
-        base = dict(kind="prop", market=PROP_MARKETS.get(x.get("file"), ("?",))[0],
-                    selection=f"{x.get('player')} {x.get('line')}+", odds=x.get("odds"),
-                    qualifies=False, on_image=False, display_rank=None, status="rejected_input")
-        if miss:
-            rows.append(dict(base, game="?", reject_reason=f"missing_input:{','.join(miss)}")); continue
-        if x["file"] not in PROP_MARKETS:
-            rows.append(dict(base, game="?", reject_reason=f"unsupported_market:{x['file']}")); continue
-        gm = f"{team_abbr(x['game'][0], abbr)}@{team_abbr(x['game'][1], abbr)}"
+        reason = _bad_prop(x)
+        xd = x if isinstance(x, dict) else {}
+        f = xd.get("file")
+        base = dict(kind="prop",
+                    market=PROP_MARKETS[f][0] if isinstance(f, str) and f in PROP_MARKETS else "?",
+                    selection=f"{xd.get('player')} {xd.get('line')}+", odds=xd.get("odds"),
+                    qualifies=False, on_image=False, display_rank=None, status="rejected_input",
+                    game="?", input_index=i)
+        if reason:
+            rows.append(dict(base, reject_reason=reason)); continue
+        ha, hh = team_abbr(x["game"][0], abbr), team_abbr(x["game"][1], abbr)
+        if ha is None or hh is None:
+            rows.append(dict(base, reject_reason="unknown_team")); continue
+        gm = f"{ha}@{hh}"
+        base["game"] = gm
         key = (gm, x["file"], x["player"], x["line"])
         if key in seen_props:
-            rows.append(dict(base, game=gm, reject_reason="duplicate_offer")); continue
+            rows.append(dict(base, reject_reason="duplicate_offer")); continue
         seen_props.add(key)
         if gm not in proj:
-            rows.append(dict(base, game=gm, reject_reason="game_not_on_slate")); continue
-        rows.append(prop_row(x, gm, proj[gm], mtot[gm]))
+            rows.append(dict(base, reject_reason="game_not_on_slate")); continue
+        try:
+            rows.append(prop_row(x, gm, proj[gm], mtot[gm]))
+        except (ArithmeticError, ValueError, TypeError) as exc:
+            rows.append(dict(base, reject_reason=f"pricing_error:{type(exc).__name__}"))
 
     # qualification (v3 card rule), then dedupe by signal in blended-EV order
     live = [r for r in rows if r["status"] is None]
@@ -235,9 +331,10 @@ def build_ledger(games, props, projections, abbr):
         rank += 1
         r["on_image"], r["display_rank"] = True, rank
 
-    attempted = sum(12 for _ in seen_games) + (len(games) - len(seen_games)) + len(props)
+    attempted = 12 * len(seen_games) + rejected_games + len(props)
     from collections import Counter
-    summary = dict(games_input=len(games), props_input=len(props), attempted_rows=attempted,
+    summary = dict(filter_basis="v3_note_1dp" if legacy_note_rounding else "full_precision",
+                   games_input=len(games), props_input=len(props), attempted_rows=attempted,
                    ledger_rows=len(rows), status_counts=dict(Counter(r["status"] for r in rows)),
                    qualifies=sum(r["qualifies"] for r in rows),
                    on_image=sum(r["on_image"] for r in rows))
