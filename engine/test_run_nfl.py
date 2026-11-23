@@ -119,6 +119,38 @@ class T(unittest.TestCase):
         finally:
             os.chdir(cwd)
 
+    def test_selected_for_card_matches_card_exactly(self):
+        out, card = self.prod["out"], self.prod["card"]
+        sel = {o["row_id"] for o in out if o["selected_for_card"]}
+        self.assertEqual(sel, {c["row_id"] for c in card})
+        self.assertEqual(len(sel), len(card))
+        excluded = {o["row_id"] for o in self.prod["held"]} | {o["row_id"] for o in self.prod["model_only"]} \
+            | {o["row_id"] for o in self.prod["doubted"]}
+        self.assertFalse(sel & excluded)
+        self.assertTrue(all(not o["selected_for_card"] for o in out if o["held"] or o["status"] == "MODEL_ONLY"))
+        self.assertTrue(all(o["approved_stake_u"] == 0 for o in out))
+        self.assertTrue(all(isinstance(o["selected_for_card"], bool) for o in out))
+
+    def test_duplicate_looking_quotes_distinct_ids(self):
+        r = run_nfl.build(board(game(24, 20, extra=[dict(market="SPREAD", line=-3.5, price_a=-110, price_b=-110)])))
+        sp = [o for o in r["out"] if o["bet_type"] == "SPREAD|0|"]
+        self.assertEqual(len(sp), 2)
+        self.assertEqual(sp[0]["pick"], sp[1]["pick"])
+        self.assertNotEqual(sp[0]["quote_id"], sp[1]["quote_id"])
+        self.assertEqual(len({o["quote_id"] for o in r["out"]}), len(r["out"]))
+        self.assertLessEqual(sum(o["selected_for_card"] for o in sp), 1)
+
+    def test_marker_does_not_change_selection(self):
+        p = board(game(30, 14, extra=[dict(market="1Q_SPREAD", line=-0.5, price_a=-110, price_b=-110)]))
+        a = run_nfl.build(p)
+        strip = lambda rows: [{k: v for k, v in o.items() if k not in ("row_id", "quote_id", "selected_for_card")}
+                              for o in rows]
+        # recompute card from the guarded rows without the marker and compare
+        ok = [o for o in strip(a["out"]) if not o["held"] and o["ev"] >= v5.EV_FLOOR and o["status"] != "MODEL_ONLY"]
+        card2 = [o for o in run_nfl.best_per_group(ok) if o["ev"] < v5.DOUBT_EV]
+        self.assertEqual([(o["pick"], o["price"], o["ev"], o["blend_p"]) for o in card2],
+                         [(o["pick"], o["price"], o["ev"], o["blend_p"]) for o in a["card"]])
+
     def test_blend_math_and_push(self):
         w, l = 0.55, 0.40
         ev = w * v5.payout(-110) - l

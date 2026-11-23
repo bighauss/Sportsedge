@@ -13,12 +13,14 @@ Wraps engine v5 without changing it. NFL rows only:
   4. Rows with no valid two-sided no-vig price are never blended and never go on the
      blended card; they are listed separately as MODEL-ONLY.
   5. Monte Carlo noise - N_FIT 20,000 -> 100,000 for this run only (restored afterwards).
-Every held row is listed with its reason at 0u. Non-NFL rows pass through with v5 numbers.
+Every held row is listed with its reason at 0u. Every exported row carries row_id, quote_id and
+selected_for_card (true only for rows on the final research card; approved_stake_u stays 0 regardless). Non-NFL rows pass through with v5 numbers.
 
 Usage:  python engine/run_nfl.py board.csv
 """
 import contextlib
 import csv
+import hashlib
 import io
 import os
 import sys
@@ -178,12 +180,20 @@ def build(path):
         v5.N_FIT = old
     notes = buf.getvalue().split("CARD (")[0].rstrip()
     out = [guard(o, gaps) for o in out]
+    for i, o in enumerate(out):                      # stable identity: v5 emission order + quote content
+        o["row_id"] = i
+        o["quote_id"] = hashlib.sha256("|".join(str(o.get(k, "")) for k in (
+            "sport", "game", "bet_type", "player", "pick", "price")).encode() + f"|{i}".encode()).hexdigest()[:16]
+        o["selected_for_card"] = False
     held = sorted([o for o in out if o["held"]], key=lambda x: (x["game"], x["pick"]))
     ok = [o for o in out if not o["held"] and o["ev"] >= v5.EV_FLOOR]
     blended = best_per_group([o for o in ok if o["status"] != "MODEL_ONLY"])
     card = [o for o in blended if o["ev"] < v5.DOUBT_EV]
     doubted = [o for o in blended if o["ev"] >= v5.DOUBT_EV]
     model_only = best_per_group([o for o in ok if o["status"] == "MODEL_ONLY"])
+    chosen = {c["row_id"] for c in card}             # marker only: selection logic above is unchanged
+    for o in out:
+        o["selected_for_card"] = o["row_id"] in chosen
     return dict(notes=notes, gaps=gaps, out=out, card=card, doubted=doubted,
                 model_only=model_only, held=held)
 
