@@ -42,7 +42,7 @@
   "rollback": {
     "target_base_sha": "157c804aef319142bb01e586d0e4b257a3e4ea6e",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "python models/nhl/test_sportsedge_nhl.py"
+    "verification_command": "python -m unittest discover -s models/nhl -p test_nhl_shared_scenarios.py -v"
   },
   "cost": {
     "currency": "USD",
