@@ -167,6 +167,12 @@ class SharedInningTests(unittest.TestCase):
         result=sim.run_research(inp,draws=8,seed=24)
         self.assertEqual(result["game_count"],2)
         self.assertEqual(len(result["games"]),2)
+        self.assertEqual(result["simulated_games"],2)
+        self.assertEqual(result["blocked_games"],0)
+        self.assertEqual(result["attempted_offer_sides"],
+                         sum(len(g["offers"]) for g in result["games"]))
+        self.assertTrue(all("simulated_runs_away" in g and "simulated_runs_home" in g
+                            for g in result["games"]))
         self.assertTrue(all(g["status"]=="SIMULATED_RESEARCH" for g in result["games"]))
         self.assertTrue(all(g["n_sims"]==8 for g in result["games"]))
         self.assertEqual(original,inp["odds"])
@@ -185,6 +191,9 @@ class SharedInningTests(unittest.TestCase):
                     2*sum(o["game_id"]=="G1" for o in inp["prop_odds"]))
         self.assertEqual(len(r["games"][0]["offers"]),expected)
         self.assertEqual(r["games"][0]["census"],{"NO_FORECAST":expected})
+        self.assertEqual(r["offer_status_census"].get("NO_FORECAST"),expected)
+        self.assertEqual(r["attempted_offer_sides"],
+                         sum(len(g["offers"]) for g in r["games"]))
         self.assertTrue(any(o["market"]=="K" and o["selection"]=="under"
                             for o in r["games"][0]["offers"]))
 
