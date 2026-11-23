@@ -90,8 +90,12 @@ W = {
     "backup_goals_against": 0.10,    # extra GA when confirmed starter is the backup
     "avg_pp_minutes": 1.85,          # minutes per power play opportunity
     "other_strength_goals": 0.12,    # 4v4/3v3/SH/penalty shots per team per game
-    "en_p_lead1": 0.13,              # P(empty-net goal | regulation lead by 1)
-    "en_p_lead2": 0.07,              # P(empty-net goal | lead by 2)
+    # Empty-net rates refit 2026-11-22 on 285 2026-27 NHL finals (|final margin| shape;
+    # was 0.13 / 0.07, which put 25% on 2-goal games vs 18% observed and 17% on
+    # 3-goal games vs 22%). Walk-forward (fit first 142, test next 143): log-loss
+    # 1.4416 -> 1.4208. See PR for evidence; PAPER / 0u.
+    "en_p_lead1": 0.11,              # P(empty-net goal | regulation lead by 1)
+    "en_p_lead2": 0.32,              # P(empty-net goal | lead by 2)
     "ot_shrink": 0.5,                # OT win prob shrink toward 50%
     "period_share": (0.305, 0.335, 0.36),
     "market_blend_model": 0.30,      # p_blend = 0.30 model + 0.70 market
