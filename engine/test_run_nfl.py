@@ -9,8 +9,7 @@ COLS = ["sport", "home", "away", "home_proj", "away_proj", "player", "team", "pr
 
 
 def board(rows):
-    d = tempfile.mkdtemp()
-    p = os.path.join(d, "board.csv")
+    p = os.path.join(tempfile.mkdtemp(), "board.csv")
     with open(p, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=COLS)
         w.writeheader()
@@ -26,75 +25,93 @@ def game(hp, ap, spread=-3.5, total=44.5, extra=()):
             dict(base, market="ML", price_a=-180, price_b=150)] + [dict(base, **e) for e in extra]
 
 
+def row(**kw):
+    o = dict(sport="NFL", game="G", player="", bet_type="SPREAD|0|", model_p=0.55,
+             market_p=0.5, ev=0.05, price=-110)
+    o.update(kw)
+    return o
+
+
 class T(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        run_nfl.N_FIT = 20000          # speed; production uses 100k
         os.chdir(tempfile.mkdtemp())
-
-    def gaps(self, rows):
-        return run_nfl.projection_gaps(run_nfl.load_nfl_lines(board(rows)))
+        cls.prod = run_nfl.build(board(game(30, 14, extra=[
+            dict(market="1H_SPREAD", line=-2.5, price_a=-110, price_b=-110),
+            dict(market="1Q_SPREAD", line=-0.5, price_a=-110, price_b=-110),
+            dict(player="WR1", team="HOM", market="REC_YDS", line=59.5, price_a=200, proj=70),
+        ])))                                         # production N_FIT (100k)
 
     def test_spread_gap_sign_and_hold(self):
-        r = run_nfl.build(board(game(30, 14)))       # proj home -16 vs book ~-3.5
-        sg, tg = r["gaps"]["AWY @ HOM"]
+        sg, tg = self.prod["gaps"]["AWY @ HOM"][""]
         self.assertGreater(sg, 6)
         self.assertLess(abs(tg), 6)
-        spreads = [o for o in r["out"] if o["bet_type"].startswith("SPREAD|")]
-        self.assertTrue(spreads and all(o["held"] for o in spreads))
-        totals = [o for o in r["out"] if o["bet_type"].startswith("TOTAL|")]
-        self.assertTrue(totals and not any(o["held"] for o in totals))
-        self.assertFalse(any(o["held"] for o in r["out"] if o["bet_type"].startswith("ML|")))
-        self.assertFalse(any(o["held"] for o in r["card"]))
+        out = self.prod["out"]
+        self.assertTrue(all(o["held"] for o in out if o["bet_type"].startswith("SPREAD|")))
+        self.assertFalse(any("pts off" in o["held"] for o in out if o["bet_type"].startswith("TOTAL|")))
+        self.assertFalse(any("pts off" in o["held"] for o in out if o["bet_type"].startswith("ML|")))
+        self.assertFalse(any(o["held"] for o in self.prod["card"]))
 
     def test_away_side_gap_negative(self):
-        sg, _ = self.gaps(game(14, 30))[ "AWY @ HOM"]
-        self.assertLess(sg, -6)
+        g = run_nfl.projection_gaps(run_nfl.load_nfl_lines(board(game(14, 30))))
+        self.assertLess(g["AWY @ HOM"][""][0], -6)
+
+    def test_period_gap_is_period_specific(self):
+        per = self.prod["gaps"]["AWY @ HOM"]
+        self.assertLess(abs(per["1Q"][0]), abs(per["1H"][0]))
+        self.assertLess(abs(per["1H"][0]), abs(per[""][0]))
+        q1 = [o for o in self.prod["out"] if o["bet_type"].startswith("1Q_SPREAD|")]
+        self.assertTrue(q1)
+        self.assertFalse(any("pts off" in o["held"] for o in q1))  # 1Q gap < 6 even though full game > 6
 
     def test_boundary(self):
-        gp = {"G": (6.0, -6.0)}
-        for mk in ("SPREAD", "TOTAL"):
-            o = dict(sport="NFL", game="G", player="", bet_type=f"{mk}|0|", model_p=0.6,
-                     market_p=0.5, ev=0.1, price=-110)
-            self.assertEqual(run_nfl.guard(o, gp)["held"], "")          # exactly 6 is not held
-        o = dict(sport="NFL", game="G", player="", bet_type="1H_SPREAD|0|", model_p=0.6,
-                 market_p=0.5, ev=0.1, price=-110)
-        self.assertTrue(run_nfl.guard(o, {"G": (6.01, 0)})["held"])      # periods held too
+        gp = {"G": {"": (6.0, -6.0), "1H": (6.01, 0.0)}}
+        self.assertEqual(run_nfl.guard(row(), gp)["held"], "")
+        self.assertEqual(run_nfl.guard(row(bet_type="TOTAL|0|"), gp)["held"], "")
+        self.assertIn("1H projection", run_nfl.guard(row(bet_type="1H_SPREAD|0|"), gp)["held"])
+        self.assertEqual(run_nfl.guard(row(bet_type="2H_SPREAD|0|"), gp)["held"], "")  # no 2H gap given
 
     def test_blend_math_and_push(self):
-        # model w=0.55 l=0.40 push=0.05 at -110; market 0.5
         w, l = 0.55, 0.40
         ev = w * v5.payout(-110) - l
-        o = dict(sport="NFL", game="G", player="", bet_type="SPREAD|0|", model_p=w / (w + l),
-                 market_p=0.5, ev=ev, price=-110)
-        g = run_nfl.guard(o, {})
+        g = run_nfl.guard(row(model_p=w / (w + l), ev=ev), {})
         p = 0.3 * (w / (w + l)) + 0.7 * 0.5
         self.assertAlmostEqual(g["blend_p"], p, 9)
         self.assertAlmostEqual(g["ev"], 0.95 * (p * v5.payout(-110) - (1 - p)), 9)
         self.assertAlmostEqual(g["model_ev"], ev, 12)
 
-    def test_one_sided_not_blended(self):
-        o = dict(sport="NFL", game="G", player="X", bet_type="REC_YDS|0|", model_p=0.4,
-                 market_p=None, ev=0.2, price=200)
-        g = run_nfl.guard(o, {})
-        self.assertEqual(g["blend_p"], 0.4)
-        self.assertEqual(g["ev"], 0.2)
+    def test_model_only_never_on_blended_card(self):
+        g = run_nfl.guard(row(player="X", bet_type="REC_YDS|0|", model_p=0.4, market_p=None,
+                              ev=0.2, price=200), {})
+        self.assertEqual((g["status"], g["blend_p"], g["ev"]), ("MODEL_ONLY", 0.4, 0.2))
+        self.assertFalse(any(o["status"] == "MODEL_ONLY" for o in self.prod["card"]))
+        self.assertTrue(any("WR1" in o["pick"] for o in self.prod["model_only"]))
 
-    def test_props_never_held(self):
-        o = dict(sport="NFL", game="G", player="X", bet_type="REC_YDS|0|", model_p=0.6,
-                 market_p=0.5, ev=0.1, price=-110)
-        self.assertEqual(run_nfl.guard(o, {"G": (20, 20)})["held"], "")
+    def test_prob_guard_separate_from_points(self):
+        self.assertIn("prob guard", run_nfl.guard(row(model_p=0.80, market_p=0.50), {})["held"])
+        self.assertIn("prob guard", run_nfl.guard(row(model_p=0.30, market_p=0.50), {})["held"])
+        self.assertIn("prob guard", run_nfl.guard(row(bet_type="ML|0|", model_p=0.10, market_p=0.06), {})["held"])
+        self.assertEqual(run_nfl.guard(row(model_p=0.60, market_p=0.50), {})["held"], "")
 
-    def test_extreme_disagreement_stays_visible(self):
+    def test_extreme_disagreement_not_hidden_by_blend(self):
         r = run_nfl.build(board(game(38, 10)))
-        self.assertTrue(r["held"])
-        self.assertTrue(all("pts off book spread" in o["held"] for o in r["held"]
-                            if o["bet_type"].startswith("SPREAD|")))
+        sp = [o for o in r["out"] if o["bet_type"].startswith("SPREAD|")]
+        self.assertTrue(sp and all(o["held"] for o in sp))
+        self.assertFalse(any(o["bet_type"].startswith("SPREAD|") for o in r["card"]))
+
+    def test_every_held_row_listed(self):
+        self.assertEqual(len(self.prod["held"]), sum(1 for o in self.prod["out"] if o["held"]))
+
+    def test_props_never_point_held(self):
+        g = run_nfl.guard(row(player="X", bet_type="REC_YDS|0|"), {"G": {"": (20, 20)}})
+        self.assertEqual(g["held"], "")
+
+    def test_n_fit_restored_and_production_value(self):
+        self.assertEqual(run_nfl.N_FIT, 100000)
+        self.assertEqual(v5.N_FIT, 20000)
 
     def test_non_nfl_untouched(self):
-        o = dict(sport="CBB", game="G", player="", bet_type="SPREAD|0|", model_p=0.7,
-                 market_p=0.5, ev=0.3, price=-110)
-        g = run_nfl.guard(dict(o), {"G": (20, 20)})
+        g = run_nfl.guard(row(sport="CBB", model_p=0.7, ev=0.3), {"G": {"": (20, 20)}})
         self.assertEqual((g["ev"], g["held"]), (0.3, ""))
 
 
