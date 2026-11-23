@@ -130,6 +130,44 @@ class T(unittest.TestCase):
         self.assertTrue(all(not o["selected_for_card"] for o in out if o["held"] or o["status"] == "MODEL_ONLY"))
         self.assertTrue(all(o["approved_stake_u"] == 0 for o in out))
         self.assertTrue(all(isinstance(o["selected_for_card"], bool) for o in out))
+        # best_per_group returns COPIES; the card objects must carry the same
+        # marker and identity as the exported originals, not stale False.
+        self.assertTrue(all(c["selected_for_card"] is True for c in card))
+        for c in card:
+            original = out[c["row_id"]]
+            self.assertEqual((c["quote_id"], c["selected_for_card"]),
+                             (original["quote_id"], original["selected_for_card"]))
+        self.assertTrue(all(not c["selected_for_card"] for c in
+                            self.prod["doubted"] + self.prod["model_only"]))
+
+    def test_exported_csv_and_returned_card_same_selected_ids(self):
+        """Compare real main() CSV export with returned build() rows and card."""
+        from unittest.mock import patch
+        import contextlib
+        import io
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                os.chdir(tmp)
+                with patch.object(run_nfl, "build", return_value=self.prod):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        run_nfl.main("unused-board.csv")
+                exports = [x for x in os.listdir(tmp) if x.startswith("picks_nfl_")]
+                self.assertEqual(len(exports), 1)
+                with open(exports[0], newline="") as f:
+                    saved = list(csv.DictReader(f))
+            finally:
+                os.chdir(cwd)
+        marked_csv = {(int(r["row_id"]), r["quote_id"]) for r in saved
+                      if r["selected_for_card"] == "True"}
+        marked_out = {(r["row_id"], r["quote_id"]) for r in self.prod["out"]
+                      if r["selected_for_card"]}
+        marked_card = {(c["row_id"], c["quote_id"]) for c in self.prod["card"]}
+        self.assertEqual(marked_csv, marked_out)
+        self.assertEqual(marked_csv, marked_card)
+        self.assertTrue(all(c["selected_for_card"] is True for c in self.prod["card"]))
+        self.assertTrue(all(float(r["approved_stake_u"]) == 0 for r in saved))
+        self.assertEqual(len({r["quote_id"] for r in saved}), len(saved))
 
     def test_duplicate_looking_quotes_distinct_ids(self):
         r = run_nfl.build(board(game(24, 20, extra=[dict(market="SPREAD", line=-3.5, price_a=-110, price_b=-110)])))
