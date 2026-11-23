@@ -92,6 +92,16 @@ def grade_row(row, finals, stats):
     return "NG", f"unknown market {market}"
 
 
+def _selected(row):
+    """run_nfl exports selected_for_card (True/False); older exports may carry on_card.
+    Neither present -> None ("selection not recorded"); never reconstructed."""
+    for k in ("selected_for_card", "on_card"):
+        v = row.get(k)
+        if v not in (None, ""):
+            return is_held(v)
+    return None
+
+
 class SettlementError(ValueError):
     """Settlement refused: integrity, identity or stake contract violated."""
 
@@ -156,7 +166,7 @@ def settle(run_dir, finals, source, stats_path=None, settle_dir=SETTLE_DIR, now=
                  "player": row.get("player") or None, "line": fnum(row.get("line")),
                  "price": price, "result": res,
                  "units": round(_profit(price, res), 4) if res in ("W", "L", "P") else None,
-                 "on_card": is_held(row.get("on_card")) if row.get("on_card") not in (None, "") else None,
+                 "on_card": _selected(row),
                  "held": is_held(row.get("held")), "status": row.get("status") or None,
                  "model_p": fnum(row.get("model_p")), "market_p": fnum(row.get("market_p")),
                  "blend_p": fnum(row.get("blend_p")), "ev": fnum(row.get("ev")),

@@ -85,7 +85,7 @@ def build(runs, pick_set=None, title="NFL weekly scorecard"):
     if any(g.get("on_card") is not None for g in rows):
         L.append(f"- Card selections: {_rec([g for g in rows if g.get('on_card')])}")
     else:
-        L.append("- Card selections: not recorded in this run's picks file (no on_card column)")
+        L.append("- Card selections: selection not recorded in this run's picks file")
     L.append(f"- Held: {_rec([g for g in rows if g['held']])}")
     if ng:
         L.append(f"- Not gradable (missing score/stat): {ng}")

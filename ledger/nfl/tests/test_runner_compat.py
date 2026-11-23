@@ -151,7 +151,19 @@ class RunnerCompat(unittest.TestCase):
         self.assertIn("- challenger", md)
         self.assertEqual(md.count("## Overall"), 2)
         self.assertIn("Unheld priced candidates", md)
-        self.assertIn("Card selections: not recorded", md)
+        self.assertIn("Card selections: selection not recorded", md)
+
+    def test_selected_for_card_reported_separately(self):
+        p = os.path.join(self.t, "sel.csv")
+        rows = [dict(r, selected_for_card=(i == 0)) for i, r in enumerate(ROWS)]
+        _w(p, rows, F + ["selected_for_card"])
+        rd = self._frz(p)
+        _, rec = settle.settle(rd, FINALS, "x", self.stats, self.sdir, now=self.now)
+        self.assertEqual([g["row"] for g in rec["graded"] if g["on_card"]], [0])
+        self.assertTrue(all(g["on_card"] is False for g in rec["graded"] if g["row"] != 0))
+        self.assertTrue(all(g["approved_stake_u"] == 0 for g in rec["graded"]))
+        md = scorecard.build(scorecard.load_week("2026-11-23", "2026-11-23", self.runs, self.sdir))
+        self.assertIn("- Card selections: 1-0-0", md)                      # WAS +6 won
 
     def test_projection_layouts(self):
         p = projection_numbers({"game": ["X@Y", 20.0, 24.0, 44.0, 45.5, 3.0]})
