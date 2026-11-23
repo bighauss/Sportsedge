@@ -356,9 +356,22 @@ def run_research(inp, *, draws=1024, seed=7):
                         census=dict(sorted(Counter(o["status"] for o in offers).items())))
         except (NoForecast,KeyError,TypeError,ValueError,ArithmeticError) as e:
             item["reason"] = str(e)
-            item["offers"] = [
-                {"market":r.get("market"),"status":"NO_FORECAST","reason":"GAME_MODEL_UNAVAILABLE"}
-                for typ in ("odds","prop_odds") for r in inp.get(typ,[])
-                if r.get("game_id")==gid]
+            # Preserve the entire original offered denominator, including BOTH
+            # sides stored together in one prop_odds row.
+            blocked = [{"market":r.get("market"),"selection":r.get("selection"),
+                        "line":r.get("line"),"player_id":None,
+                        "price":r.get("price"),"book":r.get("book"),
+                        "status":"NO_FORECAST","reason":"GAME_MODEL_UNAVAILABLE"}
+                       for r in inp.get("odds",[]) if r.get("game_id")==gid]
+            for r in inp.get("prop_odds",[]):
+                if r.get("game_id") != gid:
+                    continue
+                for side,field in (("over","over_price"),("under","under_price")):
+                    blocked.append({"market":r.get("market"),"selection":side,
+                                    "line":r.get("line"),"player_id":r.get("player_id"),
+                                    "price":r.get(field),"book":r.get("book"),
+                                    "status":"NO_FORECAST","reason":"GAME_MODEL_UNAVAILABLE"})
+            item["offers"] = blocked
+            item["census"] = {"NO_FORECAST":len(blocked)}
         report["games"].append(item)
     return report
