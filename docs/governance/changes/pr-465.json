@@ -1,0 +1,67 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 465,
+  "base_commit": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
+  "protected_paths": [
+    ".github/workflows/mlb-shared-inning-research.yml",
+    "models/mlb/shared_inning_run.py",
+    "models/mlb/shared_inning_sim.py",
+    "models/mlb/test_shared_inning_sim.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Opt-in native MLB player/inning scenario research, same-draw per-offer census and synthetic regression workflow; frozen RUN IT model and production pricing unchanged.",
+  "assumptions": [
+    "Batter BA, ISO and HR/PA are independently captured source rates rather than inferred from bookmaker lines; missing, inconsistent or invalid rates fail closed.",
+    "Base-running advancement is intentionally simplified, missing batter BB% falls back to a labelled league rate and the shared model is uncalibrated; synthetic tests cannot certify MLB outcomes.",
+    "Any simulated game still tied after the 12th inning blocks full-game market pricing rather than silently deleting unresolved draws.",
+    "Pitcher K/OUTS, real player opportunity, verified pregame source clocks, original betting odds, CLV and genuine validation remain unsupported.",
+    "Synthetic test fixtures are normalized only inside CI to make artificial BA/ISO/HR rates coherent; this must never be applied to real inputs."
+  ],
+  "agent_identity": "ChatGPT coding assistant",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Shared PA/inning research bridge and scenario test suite before this PR",
+    "before": null,
+    "unit": "tests",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v models.mlb.test_shared_inning_sim",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v models.mlb.test_shared_inning_sim"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
