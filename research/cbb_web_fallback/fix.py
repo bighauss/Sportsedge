@@ -17,5 +17,6 @@ for g,m,t,pa,ph in RAW:
     p=1-N((l-pr)/SDTT); add('TT',nm+' O',l,o,p,u); add('TT',nm+' U',l,u,1-p,o)
 out.sort(key=lambda x:-x[0])
 top=[r for r in out if r[0]>0.03]
+from collections import Counter
 print(len(top),"plays >3% EV")
-for r in top[:20]: print(f"{r[0]*100:+5.1f}% {r[1]:18s} {r[2]:6s} {r[3]:12s} {r[4]!s:6s} {r[5]:+5d} proj {r[8]}-{r[9]}")
+for r in top: print(f"{r[0]*100:+5.1f}% {r[1]:18s} {r[2]:6s} {r[3]:12s} {r[4]!s:6s} {r[5]:+5d} proj {r[8]}-{r[9]}")
