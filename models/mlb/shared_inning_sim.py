@@ -233,11 +233,15 @@ def settle(samples, market, selection, line=None, *, player_id=None):
             line = _float(line,"LINE",low=-1000.,high=1000.)
         except NoForecast as e:
             return {"status":"UNRESOLVED_MARKET","reason":str(e)}
+        if market not in {"RL","F5_RL"} and line < 0:
+            return {"status":"UNRESOLVED_MARKET","reason":"NEGATIVE_NON_SPREAD_LINE"}
     if market in batter_markets:
         if not isinstance(player_id,str) or not player_id or any(
                 player_id not in d["players"] for d in samples["scenarios"]):
             return {"status":"NO_FORECAST","reason":"PLAYER_ID_NOT_IN_LINEUP"}
-    if market in {"ML","RL","TOTAL","TT_AWAY","TT_HOME"} and samples["unresolved_extra_innings"]:
+    # Batter props also depend on a completed game: a capped, still-tied
+    # extra-inning draw can add future PA/HITS/TB/HR and cannot be settled.
+    if market in ({"ML","RL","TOTAL","TT_AWAY","TT_HOME"} | batter_markets) and samples["unresolved_extra_innings"]:
         return {"status":"UNRESOLVED_MARKET","reason":"UNSETTLED_EXTRA_INNINGS",
                 "unresolved_draws":samples["unresolved_extra_innings"],"n":n}
     counts = Counter()
