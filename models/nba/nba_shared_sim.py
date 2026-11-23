@@ -22,6 +22,16 @@ Settlement rules (must be stated by the caller, never assumed):
   * 2H and Q4 markets: caller passes ot_rule='include' or 'exclude'. No default.
     (Q1-Q3 and 1H can never contain OT, so ot_rule is ignored there.)
   * selections are validated; anything else raises ValueError.
+
+Integrity (audit round 2):
+  * team draws use their own RNG stream; each player uses a stream keyed by
+    (seed, player id), so adding/removing a player never changes team scores
+    or other players' draws for the same seed.
+  * listed players' points never exceed their team's points in any draw
+    (deterministic trim: non-three points first, then threes).
+  * players carry a stable 'id' (defaults to name); ids must be unique.
+  * inputs, lines and EV arguments are range-checked; OT is capped.
+  * scenario_sha256 hashes inputs; draws_sha256 hashes every generated draw.
 """
 from __future__ import annotations
 
@@ -35,6 +45,10 @@ PACE_SD = 0.035
 Q_SHARED_SD = 2.7      # within-quarter shock common to both teams (total variance)
 Q_TEAM_SD = 4.3        # team-specific quarter noise (margin variance)
 OT_SCALE = 5 / 12
+MAX_OT = 12
+MAX_N = 1_000_000
+TEAM_MEAN_RANGE = (40.0, 200.0)
+STAT_KEYS = ("pts", "reb", "ast", "fg3")
 
 SIDES = ("home", "away")
 OU = ("over", "under")
@@ -55,29 +69,83 @@ def _poisson(rng, lam):
         k += 1
 
 
-def _check_players(players):
+def _finite(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+def _pid(p):
+    return str(p.get("id", p.get("name")))
+
+
+def _check_inputs(home_mean, away_mean, players, n, seed):
+    for lbl, m in (("home_mean", home_mean), ("away_mean", away_mean)):
+        if not _finite(m) or not TEAM_MEAN_RANGE[0] <= m <= TEAM_MEAN_RANGE[1]:
+            raise ValueError(f"{lbl} must be finite in {TEAM_MEAN_RANGE}, got {m!r}")
+    if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= MAX_N:
+        raise ValueError(f"n must be an int in 1..{MAX_N}")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("seed must be an int")
     seen = set()
+    team_pts = {"home": 0.0, "away": 0.0}
     for p in players:
+        if not p.get("name") and p.get("id") is None:
+            raise ValueError("player needs an id or name")
+        pid = _pid(p)
         if p.get("team") not in SIDES:
-            raise ValueError(f"player {p.get('name')!r}: team must be 'home' or 'away'")
-        if p["name"] in seen:
-            raise ValueError(f"duplicate player {p['name']!r}")
-        seen.add(p["name"])
+            raise ValueError(f"player {pid!r}: team must be 'home' or 'away'")
+        if pid in seen:
+            raise ValueError(f"duplicate player id {pid!r}")
+        seen.add(pid)
+        for k in STAT_KEYS:
+            v = p.get(k, 0)
+            if not _finite(v) or v < 0:
+                raise ValueError(f"player {pid!r}: {k} must be finite and >= 0")
         if p.get("pts", 0) < 3 * p.get("fg3", 0):
-            raise ValueError(f"player {p['name']!r}: pts mean below 3 x fg3 mean")
+            raise ValueError(f"player {pid!r}: pts mean below 3 x fg3 mean")
+        team_pts[p["team"]] += p.get("pts", 0)
+    for t, mean in (("home", home_mean), ("away", away_mean)):
+        if team_pts[t] > mean:
+            raise ValueError(f"{t} players' pts means sum above team mean")
+
+
+def _player_rng(seed, pid):
+    h = hashlib.sha256(f"nba-player|{seed}|{pid}".encode()).digest()
+    return random.Random(int.from_bytes(h[:8], "big"))
+
+
+def _trim_to_team(rows, team_pts):
+    """rows: list of [pts, fg3] for one team's players in one draw (mutated).
+    Remove points deterministically until sum(pts) <= team_pts; keeps 3*fg3 <= pts."""
+    excess = sum(r[0] for r in rows) - team_pts
+    while excess > 0:
+        # largest non-three points first
+        r = max(rows, key=lambda r: (r[0] - 3 * r[1], r[0]))
+        other = r[0] - 3 * r[1]
+        if other > 0:
+            cut = min(other, excess)
+            r[0] -= cut
+            excess -= cut
+            continue
+        r = max(rows, key=lambda r: r[1])
+        if r[1] == 0:
+            break
+        r[1] -= 1
+        r[0] -= 3
+        excess -= 3
 
 
 def simulate(home_mean, away_mean, players=(), n=20000, seed=7):
     """players: [{name, team: 'home'|'away', pts, reb, ast, fg3}] per-game means.
     Returns dict of per-draw arrays."""
     players = list(players)
-    _check_players(players)
-    rng = random.Random(seed)
+    _check_inputs(home_mean, away_mean, players, n, seed)
+    rng = random.Random(seed)                     # team stream only
+    prng = {_pid(p): _player_rng(seed, _pid(p)) for p in players}
     H, A = [], []
     HQ = [[] for _ in range(4)]
     AQ = [[] for _ in range(4)]
     OT = []
-    stats = {p["name"]: {k: [] for k in ("pts", "reb", "ast", "fg3")} for p in players}
+    stats = {_pid(p): {k: [] for k in STAT_KEYS} for p in players}
     for _ in range(n):
         g = rng.gauss(1.0, PACE_SD)
         h = a = 0.0
@@ -90,26 +158,36 @@ def simulate(home_mean, away_mean, players=(), n=20000, seed=7):
             h += hq; a += aq
         ots = 0
         while h == a:
+            if ots >= MAX_OT:
+                raise RuntimeError("OT cap reached; check inputs")
             ots += 1
             sh = rng.gauss(0, Q_SHARED_SD * math.sqrt(OT_SCALE))
             h += round(max(home_mean * 0.25 * OT_SCALE * g + sh + rng.gauss(0, Q_TEAM_SD * math.sqrt(OT_SCALE)), 0))
             a += round(max(away_mean * 0.25 * OT_SCALE * g + sh + rng.gauss(0, Q_TEAM_SD * math.sqrt(OT_SCALE)), 0))
         H.append(h); A.append(a); OT.append(ots)
         fac = {"home": h / home_mean, "away": a / away_mean}
+        rows = {"home": [], "away": []}
+        draw = {}
         for p in players:
-            f = fac[p["team"]]
-            st = stats[p["name"]]
-            m3 = _poisson(rng, p.get("fg3", 0) * f)
-            other = _poisson(rng, (p.get("pts", 0) - 3 * p.get("fg3", 0)) * f)
-            st["fg3"].append(m3)
-            st["pts"].append(3 * m3 + other)
-            st["reb"].append(_poisson(rng, p.get("reb", 0) * g))
-            st["ast"].append(_poisson(rng, p.get("ast", 0) * g))
+            pid, f, r = _pid(p), fac[p["team"]], prng[_pid(p)]
+            m3 = _poisson(r, p.get("fg3", 0) * f)
+            other = _poisson(r, (p.get("pts", 0) - 3 * p.get("fg3", 0)) * f)
+            row = [3 * m3 + other, m3]
+            rows[p["team"]].append(row)
+            draw[pid] = (row, _poisson(r, p.get("reb", 0) * g), _poisson(r, p.get("ast", 0) * g))
+        _trim_to_team(rows["home"], h)
+        _trim_to_team(rows["away"], a)
+        for pid, (row, reb, ast) in draw.items():
+            st = stats[pid]
+            st["pts"].append(row[0]); st["fg3"].append(row[1])
+            st["reb"].append(reb); st["ast"].append(ast)
     for st in stats.values():
         st["pra"] = [a + b + c for a, b, c in zip(st["pts"], st["reb"], st["ast"])]
     sig = json.dumps([home_mean, away_mean, players, n, seed], sort_keys=True, default=str)
+    draws = json.dumps([H, A, HQ, AQ, OT, stats], sort_keys=True, separators=(",", ":"))
     return dict(home=H, away=A, hq=HQ, aq=AQ, ot=OT, players=stats, n=n, seed=seed,
-                scenario_sha256=hashlib.sha256(sig.encode()).hexdigest())
+                scenario_sha256=hashlib.sha256(sig.encode()).hexdigest(),
+                draws_sha256=hashlib.sha256(draws.encode()).hexdigest())
 
 
 def _wpl(vals, line, side_over=True):
@@ -122,8 +200,8 @@ def _wpl(vals, line, side_over=True):
 
 
 def _need_line(line, market):
-    if line is None or not isinstance(line, (int, float)) or isinstance(line, bool) or math.isnan(line):
-        raise ValueError(f"{market}: numeric line required")
+    if not _finite(line) or abs(line) > 400:
+        raise ValueError(f"{market}: finite numeric line required, got {line!r}")
 
 
 def price(sim, market, selection, line=None, tie_rule=None, ot_rule=None):
@@ -200,5 +278,12 @@ def price(sim, market, selection, line=None, tie_rule=None, ot_rule=None):
 
 
 def ev(win, push, american):
+    for lbl, v in (("win", win), ("push", push)):
+        if not _finite(v) or not 0 <= v <= 1:
+            raise ValueError(f"{lbl} must be a probability in [0, 1]")
+    if win + push > 1 + 1e-9:
+        raise ValueError("win + push exceeds 1")
+    if not _finite(american) or -100 < american < 100:
+        raise ValueError("american odds must be finite with |odds| >= 100")
     d = 1 + (american / 100 if american > 0 else 100 / -american)
     return win * (d - 1) - (1 - win - push)

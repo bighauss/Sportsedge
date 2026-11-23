@@ -8,11 +8,12 @@
     "models/nba/test_nba_shared_sim.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Adds an NBA shared game simulation (challenger) that prices all game, period and player-prop markets from one set of draws, with push-aware settlement; nine tests and CI.",
+  "change_summary": "Adds an NBA shared game simulation (challenger) that prices all game, period and player-prop markets from one set of draws, with push-aware settlement, explicit tie/OT rules, input validation, roster-independent RNG streams, player-points-within-team-points trimming and a draws hash; 19 tests and CI.",
   "assumptions": [
     "Constants are calibrated to the analytic model scale, not fitted to outcomes.",
-    "OT rate understated (3.1% vs ~6%).",
-    "Not wired into live cards; needs player minutes/rate inputs."
+    "OT rate understated (3.1% vs ~6%); not fitted to real finals.",
+    "Not wired into live cards; needs player minutes/rate inputs (not captured).",
+    "Player-points trim is a deterministic consistency rule, not a modeled allocation of team scoring."
   ],
   "agent_identity": "Claude coding assistant",
   "permissions": {
@@ -24,14 +25,14 @@
     "merge_rights": "REPO_RULES_ONLY"
   },
   "baseline": {
-    "metric": "Duplicate keyed-input rows silently overwritten",
+    "metric": "Internally inconsistent simulated outcomes (3PM*3 > PTS, player PTS sum > team PTS, invalid selections priced)",
     "before": null,
-    "unit": "rows",
+    "unit": "draws",
     "source_state": "UNKNOWN"
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
-    "cases": 9,
+    "cases": 19,
     "suite": "SYNTHETIC_AGENT_SAFETY"
   },
   "evaluation": {

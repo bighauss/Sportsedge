@@ -104,6 +104,68 @@ class SharedSim(unittest.TestCase):
         self.assertEqual(a["home"], b["home"])
         self.assertEqual(a["scenario_sha256"], b["scenario_sha256"])
 
+    def test_player_points_never_exceed_team_points(self):
+        heavy = [dict(id="p1", name="A", team="away", pts=40.0, fg3=6.0),
+                 dict(id="p2", name="B", team="away", pts=35.0, fg3=5.0),
+                 dict(id="p3", name="C", team="away", pts=30.0, fg3=4.0)]
+        s = S.simulate(115.0, 110.0, heavy, n=4000, seed=5)
+        for i in range(4000):
+            tot = sum(s["players"][k]["pts"][i] for k in ("p1", "p2", "p3"))
+            self.assertLessEqual(tot, s["away"][i])
+            for k in ("p1", "p2", "p3"):
+                self.assertLessEqual(3 * s["players"][k]["fg3"][i], s["players"][k]["pts"][i])
+        for i in range(len(self.s["home"])):
+            self.assertLessEqual(self.s["players"]["Star"]["pts"][i], self.s["home"][i])
+        with self.assertRaises(ValueError):
+            S.simulate(110, 105, [dict(name="X", team="home", pts=80), dict(name="Y", team="home", pts=40)], n=10)
+
+    def test_roster_change_does_not_move_team_or_other_player_draws(self):
+        a = S.simulate(115, 110, PLAYERS, n=2000, seed=9)
+        b = S.simulate(115, 110, PLAYERS[:1], n=2000, seed=9)
+        c = S.simulate(115, 110, [], n=2000, seed=9)
+        self.assertEqual(a["home"], c["home"]); self.assertEqual(b["away"], c["away"])
+        self.assertEqual(a["hq"], c["hq"]); self.assertEqual(a["ot"], c["ot"])
+        self.assertEqual(a["players"]["Star"], b["players"]["Star"])
+        rev = S.simulate(115, 110, list(reversed(PLAYERS)), n=2000, seed=9)
+        self.assertEqual(a["players"]["Star"], rev["players"]["Star"])
+
+    def test_stable_ids(self):
+        ps = [dict(id="nba:1", name="J. Smith", team="home", pts=20),
+              dict(id="nba:2", name="J. Smith", team="away", pts=18)]
+        s = S.simulate(115, 110, ps, n=200, seed=1)
+        self.assertEqual(set(s["players"]), {"nba:1", "nba:2"})
+        S.price(s, "PROP_PTS", "over:nba:2", 17.5)
+        with self.assertRaises(ValueError):
+            S.simulate(115, 110, [dict(id="x", team="home", pts=5), dict(id="x", team="away", pts=5)], n=10)
+
+    def test_draws_hash_covers_outputs(self):
+        a = S.simulate(115, 110, PLAYERS, n=300, seed=3)
+        b = S.simulate(115, 110, PLAYERS, n=300, seed=3)
+        c = S.simulate(115, 110, PLAYERS, n=300, seed=4)
+        self.assertEqual(a["draws_sha256"], b["draws_sha256"])
+        self.assertNotEqual(a["draws_sha256"], c["draws_sha256"])
+        self.assertEqual(a["scenario_sha256"], b["scenario_sha256"])
+
+    def test_input_bounds(self):
+        inf, nan = float("inf"), float("nan")
+        for hm, am, n, seed in [(inf, 110, 10, 1), (115, nan, 10, 1), (5, 110, 10, 1), (115, 110, 0, 1),
+                                (115, 110, 10**7, 1), (115, 110, 10.5, 1), (115, 110, True, 1), (115, 110, 10, "7")]:
+            with self.assertRaises(ValueError, msg=(hm, am, n, seed)):
+                S.simulate(hm, am, (), n=n, seed=seed)
+        with self.assertRaises(ValueError):
+            S.simulate(115, 110, [dict(name="X", team="home", pts=-1)], n=10)
+        with self.assertRaises(ValueError):
+            S.simulate(115, 110, [dict(name="X", team="home", reb=inf)], n=10)
+        for line in (inf, -inf, nan, 1e9, True):
+            with self.assertRaises(ValueError, msg=line):
+                S.price(self.s, "TOTAL", "over", line)
+
+    def test_ev_rejects_bad_probabilities_and_odds(self):
+        for w, p, o in [(1.2, 0, -110), (-0.1, 0, -110), (0.6, 0.5, -110), (0.5, float("nan"), -110),
+                        (0.5, 0, 50), (0.5, 0, float("inf"))]:
+            with self.assertRaises(ValueError, msg=(w, p, o)):
+                S.ev(w, p, o)
+
     def test_ev_push_refund(self):
         self.assertAlmostEqual(S.ev(0.5, 0.05, -110), 0.004545, 5)
 
