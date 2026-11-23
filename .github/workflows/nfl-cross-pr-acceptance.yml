@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bighauss/Sportsedge
-          ref: 12c667a20cd452a5732a3fec9d429caf5b4280da
+          ref: fcf2ceaa3885d5f2725138511b084252656df639
           path: runner-src
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -37,6 +37,6 @@ jobs:
         run: python -m py_compile ledger/nfl/integration/test_cross_pr_acceptance.py runner-src/engine/run_nfl.py
       - name: Verify pinned SHAs, selection identities and source hashes
         env:
-          PINNED_RUNNER_SHA: 12c667a20cd452a5732a3fec9d429caf5b4280da
+          PINNED_RUNNER_SHA: fcf2ceaa3885d5f2725138511b084252656df639
           LEDGER_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python -m unittest -v ledger.nfl.integration.test_cross_pr_acceptance
