@@ -165,6 +165,47 @@ class RunnerCompat(unittest.TestCase):
         md = scorecard.build(scorecard.load_week("2026-11-23", "2026-11-23", self.runs, self.sdir))
         self.assertIn("- Card selections: 1-0-0", md)                      # WAS +6 won
 
+    def test_mixed_selection_and_source_identity(self):
+        """Selected, explicitly unselected and legacy unknown never collapse."""
+        path = os.path.join(self.t, "mixed.csv")
+        rows = [dict(ROWS[i], row_id=i, quote_id=f"quote-{i}",
+                     selected_for_card=("True", "False", "")[i]) for i in range(3)]
+        _w(path, rows, F + ["row_id", "quote_id", "selected_for_card"])
+        rd = self._frz(path)
+        _, rec = settle.settle(rd, FINALS, "synthetic finals", self.stats, self.sdir, now=self.now)
+        got = rec["graded"]
+        self.assertEqual([g["on_card"] for g in got], [True, False, None])
+        self.assertEqual([g["row_id"] for g in got], [0, 1, 2])
+        self.assertEqual([g["quote_id"] for g in got], ["quote-0", "quote-1", "quote-2"])
+        self.assertTrue(all(g["approved_stake_u"] == 0 for g in got))
+        md = scorecard.build(scorecard.load_week("2026-11-23", "2026-11-23", self.runs, self.sdir))
+        self.assertIn("- Card selections: 1-0-0", md)
+        self.assertIn("- Explicitly unselected: 0-1-0", md)
+        self.assertIn("- Selection not recorded (legacy): 0-1-0", md)
+        self.assertIn("priced rows=1", md)
+
+    def test_selection_markers_fail_closed(self):
+        """Invalid or contradictory labels and duplicate ids cannot be graded."""
+        cases = [
+            ([dict(ROWS[0], selected_for_card="perhaps")], ["selected_for_card"]),
+            ([dict(ROWS[0], selected_for_card="True", on_card="False")],
+             ["selected_for_card", "on_card"]),
+            ([dict(ROWS[0], row_id="7", selected_for_card="True")],
+             ["row_id", "selected_for_card"]),
+            ([dict(ROWS[0], row_id="0", quote_id="q") ,
+              dict(ROWS[1], row_id="1", quote_id="q")],
+             ["row_id", "quote_id"]),
+        ]
+        for idx, (rows, extra) in enumerate(cases):
+            with self.subTest(case=idx):
+                p = os.path.join(self.t, f"bad_sel_{idx}.csv")
+                _w(p, rows, F + extra)
+                rd = freeze.freeze("CIN@WAS", self.board, self.proj,
+                                   {"challenger": p}, {}, None,
+                                   runs_dir=os.path.join(self.t, f"bad_runs_{idx}"), now=self.now)
+                with self.assertRaises(settle.SettlementError):
+                    settle.settle(rd, FINALS, "synthetic", self.stats, self.sdir, now=self.now)
+
     def test_projection_layouts(self):
         p = projection_numbers({"game": ["X@Y", 20.0, 24.0, 44.0, 45.5, 3.0]})
         self.assertEqual((p["proj_margin"], p["proj_total"], p["market_total"], p["market_margin"]),
