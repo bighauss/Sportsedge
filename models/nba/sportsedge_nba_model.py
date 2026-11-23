@@ -225,7 +225,12 @@ def price_game_market(r, proj):
     base = m.split("_", 1)[1] if seg != "FG" else m
     if base == "ML":
         mu = margin if sel == home else -margin
-        p = 1 - N.cdf((0 - mu) / (SD["margin"] * sm))
+        if seg != "FG":
+            # 2-way 1H/1Q moneyline: a tied period is refunded (no action), so the
+            # tie band |margin| < 0.5 is push mass, not half win / half loss.
+            po, push = p_over(mu, SD["margin"] * sm, 0)
+            return po, push, mu, "margin"
+        p = 1 - N.cdf((0 - mu) / (SD["margin"] * sm))   # full game: OT, no tie
         return p, 0.0, mu, "margin"
     if base == "SPREAD":
         mu = margin if sel == home else -margin
