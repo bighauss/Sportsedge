@@ -1,0 +1,21 @@
+name: CBB Torvik MC research tests
+on:
+  push:
+    branches: ['perplexity/cbb-torvik-mc-research']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Research tests against the real incumbent module
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbb_torvik_mc_pipeline
