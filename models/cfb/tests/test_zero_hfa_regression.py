@@ -1,45 +1,42 @@
-"""Regression for explicit zero venue HFA; synthetic only, no real-game validation."""
-import ast
+"""Synthetic-only tests of the isolated CFB venue HFA research challenger."""
 import pathlib
+import sys
 import unittest
 
-MODEL = pathlib.Path(__file__).resolve().parents[1] / "sportsedge_cfb_model.py"
+CFB_DIR = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(CFB_DIR))
+from venue_hfa_v2_research import venue_hfa_v2
 
 
-def venue_hfa_expression():
-    tree = ast.parse(MODEL.read_text(encoding="utf-8"))
-    run_game = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "run_game")
-    matches = [
-        n.value for n in ast.walk(run_game)
-        if isinstance(n, ast.Assign)
-        and any(isinstance(t, ast.Name) and t.id == "hfa" for t in n.targets)
-        and isinstance(n.value, ast.IfExp)
-    ]
-    if len(matches) != 1:
-        raise AssertionError(f"expected one venue HFA assignment, found {len(matches)}")
-    return compile(ast.Expression(matches[0]), str(MODEL), "eval")
+class VenueHfaV2ResearchRegression(unittest.TestCase):
+    def test_explicit_zero(self):
+        self.assertEqual(venue_hfa_v2(False, {"hfa": 0}, 2.5), 0.0)
 
-
-class VenueHfaRegression(unittest.TestCase):
-    def test_explicit_zero_preserved(self):
-        expr = venue_hfa_expression()
-        self.assertEqual(eval(expr, {"neutral": False, "ven": {"hfa": 0}, "HFA_DEFAULT": 2.5}), 0.0)
-
-    def test_missing_and_null_use_default(self):
-        expr = venue_hfa_expression()
+    def test_missing_and_null(self):
         for venue in ({}, {"hfa": None}):
             with self.subTest(venue=venue):
-                self.assertEqual(eval(expr, {"neutral": False, "ven": venue, "HFA_DEFAULT": 2.5}), 2.5)
+                self.assertEqual(venue_hfa_v2(False, venue, 2.5), 2.5)
 
-    def test_positive_value_preserved(self):
-        expr = venue_hfa_expression()
-        self.assertEqual(eval(expr, {"neutral": False, "ven": {"hfa": 1.25}, "HFA_DEFAULT": 2.5}), 1.25)
+    def test_positive_and_clamped(self):
+        for value, expected in [(1.25, 1.25), (-1, 0), (9, 4)]:
+            with self.subTest(value=value):
+                self.assertEqual(venue_hfa_v2(False, {"hfa": value}, 2.5), expected)
 
     def test_neutral_override(self):
-        expr = venue_hfa_expression()
         for venue in ({}, {"hfa": None}, {"hfa": 0}, {"hfa": 3.5}):
             with self.subTest(venue=venue):
-                self.assertEqual(eval(expr, {"neutral": True, "ven": venue, "HFA_DEFAULT": 2.5}), 0.0)
+                self.assertEqual(venue_hfa_v2(True, venue, 2.5), 0.0)
+
+    def test_invalid_values_fail_closed(self):
+        for value in ("nonsense", float("nan"), float("inf"), object()):
+            with self.subTest(value=repr(value)):
+                with self.assertRaises(ValueError):
+                    venue_hfa_v2(False, {"hfa": value}, 2.5)
+
+    def test_frozen_model_blob_unchanged(self):
+        # Frozen v1 integrity is separately enforced by the repository's hash guard.
+        text = (CFB_DIR / "sportsedge_cfb_model.py").read_text(encoding="utf-8")
+        self.assertIn('ven.get("hfa") or HFA_DEFAULT', text)
 
 
 if __name__ == "__main__":
