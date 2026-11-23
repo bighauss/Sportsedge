@@ -5,9 +5,9 @@ Wraps engine v5 without changing it. NFL rows only:
   1. 30/70 blend - two-sided rows are ranked by EV on
      p = 0.30 * model_p + 0.70 * no-vig market_p (probabilities, not points).
      Push share is kept from the model.
-  2. 6-point hold - SPREAD / TOTAL rows are HELD when the model's projection for THAT
-     period (full game, 1H, 2H, 1Q..4Q) is more than 6 points off the book-implied
-     projection for the same period. Not applied to ML or props.
+  2. 6-point hold - each two-sided SPREAD / TOTAL quote (any period, alts too) is HELD
+     when the model's projection for that period is more than 6 points off the projection
+     implied by that exact quote. Not applied to ML or props.
   3. Probability-disagreement hold (Nov 15 ruling, separate check) - two-sided rows are
      HELD when raw model_p is > 1.5x or < 0.67x the no-vig market_p, or > 12 points apart.
   4. Rows with no valid two-sided no-vig price are never blended and never go on the
@@ -23,7 +23,6 @@ import io
 import os
 import sys
 
-import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sportsedge_v5 as v5  # noqa: E402
@@ -55,20 +54,34 @@ def load_nfl_lines(path):
     return games
 
 
-def _period_means(S, ix):
-    if ix is None:
-        h, a = S["h"], S["a"]
-    else:
-        h, a = S["H"][:, ix].sum(1), S["A"][:, ix].sum(1)
-    return float(np.mean(h - a)), float(np.mean(h + a))
+def _quote_values(S, pre, base):
+    ix = v5.PERIODS["NFL"].get(pre) if pre else None
+    h, a = (S["h"], S["a"]) if ix is None else (S["H"][:, ix].sum(1), S["A"][:, ix].sum(1))
+    return (h - a) if base == "SPREAD" else (h + a)
+
+
+def quote_gap(S, r):
+    """Model projection minus the projection implied by THIS two-sided quote, same period.
+
+    Shift the model's own simulated period distribution by d until the quote's no-vig
+    price is a fair coin (pushes excluded, as v5 does); the quote-implied mean is the
+    model mean + d, so the gap is -d. Spread: home-margin points (+ = model likes home
+    more than the quote). Total: points (+ = model higher than the quote)."""
+    pre, base = v5.split_market("NFL", r["market"])
+    x = _quote_values(S, pre, base)
+    sign = 1.0 if base == "SPREAD" else -1.0
+    fa = v5.fair_a(r)
+
+    def f(d):
+        y = x + d + sign * r["line"]
+        return v5.cond(float((y > 0).mean()), float((y < 0).mean())) - fa
+    return -v5.bisect(f, -80.0, 80.0, 40)
 
 
 def projection_gaps(games):
-    """{game: {period prefix ('' = full game): (spread gap, total gap)}}.
-
-    Gap = model projection minus book-implied projection for the same period, both read
-    from the same v5 simulator (same seed), so each period is compared with itself.
-    Spread gap is in home-margin points (+ = model likes home more than the book)."""
+    """{(game, market, line): gap} for every two-sided NFL SPREAD / TOTAL quote (all
+    periods, alts included) in pregame games that have a projection. Each quote is compared
+    with the model's projection for the same period."""
     out = {}
     for (home, away), g in games.items():
         if any(r["rem"] is not None for r in g["all"]):
@@ -77,19 +90,19 @@ def projection_gaps(games):
                      if r["hp"] is not None and r["ap"] is not None), None)
         if proj is None:
             continue                                   # ANCHOR games have no opinion on the main line
-        seed = v5.seed_of(f"NFL|{home}|{away}")
-        bk = v5.anchor("NFL", g["lines"], seed)
-        if not bk:
-            continue
-        Sm = v5.simulate("NFL", proj[0], proj[1], seed, N_GAP)
-        Sb = v5.simulate("NFL", bk[0], bk[1], seed, N_GAP)
-        per = {"": ((proj[0] - proj[1]) - (bk[0] - bk[1]), (proj[0] + proj[1]) - (bk[0] + bk[1]))}
-        for pre, ix in v5.PERIODS["NFL"].items():
-            mm, mt = _period_means(Sm, ix)
-            bm, bt = _period_means(Sb, ix)
-            per[pre] = (mm - bm, mt - bt)
-        out[f"{away} @ {home}"] = per
+        S = v5.simulate("NFL", proj[0], proj[1], v5.seed_of(f"NFL|{home}|{away}"), N_GAP)
+        for r in g["lines"]:
+            base = v5.split_market("NFL", r["market"])[1]
+            if base in ("SPREAD", "TOTAL") and r["price_a"] and r["price_b"]:
+                out[(f"{away} @ {home}", r["market"], float(r["line"]))] = quote_gap(S, r)
     return out
+
+
+def _row_line(o):
+    """Home-side line (SPREAD) or number (TOTAL) of a priced side, from its v5 label."""
+    ln = float(o["pick"].split()[-1])
+    side = o["bet_type"].split("|")[1]
+    return -ln if o["bet_type"].split("|")[0].endswith("SPREAD") and side == "1" else ln
 
 
 def guard(o, gaps):
@@ -116,14 +129,12 @@ def guard(o, gaps):
             reasons.append(f"model {mp * 100:.1f}% vs market {fp * 100:.1f}% (prob guard)")
     market = o["bet_type"].split("|")[0]
     pre, base = v5.split_market("NFL", market)
-    per = gaps.get(o["game"], {}).get(pre)
-    if per and not o["player"]:
-        sg, tg = per
-        name = pre or "full-game"
-        if base == "SPREAD" and abs(sg) > GAP_PTS:
-            reasons.append(f"{name} projection {sg:+.1f} pts off book spread (>{GAP_PTS:g})")
-        elif base == "TOTAL" and abs(tg) > GAP_PTS:
-            reasons.append(f"{name} projection {tg:+.1f} pts off book total (>{GAP_PTS:g})")
+    if base in ("SPREAD", "TOTAL") and not o["player"]:
+        gap = gaps.get((o["game"], market, _row_line(o)))
+        if gap is not None and abs(gap) > GAP_PTS:
+            name = pre or "full-game"
+            kind = "spread" if base == "SPREAD" else "total"
+            reasons.append(f"{name} projection {gap:+.1f} pts off this {kind} quote (>{GAP_PTS:g})")
     o["held"] = "; ".join(reasons)
     return o
 
@@ -179,9 +190,8 @@ def table(rows, held=False):
 def main(path):
     r = build(path)
     print(r["notes"], "\n")
-    for g, per in r["gaps"].items():
-        sg, tg = per[""]
-        print(f"NFL {g}: projection vs book  spread {sg:+.1f}  total {tg:+.1f}")
+    for (g, mk, ln), gap in sorted(r["gaps"].items()):
+        print(f"NFL {g} {mk} {ln:+g}: projection vs quote {gap:+.1f} pts")
     print(f"\nCARD ({len(r['card'])}) - NFL two-sided rows ranked by 30/70 blended EV\n")
     table(r["card"])
     if r["doubted"]:
