@@ -8,11 +8,14 @@
     "models/nba/test_nba_shared_sim.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Adds an NBA shared game simulation (challenger) that prices all game, period and player-prop markets from one set of draws, with push-aware settlement; nine tests and CI.",
+  "change_summary": "NBA shared game simulation research challenger: conservation-aware player points, isolated RNG, explicit settlement, finite input validation and draw-content hashing; 19 synthetic model regression tests. No release or real-data validation.",
   "assumptions": [
     "Constants are calibrated to the analytic model scale, not fitted to outcomes.",
     "OT rate understated (3.1% vs ~6%).",
-    "Not wired into live cards; needs player minutes/rate inputs."
+    "Not wired into live cards; needs player minutes/rate inputs.",
+    "Player point budgets are sequentially allocated in stable-ID order; this enforces feasibility but is not an empirically calibrated player model.",
+    "Display-name fallback is research-only; production requires verified stable athlete IDs.",
+    "Six new adversarial tests are added; the 9-case golden fixture remains separately pinned."
   ],
   "agent_identity": "Claude coding assistant",
   "permissions": {
@@ -24,10 +27,10 @@
     "merge_rights": "REPO_RULES_ONLY"
   },
   "baseline": {
-    "metric": "Duplicate keyed-input rows silently overwritten",
+    "metric": "Prior NBA shared simulator lacked team/player point conservation, independent player RNG, bounded inputs and draw-content hashes",
     "before": null,
-    "unit": "rows",
-    "source_state": "UNKNOWN"
+    "unit": "unverified defect count",
+    "source_state": "CODE_INSPECTION_NO_HISTORICAL_MEASUREMENT"
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
