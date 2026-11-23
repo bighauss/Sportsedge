@@ -1,0 +1,25 @@
+name: NHL regulation player shared scenarios (synthetic)
+on:
+  pull_request:
+    paths:
+      - 'models/nhl/nhl_shared_player_challenger.py'
+      - 'models/nhl/test_nhl_shared_player_challenger.py'
+      - '.github/workflows/nhl-shared-player-research.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and test NHL shared draw attribution
+        run: |
+          python -m compileall -q models/nhl/nhl_shared_player_challenger.py models/nhl/test_nhl_shared_player_challenger.py
+          python -m unittest -v models.nhl.test_nhl_shared_player_challenger

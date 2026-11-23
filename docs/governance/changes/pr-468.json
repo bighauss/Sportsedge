@@ -1,0 +1,66 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 468,
+  "base_commit": "51b5893b110f214c40889d02b8b72750192145c2",
+  "protected_paths": [
+    ".github/workflows/nhl-shared-player-research.yml",
+    "models/nhl/nhl_shared_player_challenger.py",
+    "models/nhl/test_nhl_shared_player_challenger.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Opt-in NHL research scenario attribution to stable skater IDs, consistent team shots, goals and goalie saves across regulation periods, with strict scope/input gates and synthetic regression CI; no production model or live prices changed.",
+  "assumptions": [
+    "Player identities, complete 18-skater rosters, TOI, shot rates and conversion rates are supplied research inputs and are not independently source-authenticated.",
+    "The existing team scenario kernel does not model overtime, shootouts or first/last/assists/points/blocks, so those markets remain unsupported.",
+    "This conditional shot-goal allocation is intentionally uncalibrated, does not establish player prop skill and is not wired into production RUN IT.",
+    "Settlement must be independently confirmed as regulation-only; absent a source rule, pricing fails closed.",
+    "All created tests are synthetic and no bettor performance, CLV, risk certification or genuine model improvement is claimed."
+  ],
+  "agent_identity": "ChatGPT coding assistant",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Real graded player-prop calibration of shared NHL regulation simulation",
+    "before": null,
+    "unit": "graded_player_props",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v models.nhl.test_nhl_shared_player_challenger",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "51b5893b110f214c40889d02b8b72750192145c2",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v models.nhl.test_nhl_shared_player_challenger"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
