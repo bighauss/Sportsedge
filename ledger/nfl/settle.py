@@ -93,13 +93,30 @@ def grade_row(row, finals, stats):
 
 
 def _selected(row):
-    """run_nfl exports selected_for_card (True/False); older exports may carry on_card.
-    Neither present -> None ("selection not recorded"); never reconstructed."""
-    for k in ("selected_for_card", "on_card"):
-        v = row.get(k)
-        if v not in (None, ""):
-            return is_held(v)
-    return None
+    """Three states: true selected, false explicitly unselected, None legacy unknown.
+
+    Never infer selection from status/hold/EV. Refuse malformed or conflicting
+    explicit markers instead of silently treating them as a selected bet.
+    """
+    seen = {}
+    for key in ("selected_for_card", "on_card"):
+        raw = row.get(key)
+        if raw in (None, ""):
+            continue
+        if type(raw) is bool:
+            value = raw
+        else:
+            token = str(raw).strip().lower()
+            if token in ("true", "1", "yes"):
+                value = True
+            elif token in ("false", "0", "no"):
+                value = False
+            else:
+                raise SettlementError(f"unrecognized {key} marker {raw!r}")
+        seen[key] = value
+    if len(set(seen.values())) > 1:
+        raise SettlementError("conflicting selected_for_card and on_card markers")
+    return next(iter(seen.values())) if seen else None
 
 
 class SettlementError(ValueError):
@@ -150,8 +167,18 @@ def settle(run_dir, finals, source, stats_path=None, settle_dir=SETTLE_DIR, now=
     stats = load_stats(stats_path, manifest["game"])
     graded = []
     for label in manifest["pick_sets"]:
+        seen_quote_ids = set()
         for i, raw in enumerate(read_csv(os.path.join(run_dir, label, "picks_nfl.csv"))):
             row = normalize_row(raw)
+            row_id = row.get("row_id")
+            if row_id not in (None, ""):
+                if not str(row_id).isdecimal() or int(row_id) != i:
+                    raise SettlementError(f"{label} row {i} has mismatched row_id={row_id!r}")
+            quote_id = row.get("quote_id") or None
+            if quote_id:
+                if quote_id in seen_quote_ids:
+                    raise SettlementError(f"{label} repeated quote_id={quote_id!r}")
+                seen_quote_ids.add(quote_id)
             try:
                 price = price_of(row)
             except ValueError:
@@ -161,7 +188,8 @@ def settle(run_dir, finals, source, stats_path=None, settle_dir=SETTLE_DIR, now=
                 raise SettlementError(f"{label} row {i} claims approved_stake_u={row.get('approved_stake_u')}; "
                                       "research ledger accepts 0 only")
             res, why = grade_row(row, finals, stats)
-            g = {"pick_set": label, "row": i, "market": row.get("market"),
+            g = {"pick_set": label, "row": i, "row_id": int(row_id) if row_id not in (None, "") else None,
+                 "quote_id": quote_id, "market": row.get("market"),
                  "family": market_family(row.get("market")), "pick": row.get("pick"),
                  "player": row.get("player") or None, "line": fnum(row.get("line")),
                  "price": price, "result": res,
