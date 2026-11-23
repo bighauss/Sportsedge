@@ -194,6 +194,14 @@ def build(path):
     chosen = {c["row_id"] for c in card}             # marker only: selection logic above is unchanged
     for o in out:
         o["selected_for_card"] = o["row_id"] in chosen
+    # best_per_group copies row dicts. Sync each display copy to its exact
+    # original identity; a returned card must agree with the exported CSV.
+    for group in (card, doubted, model_only):
+        for c in group:
+            origin = out[c["row_id"]]
+            if c["quote_id"] != origin["quote_id"]:
+                raise ValueError("card row identity differs from exported priced side")
+            c["selected_for_card"] = origin["selected_for_card"]
     return dict(notes=notes, gaps=gaps, out=out, card=card, doubted=doubted,
                 model_only=model_only, held=held)
 
