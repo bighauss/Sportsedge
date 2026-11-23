@@ -35,7 +35,7 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python models/nhl/test_sportsedge_nhl.py",
+    "test_command": "python -m unittest discover -s models/nhl -p test_nhl_shared_scenarios.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
