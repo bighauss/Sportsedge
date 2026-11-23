@@ -1,0 +1,64 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 453,
+  "base_commit": "8608477fbd2cff7b86e2ca69ef0700ce5476ed94",
+  "protected_paths": [
+    ".github/workflows/nfl-key-number-margin.yml",
+    "models/nfl/key_number_margin.py",
+    "models/nfl/test_key_number_margin.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Research-only key-number 3/7 discrete NFL margin challenger beside frozen v3. Adds finite numeric and odds/probability gates, an explicit source-clock as-of training interface, and adversarial synthetic tests; no production pricing changes.",
+  "assumptions": [
+    "Original single-season 68/68 zero-mean exact-margin replay is exploratory and is not a pregame projection comparison.",
+    "Unstamped fit_weights is exploratory; fit_weights_asof enforces supplied final/result-capture timestamps before an as-of clock but does NOT independently authenticate those timestamps.",
+    "No real book odds, prospective graded wagers, or validated edge is established; frozen v3 and original historical records remain untouched."
+  ],
+  "agent_identity": "Claude coding assistant",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "NFL key-number challenger versus frozen v3 on source-authenticated pregame spread results",
+    "before": null,
+    "unit": "paired held-out original-line logloss or Brier",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s models/nfl -p test_key_number_margin.py -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "8608477fbd2cff7b86e2ca69ef0700ce5476ed94",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s models/nfl -p test_key_number_margin.py -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
