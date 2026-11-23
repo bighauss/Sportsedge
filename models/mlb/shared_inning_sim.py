@@ -356,6 +356,10 @@ def run_research(inp, *, draws=1024, seed=7):
                         n_sims=samples["draws"],unresolved_extra_innings=samples["unresolved_extra_innings"],
                         native_runs_away=projection["away"]["runs"],
                         native_runs_home=projection["home"]["runs"],
+                        # Surface model/sim disagreement; uncalibrated PA rates
+                        # must not be advertised as matching the native means.
+                        simulated_runs_away=sum(d["away"] for d in samples["scenarios"])/samples["draws"],
+                        simulated_runs_home=sum(d["home"] for d in samples["scenarios"])/samples["draws"],
                         assumptions=assumptions,offers=offers,
                         census=dict(sorted(Counter(o["status"] for o in offers).items())))
         except (NoForecast,KeyError,TypeError,ValueError,ArithmeticError) as e:
@@ -378,4 +382,11 @@ def run_research(inp, *, draws=1024, seed=7):
             item["offers"] = blocked
             item["census"] = {"NO_FORECAST":len(blocked)}
         report["games"].append(item)
+    # Every offered side (including blocked pitcher/alt props) stays counted.
+    report["attempted_offer_sides"] = sum(len(g.get("offers",[])) for g in report["games"])
+    report["simulated_games"] = sum(g["status"]=="SIMULATED_RESEARCH" for g in report["games"])
+    report["blocked_games"] = report["game_count"] - report["simulated_games"]
+    report["offer_status_census"] = dict(sorted(Counter(
+        o["status"] for g in report["games"] for o in g.get("offers",[])
+    ).items()))
     return report
