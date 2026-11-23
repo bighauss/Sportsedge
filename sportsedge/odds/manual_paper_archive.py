@@ -209,6 +209,98 @@ def _records(raw):
     return parsed
 
 
+def _player_prop_pair_census(entries):
+    """Record both exact line-side slots without inventing missing bookmaker offers.
+
+    A pair is meaningful only within the SAME bookmaker, source surface, event,
+    provider market ID, participant, stat, period, point and observed snapshot.
+    A separate alternate threshold is a separate group. A manually typed CSV
+    cannot authenticate that the bookmaker actually offered either side.
+    """
+    groups = {}
+    one_sided_alts = 0
+    unidentified = 0
+    for entry in entries:
+        row = entry["original_record"]
+        if not isinstance(row, dict):
+            continue
+        fam = row.get("market_family")
+        if fam != "PLAYER_PROP" and not (
+            fam == "ALTERNATE" and (row.get("participant_id") or row.get("stat"))
+        ):
+            continue
+        if not row.get("participant_id") or not row.get("stat"):
+            entry["prop_price_pair_state"] = "PLAYER_ID_OR_STAT_MISSING"
+            entry["state"] = "BLOCKED"
+            entry["reasons"] = sorted(set(entry["reasons"] + ["PLAYER_ID_OR_STAT_MISSING"]))
+            unidentified += 1
+            continue
+        if row.get("side") not in ("OVER", "UNDER"):
+            # YES/NO or X+ outcomes are valid one-sided research observations,
+            # but never a validated two-sided or no-vig quote.
+            entry["prop_price_pair_state"] = "ONE_SIDED_ALT_NO_VIG_PAIR"
+            one_sided_alts += 1
+            continue
+        try:
+            line = _decimal(row["line"], "LINE")
+        except ManualCaptureError:
+            entry["prop_price_pair_state"] = "INVALID_PROP_LINE"
+            entry["state"] = "BLOCKED"
+            entry["reasons"] = sorted(set(entry["reasons"] + ["INVALID_PROP_LINE"]))
+            continue
+        identity = tuple(row.get(x, "") for x in (
+            "sport", "event_id", "book", "source_surface", "market_family",
+            "provider_market_id", "period", "participant_id", "stat",
+            "observed_at_utc",
+        )) + (str(line.normalize()),)
+        groups.setdefault(identity, []).append(entry)
+
+    counts = Counter()
+    for entries_at_line in groups.values():
+        by_side = {side: [] for side in ("OVER", "UNDER")}
+        for entry in entries_at_line:
+            by_side[entry["original_record"]["side"]].append(entry)
+        if any(len(group) > 1 for group in by_side.values()):
+            state = "AMBIGUOUS_DUPLICATE_SIDE"
+            for entry in entries_at_line:
+                entry["state"] = "BLOCKED"
+                entry["reasons"] = sorted(set(
+                    entry["reasons"] + ["AMBIGUOUS_PROP_SAME_SIDE"]
+                ))
+        elif len(by_side["OVER"]) == len(by_side["UNDER"]) == 1:
+            if all(e["original_record"]["offer_state"] == "OBSERVED_PRICE"
+                   and e["state"] == "PAPER_UNVERIFIED"
+                   for e in entries_at_line):
+                state = "EXACT_BOTH_SIDES_RECORDED_UNVERIFIED"
+            else:
+                state = "PAIR_HAS_MISSING_OR_BLOCKED_SOURCE"
+        else:
+            missing_side = "OVER" if not by_side["OVER"] else "UNDER"
+            if any(e["original_record"]["offer_state"] == "NOT_CAPTURED"
+                   for e in entries_at_line):
+                state = "ONE_OR_BOTH_SIDES_EXPLICITLY_NOT_CAPTURED"
+            else:
+                state = "COUNTERPART_" + missing_side + "_NOT_RECORDED"
+        counts[state] += 1
+        for entry in entries_at_line:
+            entry["prop_price_pair_state"] = state
+            entry["no_vig_pair_verified"] = False
+
+    return {
+        "player_prop_and_alt_line_groups": len(groups),
+        "two_sided_recorded_unverified": counts["EXACT_BOTH_SIDES_RECORDED_UNVERIFIED"],
+        "source_blocked_pair_groups": counts["PAIR_HAS_MISSING_OR_BLOCKED_SOURCE"],
+        "ambiguous_same_side_groups": counts["AMBIGUOUS_DUPLICATE_SIDE"],
+        "explicit_missing_side_groups": counts["ONE_OR_BOTH_SIDES_EXPLICITLY_NOT_CAPTURED"],
+        "unrecorded_over_groups": counts["COUNTERPART_OVER_NOT_RECORDED"],
+        "unrecorded_under_groups": counts["COUNTERPART_UNDER_NOT_RECORDED"],
+        "one_sided_alt_outcomes_unverified": one_sided_alts,
+        "missing_player_or_stat_identity_rows": unidentified,
+        "two_sided_no_vig_authenticated": False,
+        "bookmaker_offer_completeness_authenticated": False,
+    }
+
+
 def analyze(raw, *, captured_at_utc):
     """Read-only analysis. All input records are retained; never certifies A-E."""
     captured = _utc(captured_at_utc, "LOCAL_CAPTURE")
@@ -245,7 +337,9 @@ def analyze(raw, *, captured_at_utc):
                      "original_record": payload, "state": state,
                      "reasons": reasons + ["MANUAL_SOURCE_NOT_INDEPENDENTLY_AUTHENTICATED"],
                      "approved_stake_u": 0, "official_counted": 0})
+    prop_pair_census = _player_prop_pair_census(rows)
     return {
+        "prop_pair_census": prop_pair_census,
         "schema": SCHEMA, "created_at_utc": captured_at_utc,
         "original_csv_sha256": "sha256:" + sha256(raw).hexdigest(),
         "original_csv_bytes": len(raw),
