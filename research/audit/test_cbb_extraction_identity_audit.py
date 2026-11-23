@@ -1,7 +1,13 @@
 """Synthetic-only CBB extraction identity regression tests."""
 import copy
+import csv
+import io
+import json
+import os
+from pathlib import Path
+import tempfile
 import unittest
-from research.audit.cbb_extraction_identity_audit import reconcile
+from research.audit.cbb_extraction_identity_audit import reconcile, main, REPO_ROOT
 
 
 def case(event, source, market="full_game", away_spread="-2.5", away_ml="-148"):
@@ -68,6 +74,86 @@ class ExtractionReconcileTest(unittest.TestCase):
         x["source_file"] = ""
         with self.assertRaisesRegex(ValueError, "CONFLICT_ROW_MISSING_SOURCE_FIELDS"):
             reconcile([x])
+
+    def test_clean_event_target_occupancy_blocks_full_disputed_group(self):
+        x = case("A Team AT Home One", "B Team AT Home Two")
+        y = case("B Team AT Home Two", "A Team AT Home One")
+        clean = case("A Team AT Home One", "A Team AT Home One")
+        clean["identity_status"] = "OK"
+        r = reconcile([x, y, clean])
+        self.assertEqual(r["disputed_rows"], 2)
+        self.assertEqual(len(r["blocked"]), 2)
+        self.assertEqual(r["candidate_reassignments"], [])
+
+    @staticmethod
+    def _write_rows(path, rows):
+        data = io.StringIO(newline="")
+        w = csv.DictWriter(data, fieldnames=list(rows[0]), lineterminator="\\n")
+        w.writeheader()
+        w.writerows(rows)
+        path.write_text(data.getvalue(), encoding="utf-8")
+        path.chmod(0o600)
+
+    def test_cli_private_0600_source_and_report_create_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            directory.chmod(0o700)
+            source, result = directory / "source.csv", directory / "result.json"
+            self._write_rows(source, [case("A Team AT Home One", "A Team AT Home One")])
+            old = source.read_bytes()
+            self.assertEqual(main([str(source), "--out", str(result)]), 0)
+            self.assertEqual(source.read_bytes(), old)
+            self.assertEqual(result.stat().st_mode & 0o077, 0)
+            self.assertFalse(json.loads(result.read_text())["original_pdf_authenticated"])
+            with self.assertRaises(FileExistsError):
+                main([str(source), "--out", str(result)])
+
+    def test_public_repo_input_and_output_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            directory.chmod(0o700)
+            source = directory / "source.csv"
+            self._write_rows(source, [case("A Team AT Home One", "A Team AT Home One")])
+            with self.assertRaisesRegex(ValueError, "PUBLIC_GIT_REPOSITORY_PATH_REFUSED"):
+                main([str(source), "--out", str(REPO_ROOT / "unsafe-private.json")])
+            with self.assertRaisesRegex(ValueError, "PUBLIC_GIT_REPOSITORY_PATH_REFUSED"):
+                main([str(REPO_ROOT / "research" / "audit" / "test_cbb_extraction_identity_audit.py"),
+                      "--out", str(directory / "out.json")])
+
+    def test_unsafe_source_permission_parent_or_symlink_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            directory.chmod(0o700)
+            source = directory / "source.csv"
+            self._write_rows(source, [case("A Team AT Home One", "A Team AT Home One")])
+            source.chmod(0o644)
+            with self.assertRaisesRegex(ValueError, "SOURCE_NOT_OWNER_ONLY_0600"):
+                main([str(source), "--out", str(directory / "out.json")])
+            source.chmod(0o600)
+            directory.chmod(0o755)
+            with self.assertRaisesRegex(ValueError, "DESTINATION_DIRECTORY_MUST_BE_PRIVATE_0700"):
+                main([str(source), "--out", str(directory / "out.json")])
+            directory.chmod(0o700)
+            link = directory / "link.csv"
+            link.symlink_to(source)
+            with self.assertRaisesRegex(ValueError, "SYMLINK_SOURCE_OR_OUTPUT_REFUSED"):
+                main([str(link), "--out", str(directory / "out.json")])
+
+    def test_csv_duplicate_header_and_ragged_rows_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            directory.chmod(0o700)
+            source = directory / "bad.csv"
+            self._write_rows(source, [case("A Team AT Home One", "A Team AT Home One")])
+            raw = source.read_text()
+            header, rest = raw.split("\\n", 1)
+            cols = header.split(",")
+            cols[-1] = cols[0]
+            source.write_text(",".join(cols)+"\\n"+rest)
+            source.chmod(0o600)
+            with self.assertRaisesRegex(ValueError, "DUPLICATE_OR_MISSING_CSV_HEADERS"):
+                main([str(source), "--out", str(directory / "out.json")])
+
 
 
 if __name__ == "__main__":
