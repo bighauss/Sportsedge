@@ -1,0 +1,30 @@
+name: NBA source-bound prior player rates (synthetic)
+on:
+  pull_request:
+    paths:
+      - 'models/nba/nba_pit_boxscore_rates.py'
+      - 'models/nba/test_nba_pit_boxscore_rates.py'
+      - '.github/workflows/nba-pit-player-rates.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/nba/nba_pit_boxscore_rates.py'
+      - 'models/nba/test_nba_pit_boxscore_rates.py'
+      - '.github/workflows/nba-pit-player-rates.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-original-receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile source and tests without provider access
+        run: python -m compileall -q models/nba/nba_pit_boxscore_rates.py models/nba/test_nba_pit_boxscore_rates.py
+      - name: Validate synthetic pregame receipt and player-rate guardrails
+        run: python -m unittest -v models.nba.test_nba_pit_boxscore_rates
