@@ -34,5 +34,18 @@ def test_all():
     print(open(res["md"]).read())
     print(f"OK: {len(picks)} picks; markets: {sorted({p['market'] for p in picks})}")
 
+def test_period_ml_tie_is_push():
+    proj = {"margin": 2.0, "total": 226.0, "home": "H", "away": "A", "home_pts": 114.0, "away_pts": 112.0}
+    for seg in ("1H", "1Q"):
+        ph, uh, _, _ = m.price_game_market({"market": f"{seg}_ML", "selection": "H", "line": ""}, proj)
+        pa, ua, _, _ = m.price_game_market({"market": f"{seg}_ML", "selection": "A", "line": ""}, proj)
+        assert uh > 0.02 and abs(uh - ua) < 1e-12, (seg, uh, ua)
+        assert abs(ph + pa + uh - 1) < 1e-9, (seg, ph, pa, uh)
+    fp, fu, _, _ = m.price_game_market({"market": "ML", "selection": "H", "line": ""}, proj)
+    fa, _, _, _ = m.price_game_market({"market": "ML", "selection": "A", "line": ""}, proj)
+    assert fu == 0.0 and abs(fp + fa - 1) < 1e-9
+
+
 if __name__ == "__main__":
     test_all()
+    test_period_ml_tie_is_push()
