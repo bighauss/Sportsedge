@@ -22,6 +22,8 @@ class SharedInningTests(unittest.TestCase):
         c=sim.simulate("SYNTH",profiles(),draws=30,seed=78)
         self.assertEqual(a["scenario_sha256"],b["scenario_sha256"])
         self.assertNotEqual(a["scenario_sha256"],c["scenario_sha256"])
+        self.assertNotEqual(a["scenario_sha256"],
+                            sim.simulate("OTHER",profiles(),draws=30,seed=77)["scenario_sha256"])
         self.assertEqual(a["scenarios"],b["scenarios"])
 
     def test_same_draw_f5_and_first_inning_consistency(self):
