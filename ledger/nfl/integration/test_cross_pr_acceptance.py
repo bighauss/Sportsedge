@@ -212,5 +212,88 @@ class CrossPRRunnerLedgerAcceptance(unittest.TestCase):
             }, sort_keys=True))
 
 
+    def test_real_v5_simulation_passes_through_runner_and_ledger(self):
+        """No mock of v5.run: exercise a small synthetic board through real 100k MC.
+
+        Independent of the deterministic selection-fixture test above. It
+        proves the true simulation-backed runner export fits the ledger, not
+        profitability, predictive calibration, or authentic odds.
+        """
+        now = datetime(2026, 11, 23, 23, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            board = tmp / "live-engine-synthetic-board.csv"
+            base = dict(sport="NFL", home="WAS", away="CIN",
+                        home_proj=24, away_proj=20)
+            write_csv(board, [
+                dict(base, market="SPREAD", line=-3.5, price_a=-110, price_b=-110),
+                dict(base, market="TOTAL", line=44.5, price_a=-110, price_b=-110),
+                dict(base, market="ML", line="", price_a=-180, price_b=150),
+            ], ["sport", "home", "away", "home_proj", "away_proj",
+                "market", "line", "price_a", "price_b"])
+            projection = tmp / "real-model-projection.json"
+            projection.write_text(json.dumps({
+                "proj_margin": 4, "proj_total": 44,
+                "market_margin": 3.5, "market_total": 44.5
+            }))
+            original_bytes = {str(p): sha256(p) for p in (board, projection)}
+            result = run_nfl.build(str(board))     # genuinely calls v5.run, 100,000 MC
+            self.assertGreater(len(result["out"]), 0)
+            self.assertTrue(all(o["approved_stake_u"] == 0 for o in result["out"]))
+            chosen = {(c["row_id"], c["quote_id"]) for c in result["card"]}
+            self.assertEqual(chosen, {(o["row_id"], o["quote_id"])
+                                      for o in result["out"] if o["selected_for_card"]})
+            self.assertTrue(all(c["selected_for_card"] is True for c in result["card"]))
+            cwd = Path.cwd()
+            try:
+                os.chdir(tmp)
+                with patch.object(run_nfl, "build", return_value=result):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        run_nfl.main(str(board))
+            finally:
+                os.chdir(cwd)
+            exports = list(tmp.glob("picks_nfl_*.csv"))
+            self.assertEqual(len(exports), 1)
+            with exports[0].open(newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(len(rows), len(result["out"]))
+            csv_chosen = {(int(r["row_id"]), r["quote_id"]) for r in rows
+                          if r["selected_for_card"] == "True"}
+            self.assertEqual(csv_chosen, chosen)
+            original_bytes[str(exports[0])] = sha256(exports[0])
+            run_dir = freeze.freeze(
+                "CIN@WAS", str(board), str(projection), {"simulator": str(exports[0])},
+                {"runner": os.environ["PINNED_RUNNER_SHA"],
+                 "ledger": os.environ["LEDGER_HEAD_SHA"]},
+                "2026-11-24T01:15:00Z", runs_dir=str(tmp / "runs-real"),
+                now=now)
+            frozen = {str(p): sha256(p) for p in Path(run_dir).rglob("*") if p.is_file()}
+            _, record = settle.settle(
+                run_dir, {"away": "CIN", "home": "WAS",
+                          "away_score": 27, "home_score": 24},
+                "SYNTHETIC_FIXTURE_NOT_REAL_RESULTS",
+                settle_dir=str(tmp / "settlements-real"), now=now)
+            self.assertTrue(record["run_integrity_ok"])
+            self.assertEqual(len(record["graded"]), len(rows))
+            self.assertEqual(chosen, {(g["row_id"], g["quote_id"])
+                                      for g in record["graded"] if g["on_card"] is True})
+            self.assertTrue(all(g["approved_stake_u"] == 0 for g in record["graded"]))
+            self.assertEqual(freeze.verify(run_dir), [])
+            self.assertEqual(frozen, {str(p): sha256(p) for p in
+                                      Path(run_dir).rglob("*") if p.is_file()})
+            self.assertEqual(original_bytes, {str(p): sha256(p)
+                                              for p in (board, projection, exports[0])})
+            print("SYNTHETIC REAL-SIMULATOR INTEGRATION PASS", json.dumps({
+                "runner_sha": os.environ["PINNED_RUNNER_SHA"],
+                "ledger_sha": os.environ["LEDGER_HEAD_SHA"],
+                "board_sha256": sha256(board),
+                "row_count": len(rows),
+                "selected_count": len(chosen),
+                "frozen_mismatches": len(freeze.verify(run_dir)),
+                "approved_stake_u": 0,
+                "synthetic_only": True,
+            }, sort_keys=True))
+
+
 if __name__ == "__main__":
     unittest.main()
