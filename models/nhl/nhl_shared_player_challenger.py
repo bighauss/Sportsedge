@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import random
+from datetime import datetime, timezone
 
 
 class Blocked(ValueError):
@@ -25,9 +26,22 @@ _GOALIE_KEYS = tuple(f"{p}_SAVES" for p in _PERIODS)
 _SCOPE = "REGULATION_ONLY"
 
 
-def _profile_rows(profiles):
+def _utc(value):
+    if not isinstance(value, str) or not value.strip():
+        raise Blocked("MISSING_FEATURE_AVAILABILITY_CLOCK")
+    try:
+        x = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if x.tzinfo is None or x.utcoffset() is None:
+            raise ValueError("missing timezone")
+        return x.astimezone(timezone.utc)
+    except ValueError as exc:
+        raise Blocked("INVALID_FEATURE_AVAILABILITY_CLOCK") from exc
+
+
+def _profile_rows(profiles, *, freeze_utc):
     if not isinstance(profiles, (list, tuple)) or len(profiles) != 36:
         raise Blocked("NO_FORECAST_EXACT_18_SKATERS_EACH_SIDE_REQUIRED")
+    frozen = _utc(freeze_utc)
     by_side = {"home": [], "away": []}
     ids = set()
     for r in profiles:
@@ -38,6 +52,13 @@ def _profile_rows(profiles):
                 or side not in by_side):
             raise Blocked("MISSING_DUPLICATE_OR_AMBIGUOUS_PLAYER_ID")
         ids.add(pid)
+        source_sha = r.get("feature_source_sha256")
+        if (not isinstance(source_sha, str) or len(source_sha) != 64
+                or any(c not in "0123456789abcdef" for c in source_sha)):
+            raise Blocked("MISSING_INVALID_PLAYER_SOURCE_SHA256")
+        available_utc = r.get("feature_available_utc")
+        if _utc(available_utc) > frozen:
+            raise Blocked("PLAYER_FEATURE_NOT_AVAILABLE_AT_FREEZE")
         for key in ("projected_toi_minutes", "shots_per_60", "goals_per_shot"):
             x = r.get(key)
             if (isinstance(x, bool) or not isinstance(x, (int, float))
@@ -53,6 +74,8 @@ def _profile_rows(profiles):
             "projected_toi_minutes": float(r["projected_toi_minutes"]),
             "shots_per_60": float(r["shots_per_60"]),
             "goals_per_shot": float(r["goals_per_shot"]),
+            "feature_available_utc": available_utc,
+            "feature_source_sha256": source_sha,
         })
     if any(len(by_side[side]) != 18 for side in ("home", "away")):
         raise Blocked("NO_FORECAST_EXACT_18_SKATERS_EACH_SIDE_REQUIRED")
@@ -89,7 +112,7 @@ def allocate(params, scenarios, skaters, goalie_ids, *, seed=7):
         raise Blocked("INVALID_SEED")
     if not isinstance(scenarios, (list, tuple)) or not 1 <= len(scenarios) <= 50000:
         raise Blocked("INVALID_SCENARIO_COUNT")
-    sides, skater_ids = _profile_rows(skaters)
+    sides, skater_ids = _profile_rows(skaters, freeze_utc=params.frozen_utc)
     if (not isinstance(goalie_ids, dict) or set(goalie_ids) != {"home", "away"}
             or any(not isinstance(g, str) or not g.strip() for g in goalie_ids.values())
             or goalie_ids["home"] == goalie_ids["away"]
