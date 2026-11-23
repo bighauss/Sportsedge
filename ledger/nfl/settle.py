@@ -23,8 +23,8 @@ import argparse, json, os, sys
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import (SETTLE_DIR, _profit, fnum, market_family, price_of, read_csv,  # noqa: E402
-                    read_json, truthy)
+from common import (SETTLE_DIR, _profit, fnum, market_family, normalize_row, price_of,  # noqa: E402
+                    read_csv, read_json, is_held)
 from freeze import verify  # noqa: E402
 
 
@@ -36,7 +36,10 @@ def _cmp(x, line, side):
 
 
 def grade_row(row, finals, stats):
+    row = normalize_row(row)
     market = (row.get("market") or "").strip().lower()
+    if market.startswith(("unsupported_", "unparsed_")):
+        return "NG", f"{market.split('_', 1)[0]} market {row.get('v5_market')}"
     pick = (row.get("pick") or "").strip()
     pl = pick.lower()
     line = fnum(row.get("line"))
@@ -56,20 +59,24 @@ def grade_row(row, finals, stats):
         if line is None:
             return "NG", "prop missing line"
         return _cmp(val, line, side), None
-    if "_" in market:
+    if "_" in market and market.split("_", 1)[0].upper() in ("1Q", "2Q", "3Q", "4Q", "1H", "2H"):
         per, kind = market.split("_", 1)
         p = (finals.get("periods") or {}).get(per.upper())
         if not p:
             return "NG", f"no {per.upper()} score"
         a, h = float(p[0]), float(p[1])
     else:
-        kind = fam
+        kind = market if market in ("home_tt", "away_tt") else fam
         a, h = float(finals["away_score"]), float(finals["home_score"])
     kind = {"moneyline": "ml", "h2h": "ml", "spreads": "spread", "totals": "total"}.get(kind, kind)
     if kind == "total":
         if line is None:
             return "NG", "total missing line"
         return _cmp(a + h, line, "over" if pl.startswith("o") else "under"), None
+    if kind in ("home_tt", "away_tt"):
+        if line is None:
+            return "NG", "team total missing line"
+        return _cmp(h if kind == "home_tt" else a, line, "over" if pl.startswith("o") else "under"), None
     team = pick.split()[0].upper()
     if team not in (away, home):
         return "NG", f"pick team {team} not in {away}@{home}"
@@ -98,7 +105,8 @@ def settle(run_dir, finals, source, stats_path=None, settle_dir=SETTLE_DIR, now=
     stats = load_stats(stats_path)
     graded = []
     for label in manifest["pick_sets"]:
-        for i, row in enumerate(read_csv(os.path.join(run_dir, label, "picks_nfl.csv"))):
+        for i, raw in enumerate(read_csv(os.path.join(run_dir, label, "picks_nfl.csv"))):
+            row = normalize_row(raw)
             try:
                 price = price_of(row)
             except ValueError:
@@ -109,10 +117,11 @@ def settle(run_dir, finals, source, stats_path=None, settle_dir=SETTLE_DIR, now=
                  "player": row.get("player") or None, "line": fnum(row.get("line")),
                  "price": price, "result": res,
                  "units": round(_profit(price, res), 4) if res in ("W", "L", "P") else None,
-                 "held": truthy(row.get("held")), "status": row.get("status") or None,
+                 "held": is_held(row.get("held")), "status": row.get("status") or None,
                  "model_p": fnum(row.get("model_p")), "market_p": fnum(row.get("market_p")),
                  "blend_p": fnum(row.get("blend_p")), "ev": fnum(row.get("ev")),
-                 "model_ev": fnum(row.get("model_ev"))}
+                 "model_ev": fnum(row.get("model_ev")),
+                 "approved_stake_u": fnum(row.get("approved_stake_u"), 0.0)}
             if why:
                 g["reason"] = why
             graded.append(g)

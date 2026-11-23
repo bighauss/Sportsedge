@@ -10,7 +10,7 @@ for each. Model vs market: uses projection/frozen.json keys
 import argparse, glob, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import RUNS_DIR, SETTLE_DIR, fnum, read_json  # noqa: E402
+from common import RUNS_DIR, SETTLE_DIR, fnum, projection_numbers, read_json  # noqa: E402
 
 EV_BUCKETS = [(-9.0, 0.0, "<0%"), (0.0, 0.02, "0-2%"), (0.02, 0.05, "2-5%"),
               (0.05, 0.10, "5-10%"), (0.10, 9.0, "10%+")]
@@ -24,7 +24,7 @@ def load_week(date_from, date_to, runs_dir=RUNS_DIR, settle_dir=SETTLE_DIR):
         if not (date_from <= d <= date_to):
             continue
         rd = os.path.dirname(mpath)
-        proj = read_json(os.path.join(rd, "projection", "frozen.json"))
+        proj = projection_numbers(read_json(os.path.join(rd, "projection", "frozen.json")))
         sp = os.path.join(settle_dir, m["run_id"] + ".json")
         settle = read_json(sp)[-1] if os.path.exists(sp) else None
         out.append({"manifest": m, "projection": proj, "settlement": settle})
