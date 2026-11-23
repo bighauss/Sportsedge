@@ -88,7 +88,7 @@ class ExtractionReconcileTest(unittest.TestCase):
     @staticmethod
     def _write_rows(path, rows):
         data = io.StringIO(newline="")
-        w = csv.DictWriter(data, fieldnames=list(rows[0]), lineterminator="\\n")
+        w = csv.DictWriter(data, fieldnames=list(rows[0]), lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
         path.write_text(data.getvalue(), encoding="utf-8")
@@ -146,10 +146,10 @@ class ExtractionReconcileTest(unittest.TestCase):
             source = directory / "bad.csv"
             self._write_rows(source, [case("A Team AT Home One", "A Team AT Home One")])
             raw = source.read_text()
-            header, rest = raw.split("\\n", 1)
+            header, rest = raw.split("\n", 1)
             cols = header.split(",")
             cols[-1] = cols[0]
-            source.write_text(",".join(cols)+"\\n"+rest)
+            source.write_text(",".join(cols)+"\n"+rest)
             source.chmod(0o600)
             with self.assertRaisesRegex(ValueError, "DUPLICATE_OR_MISSING_CSV_HEADERS"):
                 main([str(source), "--out", str(directory / "out.json")])
