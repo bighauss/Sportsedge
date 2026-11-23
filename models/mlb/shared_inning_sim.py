@@ -170,6 +170,11 @@ def simulate(game_id, profiles, *, draws=1024, seed=7, max_innings=12):
     rng = random.Random(seed)
     all_draws = []
     stream_hash = hashlib.sha256()
+    # Bind the transcript fingerprint to exact game, seed, model inputs and rules.
+    header = {"game_id":game_id,"seed":seed,"max_innings":max_innings,
+              "draws":draws,"profiles":profiles,"model_schema":"mlb-pa-inning-v1"}
+    stream_hash.update(json.dumps(header,sort_keys=True,separators=(",",":"),
+                                  allow_nan=False).encode())
     for _ in range(draws):
         scores = {"away":0,"home":0}
         positions = {"away":[0],"home":[0]}
