@@ -8,11 +8,11 @@
     "models/nfl/test_key_number_margin.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Adds a key-number-aware NFL margin challenger (re-weighted integer margins at 3 and 7, PIT fit, push-aware cover/EV) beside frozen v3; seven regressions and CI.",
+  "change_summary": "Research-only key-number 3/7 discrete NFL margin challenger beside frozen v3. Adds finite numeric and odds/probability gates, an explicit source-clock as-of training interface, and adversarial synthetic tests; no production pricing changes.",
   "assumptions": [
-    "Evidence is one 2026 season (136 finals) from a private file; replay only.",
-    "Walk-forward used zero-mean margins, not pregame projections.",
-    "Challenger output never replaces frozen v3 EV."
+    "Original single-season 68/68 zero-mean exact-margin replay is exploratory and is not a pregame projection comparison.",
+    "Unstamped fit_weights is exploratory; fit_weights_asof enforces supplied final/result-capture timestamps before an as-of clock but does NOT independently authenticate those timestamps.",
+    "No real book odds, prospective graded wagers, or validated edge is established; frozen v3 and original historical records remain untouched."
   ],
   "agent_identity": "Claude coding assistant",
   "permissions": {
@@ -24,9 +24,9 @@
     "merge_rights": "REPO_RULES_ONLY"
   },
   "baseline": {
-    "metric": "Duplicate keyed-input rows silently overwritten",
+    "metric": "NFL key-number challenger versus frozen v3 on source-authenticated pregame spread results",
     "before": null,
-    "unit": "rows",
+    "unit": "paired held-out original-line logloss or Brier",
     "source_state": "UNKNOWN"
   },
   "golden": {
@@ -36,14 +36,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python -m unittest -v test_key_number_margin",
+    "test_command": "python -m unittest discover -s models/nfl -p test_key_number_margin.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "8608477fbd2cff7b86e2ca69ef0700ce5476ed94",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "python -m unittest discover -s models/nfl -p test_runit_ledger.py -v"
+    "verification_command": "python -m unittest discover -s models/nfl -p test_key_number_margin.py -v"
   },
   "cost": {
     "currency": "USD",
