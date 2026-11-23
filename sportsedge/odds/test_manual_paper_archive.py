@@ -98,6 +98,114 @@ class ManualPaperArchiveTest(unittest.TestCase):
         self.assertEqual(report["paper_unverified_rows"], 2)
         self.assertEqual(len(report["by_sport_market_offer_state"]), 2)
 
+    def test_player_prop_both_exact_sides_saved_separately(self):
+        over = sample(market_family="PLAYER_PROP", provider_market_id="market1",
+                      participant_id="nfl-p1", stat="PASS_YDS",
+                      line="249.5", selection_id="p1-over", side="OVER")
+        under = dict(over, selection_id="p1-under", side="UNDER",
+                     price_american="+104")
+        report = analyze(csvbytes(over, under), captured_at_utc=CAPTURE)
+        self.assertEqual(report["total_records"], 2)
+        self.assertEqual(report["blocked_rows"], 0)
+        self.assertEqual(report["prop_pair_census"]["two_sided_recorded_unverified"], 1)
+        self.assertEqual([r["original_record"]["price_american"] for r in report["rows"]],
+                         ["-110", "+104"])
+        self.assertTrue(all(r["prop_price_pair_state"] ==
+                            "EXACT_BOTH_SIDES_RECORDED_UNVERIFIED" for r in report["rows"]))
+        self.assertFalse(report["prop_pair_census"]["two_sided_no_vig_authenticated"])
+
+    def test_missing_under_is_not_inferred(self):
+        over = sample(market_family="PLAYER_PROP", provider_market_id="market1",
+                      participant_id="nfl-p1", stat="RUSH_YDS",
+                      line="85.5", selection_id="p1-o", side="OVER")
+        result = analyze(csvbytes(over), captured_at_utc=CAPTURE)
+        self.assertEqual(result["total_records"], 1)
+        self.assertEqual(result["prop_pair_census"]["unrecorded_under_groups"], 1)
+        self.assertEqual(result["rows"][0]["prop_price_pair_state"],
+                         "COUNTERPART_UNDER_NOT_RECORDED")
+
+    def test_explicitly_unavailable_under_preserved(self):
+        over = sample(market_family="PLAYER_PROP", provider_market_id="market1",
+                      participant_id="nfl-p1", stat="REC_YDS",
+                      line="44.5", selection_id="p1-o", side="OVER")
+        under = dict(over, selection_id="p1-u", side="UNDER",
+                     price_american="", offer_state="NOT_CAPTURED",
+                     exclusion_reason="NO_PRICE")
+        result = analyze(csvbytes(over, under), captured_at_utc=CAPTURE)
+        self.assertEqual(result["total_records"], 2)
+        self.assertEqual(result["prop_pair_census"]["explicit_missing_side_groups"], 0)
+        self.assertEqual(result["prop_pair_census"]["source_blocked_pair_groups"], 1)
+        self.assertEqual(result["rows"][1]["original_record"]["offer_state"], "NOT_CAPTURED")
+
+    def test_alt_ladder_rungs_have_distinct_two_sided_prices(self):
+        records = []
+        for rung in ("40.5", "60.5", "80.5"):
+            for side in ("OVER", "UNDER"):
+                records.append(sample(market_family="ALTERNATE", provider_market_id="m-alt",
+                                      participant_id="nfl-p1", stat="REC_YDS",
+                                      line=rung, selection_id="p1-"+side+rung,
+                                      side=side, price_american="-110"))
+        result = analyze(csvbytes(*records), captured_at_utc=CAPTURE)
+        self.assertEqual(result["prop_pair_census"]["player_prop_and_alt_line_groups"], 3)
+        self.assertEqual(result["prop_pair_census"]["two_sided_recorded_unverified"], 3)
+        self.assertEqual(result["total_records"], 6)
+
+    def test_alt_xplus_single_yes_is_not_two_sided(self):
+        item = sample(market_family="ALTERNATE", provider_market_id="m-alt",
+                      participant_id="nfl-p1", stat="REC_YDS",
+                      line="100", selection_id="p1-100plus", side="YES", price_american="+325")
+        result = analyze(csvbytes(item), captured_at_utc=CAPTURE)
+        self.assertEqual(result["prop_pair_census"]["one_sided_alt_outcomes_unverified"], 1)
+        self.assertEqual(result["prop_pair_census"]["two_sided_recorded_unverified"], 0)
+        self.assertEqual(result["rows"][0]["prop_price_pair_state"],
+                         "ONE_SIDED_ALT_NO_VIG_PAIR")
+
+    def test_book_or_quote_time_or_market_id_never_cross_paired(self):
+        over = sample(market_family="PLAYER_PROP", provider_market_id="m1",
+                      participant_id="nfl-p1", stat="PASS_YDS",
+                      line="251.5", selection_id="p1-o", side="OVER")
+        under = dict(over, selection_id="p1-u", side="UNDER", book="OtherBook")
+        result = analyze(csvbytes(over, under), captured_at_utc=CAPTURE)
+        self.assertEqual(result["prop_pair_census"]["unrecorded_under_groups"], 1)
+        self.assertEqual(result["prop_pair_census"]["unrecorded_over_groups"], 1)
+        under["book"] = "DK"
+        under["observed_at_utc"] = "2026-11-15T17:58:00Z"
+        result = analyze(csvbytes(over, under), captured_at_utc=CAPTURE)
+        self.assertEqual(result["prop_pair_census"]["two_sided_recorded_unverified"], 0)
+        under["observed_at_utc"] = over["observed_at_utc"]
+        under["provider_market_id"] = "m2"
+        result = analyze(csvbytes(over, under), captured_at_utc=CAPTURE)
+        self.assertEqual(result["prop_pair_census"]["two_sided_recorded_unverified"], 0)
+
+    def test_conflicting_two_overs_block_all_copies(self):
+        a = sample(market_family="PLAYER_PROP", provider_market_id="m1",
+                   participant_id="nfl-p1", stat="RECEPTIONS", line="5.5",
+                   selection_id="a", side="OVER")
+        b = dict(a, selection_id="b", price_american="-115")
+        u = dict(a, selection_id="c", side="UNDER")
+        report = analyze(csvbytes(a, b, u), captured_at_utc=CAPTURE)
+        self.assertEqual(report["blocked_rows"], 3)
+        self.assertEqual(report["prop_pair_census"]["ambiguous_same_side_groups"], 1)
+        self.assertTrue(all("AMBIGUOUS_PROP_SAME_SIDE" in row["reasons"]
+                            for row in report["rows"]))
+
+    def test_player_stat_identity_required(self):
+        item = sample(market_family="PLAYER_PROP", provider_market_id="m1",
+                      stat="PASS_YDS", line="242.5", selection_id="p1",
+                      side="OVER", participant_id="")
+        report = analyze(csvbytes(item), captured_at_utc=CAPTURE)
+        self.assertEqual(report["blocked_rows"], 1)
+        self.assertEqual(report["prop_pair_census"]["missing_player_or_stat_identity_rows"], 1)
+        self.assertIn("PLAYER_ID_OR_STAT_MISSING", report["rows"][0]["reasons"])
+
+    def test_decimal_equivalent_line_uses_one_group(self):
+        a = sample(market_family="PLAYER_PROP", provider_market_id="m1",
+                   participant_id="nfl-p1", stat="PASS_YDS", line="250.50",
+                   selection_id="o", side="OVER")
+        b = dict(a, selection_id="u", side="UNDER", line="250.5")
+        report = analyze(csvbytes(a, b), captured_at_utc=CAPTURE)
+        self.assertEqual(report["prop_pair_census"]["two_sided_recorded_unverified"], 1)
+
     def test_private_exclusive_owner_only_archive(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
