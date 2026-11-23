@@ -140,7 +140,12 @@ class SharedInningTests(unittest.TestCase):
         r=sim.run_research(inp,draws=2,seed=7)
         self.assertEqual(r["game_count"],2)
         self.assertEqual(r["games"][0]["status"],"NO_FORECAST")
-        self.assertTrue(r["games"][0]["offers"])
+        expected = (sum(o["game_id"]=="G1" for o in inp["odds"]) +
+                    2*sum(o["game_id"]=="G1" for o in inp["prop_odds"]))
+        self.assertEqual(len(r["games"][0]["offers"]),expected)
+        self.assertEqual(r["games"][0]["census"],{"NO_FORECAST":expected})
+        self.assertTrue(any(o["market"]=="K" and o["selection"]=="under"
+                            for o in r["games"][0]["offers"]))
 
 
 if __name__=="__main__":
