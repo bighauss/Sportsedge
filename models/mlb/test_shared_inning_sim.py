@@ -11,6 +11,23 @@ def profiles():
                   for i in range(1,10)] for side in ("away","home")}
 
 
+
+def completed_fixture():
+    """Two predetermined *completed* synthetic events, never filtered from sims."""
+    return {
+        "game_id":"SYNTH","draws":2,"scenario_sha256":"synthetic-complete-fixture",
+        "unresolved_extra_innings":0,
+        "scenarios":[
+            {"away":4,"home":3,"f5_away":1,"f5_home":2,
+             "first_away":0,"first_home":0,"unresolved":False,
+             "players":{"a1":{"PA":4,"HITS":1,"TB":4,"HR":1}}},
+            {"away":2,"home":5,"f5_away":1,"f5_home":3,
+             "first_away":1,"first_home":0,"unresolved":False,
+             "players":{"a1":{"PA":4,"HITS":0,"TB":0,"HR":0}}},
+        ],
+    }
+
+
 class SharedInningTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -69,13 +86,14 @@ class SharedInningTests(unittest.TestCase):
 
     def test_player_props_use_own_same_draw(self):
         pid="a1"
+        completed=completed_fixture()
         for market,line in (("HITS",.5),("TB",1.5),("HR",.5)):
-            a=sim.settle(self.samples,market,"over",line,player_id=pid)
-            b=sim.settle(self.samples,market,"under",line,player_id=pid)
+            a=sim.settle(completed,market,"over",line,player_id=pid)
+            b=sim.settle(completed,market,"under",line,player_id=pid)
             self.assertEqual(a["wins"],b["losses"])
             self.assertEqual(a["losses"],b["wins"])
-            self.assertEqual(a["scenario_sha256"],self.samples["scenario_sha256"])
-        x=sim.settle(self.samples,"HITS","over",.5,player_id="absent")
+            self.assertEqual(a["scenario_sha256"],completed["scenario_sha256"])
+        x=sim.settle(completed,"HITS","over",.5,player_id="absent")
         self.assertEqual(x["status"],"NO_FORECAST")
 
     def test_unresolved_extras_never_renormalized(self):
@@ -124,7 +142,7 @@ class SharedInningTests(unittest.TestCase):
                       "line":"5.5","price":"-110","book":"DK"}],
              "prop_odds":[{"game_id":"SYNTH","player_id":"a1","market":"HITS",
                            "line":".5","over_price":"-150","under_price":"125"}]}
-        rows=sim._offered(self.samples,inp,{"game_id":"SYNTH"})
+        rows=sim._offered(completed_fixture(),inp,{"game_id":"SYNTH"})
         self.assertEqual(len(rows),4)
         self.assertTrue(all(x["status"]=="RESEARCH_RAW_EV_ONLY" for x in rows))
         self.assertTrue(all(x["no_vig"] is None and x["blended_ev"] is None for x in rows))
