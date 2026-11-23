@@ -1,0 +1,42 @@
+name: NFL cross-PR runner-ledger acceptance (synthetic)
+
+on:
+  pull_request:
+    paths:
+      - 'ledger/nfl/**'
+      - '.github/workflows/nfl-cross-pr-acceptance.yml'
+      - 'docs/governance/changes/pr-474.json'
+
+permissions:
+  contents: read
+
+jobs:
+  cross-pr-synthetic:
+    name: Pinned runner, frozen board, CSV and ledger identities
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact ledger PR head (not synthetic merge ref)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Checkout exact runner PR revision separately
+        uses: actions/checkout@v4
+        with:
+          repository: bighauss/Sportsedge
+          ref: 12c667a20cd452a5732a3fec9d429caf5b4280da
+          path: runner-src
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned offline model-test dependency
+        run: python -m pip install numpy==2.5.3
+      - name: Compile synthetic integration test and runner
+        run: python -m py_compile ledger/nfl/integration/test_cross_pr_acceptance.py runner-src/engine/run_nfl.py
+      - name: Verify pinned SHAs, selection identities and source hashes
+        env:
+          PINNED_RUNNER_SHA: 12c667a20cd452a5732a3fec9d429caf5b4280da
+          LEDGER_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python -m unittest -v ledger.nfl.integration.test_cross_pr_acceptance
