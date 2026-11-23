@@ -1,0 +1,63 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 459,
+  "base_commit": "a368f8644b7fd4ba8881feef818f8cae88c29c2c",
+  "protected_paths": [
+    "models/nhl/sportsedge_nhl_model.py",
+    "models/nhl/test_sportsedge_nhl.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Refits NHL empty-net rates (en_p_lead1 0.13->0.11, en_p_lead2 0.07->0.32) on 285 2026-27 finals; walk-forward margin log-loss 1.4416->1.4208; regression added.",
+  "assumptions": [
+    "One partial season, private file replay; league-average lambda.",
+    "Two parameters grid-fit; expect shrink out of sample.",
+    "Main puck line barely moves; alt puck lines move most."
+  ],
+  "agent_identity": "Claude coding assistant",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Duplicate keyed-input rows silently overwritten",
+    "before": null,
+    "unit": "rows",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python models/nhl/test_sportsedge_nhl.py",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "a368f8644b7fd4ba8881feef818f8cae88c29c2c",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python models/nhl/test_sportsedge_nhl.py"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
