@@ -43,10 +43,9 @@ def price(cfg, n, seed=7, lines=None):
                "modeled_research": ["moneyline", "spread", "total", "team_total",
                                     "player_pass_yards", "player_pass_tds",
                                     "player_rush_yards", "player_rec_yards",
-                                    "player_receptions", "anytime_td", "td_2plus"],
+                                    "player_receptions", "anytime_td", "td_2plus",
+                                    "1h_2h_q1_q4_moneyline_spread_total"],
                "blocked": {
-                   "halves": "NO_PERIOD_SIMULATION",
-                   "quarters": "NO_PERIOD_SIMULATION",
                    "first_td": "NO_ORDERED_SCORE_EVENTS",
                    "sgp": "NO_CALIBRATED_JOINT_SETTLEMENT_AND_BOOK_PRICE",
                    "alternate_lines": "NOT_CAPTURED_AND_NOT_ENUMERATED",
@@ -81,6 +80,24 @@ def price(cfg, n, seed=7, lines=None):
     g["total_settlement"] = {
         "over": round(over, 4), "under": round(1-over-total_push, 4),
         "push": round(total_push, 4)}
+    # Periods from the SAME draws: scoring events allocated to quarters (no OT in sim;
+    # 2H/Q4 books usually include OT, so a regulation tie leaves 2H unchanged).
+    PER = {"Q1": (0,), "Q2": (1,), "Q3": (2,), "Q4": (3,), "1H": (0, 1), "2H": (2, 3)}
+    g["periods"] = {}
+    if not all("_periods" in r for r in raw):
+        g["periods"] = "NO_PERIOD_SIMULATION"
+        out["inventory"]["blocked"].update(halves="NO_PERIOD_SIMULATION", quarters="NO_PERIOD_SIMULATION")
+    for name, qs in (PER.items() if isinstance(g["periods"], dict) else ()):
+        ph = [sum(r["_periods"][home][i] for i in qs) for r in raw]
+        pa = [sum(r["_periods"][away][i] for i in qs) for r in raw]
+        tie = sum(h == a for h, a in zip(ph, pa)) / n
+        hw = sum(h > a for h, a in zip(ph, pa)) / n
+        mt = statistics.fmean(h + a for h, a in zip(ph, pa))
+        g["periods"][name] = {
+            "proj_home": round(statistics.fmean(ph), 2), "proj_away": round(statistics.fmean(pa), 2),
+            "proj_total": round(mt, 2), "home_win": round(hw, 4), "tie": round(tie, 4),
+            "away_win": round(1 - hw - tie, 4),
+            "home_win_2way_tie_refund": round(hw / (1 - tie), 4) if tie < 1 else None}
     for tm, xs in ((away, A), (home, H)):
         med = statistics.median(xs) + 0.5
         g[f"{tm} team total fair"] = med

@@ -54,7 +54,7 @@ def pick(rng, names, cum):
     return names[min(bisect.bisect_left(cum, rng.random()), len(names) - 1)]
 
 # ---------------- one team's offense ----------------
-def sim_team(rng, t, zg, zt, active):
+def sim_team(rng, t, zg, zt, active, meta=None):
     f_score = math.exp(0.22 * (0.55 * zg + 0.835 * zt) - 0.5 * 0.22 ** 2)
     f_vol = math.exp(0.08 * zg)
     stat = {}
@@ -107,11 +107,34 @@ def sim_team(rng, t, zg, zt, active):
     xp = sum(1 for _ in range(tds) if rng.random() < 0.95)
     kpts += xp
     pts = 6 * tds + xp + 3 * fgm
+    if meta is not None:          # scoring-event counts for period allocation (no RNG use)
+        meta.update(tds=tds, xp=xp, fgm=fgm)
     return stat, kpts, pts, S(qb)["ints"], tds
 
+# Share of NFL scoring events by quarter (Q2 and Q4 heavier: two-minute drills).
+QUARTER_SCORE_SHARE = (0.22, 0.29, 0.21, 0.28)
+
+
+def _allocate_periods(qrng, meta):
+    """Spread a team's TDs (each 6 + its PAT) and made FGs across quarters.
+    Uses a SEPARATE RNG so DFS/canonical draws are unchanged."""
+    q = [0, 0, 0, 0]
+    cum = [sum(QUARTER_SCORE_SHARE[:i + 1]) for i in range(4)]
+    def pick():
+        u = qrng.random()
+        return next(i for i, c in enumerate(cum) if u <= c or i == 3)
+    for i in range(meta["tds"]):
+        q[pick()] += 6 + (1 if i < meta["xp"] else 0)
+    for _ in range(meta["fgm"]):
+        q[pick()] += 3
+    return q
+
+
 def run(cfg, n_sims, seed=7, raw=None):
-    """raw: optional list; if given, each sim appends {team: (stat, pts)} for market pricing."""
+    """raw: optional list; if given, each sim appends {team: (stat, pts)} for market pricing,
+    plus '_periods': {team: [q1, q2, q3, q4]} (sums to the team's points)."""
     rng = random.Random(seed)
+    qrng = random.Random(f"periods:{seed}")
     teams = cfg["teams"]; names = list(teams)
     out = {p: [] for p in cfg["players"]}
     game = []
@@ -119,8 +142,9 @@ def run(cfg, n_sims, seed=7, raw=None):
         zg = rng.gauss(0, 1)
         active = {p: (rng.random() < v["p_active"]) for p, v in cfg["players"].items()}
         res = {}
+        metas = {tm: {} for tm in names}
         for tm in names:
-            res[tm] = sim_team(rng, teams[tm], zg, rng.gauss(0, 1), active)
+            res[tm] = sim_team(rng, teams[tm], zg, rng.gauss(0, 1), active, metas[tm])
         for tm in names:
             opp = [x for x in names if x != tm][0]
             stat, kpts, pts, _, _ = res[tm]
@@ -138,7 +162,9 @@ def run(cfg, n_sims, seed=7, raw=None):
                     out[p].append(dk_offense(**s) if s else 0.0)
         game.append((res[names[0]][2], res[names[1]][2]))
         if raw is not None:
-            raw.append({tm: (res[tm][0], res[tm][2]) for tm in names})
+            entry = {tm: (res[tm][0], res[tm][2]) for tm in names}
+            entry["_periods"] = {tm: _allocate_periods(qrng, metas[tm]) for tm in names}
+            raw.append(entry)
     return out, game
 
 def q(xs, p):
