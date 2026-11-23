@@ -14,7 +14,10 @@ def profiles():
 class SharedInningTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.samples = sim.simulate("SYNTH",profiles(),draws=160,seed=2026)
+        # Use a long extra-inning cap for tests requiring complete player stats;
+        # the separate capped-extras test verifies unresolved settlement blocking.
+        cls.samples = sim.simulate("SYNTH",profiles(),draws=160,seed=2026,max_innings=18)
+        assert cls.samples["unresolved_extra_innings"] == 0
 
     def test_seed_and_hash_determinism(self):
         a=sim.simulate("SYNTH",profiles(),draws=30,seed=77)
