@@ -25,7 +25,9 @@ def profiles():
     return [dict(player_id=f"{side[0]}-{i:02d}", side=side,
                  projected_toi_minutes=15. + i / 10.,
                  shots_per_60=6. + i / 10.,
-                 goals_per_shot=.05 + i / 200.)
+                 goals_per_shot=.05 + i / 200.,
+                 feature_available_utc="2026-11-20T10:00:00Z",
+                 feature_source_sha256="b" * 64)
             for side in ("home", "away") for i in range(1, 19)]
 
 
@@ -121,6 +123,19 @@ class PlayerSharedTests(unittest.TestCase):
         wrong2[0]["projected_toi_minutes"] = float("inf")
         with self.assertRaises(player.Blocked):
             player.allocate(self.p, self.s[:1], wrong2, GOALIES)
+
+    def test_each_player_source_is_asof_and_sha_bound(self):
+        cases = [
+            ("feature_available_utc", "2026-11-22T12:00:00Z"),
+            ("feature_available_utc", "2026-11-20T10:00:00"),
+            ("feature_source_sha256", "unsigned"),
+            ("feature_source_sha256", None),
+        ]
+        for field, bad in cases:
+            candidate = profiles()
+            candidate[0][field] = bad
+            with self.assertRaises(player.Blocked):
+                player.allocate(self.p, self.s[:1], candidate, GOALIES)
 
     def test_late_inputs_unconfirmed_goalie_and_ambiguous_goalie_ids_block(self):
         with self.assertRaises(team.Blocked):
