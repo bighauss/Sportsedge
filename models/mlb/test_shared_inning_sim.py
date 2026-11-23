@@ -191,7 +191,9 @@ class SharedInningTests(unittest.TestCase):
                     2*sum(o["game_id"]=="G1" for o in inp["prop_odds"]))
         self.assertEqual(len(r["games"][0]["offers"]),expected)
         self.assertEqual(r["games"][0]["census"],{"NO_FORECAST":expected})
-        self.assertEqual(r["offer_status_census"].get("NO_FORECAST"),expected)
+        # Census is across every attempted game, not just the missing-starter game.
+        self.assertEqual(r["offer_status_census"].get("NO_FORECAST",0),
+                         sum(g["census"].get("NO_FORECAST",0) for g in r["games"]))
         self.assertEqual(r["attempted_offer_sides"],
                          sum(len(g["offers"]) for g in r["games"]))
         self.assertTrue(any(o["market"]=="K" and o["selection"]=="under"
