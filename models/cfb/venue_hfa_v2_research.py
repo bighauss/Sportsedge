@@ -5,27 +5,32 @@ Synthetic semantics only; source receipts and predictive validation required bef
 import math
 
 
-def venue_hfa_v2(neutral, venue, default_hfa):
-    """Return capped home-field points, preserving an explicitly supplied zero.
+def _validated_hfa(value, label):
+    """Require a finite native number within the documented venue HFA domain."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a native numeric value")
+    try:
+        numeric = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(f"{label} cannot be represented as finite float") from exc
+    if not math.isfinite(numeric):
+        raise ValueError(f"{label} must be finite")
+    if not 0.0 <= numeric <= 4.0:
+        raise ValueError(f"{label} outside [0, 4]")
+    return numeric
 
-    Missing/null values use the configured default. Reject nonfinite/invalid inputs
-    rather than silently substituting an untrusted venue adjustment.
+
+def venue_hfa_v2(neutral, venue, default_hfa):
+    """Return home-field points, preserving zero; fail closed on malformed inputs.
+
+    Validate the default and venue even for neutral games so invalid source
+    configuration cannot be silently hidden by a neutral-site override.
     """
     if not isinstance(neutral, bool):
         raise ValueError("neutral must be boolean")
-    if neutral:
-        return 0.0
+    default = _validated_hfa(default_hfa, "default_hfa")
     if not isinstance(venue, dict):
         raise ValueError("venue must be a mapping")
-    value = venue.get("hfa")
-    if value is None:
-        value = default_hfa
-    if isinstance(value, bool):
-        raise ValueError("boolean venue HFA is invalid")
-    try:
-        value = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("invalid venue HFA") from exc
-    if not math.isfinite(value):
-        raise ValueError("nonfinite venue HFA")
-    return max(0.0, min(4.0, value))
+    raw = venue.get("hfa")
+    hfa = default if raw is None else _validated_hfa(raw, "venue hfa")
+    return 0.0 if neutral else hfa
