@@ -1,0 +1,12 @@
++18.6% ★★★★ Taylor Bol Bowen   Oregon  AST 2+ +155  gp2 rate3.5 mu2.0 pm0.56 mkt0.38
+ +4.3% ★★   Nyk Lewis          VCU     AST 4+ +140  gp3 rate4.3 mu3.7 pm0.47 mkt0.40
+ +3.5% ★    Zach Philipkoski   StBona  PTS 12+ -130  gp4 rate16.3 mu13.7 pm0.63 mkt0.54
+ +3.0% ★    Malique Ewin       Oregon  AST 3+ -125  gp2 rate4.5 mu3.5 pm0.61 mkt0.53
+ +2.3% ★    Michael Belle      VCU     3PM 1+ +165  gp3 rate0.7 mu0.6 pm0.41 mkt0.36
+ +1.8% ★    Keyshawn Hall      StJ     PTS 20+ +110  gp1 rate26.0 mu20.5 pm0.51 mkt0.46
+ +1.5% ★    Lazar Djokovic     VCU     AST 2+ +120  gp3 rate2.0 mu1.7 pm0.49 mkt0.43
+ +1.5% ★    Andrew Meadow      Oregon  3PM 2+ +210  gp2 rate1.5 mu1.3 pm0.35 mkt0.31
+ +0.4% ★    Nyk Lewis          VCU     PTS 12+ -120  gp3 rate13.7 mu12.9 pm0.57 mkt0.52
+ +0.2% ★    Taylor Bol Bowen   Oregon  REB 5+ +130  gp2 rate5.0 mu4.6 pm0.46 mkt0.42
+ +0.0% ★    Michael Belle      VCU     REB 4+ -140  gp3 rate5.0 mu4.5 pm0.61 mkt0.56
+neg/flat EV: 97 of 100
