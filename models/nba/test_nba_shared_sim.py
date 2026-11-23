@@ -104,6 +104,59 @@ class SharedSim(unittest.TestCase):
         self.assertEqual(a["home"], b["home"])
         self.assertEqual(a["scenario_sha256"], b["scenario_sha256"])
 
+    def test_team_draws_invariant_to_player_roster(self):
+        a = S.simulate(115, 110, PLAYERS, n=300, seed=123)
+        b = S.simulate(115, 110, (), n=300, seed=123)
+        c = S.simulate(115, 110, PLAYERS[:1], n=300, seed=123)
+        for key in ("home", "away", "hq", "aq", "ot"):
+            self.assertEqual(a[key], b[key])
+            self.assertEqual(a[key], c[key])
+
+    def test_player_scoring_conserved_with_team_totals(self):
+        players = [dict(id=f"home-{i}", name=f"Player {i}", team="home",
+                        pts=60, fg3=8, reb=4, ast=4) for i in range(5)]
+        sim = S.simulate(110, 105, players, n=300, seed=9)
+        for i in range(sim["n"]):
+            self.assertLessEqual(sum(st["pts"][i] for st in sim["players"].values()), sim["home"][i])
+            for st in sim["players"].values():
+                self.assertLessEqual(3 * st["fg3"][i], st["pts"][i])
+
+    def test_draw_hash_changes_on_mutation(self):
+        sim = S.simulate(115, 110, PLAYERS, n=50, seed=2)
+        before = sim["scenario_sha256"]
+        self.assertEqual(before, S.draw_sha256(sim))
+        sim["home"][0] += 1
+        self.assertNotEqual(before, S.draw_sha256(sim))
+
+    def test_stable_ids_support_same_display_name(self):
+        players = [dict(id="one", name="Same", team="home", pts=10, fg3=1),
+                   dict(id="two", name="Same", team="away", pts=12, fg3=2)]
+        sim = S.simulate(110, 110, players, n=20)
+        self.assertEqual(set(sim["players"]), {"one", "two"})
+
+    def test_bad_sim_inputs_rejected(self):
+        for h, a, n, seed in ((0, 110, 10, 1), (float("nan"), 110, 10, 1),
+                               (110, float("inf"), 10, 1), (110, 110, 0, 1),
+                               (110, 110, 100001, 1), (110, 110, 10, -1),
+                               (110, 110, 10, 1.5)):
+            with self.assertRaises(ValueError):
+                S.simulate(h, a, n=n, seed=seed)
+        for p in (dict(name="A", team="home", pts=-1),
+                  dict(name="A", team="home", pts=float("nan")),
+                  dict(name="A", team="home", pts=3, reb=-1)):
+            with self.assertRaises(ValueError):
+                S.simulate(110, 110, [p], n=10)
+
+    def test_invalid_ev_and_infinite_lines_rejected(self):
+        for win, push, odds in ((1.1, 0, -110), (0.8, 0.3, -110),
+                                (0.5, -0.1, -110), (0.5, 0, 0),
+                                (0.5, 0, float("inf"))):
+            with self.assertRaises(ValueError):
+                S.ev(win, push, odds)
+        for line in (float("inf"), -float("inf")):
+            with self.assertRaises(ValueError):
+                S.price(self.s, "TOTAL", "over", line)
+
     def test_ev_push_refund(self):
         self.assertAlmostEqual(S.ev(0.5, 0.05, -110), 0.004545, 5)
 
