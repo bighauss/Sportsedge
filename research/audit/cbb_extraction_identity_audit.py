@@ -11,6 +11,9 @@ import argparse
 import csv
 import hashlib
 import json
+import io
+import os
+import stat
 from pathlib import Path
 import re
 
@@ -56,6 +59,15 @@ def reconcile(rows):
         _teams(r["event"])
         groups[(r["market"], r["start"], r["source_file"])].append((n, r))
 
+    # A correctly labelled row occupies its exact target identity too.
+    # Ignoring it can falsely certify a bijection within only the bad rows.
+    occupied = defaultdict(set)
+    for row in rows:
+        if isinstance(row, dict) and row.get("identity_status") == "OK":
+            keys = ("market", "start", "source_file", "event")
+            if all(isinstance(row.get(k), str) and row[k].strip() for k in keys):
+                occupied[(row["market"], row["start"], row["source_file"])].add(row["event"])
+
     proposed, blocked, census = [], [], Counter()
     for group, entries in sorted(groups.items()):
         expected = {r["event"] for _, r in entries}
@@ -70,7 +82,8 @@ def reconcile(rows):
                      and all(v == 1 for v in label_counts.values())
                      and len(unique) == len(entries)
                      and len(set(unique)) == len(entries)
-                     and set(unique) == expected)
+                     and set(unique) == expected
+                     and not any(target in occupied[group] for target in unique))
         if not bijection:
             for n, r, matches in options:
                 blocked.append({"source_row_ordinal_within_disputes": n,
@@ -108,17 +121,103 @@ def reconcile(rows):
         "warning": "OCR text is not an original PDF. Do not overwrite frozen records, approve prices, grade candidates or count wagers."}
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MAX_INPUT_BYTES = 10_000_000
+MAX_INPUT_ROWS = 50_000
+
+
+def _private_path(path):
+    lexical = Path(os.path.abspath(os.fspath(path)))
+    resolved = lexical.resolve()
+    for candidate in (lexical, resolved):
+        if candidate == REPO_ROOT or REPO_ROOT in candidate.parents:
+            raise ValueError("PUBLIC_GIT_REPOSITORY_PATH_REFUSED")
+    if lexical.is_symlink() or any(parent.is_symlink() for parent in lexical.parents):
+        raise ValueError("SYMLINK_SOURCE_OR_OUTPUT_REFUSED")
+    return lexical
+
+
+def _read_private_csv(path):
+    source = _private_path(path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(source, flags)
+    try:
+        mode = os.fstat(fd)
+        if not stat.S_ISREG(mode.st_mode):
+            raise ValueError("SOURCE_NOT_REGULAR_FILE")
+        if mode.st_mode & 0o077:
+            raise ValueError("SOURCE_NOT_OWNER_ONLY_0600")
+        if not 0 < mode.st_size <= MAX_INPUT_BYTES:
+            raise ValueError("SOURCE_MISSING_OR_OVERSIZE")
+        with os.fdopen(fd, "rb") as stream:
+            fd = -1
+            raw = stream.read(MAX_INPUT_BYTES + 1)
+        if not 0 < len(raw) <= MAX_INPUT_BYTES:
+            raise ValueError("SOURCE_MISSING_OR_OVERSIZE")
+    finally:
+        if fd >= 0:
+            os.close(fd)
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeError as exc:
+        raise ValueError("INVALID_SOURCE_ENCODING") from exc
+    reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
+    head = reader.fieldnames
+    required = {"event", "market", "start", "source_file", "raw_source_text",
+                "identity_status"}
+    if not head or len(head) != len(set(head)) or not required.issubset(head):
+        raise ValueError("DUPLICATE_OR_MISSING_CSV_HEADERS")
+    records = []
+    try:
+        for record in reader:
+            if len(records) >= MAX_INPUT_ROWS:
+                raise ValueError("CSV_ROW_LIMIT_EXCEEDED")
+            if None in record or any(key is None for key in record):
+                raise ValueError("CSV_FIELD_COUNT_INVALID")
+            records.append(record)
+    except csv.Error as exc:
+        raise ValueError("MALFORMED_CSV") from exc
+    if not records:
+        raise ValueError("CSV_EMPTY")
+    return records
+
+
+def _write_private_report(destination, report):
+    target = _private_path(destination)
+    parent = target.parent
+    if not parent.is_dir() or parent.stat().st_mode & 0o077:
+        raise ValueError("DESTINATION_DIRECTORY_MUST_BE_PRIVATE_0700")
+    if target.exists():
+        raise FileExistsError("PRIVATE_REPORT_ALREADY_EXISTS")
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(target, flags, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            fd = -1
+            json.dump(report, out, indent=2, sort_keys=True, allow_nan=False)
+            out.write("\n")
+            out.flush()
+            os.fsync(out.fileno())
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("private_reextracted_csv")
     p.add_argument("--out", required=True, help="create-only owner-private JSON output")
     args = p.parse_args(argv)
-    with open(args.private_reextracted_csv, encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f, strict=True))
+    source = _private_path(args.private_reextracted_csv)
+    destination = _private_path(args.out)
+    if source == destination:
+        raise ValueError("SOURCE_EQUALS_DESTINATION")
+    rows = _read_private_csv(source)
     report = reconcile(rows)
-    with Path(args.out).open("x", encoding="utf-8") as out:
-        json.dump(report, out, indent=2, sort_keys=True, allow_nan=False)
-        out.write("\n")
+    _write_private_report(destination, report)
     print(json.dumps({
         "input_rows": report["input_rows"],
         "disputed_rows": report["disputed_rows"],
