@@ -252,7 +252,7 @@ def run_game(game, ctx):
     # venue / home field
     neutral = bool(game.get("neutralSite"))
     ven = ctx["venues"].get(game.get("venue"), {})
-    hfa = 0.0 if neutral else float(HFA_DEFAULT if ven.get("hfa") is None else ven["hfa"])
+    hfa = 0.0 if neutral else float(ven.get("hfa") or HFA_DEFAULT)
     hfa = max(0.0, min(4.0, hfa))
     ph += hfa / 2; pa -= hfa / 2
     elev = ven.get("elevation_ft") or g(ctx["teams"].get(H, {}), "location.elevation")
