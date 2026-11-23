@@ -2,6 +2,9 @@
 import unittest
 from grade_reconciliation import reconcile, profit_per_unit
 
+# Keep CBB extraction identity regressions on the existing CBB grade CI lane.
+from research.audit.test_cbb_extraction_identity_audit import ExtractionReconcileTest
+
 
 def row(i, odds, outcome, stake="1", event="NE-DET"):
     return {"bet_id": str(i), "event_id": event,
