@@ -32,7 +32,7 @@
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
-    "cases": 19,
+    "cases": 9,
     "suite": "SYNTHETIC_AGENT_SAFETY"
   },
   "evaluation": {
