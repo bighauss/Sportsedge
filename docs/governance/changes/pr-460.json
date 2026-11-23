@@ -3,15 +3,17 @@
   "pr_number": 460,
   "base_commit": "ca14dc2d287ecd3fa9cc5a6855b66ca914661212",
   "protected_paths": [
+    ".github/workflows/nba-period-ml.yml",
     "models/nba/sportsedge_nba_model.py",
+    "models/nba/test_period_ml_settlement.py",
     "models/nba/test_sportsedge_nba_model.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "NBA 2-way 1H/1Q moneyline now treats a tied period as a push (refund) using the existing p_over push band; full-game ML unchanged; regression added.",
+  "change_summary": "Correct research-only NBA 2-way 1H/1Q ML tie push/refund; add named offline settlement tests and dedicated workflow; preserve full-game ML OT and unvalidated 0u release gates.",
   "assumptions": [
-    "Assumes 2-way period moneylines refund ties (DK-style no action).",
-    "Settlement correction only; no model weight changed.",
-    "Synthetic test establishes arithmetic, not forecast skill."
+    "Only exact 2-way period ML offers with no Tie/Draw selection have push-refund settlement, per published DraftKings General Rules.",
+    "This changes probability accounting, not fitted game means or variances.",
+    "Synthetic CI does not establish that a real original price/period/selection was recorded pregame or model improvement."
   ],
   "agent_identity": "Claude coding assistant",
   "permissions": {
@@ -23,9 +25,9 @@
     "merge_rights": "REPO_RULES_ONLY"
   },
   "baseline": {
-    "metric": "Duplicate keyed-input rows silently overwritten",
+    "metric": "NBA 2-way 1H/1Q moneyline tie refund omission",
     "before": null,
-    "unit": "rows",
+    "unit": "source-authenticated pregame outcomes unavailable",
     "source_state": "UNKNOWN"
   },
   "golden": {
@@ -35,14 +37,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python -m unittest discover -s models/nfl -p test_key_number_margin.py -v",
+    "test_command": "python -m unittest discover -s models/nba -p test_period_ml_settlement.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "ca14dc2d287ecd3fa9cc5a6855b66ca914661212",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "python -m unittest discover -s models/nfl -p test_key_number_margin.py -v"
+    "verification_command": "python -m unittest discover -s models/nba -p test_period_ml_settlement.py -v"
   },
   "cost": {
     "currency": "USD",
