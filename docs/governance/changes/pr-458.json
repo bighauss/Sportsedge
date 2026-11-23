@@ -35,14 +35,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python sportsedge/odds/test_manual_paper_archive.py -v",
+    "test_command": "python -m unittest discover -s sportsedge/odds -p test_manual_paper_archive.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "8608477fbd2cff7b86e2ca69ef0700ce5476ed94",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "python sportsedge/odds/test_manual_paper_archive.py -v"
+    "verification_command": "python -m unittest discover -s sportsedge/odds -p test_manual_paper_archive.py -v"
   },
   "cost": {
     "currency": "USD",
