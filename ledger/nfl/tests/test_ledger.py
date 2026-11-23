@@ -43,8 +43,8 @@ class LedgerTest(unittest.TestCase):
         self.picks = os.path.join(self.t, "picks.csv")
         _w(self.picks, PICKS, FIELDS)
         self.stats = os.path.join(self.t, "stats.csv")
-        _w(self.stats, [["Joe Burrow", "pass_yds", "280"], ["Ja'Marr Chase", "anytime_td", "1"]],
-           ["player", "stat", "value"])
+        _w(self.stats, [["CIN@WAS", "Joe Burrow", "pass_yds", "280"], ["CIN@WAS", "Ja'Marr Chase", "anytime_td", "1"]],
+           ["game", "player", "stat", "value"])
         self.now = datetime(2026, 11, 23, 22, 0, tzinfo=timezone.utc)
 
     def _freeze(self):

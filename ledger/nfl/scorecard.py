@@ -27,7 +27,9 @@ def load_week(date_from, date_to, runs_dir=RUNS_DIR, settle_dir=SETTLE_DIR):
         proj = projection_numbers(read_json(os.path.join(rd, "projection", "frozen.json")))
         sp = os.path.join(settle_dir, m["run_id"] + ".json")
         settle = read_json(sp)[-1] if os.path.exists(sp) else None
-        out.append({"manifest": m, "projection": proj, "settlement": settle})
+        quarantined = bool(settle and (settle.get("quarantined") or not settle.get("run_integrity_ok", True)))
+        out.append({"manifest": m, "projection": proj, "settlement": None if quarantined else settle,
+                    "quarantined": quarantined})
     return out
 
 
@@ -42,9 +44,15 @@ def _rec(rows):
 
 
 def build(runs, pick_set=None, title="NFL weekly scorecard"):
+    """One report per pick set (baseline / challenger / ... never pooled). Quarantined runs excluded."""
+    sets = sorted({g["pick_set"] for r in runs if r["settlement"] for g in r["settlement"]["graded"]})
+    if pick_set is None and len(sets) > 1:
+        return "".join(build(runs, ps, f"{title} - {ps}") for ps in sets)
     L = [f"# {title}", ""]
     settled = [r for r in runs if r["settlement"]]
-    L.append(f"Runs frozen: {len(runs)} | settled: {len(settled)} | 1u flat at frozen price")
+    q = sum(1 for r in runs if r.get("quarantined"))
+    L.append(f"Runs frozen: {len(runs)} | settled: {len(settled)} | quarantined (excluded): {q} | "
+             "hypothetical 1u at frozen price, approved stake 0")
     L.append("")
     # model vs market
     em, ek, et, etk = [], [], [], []
@@ -73,7 +81,11 @@ def build(runs, pick_set=None, title="NFL weekly scorecard"):
              if g["result"] == "NG" and (pick_set is None or g["pick_set"] == pick_set))
     L.append("## Overall")
     L.append(f"- All: {_rec(rows)}")
-    L.append(f"- Unheld: {_rec([g for g in rows if not g['held']])}")
+    L.append(f"- Unheld priced candidates: {_rec([g for g in rows if not g['held']])}")
+    if any(g.get("on_card") is not None for g in rows):
+        L.append(f"- Card selections: {_rec([g for g in rows if g.get('on_card')])}")
+    else:
+        L.append("- Card selections: not recorded in this run's picks file (no on_card column)")
     L.append(f"- Held: {_rec([g for g in rows if g['held']])}")
     if ng:
         L.append(f"- Not gradable (missing score/stat): {ng}")
@@ -105,7 +117,7 @@ def build(runs, pick_set=None, title="NFL weekly scorecard"):
                   and (pick_set is None or g["pick_set"] == pick_set)]
             L.append(f"- {m['game']}: {f['away']} {f['away_score']} - {f['home']} {f['home_score']} | {_rec(gr)}")
         else:
-            L.append(f"- {m['game']}: not settled")
+            L.append(f"- {m['game']}: {'QUARANTINED (integrity failure, excluded)' if r.get('quarantined') else 'not settled'}")
     return "\n".join(L) + "\n"
 
 

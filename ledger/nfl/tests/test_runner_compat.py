@@ -33,7 +33,7 @@ ROWS = [
 ]
 FINALS = {"away": "CIN", "home": "WAS", "away_score": 27, "home_score": 24,
           "periods": {"1H": [14, 10], "1Q": [7, 3]}}
-STATS = [["Tee Higgins", "rec_yds", "61"], ["Ja'Marr Chase", "atd", "1"]]
+STATS = [["CIN@WAS", "Tee Higgins", "rec_yds", "61"], ["CIN@WAS", "Ja'Marr Chase", "atd", "1"]]
 EXPECT = {  # (pick, bet_type) -> result
     ("WAS +6", "SPREAD|0|"): "W", ("CIN -6", "SPREAD|1|"): "L",
     ("Over 54.5", "TOTAL|0|"): "L", ("Under 54.5", "TOTAL|1|"): "W",
@@ -68,7 +68,7 @@ class RunnerCompat(unittest.TestCase):
         with open(self.proj, "w") as f:
             json.dump({"game": ["CIN@WAS", 26.04, 21.31, 47.35, 54.5, -6], "player_means": []}, f)
         self.stats = os.path.join(self.t, "stats.csv")
-        _w(self.stats, STATS, ["player", "stat", "value"])
+        _w(self.stats, STATS, ["game", "player", "stat", "value"])
         self.now = datetime(2026, 11, 23, 22, 29, tzinfo=timezone.utc)
 
     def test_normalize_mapping(self):
@@ -96,6 +96,62 @@ class RunnerCompat(unittest.TestCase):
         self.assertEqual(open(self.picks, "rb").read(), before)           # source untouched
         md = scorecard.build(scorecard.load_week("2026-11-23", "2026-11-23", self.runs, self.sdir))
         self.assertIn("Total: model", md)                                  # package projection layout read
+
+    def _frz(self, picks=None):
+        return freeze.freeze("CIN@WAS", self.board, self.proj, {"challenger": picks or self.picks},
+                             {}, None, runs_dir=self.runs, now=self.now)
+
+    def test_integrity_failure_refused_or_quarantined(self):
+        rd = self._frz()
+        f = os.path.join(rd, "challenger", "picks_nfl.csv")
+        os.chmod(f, 0o644)
+        with open(f, "a") as fh:
+            fh.write("tampered\n")
+        with self.assertRaises(settle.SettlementError):
+            settle.settle(rd, FINALS, "x", self.stats, self.sdir, now=self.now)
+        settle.settle(rd, FINALS, "x", self.stats, self.sdir, now=self.now, quarantine=True)
+        wk = scorecard.load_week("2026-11-23", "2026-11-23", self.runs, self.sdir)
+        self.assertTrue(wk[0]["quarantined"] and wk[0]["settlement"] is None)
+        self.assertIn("QUARANTINED", scorecard.build(wk))
+
+    def test_wrong_game_finals_and_stats_refused(self):
+        rd = self._frz()
+        other = dict(FINALS, away="PIT", home="BAL")
+        with self.assertRaises(settle.SettlementError):
+            settle.settle(rd, other, "x", self.stats, self.sdir, now=self.now)
+        swapped = dict(FINALS, away="WAS", home="CIN")
+        with self.assertRaises(settle.SettlementError):
+            settle.settle(rd, swapped, "x", self.stats, self.sdir, now=self.now)
+        bad_stats = os.path.join(self.t, "bad_stats.csv")
+        _w(bad_stats, [["PIT@BAL", "Tee Higgins", "rec_yds", "99"]], ["game", "player", "stat", "value"])
+        with self.assertRaises(settle.SettlementError):
+            settle.settle(rd, FINALS, "x", bad_stats, self.sdir, now=self.now)
+        unbound = os.path.join(self.t, "unbound.csv")
+        _w(unbound, [["Tee Higgins", "rec_yds", "99"]], ["player", "stat", "value"])
+        with self.assertRaises(settle.SettlementError):
+            settle.settle(rd, FINALS, "x", unbound, self.sdir, now=self.now)
+
+    def test_nonzero_approved_stake_refused(self):
+        p = os.path.join(self.t, "staked.csv")
+        rows = [dict(r) for r in ROWS]
+        for bad in (1, 0.25, "abc", "nan"):
+            rows[0]["approved_stake_u"] = bad
+            _w(p, rows, F)
+            rd = freeze.freeze("CIN@WAS", self.board, self.proj, {"challenger": p}, {}, None,
+                               runs_dir=os.path.join(self.t, f"runs_{bad}"), now=self.now)
+            with self.assertRaises(settle.SettlementError, msg=repr(bad)):
+                settle.settle(rd, FINALS, "x", self.stats, self.sdir, now=self.now)
+
+    def test_scorecard_never_pools_pick_sets(self):
+        rd = freeze.freeze("CIN@WAS", self.board, self.proj, {"baseline": self.picks, "challenger": self.picks},
+                           {}, None, runs_dir=self.runs, now=self.now)
+        settle.settle(rd, FINALS, "x", self.stats, self.sdir, now=self.now)
+        md = scorecard.build(scorecard.load_week("2026-11-23", "2026-11-23", self.runs, self.sdir))
+        self.assertIn("- baseline", md)
+        self.assertIn("- challenger", md)
+        self.assertEqual(md.count("## Overall"), 2)
+        self.assertIn("Unheld priced candidates", md)
+        self.assertIn("Card selections: not recorded", md)
 
     def test_projection_layouts(self):
         p = projection_numbers({"game": ["X@Y", 20.0, 24.0, 44.0, 45.5, 3.0]})
