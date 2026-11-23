@@ -7,11 +7,11 @@
     ".github/workflows/nfl-freeze-settlement-ledger.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Run NFL ledger standard-library regressions on the exact PR head and add a separate, synthetic, cross-PR end-to-end acceptance job pinning runner commit 12c667a20cd452a5732a3fec9d429caf5b4280da. Test frozen board/source hashes, output and settlement row/quote IDs, selection tri-state, and zero approved units. No model/pricing or betting release changes.",
+  "change_summary": "Run NFL ledger standard-library regressions on the exact PR head and add a separate, synthetic, cross-PR end-to-end acceptance job pinning runner commit fcf2ceaa3885d5f2725138511b084252656df639. Test frozen board/source hashes, output and settlement row/quote IDs, selection tri-state, and zero approved units. No model/pricing or betting release changes.",
   "assumptions": [
     "The dedicated regression suite uses synthetic input and Python standard library; the cross-PR acceptance runner additionally requires pinned NumPy.",
     "The cross-PR acceptance test mocks upstream v5.run predictions while executing the actual runner guards, card selection, CSV export, freeze, settlement and scorecard. It cannot validate v5 simulations or model accuracy.",
-    "Runner SHA 12c667a20cd452a5732a3fec9d429caf5b4280da is pinned independently of the ledger HEAD. A newer runner commit requires a new integration pin and fresh CI evidence.",
+    "Runner SHA fcf2ceaa3885d5f2725138511b084252656df639 is pinned independently of the ledger HEAD. A newer runner commit requires a new integration pin and fresh CI evidence.",
     "Private real CIN@WAS 117-row/source receipt validation is outside these synthetic CI checks; synthetic settlements must never count as real wagering results."
   ],
   "agent_identity": "OpenAI ChatGPT GPT-6",
