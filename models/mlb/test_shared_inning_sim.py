@@ -83,6 +83,26 @@ class SharedInningTests(unittest.TestCase):
         self.assertNotIn("p_win",g)
         self.assertEqual(sim.settle(d,"F5_ML","away")["status"],"SIMULATED_RESEARCH")
 
+    def test_capped_extra_innings_block_full_game_batter_props(self):
+        d=copy.deepcopy(self.samples)
+        d["unresolved_extra_innings"]=1
+        for market in ("ML","TOTAL","TT_HOME","HITS","TB","HR"):
+            selection = ("away" if market=="ML" else "over")
+            res=sim.settle(d,market,selection,4.5,player_id="a1")
+            self.assertEqual(res["status"],"UNRESOLVED_MARKET",market)
+            self.assertEqual(res["reason"],"UNSETTLED_EXTRA_INNINGS")
+            self.assertNotIn("p_win",res)
+        # Completed F5 and first-inning settlement unaffected by later ties.
+        self.assertEqual(sim.settle(d,"F5_TOTAL","over",5.5)["status"],"SIMULATED_RESEARCH")
+        self.assertEqual(sim.settle(d,"NRFI","nrfi")["status"],"SIMULATED_RESEARCH")
+
+    def test_invalid_negative_nonspread_lines_fail_closed(self):
+        for market in ("TOTAL","TT_HOME","F5_TOTAL","INNING_1_TOTAL","HITS","TB","HR"):
+            result=sim.settle(self.samples,market,"over",-0.5,player_id="a1")
+            self.assertEqual(result["status"],"UNRESOLVED_MARKET",market)
+            self.assertEqual(result["reason"],"NEGATIVE_NON_SPREAD_LINE")
+        self.assertEqual(sim.settle(self.samples,"F5_RL","away",-1.5)["status"],"SIMULATED_RESEARCH")
+
     def test_unsupported_and_bad_source(self):
         self.assertEqual(sim.settle(self.samples,"PITCHER_K","over",5.5)["status"],"NO_FORECAST")
         with self.assertRaisesRegex(sim.NoForecast,"DUPLICATE_PLAYER_ID"):
