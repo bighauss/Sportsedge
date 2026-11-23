@@ -1,0 +1,49 @@
+name: MLB shared inning player scenarios (synthetic research)
+on:
+  pull_request:
+    paths:
+      - 'models/mlb/shared_inning_sim.py'
+      - 'models/mlb/shared_inning_run.py'
+      - 'models/mlb/test_shared_inning_sim.py'
+      - '.github/workflows/mlb-shared-inning-research.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/mlb/shared_inning_sim.py'
+      - 'models/mlb/shared_inning_run.py'
+      - 'models/mlb/test_shared_inning_sim.py'
+      - '.github/workflows/mlb-shared-inning-research.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-simulation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile research simulation
+        run: python -m compileall -q models/mlb/shared_inning_sim.py models/mlb/shared_inning_run.py models/mlb/test_shared_inning_sim.py
+      - name: Test game/inning and player props from same draws
+        run: python -m unittest -v models.mlb.test_shared_inning_sim
+      - name: Normalize ONLY synthetic fixture rate components for joint PA consistency
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+          p=Path('models/mlb/sample_inputs/batters.csv')
+          with p.open(newline='') as f:
+              reader=csv.DictReader(f)
+              fields=reader.fieldnames
+              rows=list(reader)
+          for row in rows:
+              row['iso']='0.230'
+              row['hr_per_pa']='0.025'
+          with p.open('w',newline='') as f:
+              writer=csv.DictWriter(f,fieldnames=fields)
+              writer.writeheader(); writer.writerows(rows)
+          PY
+      - name: Exercise opt-in native RUN IT source bridge (synthetic samples only)
+        run: python -m models.mlb.shared_inning_run models/mlb/sample_inputs --draws 12 --seed 17 --summary
