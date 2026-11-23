@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 464,
-  "base_commit": "d43c097bcde53a7dc23af78e91acebf5a7455151",
+  "base_commit": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
   "protected_paths": [
     ".github/workflows/nba-shared-sim.yml",
     "models/nba/nba_shared_sim.py",
@@ -41,7 +41,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "d43c097bcde53a7dc23af78e91acebf5a7455151",
+    "target_base_sha": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest discover -s models/nba -p test_nba_shared_sim.py -v"
   },
