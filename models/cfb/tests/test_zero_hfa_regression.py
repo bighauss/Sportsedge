@@ -33,6 +33,20 @@ class VenueHfaV2ResearchRegression(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     venue_hfa_v2(False, {"hfa": value}, 2.5)
 
+    def test_boolean_inputs_rejected(self):
+        for value in (True, False):
+            with self.subTest(hfa=value):
+                with self.assertRaises(ValueError):
+                    venue_hfa_v2(False, {"hfa": value}, 2.5)
+                with self.assertRaises(ValueError):
+                    venue_hfa_v2(False, {}, value)
+
+    def test_neutral_flag_requires_boolean(self):
+        for value in (0, 1, None, "false", "true"):
+            with self.subTest(neutral=value):
+                with self.assertRaises(ValueError):
+                    venue_hfa_v2(value, {"hfa": 2}, 2.5)
+
     def test_frozen_model_blob_unchanged(self):
         # Frozen v1 integrity is separately enforced by the repository's hash guard.
         text = (CFB_DIR / "sportsedge_cfb_model.py").read_text(encoding="utf-8")
