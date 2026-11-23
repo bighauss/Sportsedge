@@ -10,7 +10,7 @@
   "change_summary": "Run NFL ledger standard-library regressions on the exact PR head and add a separate, synthetic, cross-PR end-to-end acceptance job pinning runner commit fcf2ceaa3885d5f2725138511b084252656df639. Test frozen board/source hashes, output and settlement row/quote IDs, selection tri-state, and zero approved units. No model/pricing or betting release changes.",
   "assumptions": [
     "The dedicated regression suite uses synthetic input and Python standard library; the cross-PR acceptance runner additionally requires pinned NumPy.",
-    "The cross-PR acceptance test mocks upstream v5.run predictions while executing the actual runner guards, card selection, CSV export, freeze, settlement and scorecard. It cannot validate v5 simulations or model accuracy.",
+    "The cross-PR acceptance includes (a) a deterministic mocked-v5 selection fixture to guarantee marked and legacy states, and (b) a synthetic board passed through real 100k-draw v5.run, actual runner CSV export, frozen ledger and settlement. Neither is model-validation evidence.",
     "Runner SHA fcf2ceaa3885d5f2725138511b084252656df639 is pinned independently of the ledger HEAD. A newer runner commit requires a new integration pin and fresh CI evidence.",
     "Private real CIN@WAS 117-row/source receipt validation is outside these synthetic CI checks; synthetic settlements must never count as real wagering results."
   ],
