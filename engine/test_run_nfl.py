@@ -25,6 +25,14 @@ def game(hp, ap, spread=-3.5, total=44.5, extra=()):
             dict(base, market="ML", price_a=-180, price_b=150)] + [dict(base, **e) for e in extra]
 
 
+def G(game, mk, ln, side=0, price=-110):
+    return (game, mk, float(ln), side, price)
+
+
+def gp(r, mk, ln, side=0, price=-110):
+    return r["gaps"][G("AWY @ HOM", mk, ln, side, price)]
+
+
 def row(**kw):
     o = dict(sport="NFL", game="G", player="", pick="HOM -3.5", bet_type="SPREAD|0|", model_p=0.55,
              market_p=0.5, ev=0.05, price=-110)
@@ -43,9 +51,8 @@ class T(unittest.TestCase):
         ])))                                         # production N_FIT (100k)
 
     def test_spread_gap_sign_and_hold(self):
-        g = self.prod["gaps"]
-        self.assertGreater(g[("AWY @ HOM", "SPREAD", -3.5)], 6)
-        self.assertLess(abs(g[("AWY @ HOM", "TOTAL", 44.5)]), 6)
+        self.assertGreater(gp(self.prod, "SPREAD", -3.5), 6)
+        self.assertLess(abs(gp(self.prod, "TOTAL", 44.5)), 6)
         out = self.prod["out"]
         self.assertTrue(all(o["held"] for o in out if o["bet_type"].startswith("SPREAD|")))
         self.assertFalse(any("pts off" in o["held"] for o in out if o["bet_type"].startswith("TOTAL|")))
@@ -54,7 +61,7 @@ class T(unittest.TestCase):
 
     def test_away_side_gap_negative(self):
         g = run_nfl.projection_gaps(run_nfl.load_nfl_lines(board(game(14, 30))))
-        self.assertLess(g[("AWY @ HOM", "SPREAD", -3.5)], -6)
+        self.assertLess(g[G("AWY @ HOM", "SPREAD", -3.5)], -6)
 
     def test_only_moved_period_quote_changes(self):
         """Full-game board fixed; move only the 1Q spread. Only the 1Q gap/hold may change."""
@@ -62,10 +69,9 @@ class T(unittest.TestCase):
         q = lambda ln: dict(market="1Q_SPREAD", line=ln, price_a=-110, price_b=-110)
         base = run_nfl.build(board(game(*proj, spread=-3.5, total=44.5, extra=[q(-0.5)])))
         moved = run_nfl.build(board(game(*proj, spread=-3.5, total=44.5, extra=[q(-9.5)])))
-        k = ("AWY @ HOM", "SPREAD", -3.5), ("AWY @ HOM", "TOTAL", 44.5)
-        for kk in k:
-            self.assertAlmostEqual(base["gaps"][kk], moved["gaps"][kk], 6)
-        g0, g1 = base["gaps"][("AWY @ HOM", "1Q_SPREAD", -0.5)], moved["gaps"][("AWY @ HOM", "1Q_SPREAD", -9.5)]
+        for mk, ln in (("SPREAD", -3.5), ("TOTAL", 44.5)):
+            self.assertAlmostEqual(gp(base, mk, ln), gp(moved, mk, ln), 6)
+        g0, g1 = gp(base, "1Q_SPREAD", -0.5), gp(moved, "1Q_SPREAD", -9.5)
         self.assertLess(abs(g0), 6)
         self.assertLess(g1, -6)                           # book says home -9.5 in 1Q, model ~-1
         hq = lambda r: [o["held"] for o in r["out"] if o["bet_type"].startswith("1Q_SPREAD|")]
@@ -75,13 +81,43 @@ class T(unittest.TestCase):
         self.assertEqual(full(base), full(moved))
 
     def test_boundary(self):
-        gp = {("G", "SPREAD", -3.5): 6.0, ("G", "TOTAL", 44.5): -6.0, ("G", "1H_SPREAD", -2.5): 6.01}
+        g = {G("G", "SPREAD", -3.5, 0): 6.0, G("G", "SPREAD", -3.5, 1): 6.0, G("G", "TOTAL", 44.5, 1): -6.0,
+             G("G", "1H_SPREAD", -2.5, 1): 6.01}
         sp = lambda **k: row(pick=k.pop("pick"), **k)
-        self.assertEqual(run_nfl.guard(sp(pick="HOM -3.5"), gp)["held"], "")
-        self.assertEqual(run_nfl.guard(sp(pick="AWY +3.5", bet_type="SPREAD|1|"), gp)["held"], "")
-        self.assertEqual(run_nfl.guard(sp(pick="Under 44.5", bet_type="TOTAL|1|"), gp)["held"], "")
-        self.assertIn("1H projection", run_nfl.guard(sp(pick="1H AWY +2.5", bet_type="1H_SPREAD|1|"), gp)["held"])
-        self.assertEqual(run_nfl.guard(sp(pick="2H HOM -2.5", bet_type="2H_SPREAD|0|"), gp)["held"], "")
+        self.assertEqual(run_nfl.guard(sp(pick="HOM -3.5"), g)["held"], "")
+        self.assertEqual(run_nfl.guard(sp(pick="AWY +3.5", bet_type="SPREAD|1|"), g)["held"], "")
+        self.assertEqual(run_nfl.guard(sp(pick="Under 44.5", bet_type="TOTAL|1|"), g)["held"], "")
+        self.assertIn("1H projection", run_nfl.guard(sp(pick="1H AWY +2.5", bet_type="1H_SPREAD|1|"), g)["held"])
+        self.assertEqual(run_nfl.guard(sp(pick="2H HOM -2.5", bet_type="2H_SPREAD|0|"), g)["held"], "")
+
+    def test_duplicate_quotes_keyed_by_price(self):
+        r = run_nfl.projection_gaps(run_nfl.load_nfl_lines(board(game(24, 20, extra=[
+            dict(market="SPREAD", line=-3.5, price_a=-130, price_b=110)]))))
+        self.assertNotAlmostEqual(r[G("AWY @ HOM", "SPREAD", -3.5, 0, -110)],
+                                  r[G("AWY @ HOM", "SPREAD", -3.5, 0, -130)], 2)
+
+    def test_conflicting_identical_quote_is_held(self):
+        g = {G("G", "SPREAD", -3.5, 0): None}
+        self.assertIn("duplicate quote", run_nfl.guard(row(), g)["held"])
+
+    def test_break_even_push_not_assumed_zero(self):
+        pay = v5.payout(-110)
+        mp = 1 / (1 + pay)                              # exactly break-even conditional
+        g = run_nfl.guard(row(model_p=mp, market_p=0.6, ev=0.0), {})
+        self.assertIn("push share", g["held"])
+        self.assertEqual(g["ev"], 0.0)
+
+    def test_every_row_zero_stake_and_create_only(self):
+        self.assertTrue(all(o["approved_stake_u"] == 0 for o in self.prod["out"]))
+        p = board(game(24, 20))
+        cwd = os.getcwd()
+        os.chdir(os.path.dirname(p))
+        try:
+            run_nfl.main(p)
+            run_nfl.main(p)
+            self.assertEqual(len([f for f in os.listdir(".") if f.startswith("picks_nfl_")]), 2)
+        finally:
+            os.chdir(cwd)
 
     def test_blend_math_and_push(self):
         w, l = 0.55, 0.40
@@ -123,7 +159,7 @@ class T(unittest.TestCase):
         self.assertEqual(v5.N_FIT, 20000)
 
     def test_non_nfl_untouched(self):
-        g = run_nfl.guard(row(sport="CBB", model_p=0.7, ev=0.3, pick="HOM -3.5"), {("G", "SPREAD", -3.5): 20})
+        g = run_nfl.guard(row(sport="CBB", model_p=0.7, ev=0.3, pick="HOM -3.5"), {G("G", "SPREAD", -3.5): 20})
         self.assertEqual((g["ev"], g["held"]), (0.3, ""))
 
 

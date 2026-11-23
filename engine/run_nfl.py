@@ -79,7 +79,7 @@ def quote_gap(S, r):
 
 
 def projection_gaps(games):
-    """{(game, market, line): gap} for every two-sided NFL SPREAD / TOTAL quote (all
+    """{(game, market, line, side, price): gap} for every two-sided NFL SPREAD / TOTAL quote (all
     periods, alts included) in pregame games that have a projection. Each quote is compared
     with the model's projection for the same period."""
     out = {}
@@ -94,7 +94,13 @@ def projection_gaps(games):
         for r in g["lines"]:
             base = v5.split_market("NFL", r["market"])[1]
             if base in ("SPREAD", "TOTAL") and r["price_a"] and r["price_b"]:
-                out[(f"{away} @ {home}", r["market"], float(r["line"]))] = quote_gap(S, r)
+                gap = quote_gap(S, r)
+                for side, price in ((0, r["price_a"]), (1, r["price_b"])):
+                    key = (f"{away} @ {home}", r["market"], float(r["line"]), side, int(price))
+                    if key in out and (out[key] is None or abs(out[key] - gap) > 1e-9):
+                        out[key] = None                # ambiguous duplicate quote: never guess
+                    else:
+                        out[key] = gap
     return out
 
 
@@ -108,6 +114,7 @@ def _row_line(o):
 def guard(o, gaps):
     """Add blend_p / model_ev / held / status to one priced side; EV becomes the blended EV."""
     o["model_ev"], o["blend_p"], o["held"], o["status"] = o["ev"], o["model_p"], "", "v5"
+    o["approved_stake_u"] = 0
     if o["sport"] != "NFL":
         return o
     mp, fp = o["model_p"], o["market_p"]
@@ -119,8 +126,11 @@ def guard(o, gaps):
         p = BLEND_W * mp + (1 - BLEND_W) * fp
         pay = v5.payout(o["price"])
         den = mp * pay - (1 - mp)
-        s = o["ev"] / den if abs(den) > 1e-9 else 1.0      # share of sims that don't push
-        s = min(max(s, 0.0), 1.0) if s == s else 1.0
+        if abs(den) > 1e-6:
+            s = min(max(o["ev"] / den, 0.0), 1.0)       # share of sims that don't push
+        else:                                           # model exactly break-even: push share
+            s = 0.0                                     # unrecoverable -> no blended edge claimed
+            reasons.append("push share not recoverable at break-even (hold)")
         o["blend_p"] = p
         o["ev"] = s * (p * pay - (1 - p))
         o["score"] = v5.score(o["ev"])
@@ -130,7 +140,10 @@ def guard(o, gaps):
     market = o["bet_type"].split("|")[0]
     pre, base = v5.split_market("NFL", market)
     if base in ("SPREAD", "TOTAL") and not o["player"]:
-        gap = gaps.get((o["game"], market, _row_line(o)))
+        key = (o["game"], market, _row_line(o), int(o["bet_type"].split("|")[1]), int(o["price"]))
+        if key in gaps and gaps[key] is None:
+            reasons.append("duplicate quote with conflicting gap (hold)")
+        gap = gaps.get(key)
         if gap is not None and abs(gap) > GAP_PTS:
             name = pre or "full-game"
             kind = "spread" if base == "SPREAD" else "total"
@@ -190,8 +203,13 @@ def table(rows, held=False):
 def main(path):
     r = build(path)
     print(r["notes"], "\n")
-    for (g, mk, ln), gap in sorted(r["gaps"].items()):
-        print(f"NFL {g} {mk} {ln:+g}: projection vs quote {gap:+.1f} pts")
+    seen = set()
+    for (g, mk, ln, _side, _price), gap in sorted(r["gaps"].items(), key=lambda kv: kv[0][:4]):
+        if (g, mk, ln) in seen:
+            continue
+        seen.add((g, mk, ln))
+        txt = "ambiguous duplicate" if gap is None else f"{gap:+.1f} pts"
+        print(f"NFL {g} {mk} {ln:+g}: projection vs quote {txt}")
     print(f"\nCARD ({len(r['card'])}) - NFL two-sided rows ranked by 30/70 blended EV\n")
     table(r["card"])
     if r["doubted"]:
@@ -203,11 +221,14 @@ def main(path):
     if r["held"]:
         print(f"\nHELD ({len(r['held'])}) - every held priced side, 0u\n")
         table(r["held"], held=True)
-    with open("picks_nfl.csv", "w", newline="") as f:
+    import datetime
+    name = "picks_nfl_" + datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + ".csv"
+    with open(name, "x", newline="") as f:                     # create-only, never overwrite
         keys = list(r["out"][0].keys()) if r["out"] else ["pick"]
         w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
         w.writeheader()
         w.writerows(r["out"])
+    print(f"\nAll priced sides saved to {name} (research only; approved_stake_u = 0 on every row)")
 
 
 if __name__ == "__main__":
