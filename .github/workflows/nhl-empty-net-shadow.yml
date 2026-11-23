@@ -1,0 +1,24 @@
+name: NHL empty-net shadow challenger (offline)
+on:
+  pull_request:
+    paths:
+      - 'models/nhl/nhl_empty_net_challenger.py'
+      - 'models/nhl/test_nhl_empty_net_challenger.py'
+      - '.github/workflows/nhl-empty-net-shadow.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Isolated shadow EN tests
+        working-directory: models/nhl
+        run: python -m unittest -v test_nhl_empty_net_challenger
