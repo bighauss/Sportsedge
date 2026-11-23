@@ -1,22 +1,22 @@
-margin scale k=1.18  total offset=+0.7
-55 plays >3% EV
-+32.1% ArkSt@SUU          ML     SUU                  +260 proj 80.8-79.9
-+27.9% OleMiss@Clemson    ML     Clemson              +205 proj 73.9-74.5
+margin scale k=1.22  total offset=+0.7
+46 plays >3% EV
++32.0% ArkSt@SUU          ML     SUU                  +260 proj 80.8-79.9
++17.0% Yale@Belmont       SPREAD Belmont      -3.5    -102 proj 68.8-78.0
 +16.4% ArkSt@SUU          SPREAD SUU          7.5     -112 proj 80.8-79.9
-+16.2% Yale@Belmont       SPREAD Belmont      -3.5    -102 proj 68.9-77.9
-+14.6% Tulsa@OrSt         TOTAL  O            154.5   -105 proj 78.3-84.4
-+14.2% GaSo@NKU           TOTAL  U            166.5   -110 proj 76.5-81.8
-+13.2% Yale@Belmont       ML     Belmont              -155 proj 68.9-77.9
-+12.5% OleMiss@Clemson    SPREAD Clemson      6.5     -128 proj 73.9-74.5
-+11.9% Tulsa@OrSt         TT     Tulsa O      73.5    -110 proj 78.3-84.4
-+11.7% IndSt@ECU          ML     ECU                  -155 proj 70.9-79.2
-+11.5% GaSo@NKU           TT     GaSo U       81.5    -115 proj 76.5-81.8
-+11.5% IndSt@ECU          SPREAD ECU          -3.5    -106 proj 70.9-79.2
-+10.4% IndSt@ECU          TT     ECU O        74.5    -115 proj 70.9-79.2
- +9.6% Akron@Wright       TOTAL  U            147.5   -105 proj 69.4-72.3
- +9.4% Yale@Belmont       TT     Belmont O    73.5    -115 proj 68.9-77.9
- +9.2% UW@BYU             TOTAL  U            165.5   -110 proj 72.7-86.9
++14.6% Tulsa@OrSt         TOTAL  O            154.5   -105 proj 78.2-84.5
++14.2% GaSo@NKU           TOTAL  U            166.5   -110 proj 76.4-81.9
++13.7% Yale@Belmont       ML     Belmont              -155 proj 68.8-78.0
++12.2% IndSt@ECU          ML     ECU                  -155 proj 70.8-79.3
++12.2% IndSt@ECU          SPREAD ECU          -3.5    -106 proj 70.8-79.3
++11.8% GaSo@NKU           TT     GaSo U       81.5    -115 proj 76.4-81.9
++11.6% Tulsa@OrSt         TT     Tulsa O      73.5    -110 proj 78.2-84.5
++10.8% IndSt@ECU          TT     ECU O        74.5    -115 proj 70.8-79.3
+ +9.8% Yale@Belmont       TT     Belmont O    73.5    -115 proj 68.8-78.0
+ +9.6% Akron@Wright       TOTAL  U            147.5   -105 proj 69.3-72.3
+ +9.2% UW@BYU             TOTAL  U            165.5   -110 proj 74.3-85.3
  +9.1% ArkSt@SUU          TT     ArkSt U      85.5    -120 proj 80.8-79.9
- +8.5% Akron@Wright       TT     Akron U      73.5    -115 proj 69.4-72.3
- +8.1% NIowa@Davidson     TOTAL  O            142.5   -105 proj 70.8-77.0
- +7.9% OleMiss@Clemson    TT     OleMiss U    77.5    -110 proj 73.9-74.5
+ +8.7% UW@BYU             TT     BYU U        89.5    -115 proj 74.3-85.3
+ +8.6% Akron@Wright       TT     Akron U      73.5    -115 proj 69.3-72.3
+ +8.1% NIowa@Davidson     TOTAL  O            142.5   -105 proj 70.7-77.0
+ +8.0% OleMiss@Clemson    ML     Clemson              +205 proj 75.7-72.7
+ +7.9% Tulsa@OrSt         TT     OrSt O       80.5    -115 proj 78.2-84.5

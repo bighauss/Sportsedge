@@ -49,7 +49,7 @@ def nv(a,b): x,y=imp(a),imp(b); return x/(x+y),y/(x+y)
 out=[]
 for g in G:
   a,h,sp,spa,sph,tot,to,tu,mla,mlh,tta,tth=g
-  A,H=T[a],T[h]; poss=A[2]*H[2]/LT
+  A,H=T[a],T[h]; poss=A[2]*H[2]/LT; HCA=0.0 if h in ('Clemson','BYU','Prov','Arizona') else 3.0
   pa=A[0]*H[1]/LE*poss/100-HCA/2; ph=H[0]*A[1]/LE*poss/100+HCA/2
   marg=ph-pa; t=pa+ph
   def add(mk,side,line,price,pm,opp):
