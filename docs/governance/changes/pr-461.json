@@ -1,0 +1,70 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 461,
+  "base_commit": "ca14dc2d287ecd3fa9cc5a6855b66ca914661212",
+  "protected_paths": [
+    ".github/workflows/frozen-results-bridge.yml",
+    "sportsedge/validation/espn_final_evidence.py",
+    "sportsedge/validation/espn_paper_grade_bridge.py",
+    "sportsedge/validation/nfl_frozen_csv.py",
+    "sportsedge/validation/paper_grade_batch.py",
+    "sportsedge/validation/paper_ledger.py",
+    "sportsedge/validation/test_espn_final_evidence.py",
+    "sportsedge/validation/test_espn_paper_grade_bridge.py",
+    "sportsedge/validation/test_paper_grade_batch.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/457",
+  "change_summary": "Clean-source port of frozen-CSV ESPN paper grading chain #397/#399/#442 onto main: eight source/fixture/workflow files plus additive source bytes and settlement helper integration; all validation via offline named regressions.",
+  "assumptions": [
+    "Historical synthetic fixture SHA reused as the stack's non-authenticating golden regression fixture; no original provider result or player data is certified.",
+    "Original 572 attempted, 330 exported, 35 qualifying and 20 displayed are separate private populations; synthetic code cannot grade missing results.",
+    "Prior stacked branches have stale bases and must not be merged over this clean integration once reviewed."
+  ],
+  "agent_identity": "ChatGPT coding assistant",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Named bridge regression execution on exact PR head",
+    "before": null,
+    "unit": "tests",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v sportsedge.validation.test_espn_paper_grade_bridge sportsedge.validation.test_espn_final_evidence sportsedge.validation.test_paper_grade_batch sportsedge.validation.test_paper_ledger",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "ca14dc2d287ecd3fa9cc5a6855b66ca914661212",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v sportsedge.validation.test_espn_paper_grade_bridge sportsedge.validation.test_espn_final_evidence sportsedge.validation.test_paper_grade_batch sportsedge.validation.test_paper_ledger"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
