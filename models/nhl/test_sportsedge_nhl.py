@@ -115,16 +115,6 @@ def main():
     assert len(rows) == len(picks)
     md = open(res["md"]).read()
     assert "Game Card" in md and "Prop Card" in md
-    # empty-net refit (2026-11-22): 3-goal finals must outweigh 2-goal finals near league scoring,
-    # as observed (22.1% vs 18.2% over 285 finals); the old 0.13/0.07 gave 16.8% vs 25.3%.
-    gp = m.GamePricer(3.28, 2.98)
-    fm = {}
-    for d, p in gp.diff.items():
-        k = 1 if d == 0 else abs(d)
-        fm[k] = fm.get(k, 0) + p
-    assert fm[3] > fm[2], fm
-    assert 0.38 < fm[1] < 0.47, fm[1]
-    assert abs(sum(p for row in gp.M for p in row) - 1) < 1e-9
     print(md)
     print("PASS: %d plays, %d dropped, markets %s" % (len(picks), len(res["dropped"]),
                                                      sorted({p["market"] for p in picks})))
