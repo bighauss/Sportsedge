@@ -75,17 +75,26 @@ def build(runs, pick_set=None, title="NFL weekly scorecard"):
     else:
         L.append("- no finals with projection + market numbers yet")
     L.append("")
-    rows = [g for r in settled for g in r["settlement"]["graded"]
-            if g["result"] in ("W", "L", "P") and (pick_set is None or g["pick_set"] == pick_set)]
-    ng = sum(1 for r in settled for g in r["settlement"]["graded"]
-             if g["result"] == "NG" and (pick_set is None or g["pick_set"] == pick_set))
+    all_rows = [g for r in settled for g in r["settlement"]["graded"]
+                if pick_set is None or g["pick_set"] == pick_set]
+    rows = [g for g in all_rows if g["result"] in ("W", "L", "P")]
+    ng = sum(g["result"] == "NG" for g in all_rows)
     L.append("## Overall")
     L.append(f"- All: {_rec(rows)}")
     L.append(f"- Unheld priced candidates: {_rec([g for g in rows if not g['held']])}")
-    if any(g.get("on_card") is not None for g in rows):
-        L.append(f"- Card selections: {_rec([g for g in rows if g.get('on_card')])}")
+    # Never treat missing legacy selection data as an explicit unselected bet;
+    # separate denominator counts include NG rows so coverage is visible.
+    recorded = [g for g in all_rows if g.get("on_card") is not None]
+    legacy = [g for g in all_rows if g.get("on_card") is None]
+    if recorded:
+        L.append(f"- Card selections: {_rec([g for g in recorded if g['on_card']])} "
+                 f"(priced rows={sum(g['on_card'] for g in recorded)})")
+        L.append(f"- Explicitly unselected: {_rec([g for g in recorded if not g['on_card']])} "
+                 f"(priced rows={sum(not g['on_card'] for g in recorded)})")
     else:
         L.append("- Card selections: selection not recorded in this run's picks file")
+    if legacy:
+        L.append(f"- Selection not recorded (legacy): {_rec(legacy)} (priced rows={len(legacy)})")
     L.append(f"- Held: {_rec([g for g in rows if g['held']])}")
     if ng:
         L.append(f"- Not gradable (missing score/stat): {ng}")
