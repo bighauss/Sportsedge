@@ -64,8 +64,11 @@ def _strict_prob(value, context):
 
 
 def _profit_1u(price, result):
-    p = float(price)
-    if not (p >= 100.0 or p <= -100.0):
+    try:
+        p = float(price)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise IntegrityError(f"invalid American price {price!r}") from exc
+    if not math.isfinite(p) or not p.is_integer() or abs(p) < 100:
         raise IntegrityError(f"invalid American price {price!r}")
     if result == "P":
         return 0.0
@@ -275,7 +278,7 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
                     units = frac * _profit_1u(row["price"], "W") - (1.0 - frac)
                     exclusions["dead_heat_rows"] += 1
                 else:
-                    units = 0.0
+                    units = _profit_1u(row["price"], "P")
                     exclusions["push_rows"] += 1
                 roi_obs.append({"sport": sport, "event_id": event_key,
                                 "family": row["family"], "units": units})
@@ -293,8 +296,9 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
                 exclusions["missing_probability_rows"] += 1
                 continue
             y = int(row["result"] == "W")
-            close_p = (closing_quotes or {}).get((m["run_id"], row.get("quote_id")))
-            clv = (float(close_p) - kp) if close_p is not None else None
+            close_p = _strict_prob((closing_quotes or {}).get((m["run_id"], row.get("quote_id"))),
+                                   "caller_supplied_closing_probability")
+            clv = (close_p - kp) if close_p is not None else None
             probs = {
                 "market_only": kp,
                 "blend_90_10": 0.9 * kp + 0.1 * mp,
@@ -331,7 +335,7 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
         row_delta = sum(b - m for b, m in zip(b_list, m_list)) / n
         cal = _calibration([(r["p"], r["y"]) for r in rows])
         clvs = [r["clv"] for r in rows if r["clv"] is not None]
-        clv_out = ({"mean": sum(clvs) / len(clvs), "n": len(clvs), "status": "AUTHENTICATED_CLOSING_QUOTES"}
+        clv_out = ({"mean": sum(clvs) / len(clvs), "n": len(clvs), "status": "CALLER_SUPPLIED_CLOSING_PROBABILITIES_UNVERIFIED"}
                    if clvs else {"mean": None, "n": 0, "status": "NOT_AVAILABLE_NO_AUTHENTICATED_CLOSING_QUOTES"})
         return {
             "n": n, "n_events": n_ev,
