@@ -15,6 +15,50 @@ from cbbd_prospective_capture import Hold, decoded, utc, _unique_pairs, _bad_con
 URL = "https://api.collegebasketballdata.com/games/players"
 
 
+def plan_player_windows(games, *, season, start_utc, end_utc, max_games=400, max_batches=4):
+    """Bound each inclusive player request by known scheduled game density.
+
+    Keep identical tip timestamps together. Use the most recent windows when
+    the bounded request budget cannot cover the whole season. The downstream
+    full-final census still reports missing games; no coverage is assumed.
+    """
+    lo, hi = utc(start_utc, "window_start"), utc(end_utc, "window_end")
+    if lo >= hi or not (1 <= max_games <= 400 and 1 <= max_batches <= 4):
+        raise Hold("PLAYER_WINDOW_CONFIG_INVALID")
+    tips = defaultdict(set)
+    ids = Counter(g.get("id") for g in games if isinstance(g, dict) and type(g.get("id")) is int)
+    for g in games:
+        if (not isinstance(g, dict) or type(g.get("id")) is not int or g["id"] <= 0
+                or ids[g["id"]] != 1 or g.get("season") != season or g.get("startTimeTbd") is not False):
+            continue
+        try:
+            tip = utc(g.get("startDate"), "tip")
+        except ValueError:
+            continue
+        if lo <= tip <= hi:
+            tips[tip].add(g["id"])
+    windows, group = [], []
+    n = 0
+    for tip, members in sorted(tips.items(), reverse=True):
+        if len(members) > max_games:
+            raise Hold("PLAYER_WINDOW_SINGLE_TIP_CAPACITY")
+        if group and n + len(members) > max_games:
+            windows.append((group[-1], group[0], n))
+            group, n = [], 0
+        group.append(tip)
+        n += len(members)
+    if group:
+        windows.append((group[-1], group[0], n))
+    selected = list(reversed(windows[:max_batches]))
+    def z(t):
+        return t.isoformat().replace("+00:00", "Z")
+    return {"windows": [{"start_utc": z(a), "end_utc": z(b), "scheduled_games": n}
+                        for a, b, n in selected],
+            "known_games": sum(len(x) for x in tips.values()),
+            "planned_games": sum(n for _, _, n in selected),
+            "omitted_games": sum(n for _, _, n in windows[max_batches:])}
+
+
 def decode_player_boxes(raw):
     # Player boxes are substantially larger than schedule records.
     if type(raw) is not bytes or not 0 < len(raw) <= 32 * 1024 * 1024:
