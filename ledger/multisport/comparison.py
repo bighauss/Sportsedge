@@ -2,17 +2,22 @@
 
 Fixes survivorship fallback (dedupes latest pregame per event BEFORE filtering
 quarantined/unsettled runs), enforces parsed UTC capture < start timestamps,
-aligns cluster bootstrap CIs with both equal-event and row-weighted estimates,
-and discloses small-cluster warnings (n_events < 30).
+fails closed on ambiguous equal-time captures and on inconsistent event start
+times, aligns cluster bootstrap CIs with both equal-event and row-weighted
+estimates, and discloses small-cluster warnings (n_events < 30). ROI is
+reported two ways: decided-rows-only hypothetical_roi_1u, and all-quote
+roi_all_quotes_1u where pushes settle at 0.0 and PGA dead heats settle at
+their fractional book payout; rows excluded from the paired probability
+sample are counted in exclusion_audit and sample_census.
 """
 import math
 import random
 from datetime import datetime, timezone
 
 try:
-    from .adapters import SPORTS, grade_row, is_push_capable, market_family
+    from .adapters import SPORTS, dead_heat_win_fraction, grade_row, is_push_capable, market_family
 except ImportError:
-    from adapters import SPORTS, grade_row, is_push_capable, market_family
+    from adapters import SPORTS, dead_heat_win_fraction, grade_row, is_push_capable, market_family
 
 FIELDS = ("model_p", "market_p", "blend_p")
 VALID_PROB_DEFS = ("conditional_no_push", "unconditional_win")
@@ -60,6 +65,8 @@ def _strict_prob(value, context):
 
 def _profit_1u(price, result):
     p = float(price)
+    if not (p >= 100.0 or p <= -100.0):
+        raise IntegrityError(f"invalid American price {price!r}")
     if result == "P":
         return 0.0
     if result == "L":
@@ -76,6 +83,7 @@ def select_latest_pregame_runs(runs):
     was quarantined or unsettled. Also enforces parsed capture_utc < start_utc.
     """
     by_event = {}
+    starts = {}
     superseded = 0
     postgame_excluded = 0
     seen_ids = set()
@@ -95,9 +103,18 @@ def select_latest_pregame_runs(runs):
             postgame_excluded += 1
             continue
         key = (sport, m["event_id"])
+        if key in starts and starts[key] != start_dt:
+            raise IntegrityError(
+                f"inconsistent start_utc for {sport} event {m['event_id']!r}: "
+                f"{starts[key].isoformat()} vs {start_dt.isoformat()}")
+        starts[key] = start_dt
         prev = by_event.get(key)
         if prev is None:
             by_event[key] = (cap_dt, run)
+        elif cap_dt == prev[0]:
+            raise IntegrityError(
+                f"ambiguous equal-time captures for {sport} event {m['event_id']!r} "
+                f"at {cap_dt.isoformat()}: {prev[1]['manifest']['run_id']!r} vs {rid!r}")
         elif cap_dt > prev[0]:
             by_event[key] = (cap_dt, run)
             superseded += 1
@@ -235,6 +252,9 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
     eligible, run_audit = select_latest_pregame_runs(runs)
     cand_names = ("market_only", "blend_90_10", "current_model", "independent_model")
     obs = {c: [] for c in cand_names}
+    roi_obs = []
+    exclusions = {"push_rows": 0, "dead_heat_rows": 0,
+                  "ungraded_rows": 0, "missing_probability_rows": 0}
     coverage_gaps = {}
 
     for run in eligible:
@@ -245,15 +265,31 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
                 coverage_gaps.setdefault(sport, {})[fam] = reason
         reconciled = _reconcile_run(run, pick_set, authenticated_finals=authenticated_finals)
         for row in reconciled:
+            event_key = f"{sport}:{m['event_id']}"
+            if row["result"] == "P":
+                frac = dead_heat_win_fraction(row, run["settlement"]["finals"])
+                if frac is not None:
+                    units = frac * _profit_1u(row["price"], "W") - (1.0 - frac)
+                    exclusions["dead_heat_rows"] += 1
+                else:
+                    units = 0.0
+                    exclusions["push_rows"] += 1
+                roi_obs.append({"sport": sport, "event_id": event_key,
+                                "family": row["family"], "units": units})
+                continue
             if row["result"] not in ("W", "L"):
+                exclusions["ungraded_rows"] += 1
                 continue
             mp = _cond_prob(sport, row, "model_p", default_prob_definition)
             kp = _cond_prob(sport, row, "market_p", default_prob_definition)
             bp = _cond_prob(sport, row, "blend_p", default_prob_definition)
             if mp is None or kp is None or bp is None:
+                exclusions["missing_probability_rows"] += 1
                 continue
             y = int(row["result"] == "W")
             units = _profit_1u(row["price"], row["result"])
+            roi_obs.append({"sport": sport, "event_id": event_key,
+                            "family": row["family"], "units": units})
             close_p = (closing_quotes or {}).get((m["run_id"], row.get("quote_id")))
             clv = (float(close_p) - kp) if close_p is not None else None
             probs = {
@@ -307,24 +343,46 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
             "clv": clv_out,
         }
 
+    def _roi_agg(rows):
+        """All-quote ROI: every settled quote counts, pushes at 0.0 and dead
+        heats at their fractional book settlement. Kept separate from the
+        decided-rows-only hypothetical_roi_1u inside _agg."""
+        if not rows:
+            return {"n_settled_quotes": 0, "roi_all_quotes_1u": None}
+        return {"n_settled_quotes": len(rows),
+                "roi_all_quotes_1u": sum(r["units"] for r in rows) / len(rows)}
+
     candidates = {}
     for cname in cand_names:
         rows = obs[cname]
         by_sport = {}
-        for sp in sorted({r["sport"] for r in rows}):
+        for sp in sorted({r["sport"] for r in rows} | {r["sport"] for r in roi_obs}):
             sp_rows = [r for r in rows if r["sport"] == sp]
+            sp_roi = [r for r in roi_obs if r["sport"] == sp]
+            fam_all = sorted({r["family"] for r in sp_rows} | {r["family"] for r in sp_roi})
             by_sport[sp] = {
-                "overall": _agg(sp_rows),
+                "overall": {**_agg(sp_rows), **_roi_agg(sp_roi)},
                 "by_family": {
-                    fam: _agg([r for r in sp_rows if r["family"] == fam])
-                    for fam in sorted({r["family"] for r in sp_rows})
+                    fam: {**_agg([r for r in sp_rows if r["family"] == fam]),
+                          **_roi_agg([r for r in sp_roi if r["family"] == fam])}
+                    for fam in fam_all
                 },
             }
-        candidates[cname] = {"overall": _agg(rows), "by_sport": by_sport}
+        candidates[cname] = {"overall": {**_agg(rows), **_roi_agg(roi_obs)},
+                             "by_sport": by_sport}
 
+    eligible_events = {f"{run['manifest']['sport'].upper()}:{run['manifest']['event_id']}"
+                       for run in eligible}
+    paired_events = {r["event_id"] for r in obs["independent_model"]}
     return {
         "pick_set": pick_set,
         "run_audit": run_audit,
+        "exclusion_audit": exclusions,
+        "sample_census": {
+            "eligible_events": len(eligible_events),
+            "paired_metric_events": len(paired_events),
+            "events_without_paired_rows": sorted(eligible_events - paired_events),
+        },
         "coverage_gaps": coverage_gaps,
         "candidates": candidates,
     }

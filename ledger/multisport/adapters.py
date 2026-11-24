@@ -118,6 +118,36 @@ def is_push_capable(sport, row):
     return False
 
 
+def dead_heat_win_fraction(row, finals):
+    """Winning fraction of a PGA top-K dead heat under book rules, else None.
+
+    When t players tie at position pos and only (K - pos + 1) of them fit
+    inside the top K, each winning ticket is paid on that fraction of the
+    stake and loses the rest. Returns None for non-placement markets,
+    outright wins/losses, and ties fully inside the places (full win).
+    """
+    market = (row.get("market") or "").strip().lower()
+    if not market.startswith("top_"):
+        return None
+    try:
+        k = int(market.split("_", 1)[1])
+    except ValueError:
+        return None
+    positions = finals.get("positions") or {}
+    player = (row.get("player") or row.get("pick") or "").strip()
+    pos = positions.get(player)
+    if pos is None:
+        return None
+    pos = int(pos)
+    if pos > k:
+        return None
+    tied = sum(1 for v in positions.values() if int(v) == pos)
+    places = k - pos + 1
+    if tied <= places:
+        return None
+    return places / tied
+
+
 def grade_row(sport, row, finals, stats=None):
     """Grade one normalized row for any of the 7 sports. Returns (result, reason).
 

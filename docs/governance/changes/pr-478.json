@@ -1,0 +1,61 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 478,
+  "base_commit": "9267e10ca9c500a9ea66ba82ef4831c63fe338b8",
+  "protected_paths": [".github/workflows/multisport-research-comparison.yml"],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Adds the required high-risk change manifest for PR #478. The PR diff adds one workflow file under .github/workflows/ (a protected path) plus a research-only seven-sport comparison framework under ledger/multisport/. This manifest commit changes no workflow, model, frozen artifact, or runtime behavior; it only declares the change so the trusted governance check can pass.",
+  "assumptions": [
+    "PR #478 was authored by another agent lane; this manifest was added by Rocky (Muse) under Isaac's Nov 23, 2026 directive to diagnose and repair the PR's governance failure.",
+    "Research-only framework: no production routing, staking, market release, or certification change; all output remains PAPER / 0u.",
+    "Base commit is the main HEAD at manifest authoring time; if main advances before the governance check runs on a new head, the manifest base_commit must be refreshed to the new base.",
+    "Baseline is UNKNOWN because the framework is new research code with no prior measured baseline in the repository."
+  ],
+  "agent_identity": "Rocky (Muse, Muse) acting for Isaac Rome",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "multisport comparison framework presence on main",
+    "before": null,
+    "unit": "modules",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s ledger/multisport/tests -p test_*.py",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "9267e10ca9c500a9ea66ba82ef4831c63fe338b8",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest tools.test_agent_change_governance"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from adapters import SPORTS, grade_row
-from comparison import evaluate_multisport
+from adapters import SPORTS, dead_heat_win_fraction, grade_row
+from comparison import IntegrityError, evaluate_multisport
 
 
 def _make_run(run_id, sport, event_id, capture_utc, start_utc, rows, finals,
@@ -97,6 +97,78 @@ class MultiSportFrameworkTests(unittest.TestCase):
                              dict(positions={"A": 5, "B": 5, "C": 5}))
         self.assertEqual(res, "P")
         self.assertIn("dead_heat", why)
+
+    def test_equal_time_captures_fail_closed(self):
+        row = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5, price=-110,
+                    model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        a = _make_run("r_a", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z", "2026-11-24T01:00:00Z", row, finals)
+        b = _make_run("r_b", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z", "2026-11-24T01:00:00Z", row, finals)
+        with self.assertRaises(IntegrityError):
+            evaluate_multisport([a, b], "baseline")
+        with self.assertRaises(IntegrityError):
+            evaluate_multisport([b, a], "baseline")
+
+    def test_inconsistent_start_times_fail_closed(self):
+        row = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5, price=-110,
+                    model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        a = _make_run("r_a", "NFL", "CIN@WAS", "2026-11-23T18:00:00Z", "2026-11-24T01:00:00Z", row, finals)
+        b = _make_run("r_b", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z", "2026-11-24T02:00:00Z", row, finals)
+        with self.assertRaises(IntegrityError):
+            evaluate_multisport([a, b], "baseline")
+
+    def test_push_counts_in_all_quote_roi_at_zero(self):
+        rows = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.0, price=-110,
+                     model_p=0.8, market_p=0.5, blend_p=0.6,
+                     prob_definition="conditional_no_push", approved_stake_u=0),
+                dict(quote_id="q2", market="total", pick="over", player=None, line=30.0, price=-110,
+                     model_p=0.6, market_p=0.5, blend_p=0.55, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        run = _make_run("r_push", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z", "2026-11-24T01:00:00Z", rows, finals)
+        report = evaluate_multisport([run], "baseline")
+        overall = report["candidates"]["independent_model"]["overall"]
+        # WAS -3.0 wins by 10 (profit 100/110); total 30.0 pushes exactly.
+        self.assertEqual(overall["n"], 1)
+        self.assertAlmostEqual(overall["hypothetical_roi_1u"], 100.0 / 110.0)
+        self.assertEqual(overall["n_settled_quotes"], 2)
+        self.assertAlmostEqual(overall["roi_all_quotes_1u"], (100.0 / 110.0) / 2)
+        self.assertEqual(report["exclusion_audit"]["push_rows"], 1)
+
+    def test_dead_heat_settles_at_fractional_book_payout(self):
+        rows = [dict(quote_id="q1", market="top_5", pick="A", player="A", line=None, price=150,
+                     model_p=0.42, market_p=0.38, blend_p=0.39,
+                     prob_definition="conditional_no_push", approved_stake_u=0)]
+        finals = dict(positions={"A": 5, "B": 5, "C": 5})
+        frac = dead_heat_win_fraction(rows[0], finals)
+        self.assertAlmostEqual(frac, 1.0 / 3.0)
+        run = _make_run("r_dh", "PGA", "EVENT", "2026-04-09T10:00:00Z", "2026-04-09T12:00:00Z", rows, finals)
+        report = evaluate_multisport([run], "baseline")
+        overall = report["candidates"]["independent_model"]["overall"]
+        self.assertEqual(overall["n"], 0)
+        self.assertEqual(overall["n_settled_quotes"], 1)
+        self.assertAlmostEqual(overall["roi_all_quotes_1u"], (1.0 / 3.0) * 1.5 - (2.0 / 3.0))
+        self.assertEqual(report["exclusion_audit"]["dead_heat_rows"], 1)
+
+    def test_missing_probability_rows_are_audited_not_silent(self):
+        rows = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5, price=-110,
+                     model_p=None, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        run = _make_run("r_mp", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z", "2026-11-24T01:00:00Z", rows, finals)
+        report = evaluate_multisport([run], "baseline")
+        self.assertEqual(report["candidates"]["independent_model"]["overall"]["n"], 0)
+        self.assertEqual(report["exclusion_audit"]["missing_probability_rows"], 1)
+        self.assertEqual(report["sample_census"]["eligible_events"], 1)
+        self.assertEqual(report["sample_census"]["paired_metric_events"], 0)
+        self.assertEqual(report["sample_census"]["events_without_paired_rows"], ["NFL:CIN@WAS"])
+
+    def test_invalid_american_price_fails_closed(self):
+        rows = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5, price=0,
+                     model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        run = _make_run("r_bad", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z", "2026-11-24T01:00:00Z", rows, finals)
+        with self.assertRaises(IntegrityError):
+            evaluate_multisport([run], "baseline")
 
 
 if __name__ == "__main__":
