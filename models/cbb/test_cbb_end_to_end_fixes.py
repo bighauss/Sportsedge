@@ -41,6 +41,28 @@ class IndependentReport(unittest.TestCase):
         self.assertEqual(card["priced_market_rows"], 0)
         self.assertIn("not recommendations or validated positive EV", report)
 
+class PeriodIdentity(unittest.TestCase):
+    def test_explicit_non_full_game_main_quotes_are_withheld(self):
+        for period in ("1H", "2H", "", "Q1", None):
+            with self.subTest(period=period):
+                card, _, extra = go([row("SPREAD", "-3.5", period=period)])
+                self.assertEqual(m_of(card, "9001", "spread")["status"], "PASS")
+                self.assertTrue(any("UNSUPPORTED_PERIOD" in x[2] for x in extra["quotes_unmatched"]))
+
+    def test_first_half_ladder_cannot_be_priced_as_full_game(self):
+        main = row("TOTAL", "140.5", totals_order="over_under", period="FG")
+        half = row("ALT_TOTAL", "145.5", "+120", "-150", totals_order="over_under", period="1H")
+        card, _, extra = go([main, half], config=LOOSE)
+        self.assertEqual(m_of(card, "9001", "total")["status"], "PRICED_PAPER")
+        self.assertEqual(extra["ladders"], [])
+        self.assertTrue(any("UNSUPPORTED_PERIOD" in x[2] for x in extra["ladders_skipped"]))
+
+    def test_other_period_does_not_poison_full_game_quote(self):
+        fg = row("SPREAD", "-3.5", period="FG", dk_event_id="E1")
+        h1 = row("SPREAD", "-1.5", period="1H", dk_event_id="E2")
+        card, _, _ = go([fg, h1])
+        self.assertEqual(m_of(card, "9001", "spread")["status"], "PRICED_PAPER")
+
 class TotalsBinding(unittest.TestCase):
     def test_global_constant_stays_false_and_totals_withheld_by_default(self):
         self.assertFalse(R.TOTALS_ORDER_VERIFIED)
