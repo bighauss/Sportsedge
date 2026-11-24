@@ -589,6 +589,12 @@ def render(card, names, extra):
         o += ["", f"Slate player-history coverage: {sp['team_rows_with_history']} of {sp['team_rows']} team-game rows "
               f"have eligible historical candidates; {sp['team_rows_without_history']} have none.",
               "Historical team IDs are not confirmed rosters or game-day availability; no prop forecasts or prices."]
+    if "conditional_player_means" in extra:
+        cp = extra["conditional_player_means"]
+        o += ["", f"Conditional player mean research: {cp['conditional_mean_rows']} of "
+              f"{cp['candidate_player_game_rows']} historical player-game candidates; "
+              "minutes, points, rebounds, assists, threes and PRA conditional on participation.",
+              "No confirmed activity, calibrated probabilities, matchup adjustment or prop prices."]
     o += ["", "**Pricing diagnostics below are not recommendations or validated positive EV.** "
           "The same-book blend is experimental, not independent market consensus. "
           "Large model-market disagreement, particularly longshots, requires calibration and event review.", ""]
@@ -903,6 +909,12 @@ def main(argv=None):
             (out / "slate_player_history_research.json").write_text(json.dumps(slate_players, sort_keys=True, allow_nan=False))
             extra["slate_player_history"] = {k: v for k, v in slate_players.items() if k != "rows"}
             receipts.extend(r for _, r in player_batches)
+            from cbbd_player_history import conditional_player_means
+            conditional = conditional_player_means(card, player_report)
+            (out / "conditional_player_means_research.json").write_text(
+                json.dumps(conditional, sort_keys=True, allow_nan=False))
+            extra["conditional_player_means"] = {k: v for k, v in conditional.items()
+                                                   if k not in ("rows", "source_batches")}
         except (ValueError, TypeError, KeyError, OSError, Hold) as exc:
             extra["player_history"] = {"label": "BLOCK_PLAYER_HISTORY", "reason": player_capture_error or type(exc).__name__,
                                        "historical_players": 0, "confirmed_activity": False, "approved_stake_u": 0}

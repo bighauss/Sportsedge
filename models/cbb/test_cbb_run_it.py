@@ -410,6 +410,38 @@ class PlayerHistorySource(unittest.TestCase):
             extra["slate_player_history"] = report
             self.assertIn("Slate player-history coverage", R.render(card, names, extra))
 
+    def test_conditional_player_means_are_pregame_and_keep_availability_unknown(self):
+        from cbbd_player_history import historical_baselines, conditional_player_means
+        records, _ = self.normalize(*self.inputs())
+        baseline = historical_baselines(records)[0]
+        with tempfile.TemporaryDirectory() as d:
+            card, names, extra = run(d)
+            report = conditional_player_means(card, {"historical_baselines": [baseline]})
+            self.assertEqual(report["conditional_mean_rows"], 1)
+            self.assertEqual(report["confirmed_active_players"], 0)
+            self.assertEqual(report["priced_props"], 0)
+            row = report["rows"][0]
+            self.assertEqual(row["game_id"], "9001")
+            self.assertEqual(row["minutes_if_participating"], 25)
+            self.assertEqual(row["means_if_participating"],
+                {"POINTS": 12, "REBOUNDS": 5, "ASSISTS": 3, "THREES": 2, "PRA": 20})
+            self.assertFalse(row["confirmed_activity"])
+            extra["conditional_player_means"] = report
+            self.assertIn("Conditional player mean research", R.render(card, names, extra))
+            with self.assertRaisesRegex(ValueError, "PLAYER_FROZEN_CARD_INVALID"):
+                conditional_player_means(dict(card, approved_stake_u=1), {"historical_baselines": [baseline]})
+
+    def test_conditional_player_means_reject_inconsistent_pra(self):
+        from cbbd_player_history import historical_baselines, conditional_player_means
+        records, _ = self.normalize(*self.inputs())
+        baseline = historical_baselines(records)[0]
+        baseline["stats"]["PRA"]["mean"] = 999
+        with tempfile.TemporaryDirectory() as d:
+            card, _, _ = run(d)
+            report = conditional_player_means(card, {"historical_baselines": [baseline]})
+            self.assertEqual(report["conditional_mean_rows"], 0)
+            self.assertEqual(report["rejected"], {"PLAYER_PRA_INCONSISTENT": 1})
+
     def test_slate_history_join_rejects_duplicate_and_future_player_baselines(self):
         from cbbd_player_history import historical_baselines, slate_history_coverage
         records, _ = self.normalize(*self.inputs())

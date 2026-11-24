@@ -286,3 +286,53 @@ def slate_history_coverage(card, history):
             "team_rows_without_history": sum(not r["historical_candidates"] for r in rows),
             "excluded_baselines": dict(excluded), "rows": rows,
             "confirmed_active_players": 0, "priced_props": 0, "approved_stake_u": 0}
+
+
+def conditional_player_means(card, history):
+    """Freeze a simple historical mean forecast conditional on participation.
+
+    No active roster, expected DNP probability, matchup adjustment, calibrated
+    distribution or price is implied. The last 4–5 admitted appearances
+    supply minutes and mean stats. These independent player means are not a
+    joint team allocation and must not be summed into a team forecast.
+    """
+    from cbbd_paper_card import CARD_STATUS, card_digest
+    if (card.get("status") != CARD_STATUS or card.get("approved_stake_u") != 0
+            or card.get("official_counted") != 0 or card.get("card_sha256") != card_digest(card)):
+        raise Hold("PLAYER_FROZEN_CARD_INVALID")
+    coverage = slate_history_coverage(card, history)
+    baselines = {b["player_id"]: b for b in history["historical_baselines"]}
+    games = {r["game_id"]: r for r in card["rows"]}
+    rows, rejected = [], Counter()
+    stat_names = ("POINTS", "REBOUNDS", "ASSISTS", "THREES", "PRA")
+    for team in coverage["rows"]:
+        for pid in team["historical_candidate_ids"]:
+            b = baselines[pid]
+            try:
+                minutes = b["mean_minutes"]
+                stats = {k: b["stats"][k]["mean"] for k in stat_names}
+                if (type(minutes) not in (int, float) or not math.isfinite(minutes)
+                        or not 0 < minutes <= 100
+                        or any(type(v) not in (int, float) or not math.isfinite(v) or v < 0
+                               for v in stats.values())):
+                    raise Hold("PLAYER_CONDITIONAL_MEAN_INVALID")
+                if not math.isclose(stats["PRA"], sum(stats[k] for k in stat_names[:3]),
+                                    rel_tol=1e-10, abs_tol=1e-10):
+                    raise Hold("PLAYER_PRA_INCONSISTENT")
+                gid = team["game_id"]
+                rows.append({"game_id": gid, "tipoff_utc": games[gid]["tipoff_utc"],
+                             "team_id": team["team_id"], "player_id": pid,
+                             "training_games": b["games"], "latest_participation_utc": b["latest_participation_utc"],
+                             "minutes_if_participating": minutes, "means_if_participating": stats,
+                             "status": "CONDITIONAL_MEAN_RESEARCH_AVAILABILITY_UNKNOWN",
+                             "confirmed_activity": False, "priced": False})
+            except (ValueError, TypeError, KeyError) as exc:
+                rejected[str(exc)] += 1
+    return {"label": "PAPER_0U_CONDITIONAL_PLAYER_MEANS", "card_sha256": card["card_sha256"],
+            "freeze_utc": card["freeze_utc"], "method": "LAST_4_TO_5_APPEARANCE_MEANS",
+            "source_batches": [{k: b[k] for k in ("source_sha256", "finals_sha256", "source_observed_utc")}
+                               for b in history.get("batches", [])],
+            "candidate_player_game_rows": sum(r["historical_candidates"] for r in coverage["rows"]),
+            "conditional_mean_rows": len(rows), "rejected": dict(rejected), "rows": rows,
+            "confirmed_active_players": 0, "priced_props": 0, "approved_stake_u": 0,
+            "holdout_calibrated": False}
