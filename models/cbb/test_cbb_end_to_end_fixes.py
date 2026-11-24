@@ -22,6 +22,25 @@ def go(board, **kw):
 def m_of(card, gid, market):
     return next(m for r in card["rows"] if r["game_id"] == gid for m in r["markets"] if m["market"] == market)
 
+class IndependentReport(unittest.TestCase):
+    def test_render_includes_every_game_and_independent_scores_without_odds(self):
+        card, names, extra = go([])
+        report = R.render(card, names, extra)
+        section = report.split("## Independent full-game score projections", 1)[1].split(
+            "## Priced markets", 1)[0]
+        for game in card["rows"]:
+            away, home, _ = names[game["game_id"]]
+            self.assertIn(f"{away} @ {home}", section)
+            if game["status"] == "PROJECTED":
+                p = game["projection"]
+                self.assertIn(f"| {p['away_points']:.2f} | {p['home_points']:.2f} | "
+                              f"{p['margin']:+.2f} | {p['total']:.2f} |", section)
+            else:
+                self.assertIn(f"PASS: {game['pass_reason']}", section)
+        self.assertGreater(card["projected_rows"], 0)
+        self.assertEqual(card["priced_market_rows"], 0)
+        self.assertIn("not recommendations or validated positive EV", report)
+
 class TotalsBinding(unittest.TestCase):
     def test_global_constant_stays_false_and_totals_withheld_by_default(self):
         self.assertFalse(R.TOTALS_ORDER_VERIFIED)
