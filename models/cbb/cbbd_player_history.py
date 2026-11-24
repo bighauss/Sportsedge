@@ -133,6 +133,13 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
     A batch is (original bytes, capture receipt). No player is inferred active.
     Provider caps at 1000 games per request; reject cap-sized result batches.
     """
+    if (finals_receipt.get("source") != "cbbd_games_season"
+            or finals_receipt.get("sha256") != sha256(finals_raw).hexdigest()
+            or finals_receipt.get("bytes") != len(finals_raw)):
+        raise Hold("PLAYER_SOURCE_RECEIPT_MISMATCH")
+    final_observed = utc(finals_receipt.get("observed_utc"), "observation")
+    if final_observed >= utc(asof_utc, "asof"):
+        raise Hold("PLAYER_SOURCE_NOT_PRIOR")
     all_rows, batch_reports = [], []
     box_batch_counts = Counter()
     for raw, receipt in batches:
@@ -168,7 +175,7 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
                 or any(type(t) is not int or t <= 0 for t in (h, a)) or h == a):
             continue
         try:
-            if utc(g.get("startDate"), "game_start") >= utc(finals_receipt["observed_utc"], "observation"):
+            if utc(g.get("startDate"), "game_start") >= final_observed:
                 continue
         except (ValueError, TypeError, KeyError):
             continue
