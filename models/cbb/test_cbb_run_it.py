@@ -108,6 +108,43 @@ class EndToEnd(unittest.TestCase):
             with self.assertRaises(LG.LedgerError):
                 run(os.path.join(d, "b"), ledger_path=led)
 
+    def test_repeat_diagnostic_preserves_prior_freeze_byte_for_byte(self):
+        with tempfile.TemporaryDirectory() as d:
+            led = Path(d) / "ledger.jsonl"
+            run(Path(d) / "a", ledger_path=led)
+            original = led.read_bytes()
+            card, names, extra = run(Path(d) / "b", ledger_path=led, diagnostic_repeat=True)
+            self.assertEqual(led.read_bytes(), original)
+            self.assertEqual(extra["ledger"]["already_frozen"], card["row_count"])
+            self.assertEqual(extra["ledger"]["newly_frozen"], 0)
+            self.assertEqual(extra["ledger"]["appended"], 0)
+            self.assertIn("Repeat diagnostic", R.render(card, names, extra))
+
+    def test_repeat_diagnostic_freezes_only_unseen_subset(self):
+        with tempfile.TemporaryDirectory() as d:
+            led = Path(d) / "ledger.jsonl"
+            card, _, _ = run(Path(d) / "a")
+            prior = dict(card)
+            prior["rows"] = card["rows"][:1]
+            prior["row_count"] = 1
+            prior["projected_rows"] = int(prior["rows"][0]["status"] == "PROJECTED")
+            prior["priced_market_rows"] = sum(m["status"] == "PRICED_PAPER"
+                                               for m in prior["rows"][0]["markets"])
+            prior["card_sha256"] = R.PC.card_digest(prior)
+            LG.append(led, LG.card_entries(prior), clock=lambda: NOW)
+            original = led.read_bytes()
+            current, _, extra = run(Path(d) / "b", ledger_path=led, diagnostic_repeat=True)
+            entries = LG.read(led)
+            self.assertTrue(led.read_bytes().startswith(original))
+            self.assertEqual(len(entries), 2)
+            subset = entries[-1]["payload"]
+            self.assertEqual(subset["row_count"], current["row_count"] - 1)
+            self.assertEqual(subset["ledger_subset"]["parent_card_sha256"], current["card_sha256"])
+            self.assertEqual(subset["card_sha256"], R.PC.card_digest(subset))
+            self.assertEqual(extra["ledger"]["already_frozen"], 1)
+            self.assertEqual(extra["ledger"]["newly_frozen"], current["row_count"] - 1)
+            self.assertNotIn(prior["rows"][0]["game_id"], [r["game_id"] for r in subset["rows"]])
+
 class Adapters(unittest.TestCase):
     def test_prior_rejects_duplicates_and_wrong_teams(self):
         games, boxes = provider()
