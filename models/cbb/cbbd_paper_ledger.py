@@ -369,6 +369,31 @@ def _walkforward_rows(graded, family):
     return rows
 
 
+# Fixed, predeclared model-weight grid; market benchmark is the SAME book.
+BLEND_GRID = (0, 25, 50, 60, 75, 80, 90, 95, 100)
+
+def nine_weight_comparison(pairs):
+    """Paired frozen probabilities only. No weight selection or refitting.
+    Each tuple is (unconditional model side A, push, conditional no-vig A, outcome).
+    Conditional Brier/log loss excludes actual pushes for ALL weights equally.
+    """
+    result = []
+    for weight in BLEND_GRID:
+        values = []
+        for pm, push, pk, y in pairs:
+            if not all(type(x) in (int, float) and math.isfinite(x) for x in (pm, push, pk)):
+                raise LedgerError("BLEND_GRID_NONFINITE")
+            if not (0 <= push < 1 and 0 <= pm <= 1 - push + 1e-12 and 0 <= pk <= 1
+                    and type(y) is int and y in (0, 1)):
+                raise LedgerError("BLEND_GRID_INVALID")
+            p = (weight / 100) * min(1.0, pm / (1 - push)) + (1 - weight / 100) * pk
+            values.append(((p-y)**2, _ll(p, y)))
+        result.append({"weight_model_pct": weight, "n": len(values),
+                       "brier": mean(v[0] for v in values) if values else None,
+                       "logloss": mean(v[1] for v in values) if values else None})
+    return result
+
+
 def evaluate(entries, *, min_prior=30, max_quote_age_hours=24):
     finals = _done(entries, "FINAL_ATTACHED")
     closes = _done(entries, "CLOSE_QUOTE")
@@ -377,6 +402,7 @@ def evaluate(entries, *, min_prior=30, max_quote_age_hours=24):
     census, pass_reasons, results = Counter(), Counter(), Counter()
     acc = defaultdict(list)
     calib = defaultdict(list)
+    blend_pairs = defaultdict(list)
     returns = defaultdict(list)
     clv = defaultdict(list)
     graded_projected, residuals, by_date = [], [], defaultdict(Counter)
@@ -422,6 +448,8 @@ def evaluate(entries, *, min_prior=30, max_quote_age_hours=24):
                 acc[m["market"] + "_brier"].append(((pm - y) ** 2, (pk - y) ** 2))
                 acc[m["market"] + "_logloss"].append((_ll(pm, y), _ll(pk, y)))
                 calib[m["market"]].append((pm, y))
+                if denom > 0:
+                    blend_pairs[m["market"]].append((m["model_prob"][a], m["model_prob"]["push"], pk, y))
                 by_date[day][m["market"] + "_n"] += 1
             if g["hypothetical_flat_1u_return"] is not None:
                 returns[m["market"]].append(g["hypothetical_flat_1u_return"])
@@ -455,6 +483,11 @@ def evaluate(entries, *, min_prior=30, max_quote_age_hours=24):
                for mk in MARKETS for k in ("brier", "logloss")},
             "calibration_side_a": {mk: _calibration(calib[mk]) for mk in MARKETS},
             "per_freeze_date_counts": {d: dict(c) for d, c in sorted(by_date.items())},
+        },
+        "nine_weight_same_book_comparison": {
+            "label": "FIXED_GRID_DESCRIPTIVE_ONLY_NOT_EXTERNAL_CONSENSUS_OR_WEIGHT_SELECTION",
+            "conditional_on_no_push": True,
+            "families": {mk: nine_weight_comparison(blend_pairs[mk]) for mk in MARKETS},
         },
         "paper_returns_separate_from_accuracy": {
             "result_counts": {f"{k[0]}:{k[1]}": v for k, v in sorted(results.items())},

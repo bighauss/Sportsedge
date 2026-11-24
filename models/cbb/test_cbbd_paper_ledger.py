@@ -165,6 +165,34 @@ class GradingTest(LedgerBase):
             L.append(self.ledger, L.final_entries(f, rp, mp), clock=lambda: T_LATER)
 
 
+class NineWeightTest(LedgerBase):
+    def test_fixed_grid_uses_conditional_probabilities_and_same_denominator(self):
+        rows = L.nine_weight_comparison([(0.6, 0.2, 0.4, 1)])
+        self.assertEqual([x["weight_model_pct"] for x in rows], list(L.BLEND_GRID))
+        self.assertTrue(all(x["n"] == 1 for x in rows))
+        self.assertAlmostEqual(rows[0]["brier"], 0.36)
+        self.assertAlmostEqual(rows[-1]["brier"], 0.0625)
+        self.assertAlmostEqual(rows[2]["brier"], (0.575 - 1)**2)
+        self.assertTrue(all(x["brier"] is None and x["n"] == 0 for x in L.nine_weight_comparison([])))
+
+    def test_real_ledger_integration_endpoints_match_existing_metrics(self):
+        self.freeze(self.make_card())
+        self.attach([("9001", 1, 2, 70, 80), ("9002", 3, 4, 80, 77)])
+        report = L.evaluate(L.read(self.ledger))
+        for family, grid in report["nine_weight_same_book_comparison"]["families"].items():
+            base = report["forecast_accuracy"][family + "_brier"]
+            self.assertEqual(grid[0]["n"], base["n"])
+            if base["n"]:
+                self.assertAlmostEqual(grid[0]["brier"], base["market"])
+                self.assertAlmostEqual(grid[-1]["brier"], base["model"])
+        self.assertEqual(report["approved_stake_u"], 0)
+
+    def test_invalid_probabilities_fail_closed(self):
+        for pair in [(float("nan"), 0, .5, 1), (.9, .2, .5, 0), (.5, 1, .5, 1)]:
+            with self.assertRaises(L.LedgerError):
+                L.nine_weight_comparison([pair])
+
+
 class CloseAndEvaluateTest(LedgerBase):
     def test_close_window_and_clv(self):
         self.freeze(self.make_card())

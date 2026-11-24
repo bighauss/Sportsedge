@@ -367,6 +367,28 @@ def diagnostic_ledger_entries(card):
     return build
 
 
+def board_coverage(board_rows):
+    """Count every input row, including unimplemented periods and player markets.
+    This is an intake census, not a market count or a claim of capture completeness.
+    """
+    census = Counter()
+    for row in board_rows:
+        sport = row.get("sport")
+        market = row.get("market")
+        period = row.get("period", "FG")
+        if sport != "CBB":
+            state = "OTHER_SPORT"
+        elif period != "FG":
+            state = "PERIOD_NOT_IMPLEMENTED"
+        elif market not in MK and market not in PR.LADDER_MARKETS:
+            state = "MARKET_NOT_IMPLEMENTED"
+        else:
+            state = "FULL_GAME_ADAPTER_ATTEMPT"
+        census[(str(period), str(market), state)] += 1
+    return [{"period": p, "market": m, "state": s, "rows": n}
+            for (p, m, s), n in sorted(census.items())]
+
+
 def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ratings_receipt,
           espn, espn_sha, espn_captured, board_rows, board_captured_utc, ledger_path=None,
           totals_order_verified=False, config=None, diagnostic_repeat=False):
@@ -400,7 +422,8 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
     names = {r["game_id"]: (r["_away"], r["_home"], r["tipoff_utc"]) for r in s}
     extra = {"prior_census": pcensus, "registry_unmatched": reg_miss, "quotes_unmatched": unmatched,
              "slate_games": len(s), "ledger": ledger, "config": cfg, "ladders": ladders,
-             "ladders_skipped": ladders_skipped, "board_rows": len(board_rows)}
+             "ladders_skipped": ladders_skipped, "board_rows": len(board_rows),
+             "board_coverage": board_coverage(board_rows)}
     return card, names, extra
 
 def _best(m):
@@ -483,6 +506,13 @@ def render(card, names, extra):
             flag = " (blowout-excluded)" if L["blowout_excluded"] else ""
             o.append(f"| {a} @ {h} | {L['kind']}{flag} | {L['line']:g} | {L['sides'][i]} | {L['price'][i]:+d} | "
                      f"{L['model_prob'][i]:.3f} | {L['paper_ev'][i]*100:+.1f}% | {L['blend_ev'][i]*100:+.1f}% |")
+    o += ["", "## Market intake coverage (all supplied rows)", "",
+          "Counts describe input rows, not unique markets. No absent market is assumed captured.",
+          "First-half and player-prop forecasts are not implemented in this runner.", "",
+          "| Period | Market | Admission state | Input rows |", "|---|---|---|---:|"]
+    for c in extra.get("board_coverage", []):
+        clean = lambda v: str(v).replace("|", "/").replace("\\n", " ").replace("\\r", " ")
+        o.append(f"| {clean(c['period'])} | {clean(c['market'])} | {c['state']} | {c['rows']} |")
     o += ["", "## Withheld", ""]
     o += [f"- {g} {mk}: ladder row skipped ({why})" for g, mk, why in extra.get("ladders_skipped", [])]
     for r in card["rows"]:

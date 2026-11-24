@@ -199,5 +199,49 @@ class CliFixture(unittest.TestCase):
                          "--private-dir", str(Path(d) / "p"), "--out", str(Path(d) / "o")])
             self.assertEqual(rc, 2); self.assertFalse((Path(d) / "p").exists())
 
+class HalfSourceEvidence(unittest.TestCase):
+    def fixture(self, games, asof="2026-11-22T04:00:00Z"):
+        import hashlib
+        from cbbd_half_evidence import normalize
+        raw = json.dumps(games).encode()
+        man = {"format": "CBBD_GAMES_CAPTURE_V1", "provider": "collegebasketballdata",
+               "documented_endpoint": "https://api.collegebasketballdata.com/games",
+               "source_sha256": hashlib.sha256(raw).hexdigest(), "source_bytes": len(raw),
+               "returned_rows": len(games), "season": 2027,
+               "local_observed_utc": "2026-11-22T03:00:00Z"}
+        return normalize(raw, man, asof_utc=asof)
+
+    def game(self, **kw):
+        return dict({"id": 9001, "season": 2027, "homeTeamId": 1, "awayTeamId": 2,
+                     "status": "final", "startTimeTbd": False, "startDate": S.TIP,
+                     "homePeriodPoints": [30, 40, 8], "awayPeriodPoints": [35, 35, 5],
+                     "homePoints": 78, "awayPoints": 75}, **kw)
+
+    def test_overtime_removed_and_observation_clock_preserved(self):
+        raw, report = self.fixture([self.game()])
+        row = json.loads(raw)
+        self.assertEqual(row["periods"], {"H1": [30, 35], "H2": [40, 35]})
+        self.assertEqual((row["regulation_home"], row["regulation_away"]), (70, 70))
+        self.assertEqual(row["final_published_utc"], row["final_captured_utc"])
+        self.assertEqual(report["admitted"], 1)
+        from sportsedge.markets.period_share_fit import _row
+        from datetime import timezone
+        _row(row, "CBB", datetime(2026, 11, 22, 4, tzinfo=timezone.utc))
+
+    def test_duplicates_missing_and_invalid_overtime_fail_closed(self):
+        bad = [self.game(), self.game(), self.game(id=2, homePeriodPoints=None),
+               self.game(id=3, homePeriodPoints=[31, 39, 8], awayPeriodPoints=[35, 34, 6]),
+               self.game(id=4, homePoints=99)]
+        raw, report = self.fixture(bad)
+        self.assertEqual(raw, b"")
+        self.assertEqual(report["input_rows"], 5)
+        self.assertEqual(len(report["rejected"]), 5)
+
+    def test_snapshot_after_cutoff_refused(self):
+        from cbbd_prospective_capture import Hold
+        with self.assertRaisesRegex(Hold, "HALF_SOURCE_NOT_PRIOR"):
+            self.fixture([self.game()], asof="2026-11-22T03:00:00Z")
+
+
 if __name__ == "__main__":
     unittest.main()
