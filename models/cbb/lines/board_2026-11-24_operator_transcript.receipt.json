@@ -1,0 +1,2012 @@
+{
+  "label": "PAPER_0U_OPERATOR_TRANSCRIPT_NOT_PROVIDER_AUTHENTICATED",
+  "date_ct": "2026-11-24",
+  "board_path": "models/cbb/lines/board_2026-11-24_operator_transcript.csv",
+  "source": "Issue #57 agent-transcribed reports, not independently authenticated provider bytes",
+  "events": 78,
+  "rows": 6295,
+  "counts": {
+    "SPREAD": 78,
+    "ML": 74,
+    "TOTAL": 78,
+    "ALT_SPREAD": 1600,
+    "ALT_TOTAL": 1794,
+    "TT_HOME": 1315,
+    "TT_AWAY": 1356
+  },
+  "board_capture_window_start_utc": "2026-11-24T11:49:00Z",
+  "board_capture_window_end_utc": "2026-11-24T14:46:00Z",
+  "board_captured_utc_for_runner": "2026-11-24T14:46:00Z",
+  "method": "Conservative extraction. Explicit section timestamps when available; otherwise reported event capture upper bound, not an exact quote timestamp. Each row retains source URL and capture window. Away/home reversed into runner home/away price orientation. Exact price pairs only; unresolved aliases, moved sections, unsupported markets and non-exact fragments withheld. Not a full-board denominator beyond captured main markets.",
+  "source_comments": [
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135816106",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136753974",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136995558",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+    "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137011301"
+  ],
+  "event_census": [
+    {
+      "event_id": "35078383",
+      "away": "Wright State",
+      "home": "Saint Bonaventure",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 23,
+        "TT_HOME": 21,
+        "TT_AWAY": 20
+      },
+      "omissions": [
+        {
+          "market": "ALT_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " 145.5 -120/-110 (5:57 AM"
+        },
+        {
+          "market": "ALT_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " moved to -125/-105 by 5:59 AM)"
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " 73.5 -101/-132 (5:58 AM"
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " moved to -105/-127 by 6:02 AM)"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078384",
+      "away": "Ohio",
+      "home": "New Mexico State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078385",
+      "away": "Belmont",
+      "home": "Akron",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078386",
+      "away": "SE Louisiana",
+      "home": "Northern Colorado",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 1,
+        "TT_AWAY": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078387",
+      "away": "Southern Utah",
+      "home": "FIU",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "SECTION_NOT_PARSED"
+        },
+        {
+          "market": "ALT_TOTAL",
+          "reason": "SECTION_NOT_PARSED"
+        },
+        {
+          "market": "TEAM_TOTAL",
+          "reason": "INCOMPLETE_EXACT_TEAM_MAPPING"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078389",
+      "away": "Rice",
+      "home": "Illinois Chicago",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 1,
+        "TT_AWAY": 1
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078388",
+      "away": "Oklahoma",
+      "home": "Pittsburgh",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 23,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " OK +1.5 +101 / PITT -1.5 -138"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078390",
+      "away": "Oregon State",
+      "home": "San Francisco",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 22,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " OSU +1.5 -680 / SF -1.5 +391"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " OSU +2.5 -930 / SF -2.5 +479"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078970",
+      "away": "Ole Miss",
+      "home": "BYU",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": true
+    },
+    {
+      "event_id": "35073825",
+      "away": "Tennessee",
+      "home": "Maryland",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD (TENN line / TENN price / MD price)"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": true
+    },
+    {
+      "event_id": "35073826",
+      "away": "Miami FL",
+      "home": "TCU",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 23,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " MIA +1.5 -355 / TCU -1.5 +239"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078392",
+      "away": "North Dakota",
+      "home": "Detroit Mercy",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078391",
+      "away": "Appalachian State",
+      "home": "Yale",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078393",
+      "away": "Long Beach State",
+      "home": "Arkansas State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "ALT SPREAD (LBS / Ark; main not repeated)"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35080068",
+      "away": "Providence",
+      "home": "Arizona",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 1,
+        "TT_AWAY": 1
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078395",
+      "away": "Tulsa",
+      "home": "Illinois State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078396",
+      "away": "Wyoming",
+      "home": "Kent State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078397",
+      "away": "DePaul",
+      "home": "Purdue",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078402",
+      "away": "Southern Indiana",
+      "home": "VMI",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078401",
+      "away": "Sacred Heart",
+      "home": "Rutgers",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078399",
+      "away": "Mercer",
+      "home": "Florida Atlantic",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078398",
+      "away": "Eastern Michigan",
+      "home": "Kennesaw State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078400",
+      "away": "Queens NC",
+      "home": "Wofford",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078404",
+      "away": "Robert Morris",
+      "home": "Lamar",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078403",
+      "away": "Elon",
+      "home": "Furman",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078394",
+      "away": "Lindenwood",
+      "home": "New Haven",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 1,
+        "TT_HOME": 1
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35073827",
+      "away": "San Diego State",
+      "home": "Iowa State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135816106",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD (SDSU / Iowa)"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": true
+    },
+    {
+      "event_id": "35073883",
+      "away": "Creighton",
+      "home": "Michigan",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135816106",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 23,
+        "ALT_TOTAL": 23,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " +7.5 -131→-128 (7:20)/-7.5 -104→-106"
+        },
+        {
+          "market": "ALT_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " 174.5 +270/-375. (At 7:20 AM the alt default moved to 160.5 O -125 / U -105 with the ladder starting at 149.5.)"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078408",
+      "away": "Bryant",
+      "home": "Marist",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078413",
+      "away": "Gardner-Webb",
+      "home": "Bowling Green",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD (GW line/price, BG price)"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078407",
+      "away": "Boston University",
+      "home": "Harvard",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078412",
+      "away": "Delaware State",
+      "home": "Chattanooga",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 21,
+        "TT_AWAY": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078410",
+      "away": "Charleston Southern",
+      "home": "James Madison",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078406",
+      "away": "Binghamton",
+      "home": "Lehigh",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078419",
+      "away": "New Hampshire",
+      "home": "Seton Hall",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD (NH / SHU)"
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
+          "source_text": "   SHU alt TT (O/U): 66.5 -620/+376; 67.5 -510/+328; 68.5 -418/+280; 69.5 -340/+236; 70.5 -280/+200; 71.5 -233/+170; 72."
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078421",
+      "away": "Samford",
+      "home": "Georgia Tech",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 23,
+        "ALT_TOTAL": 22,
+        "TT_AWAY": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " +24.5 -930/-24.5 +479. (7:05 readings were the same ladder ~1-5% longer on Samford prices"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " full dual readings in the agent report.)"
+        },
+        {
+          "market": "ALT_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": "148.5 -395/+280 (new rung)"
+        },
+        {
+          "market": "ALT_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " 172.5 +260/-360. (173.5 rung removed at 7:11.)"
+        },
+        {
+          "market": "TEAM_TOTAL",
+          "reason": "INCOMPLETE_EXACT_TEAM_MAPPING"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078426",
+      "away": "Vermont",
+      "home": "Siena",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078416",
+      "away": "Milwaukee",
+      "home": "Florida",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ML",
+          "reason": "NOT_POSTED"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078414",
+      "away": "Hampton",
+      "home": "Old Dominion",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_TOTAL",
+          "reason": "PRE_MOVE_OR_UNPARSED_SECTION"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078431",
+      "away": "West Georgia",
+      "home": "Tennessee Tech",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078405",
+      "away": "Bellarmine",
+      "home": "Georgia Southern",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078417",
+      "away": "Mount Saint Marys",
+      "home": "Morgan State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078411",
+      "away": "Coppin State",
+      "home": "Villanova",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 1,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ML",
+          "reason": "NOT_POSTED"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD (Coppin / Villanova)"
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
+          "source_text": "   Coppin alt TT (O/U): 46.5 -640/+386; 47.5 -522/+334; 48.5 -422/+283; 49.5 -344/+239; 50.5 -283/+202; 51.5 -238/+173; "
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078418",
+      "away": "Nevada",
+      "home": "Santa Clara",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078422",
+      "away": "Stetson",
+      "home": "South Florida",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 1
+      },
+      "omissions": [
+        {
+          "market": "ML",
+          "reason": "NOT_POSTED"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD (Stetson / USF)"
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
+          "source_text": "   USF alt TT (O/U): 76.5 -570/+357; 77.5 -468/+307; 78.5 -389/+265; 79.5 -328/+229; 80.5 -274/+196; 81.5 -231/+169; 82."
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078423",
+      "away": "Tarleton State",
+      "home": "Weber State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 23,
+        "TT_AWAY": 1,
+        "TT_HOME": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " 167.5 +238/-328. (155.5 skipped — slider-selected at that moment.)"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078420",
+      "away": "Rider",
+      "home": "Loyola Maryland",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078409",
+      "away": "Campbell",
+      "home": "Coastal Carolina",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078430",
+      "away": "Purdue Fort Wayne",
+      "home": "SE Missouri State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078429",
+      "away": "Houston Christian",
+      "home": "ULM",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078424",
+      "away": "UMBC",
+      "home": "Iowa",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136753974",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078415",
+      "away": "Jacksonville",
+      "home": "Indiana",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136753974",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078428",
+      "away": "High Point",
+      "home": "Duquesne",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136753974",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078427",
+      "away": "Alcorn",
+      "home": "Louisiana Tech",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136753974",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078425",
+      "away": "Vanderbilt",
+      "home": "Ohio State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136753974",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 1,
+        "TT_AWAY": 1
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078432",
+      "away": "Alabama A&M",
+      "home": "North Alabama",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078433",
+      "away": "Army",
+      "home": "Air Force",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078438",
+      "away": "Green Bay",
+      "home": "UMKC",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078437",
+      "away": "Florida A&M",
+      "home": "South Alabama",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 23,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 1,
+        "TT_HOME": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " +31.5 -610/+362. EARLIER (7:37 AM, range 6.5–30.5): +6.5 +384/-670"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-7.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-8.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-9.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-10.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-11.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-12.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-13.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-14.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-15.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-16.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-17.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-19.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-20.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-21.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-22.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-23.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-24.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-25.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-26.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-27.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-28.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-29.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        },
+        {
+          "market": "ALT_SPREAD",
+          "line": "-30.5",
+          "reason": "DUPLICATE_OR_MAIN_RUNG"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078440",
+      "away": "Oral Roberts",
+      "home": "UT Arlington",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078436",
+      "away": "Drexel",
+      "home": "Pennsylvania",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078439",
+      "away": "Lipscomb",
+      "home": "Auburn",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": false,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078434",
+      "away": "Bucknell",
+      "home": "Cornell",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078972",
+      "away": "Clemson",
+      "home": "Washington",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078441",
+      "away": "Charleston",
+      "home": "UTEP",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136995558",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 23,
+        "ALT_TOTAL": 23,
+        "TT_AWAY": 1,
+        "TT_HOME": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " +10.5 -900/-10.5 +470. (Pre-move 7:46 AM ladder in agent report.)"
+        },
+        {
+          "market": "ALT_TOTAL",
+          "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
+          "source_text": " 159.5 +270/-375. (Pre-move ladder at 148.5 in agent report.)"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35073828",
+      "away": "Texas Tech",
+      "home": "Louisville",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136995558",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "PRE_MOVE_OR_UNPARSED_SECTION"
+        },
+        {
+          "market": "ALT_TOTAL",
+          "reason": "PRE_MOVE_OR_UNPARSED_SECTION"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078435",
+      "away": "Central Michigan",
+      "home": "Notre Dame",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136995558",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD (CMU / ND)"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078442",
+      "away": "Evansville",
+      "home": "Missouri",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "ML",
+          "reason": "NOT_POSTED"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078445",
+      "away": "UNC Asheville",
+      "home": "Florida State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [],
+      "halves_reported": false,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078443",
+      "away": "Idaho State",
+      "home": "Boise State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078444",
+      "away": "Sam Houston",
+      "home": "Washington State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078447",
+      "away": "Grand Canyon",
+      "home": "Saint Louis",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35078446",
+      "away": "UNC Greensboro",
+      "home": "UC Santa Barbara",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 1,
+        "TT_HOME": 1
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    },
+    {
+      "event_id": "35080069",
+      "away": "VCU",
+      "home": "Colorado State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 1,
+        "TT_HOME": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_SPREAD",
+          "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
+          "source_text": "2) ALT SPREAD — LATEST (8:35 AM, VCU / CSU)"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35073829",
+      "away": "Baylor",
+      "home": "Alabama",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137004985",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_HOME": 1,
+        "TT_AWAY": 1
+      },
+      "omissions": [
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
+          "source_text": "   Alabama alt TT — PRE-MOVE (O/U): 78.5 -591/+366; 79.5 -486/+316; 80.5 -398/+269; 81.5 -331/+231; 82.5 -280/+200; 83.5"
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
+          "source_text": "   Baylor alt TT — PRE-MOVE (O/U): 77.5 -610/+372; 78.5 -493/+319; 79.5 -402/+272; 80.5 -332/+232; 81.5 -275/+197; 82.5 "
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35073830",
+      "away": "Oregon",
+      "home": "St. Johns",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137011301",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 1
+      },
+      "omissions": [
+        {
+          "market": "TEAM_TOTAL",
+          "reason": "SIDE_OR_MOVE_NOT_EXACT",
+          "source_text": "LATEST 82.5 O -115 / U -115"
+        },
+        {
+          "market": "TEAM_TOTAL",
+          "reason": "INCOMPLETE_EXACT_TEAM_MAPPING"
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
+          "source_text": "   Oregon alt TT — PRE-MOVE (O/U): 61.5 -810/+456; 62.5 -640/+388; 63.5 -519/+332; 64.5 -416/+279; 65.5 -337/+235; 66.5 "
+        },
+        {
+          "market": "ALT_TEAM_TOTAL",
+          "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
+          "source_text": "   St. Johns alt TT — PRE-MOVE (O/U): 72.5 -610/+373; 73.5 -500/+323; 74.5 -406/+274; 75.5 -336/+234; 76.5 -282/+201; 77"
+        },
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35078448",
+      "away": "Stanford",
+      "home": "Colorado",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137011301",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        },
+        {
+          "market": "PLAYER_PROP",
+          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": true
+    },
+    {
+      "event_id": "35073831",
+      "away": "Gonzaga",
+      "home": "Kansas State",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7137011301",
+      "markets": {
+        "SPREAD": 1,
+        "ML": 1,
+        "TOTAL": 1,
+        "ALT_SPREAD": 24,
+        "ALT_TOTAL": 24,
+        "TT_AWAY": 21,
+        "TT_HOME": 21
+      },
+      "omissions": [
+        {
+          "market": "1H",
+          "reason": "RUNNER_UNSUPPORTED"
+        }
+      ],
+      "halves_reported": true,
+      "props_reported": false
+    }
+  ]
+}

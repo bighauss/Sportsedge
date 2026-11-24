@@ -241,9 +241,71 @@ def write_csv(path, header, rows):
     w.writeheader(); w.writerows(rows); Path(path).write_text(buf.getvalue(), encoding="utf-8")
 
 # ---------------------------------------------------------------- orchestration
+def diagnostic_ledger_entries(card):
+    """Under the existing ledger lock: preserve first freezes; append only unseen games.
+
+    The full current diagnostic card remains unchanged and is NOT a second freeze.
+    The frozen subset carries its parent digest and its own exact row census.
+    """
+    def build(entries, now):
+        if card.get("schema") != PC.CARD_SCHEMA or card.get("status") != PC.CARD_STATUS or \
+                card.get("card_sha256") != PC.card_digest(card) or \
+                card.get("official_counted") != 0 or card.get("approved_stake_u") != 0:
+            raise LG.LedgerError("DIAGNOSTIC_CARD_INVALID")
+        previous = {}
+        for entry in entries:
+            if entry["kind"] != "CARD_FROZEN":
+                continue
+            for row in entry["payload"]["rows"]:
+                gid = row["game_id"]
+                if gid in previous:
+                    raise LG.LedgerError("DIAGNOSTIC_LEDGER_DUPLICATE_GAME")
+                previous[gid] = row
+        current_ids = [r["game_id"] for r in card["rows"]]
+        if len(current_ids) != len(set(current_ids)):
+            raise LG.LedgerError("DIAGNOSTIC_CARD_DUPLICATE_GAME")
+        unseen, overlap = [], []
+        for row in card["rows"]:
+            old = previous.get(row["game_id"])
+            if old is None:
+                unseen.append(row)
+                continue
+            if any(str(old.get(k)) != str(row.get(k)) for k in
+                   ("season", "home_team_id", "away_team_id")):
+                raise LG.LedgerError("DIAGNOSTIC_GAME_IDENTITY_CONFLICT")
+            overlap.append(row["game_id"])
+        report = {"state": "DIAGNOSTIC_ONLY_EXISTING_GAMES" if not unseen else "CARD_FROZEN",
+                  "rows": len(unseen), "already_frozen": len(overlap),
+                  "newly_frozen": len(unseen), "source_card_sha256": card["card_sha256"]}
+        if not unseen:
+            return [], report
+        if not overlap:
+            payloads, _ = LG.card_entries(card)(entries, now)
+            report["ledger_card_sha256"] = card["card_sha256"]
+            return payloads, report
+        subset = dict(card)
+        subset["rows"] = [dict(row, input_index=i) for i, row in enumerate(unseen)]
+        subset["row_count"] = len(unseen)
+        subset["projected_rows"] = sum(r["status"] == "PROJECTED" for r in unseen)
+        subset["priced_market_rows"] = sum(m["status"] == "PRICED_PAPER"
+                                            for r in unseen for m in r["markets"])
+        subset["pass_reason_counts"] = dict(sorted(Counter(r["pass_reason"] for r in unseen
+                                                           if r["status"] == "PASS").items()))
+        subset["ledger_subset"] = {"parent_card_sha256": card["card_sha256"],
+                                   "parent_row_count": len(card["rows"]),
+                                   "excluded_already_frozen": len(overlap),
+                                   "parent_input_indices": [r["input_index"] for r in unseen],
+                                   "quote_census_scope": "FULL_PARENT_INPUT"}
+        subset["card_sha256"] = PC.card_digest(subset)
+        payloads, _ = LG.card_entries(subset)(entries, now)
+        report["ledger_card_sha256"] = subset["card_sha256"]
+        return payloads, report
+    return build
+
+
 def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ratings_receipt,
           espn, espn_sha, espn_captured, board_rows, board_captured_utc, ledger_path=None,
-          totals_order_verified=False, config=None):
+          totals_order_verified=False, config=None, diagnostic_repeat=False):
     cfg = PR.make_config(**(config or {}))
     work = Path(work); work.mkdir(parents=True, exist_ok=True)
     day = now_utc.astimezone(CT).date()
@@ -269,7 +331,8 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
         totals_order=lambda b: _totals_order(b, totals_order_verified))
     ledger = None
     if ledger_path:
-        ledger = LG.append(ledger_path, LG.card_entries(card), clock=lambda: now_utc)
+        entry_builder = diagnostic_ledger_entries(card) if diagnostic_repeat else LG.card_entries(card)
+        ledger = LG.append(ledger_path, entry_builder, clock=lambda: now_utc)
     names = {r["game_id"]: (r["_away"], r["_home"], r["tipoff_utc"]) for r in s}
     extra = {"prior_census": pcensus, "registry_unmatched": reg_miss, "quotes_unmatched": unmatched,
              "slate_games": len(s), "ledger": ledger, "config": cfg, "ladders": ladders,
@@ -287,6 +350,10 @@ def render(card, names, extra):
          f"Freeze {parse_z(card['freeze_utc']).astimezone(CT):%Y-%m-%d %-I:%M %p} CT · slate {extra['slate_games']} games · "
          f"projected {card['projected_rows']} · priced markets {card['priced_market_rows']} · "
          f"prior finals used {(card.get('context') or {}).get('prior_games_used')}", ""]
+    if (extra.get("ledger") or {}).get("already_frozen", 0):
+        report = extra["ledger"]
+        o += [f"**Repeat diagnostic:** {report['already_frozen']} games retain their original ledger freeze; "
+              f"{report['newly_frozen']} newly frozen. Current projections are not replacement records.", ""]
     cx = card.get("context") or {}
     if cx:
         h, sd = cx.get("hca") or {}, cx.get("sd") or {}
@@ -418,6 +485,7 @@ def _write_receipt(out_dir, run_id, now, card, extra, errors, ledger_path):
            "priced_markets": None if card is None else card["priced_market_rows"],
            "ladder_rows_priced": None if extra is None else len(extra["ladders"]),
            "ledger_rows": n_ledger, "errors": errors,
+           "ledger_reconciliation": None if extra is None else extra.get("ledger"),
            "ladders_rejected_by_code": None if extra is None else dict(sorted(
                Counter(w.split(":")[0] for _, _, w in extra["ladders_skipped"]).items())),
            "unmatched": None if extra is None else {"quotes": len(extra["quotes_unmatched"]),
@@ -436,6 +504,8 @@ def main(argv=None):
     a.add_argument("--season", type=int, required=True)
     a.add_argument("--private-dir"); a.add_argument("--out", required=True)
     a.add_argument("--ledger")
+    a.add_argument("--diagnostic-repeat", action="store_true",
+                   help="retain previous game freezes; append unseen games only; report full current diagnostic")
     a.add_argument("--season-start-utc", help="UTC Z start of the prior-finals window; default Nov 1 of the season's start year (2026-11-01 for season 2027)")
     a.add_argument("--fixture-dir", help="offline captures (tests only): ratings.json receipt.json games.json boxes.json espn.json")
     a.add_argument("--now", help="ISO UTC override (tests only)")
@@ -519,6 +589,7 @@ def main(argv=None):
                                    espn_captured=erec["observed_utc"], board_rows=board,
                                    board_captured_utc=x.board_captured_utc, ledger_path=x.ledger,
                                    totals_order_verified=x.totals_order_verified,
+                                   diagnostic_repeat=x.diagnostic_repeat,
                                    config={"sd_margin": x.sd_margin, "sd_total": x.sd_total,
                                            "blend_weight_model": x.blend_weight_model,
                                            "blowout_spread_abs": x.blowout_spread_abs})
