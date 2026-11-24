@@ -110,6 +110,34 @@ class PricingConfig(unittest.TestCase):
             with self.assertRaises(ValueError): PR.make_config(blend_weight_model=bad)
         self.assertIn(0.25, PR.CANDIDATE_BLEND_WEIGHTS); self.assertEqual(len(PR.CANDIDATE_BLEND_WEIGHTS), 9)
 
+    def test_push_aware_blend_all_nine_weights(self):
+        for w in PR.CANDIDATE_BLEND_WEIGHTS:
+            for market, line in (("SPREAD", "-3"), ("TOTAL", "140")):
+                with self.subTest(weight=w, market=market):
+                    card, _, _ = go([row(market, line, "-120", "100")],
+                                    totals_order_verified=True,
+                                    config={"blend_weight_model": w})
+                    m = m_of(card, "9001", {"SPREAD": "spread", "TOTAL": "total"}[market])
+                    pm, mk, b = m["model_prob"], m["market_novig_prob"], m["blend"]
+                    self.assertGreater(pm["push"], 0)
+                    self.assertAlmostEqual(sum(b["prob"].values()) + b["push"], 1)
+                    for side, price in zip(m["sides"], (-120, 100)):
+                        want = w * pm[side] + (1-w) * (1-pm["push"]) * mk[side]
+                        self.assertAlmostEqual(b["prob"][side], want)
+                        self.assertAlmostEqual(b["paper_ev_per_1u_at_price"][side],
+                                               NM.ev_per_unit(want, pm["push"], price))
+
+    def test_push_aware_ladder_ev(self):
+        for w in PR.CANDIDATE_BLEND_WEIGHTS:
+            _, _, extra = go([row("ALT_TOTAL", "145", "-120", "100")],
+                             totals_order_verified=True, config={"blend_weight_model": w})
+            L = extra["ladders"][0]
+            self.assertGreater(L["push"], 0)
+            self.assertAlmostEqual(sum(L["model_prob"]) + L["push"], 1)
+            for i, price in enumerate((-120, 100)):
+                want = w * L["model_prob"][i] + (1-w) * (1-L["push"]) * L["market_novig"][i]
+                self.assertAlmostEqual(L["blend_ev"][i], NM.ev_per_unit(want, L["push"], price))
+
     def test_blowout_guard(self):
         card, names, extra = go([row("SPREAD", "-16.5")])
         self.assertTrue(m_of(card, "9001", "spread")["blowout_excluded"])
