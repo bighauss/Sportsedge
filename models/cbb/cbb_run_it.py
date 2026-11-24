@@ -284,15 +284,25 @@ def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
         if not g:
             unmatched.append((f"{b['away']} @ {b['home']}", b["market"], why)); continue
         matched.append((b, g, order))
-    # DK event ID <-> CBBD game must be one-to-one; any conflict quarantines every copy.
+    # Bind across ALL recognized full-game market families, even when an
+    # individual row is not priceable. A ladder must not contradict a main.
     ev_games, game_evs = {}, {}
-    for b, g, _ in matched:
+    for b in board_rows:
+        if (b.get("sport") != "CBB" or not PR.full_game_period(b)
+                or b.get("market") not in (*MK, *PR.LADDER_MARKETS)):
+            continue
         e = board_event_id(b)
-        if e: ev_games.setdefault(e, set()).add(g["game_id"]); game_evs.setdefault(g["game_id"], set()).add(e)
+        if not e:
+            continue
+        g, _ = _match(slate_rows, b["home"], b["away"], b)
+        if g:
+            ev_games.setdefault(e, set()).add(g["game_id"])
+            game_evs.setdefault(g["game_id"], set()).add(e)
     out = []
     for b, g, order in matched:
         e = board_event_id(b)
-        if e and (len(ev_games[e]) > 1 or len(game_evs[g["game_id"]]) > 1):
+        if (e and (len(ev_games[e]) > 1 or len(game_evs[g["game_id"]]) > 1)) or (
+                not e and game_evs.get(g["game_id"])):
             unmatched.append((f"{b['away']} @ {b['home']}", b["market"], "DK event id conflict")); continue
         pa, pb = (b["price_b"], b["price_a"]) if order == "swap" else (b["price_a"], b["price_b"])
         out.append({"game_id": g["game_id"], "market": MK[b["market"]], "book": book,
