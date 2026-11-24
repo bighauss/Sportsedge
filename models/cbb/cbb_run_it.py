@@ -492,7 +492,12 @@ def render(card, names, extra):
         o += ["", "## Player historical participation census (not live props)", "",
               f"State: {ph['label']}; historical players {ph.get('historical_players', 0)}; "
               f"player-games {ph.get('accepted_player_games', 0)}; "
-              f"represented finals {ph.get('represented_final_games', 0)} of {ph.get('expected_final_games', 0)}.",
+              f"any-team represented finals {ph.get('represented_final_games', 0)} of {ph.get('expected_final_games', 0)}.",
+              f"Both-team represented: {ph.get('both_teams_represented_final_games', 'UNMEASURED')}; "
+              f"one-team represented: {ph.get('one_team_represented_final_games', 'UNMEASURED')}; "
+              f"unrepresented: {ph.get('unrepresented_final_games', 'UNMEASURED')}; "
+              f"repeated team boxes: {ph.get('duplicate_team_boxes_across_batches', 'UNMEASURED')}. "
+              "Representation is not complete roster coverage.",
               "No confirmed game-day activity, player projection or player-prop price inferred."]
     o += ["", "**Pricing diagnostics below are not recommendations or validated positive EV.** "
           "The same-book blend is experimental, not independent market consensus. "

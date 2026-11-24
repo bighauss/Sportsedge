@@ -133,9 +133,21 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
     A batch is (original bytes, capture receipt). No player is inferred active.
     Provider caps at 1000 games per request; reject cap-sized result batches.
     """
+    if (finals_receipt.get("source") != "cbbd_games_season"
+            or finals_receipt.get("sha256") != sha256(finals_raw).hexdigest()
+            or finals_receipt.get("bytes") != len(finals_raw)):
+        raise Hold("PLAYER_SOURCE_RECEIPT_MISMATCH")
+    final_observed = utc(finals_receipt.get("observed_utc"), "observation")
+    if final_observed >= utc(asof_utc, "asof"):
+        raise Hold("PLAYER_SOURCE_NOT_PRIOR")
     all_rows, batch_reports = [], []
+    box_batch_counts = Counter()
     for raw, receipt in batches:
-        unique_games = {b.get("gameId") for b in decode_player_boxes(raw) if isinstance(b, dict)
+        decoded_boxes = decode_player_boxes(raw)
+        box_batch_counts.update({(str(b["gameId"]), str(b["teamId"])) for b in decoded_boxes
+                                 if isinstance(b, dict) and all(type(b.get(k)) is int
+                                 for k in ("gameId", "teamId"))})
+        unique_games = {b.get("gameId") for b in decoded_boxes if isinstance(b, dict)
                         and type(b.get("gameId")) is int}
         if len(unique_games) >= 1000:
             raise Hold("PLAYER_BATCH_PROVIDER_CAP_REACHED")
@@ -144,14 +156,41 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
         all_rows.extend(rows)
         batch_reports.append(report)
     keys = Counter((r["game_id"], r["player_id"]) for r in all_rows)
-    clean = [r for r in all_rows if keys[(r["game_id"], r["player_id"])] == 1]
+    clean = [r for r in all_rows if keys[(r["game_id"], r["player_id"])] == 1
+             and box_batch_counts[(r["game_id"], r["team_id"])] == 1]
     models = historical_baselines(clean)
-    expected = {str(g["id"]) for g in decoded(finals_raw) if isinstance(g, dict)
-                and type(g.get("id")) is int and g.get("status") == "final"
-                and g.get("season") == season and g.get("startTimeTbd") is False}
-    represented = {r["game_id"] for r in clean}
+    # Coverage distinguishes any admissible participation from both-team
+    # representation. Neither means a complete roster or confirmed availability.
+    games = decoded(finals_raw)
+    final_ids = Counter(g.get("id") for g in games if isinstance(g, dict)
+                        and type(g.get("id")) is int)
+    expected = {}
+    for g in games:
+        if not isinstance(g, dict) or type(g.get("id")) is not int:
+            continue
+        gid = g["id"]
+        h, a = g.get("homeTeamId"), g.get("awayTeamId")
+        if (gid <= 0 or final_ids[gid] != 1 or g.get("status") != "final"
+                or g.get("season") != season or g.get("startTimeTbd") is not False
+                or any(type(t) is not int or t <= 0 for t in (h, a)) or h == a):
+            continue
+        try:
+            if utc(g.get("startDate"), "game_start") >= final_observed:
+                continue
+        except (ValueError, TypeError, KeyError):
+            continue
+        expected[str(gid)] = {str(h), str(a)}
+    represented = defaultdict(set)
+    for r in clean:
+        represented[r["game_id"]].add(r["team_id"])
+    both = sum(represented.get(gid, set()) == teams for gid, teams in expected.items())
+    any_team = sum(bool(represented.get(gid, set()) & teams) for gid, teams in expected.items())
     return {"label": "PAPER_0U_CONDITIONAL_HISTORY_ONLY", "batches": batch_reports,
             "accepted_player_games": len(clean), "cross_batch_duplicate_rows": len(all_rows)-len(clean),
-            "expected_final_games": len(expected), "represented_final_games": len(expected & represented),
+            "expected_final_games": len(expected), "represented_final_games": any_team,
+            "both_teams_represented_final_games": both,
+            "one_team_represented_final_games": any_team - both,
+            "unrepresented_final_games": len(expected) - any_team,
+            "duplicate_team_boxes_across_batches": sum(n > 1 for n in box_batch_counts.values()),
             "historical_players": len(models), "confirmed_activity": False,
             "approved_stake_u": 0, "historical_baselines": models}
