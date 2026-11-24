@@ -7,6 +7,7 @@ import argparse
 import math
 import os
 import random
+from datetime import datetime, timezone
 
 FIELDS = ("model_p", "market_p", "blend_p")
 IDENTITY = ("market", "family", "pick", "player", "line", "price")
@@ -271,32 +272,78 @@ def _calibration_bins(pairs, num_bins=5):
     return {"bins": bins, "ece": ece}
 
 
-def _game_clustered_ci(game_values, n_boot=1000, seed=42):
-    """Percentile 95% CI via deterministic block bootstrap over game clusters."""
+def _game_clustered_ci(game_values, n_boot=1000, seed=42, *, equal_game=False):
+    """Exploratory percentile interval, resampling whole game clusters."""
+    if type(n_boot) is not int or n_boot < 1:
+        raise ValueError("n_boot must be a positive integer")
     games = sorted(game_values)
     g = len(games)
     if g < 2:
         return None
-    means_by_game = [sum(game_values[k]) / len(game_values[k]) for k in games]
+    sums = [sum(game_values[k]) for k in games]
+    counts = [len(game_values[k]) for k in games]
     rng = random.Random(seed)
     boots = []
     for _ in range(n_boot):
-        sample = [means_by_game[rng.randrange(g)] for _ in range(g)]
-        boots.append(sum(sample) / g)
+        sample = [rng.randrange(g) for _ in range(g)]
+        if equal_game:
+            boots.append(sum(sums[i] / counts[i] for i in sample) / g)
+        else:
+            boots.append(sum(sums[i] for i in sample) / sum(counts[i] for i in sample))
     boots.sort()
     return [boots[int(0.025 * n_boot)], boots[int(0.975 * n_boot)]]
 
 
+def _parse_capture_time(value):
+    """Normalize explicit timezone offsets; never infer a missing kickoff."""
+    if not isinstance(value, str):
+        raise ValueError("capture/start timestamp is missing or invalid")
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        raise ValueError("capture/start timestamp requires timezone")
+    return dt.astimezone(timezone.utc)
+
+
 def _dedupe_runs(runs, capture_policy):
-    """Return eligible runs, optionally keeping only the latest valid pregame run per game."""
-    valid = []
+    """Choose latest pregame capture before applying settlement eligibility."""
+    if capture_policy not in ("latest_pregame", "all_captures"):
+        raise ValueError(f"unknown capture_policy: {capture_policy!r}")
+    pregame = []
     excluded = 0
+    superseded = 0
     seen_runs = set()
+    by_game = {}
     for run in runs:
-        m, s = run["manifest"], run.get("settlement")
+        m = run["manifest"]
         if m["run_id"] in seen_runs:
             raise ValueError("duplicate run")
         seen_runs.add(m["run_id"])
+        capture = _parse_capture_time(m.get("capture_utc"))
+        start = _parse_capture_time(m.get("start_utc"))
+        if capture >= start:
+            excluded += 1
+            continue
+        if capture_policy == "all_captures":
+            pregame.append(run)
+            continue
+        game = m["game"]
+        previous = by_game.get(game)
+        if previous is None:
+            by_game[game] = (capture, start, run)
+        else:
+            if start != previous[1]:
+                raise ValueError("ambiguous event identity: conflicting kickoff timestamps")
+            if capture == previous[0]:
+                raise ValueError("ambiguous latest pregame capture timestamp")
+            if capture > previous[0]:
+                by_game[game] = (capture, start, run)
+            superseded += 1
+    if capture_policy == "latest_pregame":
+        pregame = [by_game[g][2] for g in sorted(by_game)]
+
+    valid = []
+    for run in pregame:
+        m, s = run["manifest"], run.get("settlement")
         if (run.get("quarantined") or not s or s.get("quarantined")
                 or s.get("run_integrity_ok") is not True):
             excluded += 1
@@ -304,33 +351,13 @@ def _dedupe_runs(runs, capture_policy):
         if s.get("run_id") != m["run_id"] or s.get("game") != m["game"]:
             raise ValueError("settlement identity mismatch")
         valid.append(run)
-    if capture_policy == "all_captures":
-        return valid, excluded, 0
-    if capture_policy != "latest_pregame":
-        raise ValueError(f"unknown capture_policy: {capture_policy!r}")
-    by_game = {}
-    superseded = 0
-    for run in valid:
-        m = run["manifest"]
-        if m.get("pregame") is False:
-            excluded += 1
-            continue
-        game = m["game"]
-        prev = by_game.get(game)
-        if prev is None:
-            by_game[game] = run
-        elif m["capture_utc"] >= prev["manifest"]["capture_utc"]:
-            by_game[game] = run
-            superseded += 1
-        else:
-            superseded += 1
-    return [by_game[g] for g in sorted(by_game)], excluded, superseded
+    return valid, excluded, superseded
 
 
 def _summarize_metric_rows(obs, n_boot=1000, seed=42):
     """obs: list of dicts with game, left_p, right_p, y, units, clv."""
     if not obs:
-        return {"n": 0, "n_games": 0, "left": None, "right": None,
+        return {"n": 0, "n_games": 0, "small_cluster_warning": True, "left": None, "right": None,
                 "delta_brier": None, "delta_brier_ci95": None,
                 "delta_log_loss": None, "delta_log_loss_ci95": None,
                 "left_log_loss": None, "right_log_loss": None,
@@ -361,6 +388,7 @@ def _summarize_metric_rows(obs, n_boot=1000, seed=42):
     return {
         "n": n,
         "n_games": len(games),
+        "small_cluster_warning": len(games) < 30,
         "left": sum(lb) / n,
         "right": sum(rb) / n,
         "delta_brier": (sum(lb) - sum(rb)) / n,
@@ -514,6 +542,7 @@ def compare_prospective_candidates(runs, pick_set, *, default_prob_definition=No
         results[cname] = {
             "n": summary["n"],
             "n_games": summary["n_games"],
+            "small_cluster_warning": summary["small_cluster_warning"],
             "brier": summary["left"],
             "game_weighted_brier": summary["game_weighted_left_brier"],
             "delta_brier_vs_market": summary["delta_brier"],
@@ -527,6 +556,7 @@ def compare_prospective_candidates(runs, pick_set, *, default_prob_definition=No
             "by_family": {
                 fam: {
                     "n": s["n"], "n_games": s["n_games"], "brier": s["left"],
+                    "small_cluster_warning": s["small_cluster_warning"],
                     "log_loss": s["left_log_loss"], "ece": s["left_calibration"]["ece"],
                     "hypothetical_roi_1u": s["hypothetical_roi_1u"],
                 }
