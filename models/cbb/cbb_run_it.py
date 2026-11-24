@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE)); sys.path.insert(0, str(HERE.parents[1]))
 import cbbd_paper_card as PC                       # noqa: E402
 import cbbd_paper_ledger as LG                     # noqa: E402
+import cbb_pricing as PR                           # noqa: E402
 from cbbd_native_score_model import stamp          # noqa: E402
 
 CT = ZoneInfo("America/Chicago")
@@ -133,9 +134,31 @@ def slate(games, day_ct, now_utc, season, misses=None):
                      "_home": g.get("homeTeam"), "_away": g.get("awayTeam")})
     return rows
 
-def _match(slate_rows, home, away):
+TIP_WINDOW_S = 900
+
+def board_tip(row):
+    """Board tip time (UTC) from optional columns, None if absent; ValueError if present but bad."""
+    raw = next((str(row[k]).strip() for k in ("tip_utc", "start_utc") if row and str(row.get(k) or "").strip()), "")
+    if not raw: return None
+    d = parse_z(raw)
+    if d.tzinfo is None: raise ValueError("TIP_NOT_UTC")
+    return d
+
+def board_event_id(row):
+    return next((str(row[k]).strip() for k in ("dk_event_id", "event_id") if row and str(row.get(k) or "").strip()), None)
+
+def _match(slate_rows, home, away, row=None):
+    """Names must match exactly; when the board carries a tip time it must be within 15 min of the
+    CBBD tip (this also separates same-name doubleheaders). DK event IDs are bound in board_quotes."""
     hs, as_ = set(cands(home)), set(cands(away))
     hits = [r for r in slate_rows if norm(r["_home"]) in hs and norm(r["_away"]) in as_]
+    try:
+        tip = board_tip(row)
+    except ValueError:
+        return None, "board tip time unparsable"
+    if tip is not None:
+        hits = [r for r in hits if abs((parse_z(r["tipoff_utc"]) - tip).total_seconds()) <= TIP_WINDOW_S]
+        if not hits: return None, "no CBBD game within 15 min of board tip time"
     if len(hits) == 1: return hits[0], None
     rev = [r for r in slate_rows if norm(r["_home"]) in as_ and norm(r["_away"]) in hs]
     return None, ("home/away orientation mismatch" if rev else "no unique CBBD game for names" if not hits
@@ -175,19 +198,40 @@ MK = {"SPREAD": "spread", "TOTAL": "total", "ML": "moneyline"}
 # 4 reversed -> unverified, so totals are withheld until a board format proves it.
 TOTALS_ORDER_VERIFIED = False
 
+def _totals_order(row, verified):
+    """Totals price order is bound to the BOARD FORMAT, never a global flip: a run-level
+    verified flag or a per-row totals_order column ('over_under' = verified, 'under_over' = swap)."""
+    t = str(row.get("totals_order") or "").strip().lower()
+    if t == "under_over": return "swap"
+    if t == "over_under" or verified: return "ok"
+    return None
+
 def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
                  totals_order_verified=TOTALS_ORDER_VERIFIED):
-    out, unmatched = [], []
+    matched, unmatched = [], []
     for b in board_rows:
         if b.get("sport") != "CBB" or b.get("market") not in MK: continue
-        if b["market"] == "TOTAL" and not totals_order_verified:
+        order = _totals_order(b, totals_order_verified) if b["market"] == "TOTAL" else "ok"
+        if order is None:
             unmatched.append((f"{b['away']} @ {b['home']}", "TOTAL",
                               "over/under price order not verified for this board format")); continue
-        g, why = _match(slate_rows, b["home"], b["away"])
+        g, why = _match(slate_rows, b["home"], b["away"], b)
         if not g:
             unmatched.append((f"{b['away']} @ {b['home']}", b["market"], why)); continue
+        matched.append((b, g, order))
+    # DK event ID <-> CBBD game must be one-to-one; any conflict quarantines every copy.
+    ev_games, game_evs = {}, {}
+    for b, g, _ in matched:
+        e = board_event_id(b)
+        if e: ev_games.setdefault(e, set()).add(g["game_id"]); game_evs.setdefault(g["game_id"], set()).add(e)
+    out = []
+    for b, g, order in matched:
+        e = board_event_id(b)
+        if e and (len(ev_games[e]) > 1 or len(game_evs[g["game_id"]]) > 1):
+            unmatched.append((f"{b['away']} @ {b['home']}", b["market"], "DK event id conflict")); continue
+        pa, pb = (b["price_b"], b["price_a"]) if order == "swap" else (b["price_a"], b["price_b"])
         out.append({"game_id": g["game_id"], "market": MK[b["market"]], "book": book,
-                    "line": b["line"] or None, "price_a": b["price_a"], "price_b": b["price_b"],
+                    "line": b["line"] or None, "price_a": pa, "price_b": pb,
                     "captured_utc": captured_utc})
     return out, unmatched
 
@@ -197,7 +241,9 @@ def write_csv(path, header, rows):
 
 # ---------------------------------------------------------------- orchestration
 def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ratings_receipt,
-          espn, espn_sha, espn_captured, board_rows, board_captured_utc, ledger_path=None):
+          espn, espn_sha, espn_captured, board_rows, board_captured_utc, ledger_path=None,
+          totals_order_verified=False, config=None):
+    cfg = PR.make_config(**(config or {}))
     work = Path(work); work.mkdir(parents=True, exist_ok=True)
     day = now_utc.astimezone(CT).date()
     slate_miss = []
@@ -205,22 +251,26 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
     pg, pcensus = prior_games(games, boxes, observed_utc, season)
     reg, reg_miss = registry(s, espn, espn_sha, espn_captured)
     reg_miss = slate_miss + reg_miss
-    quotes, unmatched = board_quotes(board_rows, s, board_captured_utc)
+    quotes, unmatched = board_quotes(board_rows, s, board_captured_utc,
+                                     totals_order_verified=totals_order_verified)
     write_csv(work / "slate.csv", list(PC.SLATE_COLUMNS), s)
     write_csv(work / "registry.csv", ["game_id", "neutral", "source", "source_sha256", "published_utc",
                                       "captured_utc", "tipoff_utc"], reg)
     freeze = stamp(now_utc)
-    card = PC.build_card(freeze_utc=freeze, built_utc=freeze, season=season,
-                         slate_path=work / "slate.csv", registry_path=work / "registry.csv",
-                         ratings_body=ratings_body, ratings_receipt=ratings_receipt,
-                         prior_games=pg, quotes=[(q, "OPERATOR") for q in quotes],
-                         input_sha256={"espn_scoreboard": espn_sha})
+    with PR.patched_card(cfg):
+        card = PC.build_card(freeze_utc=freeze, built_utc=freeze, season=season,
+                             slate_path=work / "slate.csv", registry_path=work / "registry.csv",
+                             ratings_body=ratings_body, ratings_receipt=ratings_receipt,
+                             prior_games=pg, quotes=[(q, "OPERATOR") for q in quotes],
+                             input_sha256={"espn_scoreboard": espn_sha})
+    ladders, ladders_skipped = PR.price_ladders(board_rows, _match, s, card, cfg, board_captured_utc)
     ledger = None
     if ledger_path:
         ledger = LG.append(ledger_path, LG.card_entries(card), clock=lambda: now_utc)
     names = {r["game_id"]: (r["_away"], r["_home"], r["tipoff_utc"]) for r in s}
     extra = {"prior_census": pcensus, "registry_unmatched": reg_miss, "quotes_unmatched": unmatched,
-             "slate_games": len(s), "ledger": ledger}
+             "slate_games": len(s), "ledger": ledger, "config": cfg, "ladders": ladders,
+             "ladders_skipped": ladders_skipped, "board_rows": len(board_rows)}
     return card, names, extra
 
 def _best(m):
@@ -240,29 +290,50 @@ def render(card, names, extra):
         o += [f"Model context: HCA {h.get('value')} (n {h.get('n')}, sd {h.get('sd')}) · predictive SD margin "
               f"{sd.get('margin')} / total {sd.get('total')} (basis {sd.get('basis')}, n {sd.get('n')}) · "
               f"league pace {cx.get('league_pace')} · league ORtg {cx.get('league_mean_ortg')}", ""]
+    cfg = extra.get("config") or PR.DEFAULT_CONFIG
+    o += [f"Config: SD margin {cfg['sd_margin']} / total {cfg['sd_total']} (constants, not fitted) · model-vs-market blend "
+          f"weight on model {cfg['blend_weight_model']} (EXPERIMENTAL, chronological test pending; candidates "
+          f"{[int(w*100) for w in PR.CANDIDATE_BLEND_WEIGHTS]}%) · spreads with |line| > {cfg['blowout_spread_abs']:g} excluded from best plays", ""]
     sides = [(_best(m)[0]) for r in card["rows"] for m in r["markets"] if m["status"] == "PRICED_PAPER"]
     if sides:
         from collections import Counter as _C
         o += [f"Side balance of best-EV picks: {dict(_C(sides))}", ""]
     if card.get("context_error"):
         o += [f"**Context error (all games PASS):** {card['context_error']}", ""]
-    priced = []
+    priced, blowouts = [], []
     for r in card["rows"]:
         for m in r["markets"]:
             if m["status"] == "PRICED_PAPER":
-                side, ev = _best(m); priced.append((ev, r, m, side))
+                side, ev = _best(m)
+                (blowouts if m.get("blowout_excluded") else priced).append((ev, r, m, side))
     priced.sort(key=lambda x: -x[0])
     o += ["## Priced markets (best side by paper EV)", "",
-          "| # | Game | Tip (CT) | Market | Side | Line | Price | p model | p no-vig | Paper EV |",
-          "|---|---|---|---|---|---|---|---|---|---|"]
+          "| # | Game | Tip (CT) | Market | Side | Line | Price | p model | p no-vig | Paper EV | Blend EV (exp.) |",
+          "|---|---|---|---|---|---|---|---|---|---|---|"]
     for i, (ev, r, m, side) in enumerate(priced, 1):
         a, h, tip = names.get(r["game_id"], ("?", "?", r["tipoff_utc"]))
         q = m["quote"]; price = q["price_a"] if side == m["sides"][0] else q["price_b"]
         line = "" if q["line"] is None else (f"{q['line']:g}" if m["market"] == "total"
                                              else f"{(q['line'] if side == 'home' else -q['line']):+g}")
         o.append(f"| {i} | {a} @ {h} | {parse_z(tip).astimezone(CT):%-I:%M %p} | {m['market']} | {side} | {line} | "
-                 f"{price:+d} | {m['model_prob'][side]:.3f} | {m['market_novig_prob'][side]:.3f} | {ev*100:+.1f}% |")
+                 f"{price:+d} | {m['model_prob'][side]:.3f} | {m['market_novig_prob'][side]:.3f} | {ev*100:+.1f}% | "
+                 f"{m['blend']['paper_ev_per_1u_at_price'][side]*100:+.1f}% |")
+    if blowouts:
+        o += ["", f"## Spreads excluded from best plays (|line| > {cfg['blowout_spread_abs']:g}: blowout-margin compression)", ""]
+        for ev, r, m, side in blowouts:
+            a, h, _ = names.get(r["game_id"], ("?", "?", ""))
+            o.append(f"- {a} @ {h} spread {m['quote']['line']:+g}: model-best {side}, paper EV {ev*100:+.1f}% (not a best play)")
+    if extra.get("ladders"):
+        o += ["", "## Alt ladders and team totals (same projected mean/SD, normal; PAPER)", "",
+              "| Game | Market | Line | Side | Price | p model | Paper EV | Blend EV (exp.) |", "|---|---|---|---|---|---|---|---|"]
+        for L in sorted(extra["ladders"], key=lambda x: -max(x["paper_ev"])):
+            a, h, _ = names.get(L["game_id"], ("?", "?", ""))
+            i = 0 if L["paper_ev"][0] >= L["paper_ev"][1] else 1
+            flag = " (blowout-excluded)" if L["blowout_excluded"] else ""
+            o.append(f"| {a} @ {h} | {L['kind']}{flag} | {L['line']:g} | {L['sides'][i]} | {L['price'][i]:+d} | "
+                     f"{L['model_prob'][i]:.3f} | {L['paper_ev'][i]*100:+.1f}% | {L['blend_ev'][i]*100:+.1f}% |")
     o += ["", "## Withheld", ""]
+    o += [f"- {g} {mk}: ladder row skipped ({why})" for g, mk, why in extra.get("ladders_skipped", [])]
     for r in card["rows"]:
         a, h, _ = names.get(r["game_id"], ("?", "?", ""))
         if r["status"] == "PASS":
@@ -325,6 +396,34 @@ def replay(evidence_dir, season, out_dir):
     (out / "cbb_replay.json").write_text(json.dumps({"label": "SHADOW_REPLAY_0U", "matches_frozen": same, "card": card}, indent=1, sort_keys=True))
     return same
 
+def _err_code(e):
+    """Receipt-safe error: exception type plus the reason only when it is a plain upper-case code."""
+    m = re.fullmatch(r"[A-Z][A-Z0-9_:]{2,80}", str(e))
+    return f"{type(e).__name__}: {e}" if m else type(e).__name__
+
+def _write_receipt(out_dir, run_id, now, card, extra, errors, ledger_path):
+    """run_receipt.json: what ran and what came out, including failures. Counts only; no provider bodies."""
+    try:
+        n_ledger = len(LG.read(ledger_path)) if ledger_path and Path(ledger_path).exists() else 0
+    except Exception:  # a broken ledger is reported by the run itself
+        n_ledger = None
+    rec = {"label": "PAPER_0U", "run_id": str(run_id), "date_ct": now.astimezone(CT).date().isoformat(),
+           "generated_utc": utcz(now), "ok": not errors and card is not None,
+           "rows_pulled": None if extra is None else {"board_rows": extra["board_rows"], "slate_games": extra["slate_games"],
+                                                     "prior_finals_used": extra["prior_census"].get("finals")},
+           "games_projected": None if card is None else card["projected_rows"],
+           "priced_markets": None if card is None else card["priced_market_rows"],
+           "ladder_rows_priced": None if extra is None else len(extra["ladders"]),
+           "ledger_rows": n_ledger, "errors": errors,
+           "unmatched": None if extra is None else {"quotes": len(extra["quotes_unmatched"]),
+                                                    "registry": len(extra["registry_unmatched"]),
+                                                    "ladders": len(extra["ladders_skipped"])}}
+    try:
+        out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
+        (out / "run_receipt.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    except OSError:
+        pass
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument("--replay-evidence", help="decrypted evidence dir: SHADOW REPLAY, read-only, no ledger")
@@ -334,6 +433,14 @@ def main(argv=None):
     a.add_argument("--ledger"); a.add_argument("--season-start-utc", default="2026-11-01T00:00:00Z")
     a.add_argument("--fixture-dir", help="offline captures (tests only): ratings.json receipt.json games.json boxes.json espn.json")
     a.add_argument("--now", help="ISO UTC override (tests only)")
+    a.add_argument("--totals-order-verified", action="store_true",
+                   help="this BOARD FORMAT is verified price_a=over; otherwise totals are withheld "
+                        "unless rows carry totals_order=over_under/under_over")
+    a.add_argument("--sd-margin", type=float); a.add_argument("--sd-total", type=float)
+    a.add_argument("--blend-weight-model", type=float,
+                   help="EXPERIMENTAL model weight in [0,1] (default 0.25; chronological test pending)")
+    a.add_argument("--blowout-spread-abs", type=float)
+    a.add_argument("--run-id", default=os.environ.get("GITHUB_RUN_ID", "local"))
     x = a.parse_args(argv)
     if x.replay_evidence:
         if x.ledger: print("BLOCKED Hold: REPLAY_NEVER_WRITES_LEDGER", file=sys.stderr); return 2
@@ -392,9 +499,15 @@ def main(argv=None):
                                    boxes=boxes, observed_utc=gcap["observed_utc"], ratings_body=ratings,
                                    ratings_receipt=rec[0], espn=espn, espn_sha=erec["sha256"],
                                    espn_captured=erec["observed_utc"], board_rows=board,
-                                   board_captured_utc=x.board_captured_utc, ledger_path=x.ledger)
+                                   board_captured_utc=x.board_captured_utc, ledger_path=x.ledger,
+                                   totals_order_verified=x.totals_order_verified,
+                                   config={"sd_margin": x.sd_margin, "sd_total": x.sd_total,
+                                           "blend_weight_model": x.blend_weight_model,
+                                           "blowout_spread_abs": x.blowout_spread_abs})
     except (Hold, PC.Pass, ValueError, OSError, LG.LedgerError) as e:
-        print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
+        print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr)
+        _write_receipt(x.out, x.run_id, clock(), None, None, [_err_code(e)], x.ledger)
+        return 2
     receipts = [{"source": "cbbd_ratings_adjusted", **{k: rec[0].get(k) for k in ("bytes", "sha256", "observed_utc")}},
                 {"source": "cbbd_games", "sha256": gcap["sha256"], "observed_utc": gcap["observed_utc"]},
                 brec, erec, *([srec] if not x.fixture_dir else []), {"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
@@ -405,6 +518,7 @@ def main(argv=None):
     md = render(card, names, extra) + "\n## Source receipts\n\n" + "\n".join(
         f"- {r['source']}: sha256 {str(r['sha256']).replace('sha256:', '')[:16]}…" for r in receipts) + "\n"
     (out / "cbb_card.md").write_text(md)
+    _write_receipt(x.out, x.run_id, now, card, extra, [], x.ledger)
     print(f"slate {extra['slate_games']}, projected {card['projected_rows']}, priced {card['priced_market_rows']}")
     return 0
 

@@ -20,6 +20,7 @@ from unittest import mock
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE)); sys.path.insert(0, str(HERE.parents[1]))
 import cbb_run_it as R
+import cbb_pricing as PR
 import cbbd_paper_card as PC
 import test_cbb_run_it as T
 
@@ -53,7 +54,9 @@ class Parity(unittest.TestCase):
                              prior_games=str(d / "prior_games.json"), prior_residuals=None,
                              quotes=[str(d / "quotes.json")], odds_api_raw=None, odds_api_manifest=None,
                              odds_api_crosswalk=None, max_quote_age_hours=24, output=str(d / "out" / "card.json"))
-            res = PC.run(args, clock=lambda: T.NOW)
+            # the runner prices with the configured SD constants + blend fields; apply the same to the paper run
+            with PR.patched_card(PR.make_config()):
+                res = PC.run(args, clock=lambda: T.NOW)
             card_p = json.loads((d / "out" / "card.json").read_bytes())
             self.assertEqual(res["card_sha256"], card_p["card_sha256"])
             strip = lambda c: {k: v for k, v in c.items() if k not in EXCLUDED}  # noqa: E731
