@@ -123,6 +123,7 @@ def historical_baselines(records):
                  for stat in recent[0]["stats"]}
         out.append({"player_id": pid, "team_id": recent[0]["team_id"], "games": len(recent),
                     "mean_minutes": mean(r["minutes"] for r in recent), "stats": stats,
+                    "latest_participation_utc": recent[0]["game_start_utc"],
                     "status": "HISTORICAL_PARTICIPATION_CONDITIONAL_NOT_PREGAME_FORECAST"})
     return out
 
@@ -194,3 +195,50 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
             "duplicate_team_boxes_across_batches": sum(n > 1 for n in box_batch_counts.values()),
             "historical_players": len(models), "confirmed_activity": False,
             "approved_stake_u": 0, "historical_baselines": models}
+
+
+def slate_history_coverage(card, history):
+    """Exact historical team-ID join, never a roster or active-player assertion.
+
+    Report both teams for every frozen game, including unprojected games.
+    Candidate IDs remain in the private research artifact; no prices.
+    """
+    freeze = utc(card["freeze_utc"], "freeze")
+    baselines = history.get("historical_baselines", [])
+    counts = Counter(b.get("player_id") for b in baselines)
+    by_team = defaultdict(list)
+    excluded = Counter()
+    for b in baselines:
+        try:
+            pid, tid = b["player_id"], b["team_id"]
+            if (type(pid) is not str or not pid.isdigit() or int(pid) <= 0
+                    or type(tid) is not str or not tid.isdigit() or int(tid) <= 0
+                    or counts[pid] != 1):
+                raise Hold("PLAYER_BASELINE_ID_INVALID_OR_DUPLICATE")
+            if (b.get("status") != "HISTORICAL_PARTICIPATION_CONDITIONAL_NOT_PREGAME_FORECAST"
+                    or not 4 <= b["games"] <= 5):
+                raise Hold("PLAYER_BASELINE_STATUS_INVALID")
+            if utc(b["latest_participation_utc"], "latest_participation") >= freeze:
+                raise Hold("PLAYER_BASELINE_NOT_PRIOR")
+            by_team[tid].append(pid)
+        except (ValueError, KeyError, TypeError) as exc:
+            excluded[str(exc)] += 1
+    game_counts = Counter(r["game_id"] for r in card["rows"])
+    rows = []
+    for r in card["rows"]:
+        gid, home, away = r["game_id"], r["home_team_id"], r["away_team_id"]
+        for side, tid in (("home", home), ("away", away)):
+            valid = (game_counts[gid] == 1 and home != away
+                     and utc(r["tipoff_utc"], "tip") > freeze)
+            ids = sorted(by_team.get(tid, [])) if valid else []
+            rows.append({"game_id": gid, "team_id": tid, "side": side,
+                         "historical_candidate_ids": ids,
+                         "historical_candidates": len(ids),
+                         "state": ("HISTORICAL_CANDIDATES_ONLY" if ids else
+                                   "NO_ELIGIBLE_HISTORY" if valid else "GAME_IDENTITY_OR_CLOCK_INVALID"),
+                         "confirmed_activity": False, "prop_forecast": None})
+    return {"label": "PAPER_0U_SLATE_HISTORY_ONLY", "input_games": len(card["rows"]),
+            "team_rows": len(rows), "team_rows_with_history": sum(bool(r["historical_candidates"]) for r in rows),
+            "team_rows_without_history": sum(not r["historical_candidates"] for r in rows),
+            "excluded_baselines": dict(excluded), "rows": rows,
+            "confirmed_active_players": 0, "priced_props": 0, "approved_stake_u": 0}
