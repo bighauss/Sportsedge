@@ -1,0 +1,10 @@
+{
+  "schema": "cbb-paper-run-request-v1",
+  "date_ct": "2026-11-24",
+  "board_path": "models/cbb/lines/board_2026-11-24_operator_transcript.csv",
+  "board_blob_sha": "31ed2ed873e607d945498964c737189762253e3a",
+  "board_captured_utc": "2026-11-24T14:46:00Z",
+  "season": 2027,
+  "totals_order_verified": false,
+  "label": "PAPER_0U"
+}

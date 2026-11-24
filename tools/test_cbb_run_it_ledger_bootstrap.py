@@ -44,7 +44,7 @@ if '/actions/artifacts?name=cbb-run-it-ledger' in url:
     print(os.getenv('FAKE_GH_ARTIFACT', 'NONE'))
 elif '/actions/workflows/cbb-run-it.yml/runs?' in url:
     # Simulate GitHub filtering: fixture-only PR successes must not count.
-    if 'event=workflow_dispatch' not in url or 'branch=main' not in url:
+    if not ('event=workflow_dispatch' in url or 'event=push' in url) or 'branch=main' not in url:
         print('99')
     else:
         print(os.getenv('FAKE_GH_PRIOR_SUCCESS', '0'))
@@ -94,6 +94,12 @@ class Continuity(unittest.TestCase):
         self.assertIn('initialize PAPER chain', msg)
         self.assertIsNone(raw)
         self.assertIn('/actions/workflows/cbb-run-it.yml/runs?event=workflow_dispatch&branch=main&status=success', calls)
+
+    def test_bootstrap_checks_both_main_execution_events(self):
+        code, _, calls, _ = self.run_restore()
+        self.assertEqual(code, 0)
+        self.assertIn('event=workflow_dispatch&branch=main&status=success', calls)
+        self.assertIn('event=push&branch=main&status=success', calls)
 
     def test_missing_artifact_after_prior_success_refused(self):
         code, msg, calls, raw = self.run_restore(prior='1')
