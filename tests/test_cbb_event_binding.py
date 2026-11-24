@@ -37,5 +37,19 @@ class BindingTests(unittest.TestCase):
     def test_missing_match(self):
         self.check([self.e], [], ["BLOCKED"])
 
+    def test_missing_event_id_preserves_denominator(self):
+        self.check([{}, self.e, None], [self.g], ["BLOCKED", "MATCHED", "BLOCKED"])
+
+    def test_malformed_schedule_isolated(self):
+        self.check([self.e], [{}, None, dict(self.g, game_id="789", tipoff_utc="bad"), self.g], ["MATCHED"])
+
+    def test_malformed_duplicate_id_blocks(self):
+        self.check([self.e], [self.g, dict(game_id="456")], ["BLOCKED"])
+
+    def test_invalid_tolerance(self):
+        for value in (-1, 901, True, 1.5):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                reconcile([self.e], [self.g], tolerance_seconds=value)
+
 if __name__ == "__main__":
     unittest.main()
