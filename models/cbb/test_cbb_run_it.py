@@ -370,6 +370,33 @@ class PlayerHistorySource(unittest.TestCase):
         self.assertEqual(report["historical_players"], 0)
         self.assertFalse(report["confirmed_activity"])
 
+    def test_slate_history_join_retains_every_team_and_never_claims_activity(self):
+        from cbbd_player_history import historical_baselines, slate_history_coverage
+        records, _ = self.normalize(*self.inputs())
+        baseline = historical_baselines(records)[0]
+        with tempfile.TemporaryDirectory() as d:
+            card, names, extra = run(d)
+            report = slate_history_coverage(card, {"historical_baselines": [baseline]})
+            self.assertEqual(report["team_rows"], 2 * len(card["rows"]))
+            self.assertEqual(report["team_rows_with_history"], 1)
+            self.assertEqual(report["confirmed_active_players"], 0)
+            self.assertEqual(report["priced_props"], 0)
+            self.assertTrue(all(r["prop_forecast"] is None for r in report["rows"]))
+            self.assertEqual(next(r for r in report["rows"] if r["historical_candidates"])["team_id"], "1")
+            extra["slate_player_history"] = report
+            self.assertIn("Slate player-history coverage", R.render(card, names, extra))
+
+    def test_slate_history_join_rejects_duplicate_and_future_player_baselines(self):
+        from cbbd_player_history import historical_baselines, slate_history_coverage
+        records, _ = self.normalize(*self.inputs())
+        baseline = historical_baselines(records)[0]
+        with tempfile.TemporaryDirectory() as d:
+            card, _, _ = run(d)
+            future = dict(baseline, player_id="56", latest_participation_utc=R.utcz(NOW))
+            report = slate_history_coverage(card, {"historical_baselines": [baseline, baseline, future]})
+            self.assertEqual(report["team_rows_with_history"], 0)
+            self.assertEqual(sum(report["excluded_baselines"].values()), 3)
+
     def test_empty_player_batches_still_require_valid_finals_receipt(self):
         from hashlib import sha256
         from cbbd_player_history import collect_batches
