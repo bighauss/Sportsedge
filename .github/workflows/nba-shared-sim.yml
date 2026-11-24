@@ -1,0 +1,24 @@
+name: NBA shared simulation tests
+on:
+  pull_request:
+    paths:
+      - 'models/nba/nba_shared_sim.py'
+      - 'models/nba/test_nba_shared_sim.py'
+      - '.github/workflows/nba-shared-sim.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Shared-draw consistency checks
+        working-directory: models/nba
+        run: python -m unittest -v test_nba_shared_sim
