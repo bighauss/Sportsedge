@@ -2,7 +2,7 @@
 
 * SD constants: margin 12.5, total 17 (tighter fitted SDs overstated confidence). Applied by
   wrapping ``project`` for the duration of a build; the fitted SDs stay in the card context.
-* Blend: p_blend = w * p_model + (1 - w) * p_market_no_vig. w default 0.25 is EXPERIMENTAL;
+* Blend: p_blend = w * p_model + (1 - w) * (1 - p_push) * p_market_no_vig. w default 0.25 is EXPERIMENTAL;
   candidate weights below await a chronological test. Nothing here is validated.
 * Blowout guard: early-season ratings compress blowout margins (large-underdog spread bias),
   so spreads with |market line| > 15 are excluded from best plays (priced, but flagged).
@@ -38,8 +38,12 @@ def make_config(**over):
     return cfg
 
 
-def blend(p_model, p_market, w):
-    return w * p_model + (1 - w) * p_market
+def blend(p_model, p_market, w, *, push=0.0):
+    """Blend unconditional model win mass with conditional market win mass.
+
+    Hold the modeled push probability fixed; two side probabilities and push sum to one.
+    """
+    return w * p_model + (1 - w) * (1 - push) * p_market
 
 
 def is_blowout(market, line, cfg):
@@ -62,8 +66,9 @@ def patched_card(cfg):
         s0, s1 = m["sides"]
         w = cfg["blend_weight_model"]
         pm, mk = m["model_prob"], m["market_novig_prob"]
-        bp = {s0: blend(pm[s0], mk[s0], w), s1: blend(pm[s1], mk[s1], w)}
-        m["blend"] = {"label": "EXPERIMENTAL", "weight_model": w, "prob": bp,
+        bp = {s0: blend(pm[s0], mk[s0], w, push=pm["push"]),
+              s1: blend(pm[s1], mk[s1], w, push=pm["push"])}
+        m["blend"] = {"label": "EXPERIMENTAL", "weight_model": w, "prob": bp, "push": pm["push"],
                       "paper_ev_per_1u_at_price": {
                           s0: NM.ev_per_unit(bp[s0], pm["push"], q["price_a"]),
                           s1: NM.ev_per_unit(bp[s1], pm["push"], q["price_b"])}}
@@ -116,10 +121,10 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc):
         ma, mb, _ = NM.no_vig(pa, pb)
         w = cfg["blend_weight_model"]
         out.append({"game_id": g["game_id"], "kind": kind, "line": line, "sides": sides,
-                    "price": (pa, pb), "model_prob": (a, c), "market_novig": (ma, mb),
+                    "price": (pa, pb), "model_prob": (a, c), "push": push, "market_novig": (ma, mb),
                     "paper_ev": (NM.ev_per_unit(a, push, pa), NM.ev_per_unit(c, push, pb)),
-                    "blend_ev": (NM.ev_per_unit(blend(a, ma, w), push, pa),
-                                 NM.ev_per_unit(blend(c, mb, w), push, pb)),
+                    "blend_ev": (NM.ev_per_unit(blend(a, ma, w, push=push), push, pa),
+                                 NM.ev_per_unit(blend(c, mb, w, push=push), push, pb)),
                     "blowout_excluded": is_blowout("spread", line, cfg) if kind == "alt_spread" else False,
                     "captured_utc": captured_utc})
     return out, skipped
