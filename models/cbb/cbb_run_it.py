@@ -267,6 +267,59 @@ def _totals_order(row, verified):
     if t == "over_under" or (not t and verified): return "ok"
     return None
 
+def align_neutral_totals(board_rows, slate_rows, registry_rows, freeze_utc):
+    """Reconcile only orientation-invariant FG game totals on confirmed neutral sites.
+
+    Exact team identity, a dated DK event, a unique CBBD candidate, a unique
+    pre-freeze ESPN registry entry and both neutral flags are required. The
+    total line and over/under prices are never modified. Side-dependent markets
+    remain held; input rows and original evidence remain unchanged.
+    """
+    reg_counts = Counter(r["game_id"] for r in registry_rows)
+    eligible = set()
+    for r in registry_rows:
+        if reg_counts[r["game_id"]] != 1 or r.get("neutral") != "1" or r.get("source") != "ESPN":
+            continue
+        try:
+            if parse_z(r["captured_utc"]) <= freeze_utc < parse_z(r["tipoff_utc"]):
+                eligible.add(r["game_id"])
+        except (ValueError, TypeError, KeyError):
+            continue
+    ev_games, game_evs, candidates = {}, {}, {}
+    for i, b in enumerate(board_rows):
+        if (b.get("sport") != "CBB" or not PR.full_game_period(b)
+                or b.get("market") not in (*MK, *PR.LADDER_MARKETS)):
+            continue
+        e = board_event_id(b)
+        if not e:
+            continue
+        g, why = _match(slate_rows, b["home"], b["away"], b)
+        if not g and why == "home/away orientation mismatch":
+            # Explicit date/time is mandatory for reversed designation.
+            try:
+                if board_tip(b) is None:
+                    continue
+            except (ValueError, TypeError, AttributeError):
+                continue
+            g, _ = _match(slate_rows, b["away"], b["home"], b)
+            if not g or g.get("neutral") != "1" or g["game_id"] not in eligible:
+                continue
+            if b["market"] in ("TOTAL", "ALT_TOTAL"):
+                candidates[i] = (g, e)
+        if g:
+            ev_games.setdefault(e, set()).add(g["game_id"])
+            game_evs.setdefault(g["game_id"], set()).add(e)
+    out, audit = list(board_rows), []
+    for i, (g, e) in candidates.items():
+        gid = g["game_id"]
+        if len(ev_games[e]) != 1 or len(game_evs[gid]) != 1:
+            continue
+        b = board_rows[i]
+        out[i] = dict(b, home=b["away"], away=b["home"])
+        audit.append({"input_index": i, "game_id": gid, "dk_event_id": e, "market": b["market"]})
+    return out, audit
+
+
 def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
                  totals_order_verified=TOTALS_ORDER_VERIFIED):
     matched, unmatched = [], []
@@ -410,7 +463,8 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
     pg, pcensus = prior_games(games, boxes, observed_utc, season)
     reg, reg_miss = registry(s, espn, espn_sha, espn_captured)
     reg_miss = slate_miss + reg_miss
-    quotes, unmatched = board_quotes(board_rows, s, board_captured_utc,
+    aligned_board, neutral_total_audit = align_neutral_totals(board_rows, s, reg, now_utc)
+    quotes, unmatched = board_quotes(aligned_board, s, board_captured_utc,
                                      totals_order_verified=totals_order_verified)
     write_csv(work / "slate.csv", list(PC.SLATE_COLUMNS), s)
     write_csv(work / "registry.csv", ["game_id", "neutral", "source", "source_sha256", "published_utc",
@@ -423,7 +477,7 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
                              prior_games=pg, quotes=[(q, "OPERATOR") for q in quotes],
                              input_sha256={"espn_scoreboard": espn_sha})
     ladders, ladders_skipped = PR.price_ladders(
-        board_rows, _match, s, card, cfg, board_captured_utc, event_id=board_event_id,
+        aligned_board, _match, s, card, cfg, board_captured_utc, event_id=board_event_id,
         totals_order=lambda b: _totals_order(b, totals_order_verified))
     ledger = None
     if ledger_path:
@@ -433,7 +487,7 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
     extra = {"prior_census": pcensus, "registry_unmatched": reg_miss, "quotes_unmatched": unmatched,
              "slate_games": len(s), "ledger": ledger, "config": cfg, "ladders": ladders,
              "ladders_skipped": ladders_skipped, "board_rows": len(board_rows),
-             "board_coverage": board_coverage(board_rows)}
+             "board_coverage": board_coverage(board_rows), "neutral_total_realignments": neutral_total_audit}
     return card, names, extra
 
 def _best(m):
@@ -552,7 +606,7 @@ def render(card, names, extra):
     for c in extra.get("board_coverage", []):
         clean = lambda v: str(v).replace("|", "/").replace("\\n", " ").replace("\\r", " ")
         o.append(f"| {clean(c['period'])} | {clean(c['market'])} | {c['state']} | {c['rows']} |")
-    o += ["", "## Withheld", ""]
+    o += ["", f"Confirmed-neutral total row realignments (before price gates): {len(extra.get('neutral_total_realignments', []))}. Side-dependent rows are not realigned.", "", "## Withheld", ""]
     o += [f"- {g} {mk}: ladder row skipped ({why})" for g, mk, why in extra.get("ladders_skipped", [])]
     for r in card["rows"]:
         a, h, _ = names.get(r["game_id"], ("?", "?", ""))
