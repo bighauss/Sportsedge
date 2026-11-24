@@ -8,10 +8,25 @@ recorded participation, NOT a game-day forecast. Missing stats are not zeros.
 from collections import Counter, defaultdict
 from hashlib import sha256
 import math
+import json
 from statistics import mean, stdev
-from cbbd_prospective_capture import Hold, decoded, utc
+from cbbd_prospective_capture import Hold, decoded, utc, _unique_pairs, _bad_constant
 
 URL = "https://api.collegebasketballdata.com/games/players"
+
+
+def decode_player_boxes(raw):
+    # Player boxes are substantially larger than schedule records.
+    if type(raw) is not bytes or not 0 < len(raw) <= 32 * 1024 * 1024:
+        raise Hold("PLAYER_BODY_SIZE_INVALID")
+    try:
+        rows = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_pairs,
+                          parse_constant=_bad_constant)
+    except (ValueError, UnicodeError) as exc:
+        raise Hold("PLAYER_BODY_JSON_INVALID") from exc
+    if not isinstance(rows, list) or len(rows) >= 2000:
+        raise Hold("PLAYER_TEAM_BOX_LIMIT_OR_SCHEMA_INVALID")
+    return rows
 
 
 def normalize(raw, receipt, finals_raw, finals_receipt, *, season, asof_utc):
@@ -23,7 +38,7 @@ def normalize(raw, receipt, finals_raw, finals_receipt, *, season, asof_utc):
         observed = utc(rec.get("observed_utc"), "observation")
         if observed >= cutoff:
             raise Hold("PLAYER_SOURCE_NOT_PRIOR")
-        return decoded(blob), observed
+        return (decode_player_boxes(blob) if source == "cbbd_games_players" else decoded(blob)), observed
     games, go = verify(finals_raw, finals_receipt, "cbbd_games_season")
     boxes, bo = verify(raw, receipt, "cbbd_games_players")
     counts = Counter(g.get("id") for g in games if isinstance(g, dict) and type(g.get("id")) is int)
@@ -120,7 +135,7 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
     """
     all_rows, batch_reports = [], []
     for raw, receipt in batches:
-        unique_games = {b.get("gameId") for b in decoded(raw) if isinstance(b, dict)
+        unique_games = {b.get("gameId") for b in decode_player_boxes(raw) if isinstance(b, dict)
                         and type(b.get("gameId")) is int}
         if len(unique_games) >= 1000:
             raise Hold("PLAYER_BATCH_PROVIDER_CAP_REACHED")
