@@ -1,13 +1,18 @@
 name: CBB RUN IT (manual, research diagnostic)
 on:
+  pull_request:
+    paths: [.github/workflows/cbb-run-it.yml, models/cbb/**]
+  push:
+    branches: [perplexity/alternate-distributions-20261124]
+    paths: [.github/workflows/cbb-run-it.yml]
   workflow_dispatch:
     inputs:
       board_path:
-        description: Repository board CSV (verified side orientation required)
-        default: models/cbb/lines/board_2026-11-21_0914CT_CBB.csv
+        description: Optional repository board CSV; leave blank for independent forecasts
+        default: ''
       board_captured_utc:
-        description: Board capture UTC
-        default: '2026-11-21T15:14:00Z'
+        description: Required only when a board is supplied
+        default: ''
       season:
         description: CBBD season end year
         default: '2027'
@@ -18,8 +23,26 @@ concurrency:
   group: cbb-run-it
   cancel-in-progress: false
 jobs:
+  offline-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 123dede2268cf617720c948b9d1288bfb25fdecc
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pinned offline runner tests
+        working-directory: models/cbb
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+        run: python -m unittest -v test_cbb_run_it test_cbb_run_it_neutral_unknown test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
   run-it:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/perplexity/alternate-distributions-20261124'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -27,22 +50,59 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 123dede2268cf617720c948b9d1288bfb25fdecc
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fixture gate
+      - name: Fixture gate (synthetic, offline)
         working-directory: models/cbb
         run: python -m unittest -v test_cbb_run_it test_cbb_run_it_neutral_unknown test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
+      - name: No-board CLI and projection independence regression (synthetic, offline)
+        working-directory: models/cbb
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import contextlib,io,json,tempfile,unittest
+          from pathlib import Path
+          import test_cbb_run_it as T
+          class NoBoard(unittest.TestCase):
+              def test_projection_independence(self):
+                  with tempfile.TemporaryDirectory() as d:
+                      quoted,_,_=T.run(Path(d)/'quoted')
+                      independent,_,_=T.run(Path(d)/'independent',board_rows=[],board_captured_utc=None)
+                      self.assertGreater(independent['projected_rows'],0)
+                      self.assertEqual(independent['priced_market_rows'],0)
+                      self.assertEqual([(r['game_id'],r['projection']) for r in quoted['rows']],[(r['game_id'],r['projection']) for r in independent['rows']])
+              def test_cli_without_board(self):
+                  with tempfile.TemporaryDirectory() as d:
+                      root=Path(d);fx=root/'fixtures';fx.mkdir();games,boxes=T.provider();body=T.S.ratings_body()
+                      (fx/'ratings.json').write_bytes(body)
+                      for name,value in [('receipt',T.S.receipt(body)),('games',games),('boxes',boxes),('espn',T.espn())]:
+                          (fx/(name+'.json')).write_text(json.dumps(value))
+                      with contextlib.redirect_stdout(io.StringIO()):
+                          rc=T.R.main(['--season',str(T.S.SEASON),'--private-dir',str(root/'private'),'--out',str(root/'card'),'--fixture-dir',str(fx),'--now','2026-11-21T15:00:00+00:00'])
+                      self.assertEqual(rc,0)
+                      card=json.loads((root/'card'/'cbb_card.json').read_text());receipts=json.loads((root/'card'/'receipts.json').read_text())
+                      self.assertGreater(card['projected_rows'],0);self.assertEqual(card['priced_market_rows'],0)
+                      self.assertFalse(any(r['source']=='dk_board' for r in receipts))
+                      self.assertEqual(card['approved_stake_u'],0)
+          suite=unittest.defaultTestLoader.loadTestsFromTestCase(NoBoard)
+          result=unittest.TextTestRunner(verbosity=2).run(suite)
+          if result.testsRun!=2 or result.skipped or not result.wasSuccessful():raise SystemExit(1)
+          PY
       - name: Install encryption
         run: python -m pip install --disable-pip-version-check cryptography==46.0.4
       - name: Provider-free CBB ledger continuity regressions
         run: python -m unittest -v tools.test_cbb_run_it_ledger_bootstrap
       - name: Preflight before provider requests
+        id: preflight
         env:
           CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
           BOARD: ${{ inputs.board_path }}
+          BOARD_AT: ${{ inputs.board_captured_utc }}
         run: |
           python - <<'PY'
           import os
@@ -54,24 +114,24 @@ jobs:
               raise SystemExit('BLOCK_ARCHIVE_KEY') from None
           if not os.environ.get('CBBD_API_KEY'):
               raise SystemExit('BLOCK_SOURCE_KEY')
-          repo = Path.cwd().resolve()
-          board = (repo / os.environ['BOARD']).resolve()
-          if not board.is_relative_to(repo) or not board.is_file():
-              raise SystemExit('BLOCK_BOARD_PATH')
+          if bool(os.environ['BOARD']) != bool(os.environ['BOARD_AT']):
+              raise SystemExit('BLOCK_BOARD_AND_TIMESTAMP_MUST_BE_PAIRED')
+          if os.environ['BOARD']:
+              repo=Path.cwd().resolve();board=(repo/os.environ['BOARD']).resolve()
+              if not board.is_relative_to(repo) or not board.is_file():
+                  raise SystemExit('BLOCK_BOARD_PATH')
           PY
       - name: Restore and verify encrypted paper ledger from the previous run
+        id: restore
         env:
           GH_TOKEN: ${{ github.token }}
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
         run: |
           set -euo pipefail
           install -d -m 0700 "$RUNNER_TEMP/ledger"
-          # Never silently reset an existing chain: the newest artifact is authoritative.
           artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cbb-run-it-ledger&per_page=1" \
             --jq 'if (.artifacts | length) == 0 then "NONE" else "\(.artifacts[0].id) \(.artifacts[0].expired)" end')
           if [ "$artifact" = "NONE" ]; then
-            # A genuine first run can bootstrap. Any earlier successful CBB RUN IT
-            # without a retained ledger is a continuity failure, not a fresh slate.
             prior_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cbb-run-it.yml/runs?status=success&per_page=1" --jq '.total_count')
             case "$prior_success" in ''|*[!0-9]*) echo "::error::CBB_LEDGER_HISTORY_UNVERIFIED"; exit 2;; esac
             if [ "$prior_success" -ne 0 ]; then
@@ -87,32 +147,46 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/ledger.zip"
           unzip -q "$RUNNER_TEMP/ledger.zip" -d "$RUNNER_TEMP/ledger-enc"
           python - <<'PY'
-          import os, pathlib
+          import os,pathlib
           from cryptography.fernet import Fernet
           import cbbd_paper_ledger as LG
-          t = pathlib.Path(os.environ['RUNNER_TEMP'])
-          raw = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).decrypt((t / 'ledger-enc' / 'ledger.jsonl.fernet').read_bytes())
+          t=pathlib.Path(os.environ['RUNNER_TEMP'])
+          raw=Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).decrypt((t/'ledger-enc'/'ledger.jsonl.fernet').read_bytes())
           LG.parse_ledger(raw)
-          p = t / 'ledger' / 'ledger.jsonl'; p.write_bytes(raw); p.chmod(0o600)
+          p=t/'ledger'/'ledger.jsonl';p.write_bytes(raw);p.chmod(0o600)
           PY
-      - name: Diagnostic model execution with private logs
+      - name: Live provider capture and independent model execution with private logs
         id: model
         env:
           CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
           BOARD: ${{ inputs.board_path }}
           BOARD_AT: ${{ inputs.board_captured_utc }}
-          SEASON: ${{ inputs.season }}
+          SEASON: ${{ inputs.season || '2027' }}
         run: |
           set -euo pipefail
           umask 077
           mkdir -m 0700 "$RUNNER_TEMP/evidence"
-          cp -- "$BOARD" "$RUNNER_TEMP/evidence/board.csv"
-          python models/cbb/cbb_run_it.py --board "$BOARD" --board-captured-utc "$BOARD_AT" --season "$SEASON" \
-            --private-dir "$RUNNER_TEMP/evidence/capture" --out "$RUNNER_TEMP/evidence/card" \
-            --ledger "$RUNNER_TEMP/ledger/ledger.jsonl" \
-            > "$RUNNER_TEMP/evidence/stdout.log" 2> "$RUNNER_TEMP/evidence/stderr.log"
+          python - <<'PY'
+          import json,os,pathlib,subprocess
+          revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          if revision!='123dede2268cf617720c948b9d1288bfb25fdecc':raise SystemExit('BLOCK_SOURCE_REVISION')
+          value=dict(source_revision=revision,trigger_revision=os.environ['GITHUB_SHA'],run_id=os.environ['GITHUB_RUN_ID'],run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],sport='CBB',model_track='INDEPENDENT',approved_stake_u=0,board_supplied=bool(os.environ['BOARD']))
+          with (pathlib.Path(os.environ['RUNNER_TEMP'])/'evidence'/'execution.json').open('x') as stream:json.dump(value,stream,sort_keys=True)
+          PY
+          args=(--season "$SEASON" --private-dir "$RUNNER_TEMP/evidence/capture" --out "$RUNNER_TEMP/evidence/card" --ledger "$RUNNER_TEMP/ledger/ledger.jsonl")
+          if [ -n "$BOARD" ]; then
+            cp -- "$BOARD" "$RUNNER_TEMP/evidence/board.csv"
+            args+=(--board "$BOARD" --board-captured-utc "$BOARD_AT")
+          fi
+          python models/cbb/cbb_run_it.py "${args[@]}" > "$RUNNER_TEMP/evidence/stdout.log" 2> "$RUNNER_TEMP/evidence/stderr.log"
           cp -- "$RUNNER_TEMP/ledger/ledger.jsonl" "$RUNNER_TEMP/evidence/capture/ledger.jsonl"
-      - name: Complete encrypted evidence or encrypted failure diagnostics
+          python - <<'PY'
+          import json, os, pathlib
+          card=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"evidence/card/cbb_card.json").read_text())
+          if type(card.get("projected_rows")) is not int or card["projected_rows"] <= 0:
+              raise SystemExit("BLOCK_ZERO_INDEPENDENT_PROJECTIONS")
+          PY
+      - name: Encrypt captured evidence or failure diagnostics
         id: encrypt
         if: always() && steps.model.outcome != 'skipped'
         env:
@@ -120,52 +194,36 @@ jobs:
           MODEL_OUTCOME: ${{ steps.model.outcome }}
         run: |
           python - <<'PY'
-          import hashlib, io, json, os, pathlib, tarfile, tempfile
+          import hashlib,io,json,os,pathlib,tarfile,tempfile
           from cryptography.fernet import Fernet
-          root = pathlib.Path(os.environ['RUNNER_TEMP'])
-          src = root / 'evidence'
-          entries = sorted(src.rglob('*'))
-          if any(p.is_symlink() for p in entries):
-              raise SystemExit('BLOCK_EVIDENCE_SYMLINK')
-          files = {str(p.relative_to(src)): p.read_bytes() for p in entries if p.is_file()}
-          if not files:
-              raise SystemExit('BLOCK_EMPTY_EVIDENCE')
-          if os.environ['MODEL_OUTCOME'] == 'success':
-              for required in ('card/cbb_card.json', 'card/cbb_card.md', 'card/receipts.json', 'board.csv', 'capture/ledger.jsonl'):
-                  if not files.get(required):
-                      raise SystemExit('BLOCK_REQUIRED_EVIDENCE_MISSING')
-              card = json.loads(files['card/cbb_card.json'])
-              if card.get('sport') != 'CBB' or not isinstance(card.get('rows'), list):
-                  raise SystemExit('BLOCK_CARD_SCHEMA')
-              receipts = json.loads(files['card/receipts.json'])
-              if not isinstance(receipts, list) or not receipts:
-                  raise SystemExit('BLOCK_RECEIPTS_MISSING')
-              source_bytes = [b for n, b in files.items() if n.startswith('capture/') or n == 'board.csv']
-              digests = {hashlib.sha256(b).hexdigest() for b in source_bytes}
+          root=pathlib.Path(os.environ['RUNNER_TEMP']);src=root/'evidence';entries=sorted(src.rglob('*'))
+          if any(p.is_symlink() for p in entries):raise SystemExit('BLOCK_EVIDENCE_SYMLINK')
+          files={str(p.relative_to(src)):p.read_bytes() for p in entries if p.is_file()}
+          if not files:raise SystemExit('BLOCK_EMPTY_EVIDENCE')
+          if os.environ['MODEL_OUTCOME']=='success':
+              for required in ('execution.json','card/cbb_card.json','card/cbb_card.md','card/receipts.json','capture/ledger.jsonl'):
+                  if not files.get(required):raise SystemExit('BLOCK_REQUIRED_EVIDENCE_MISSING')
+              card=json.loads(files['card/cbb_card.json'])
+              if card.get('sport')!='CBB' or not isinstance(card.get('rows'),list):raise SystemExit('BLOCK_CARD_SCHEMA')
+              if card.get('official_counted')!=0 or card.get('approved_stake_u')!=0:raise SystemExit('BLOCK_PAPER_GUARD')
+              receipts=json.loads(files['card/receipts.json'])
+              if not isinstance(receipts,list) or not receipts:raise SystemExit('BLOCK_RECEIPTS_MISSING')
+              uses_board=any(r.get('source')=='dk_board' for r in receipts)
+              if uses_board != ('board.csv' in files):raise SystemExit('BLOCK_BOARD_RECEIPT_MISMATCH')
+              source_bytes=[b for n,b in files.items() if n.startswith('capture/') or n=='board.csv']
+              digests={hashlib.sha256(b).hexdigest() for b in source_bytes}
               for receipt in receipts:
-                  digest = str(receipt.get('sha256', '')).removeprefix('sha256:')
-                  if len(digest) != 64 or digest not in digests:
-                      raise SystemExit('BLOCK_RECEIPT_BYTES_MISMATCH')
-          manifest = {'status': 'DIAGNOSTIC_ONLY' if os.environ['MODEL_OUTCOME'] == 'success' else 'FAILED_RUN',
-                      'wager_eligible': False, 'approved_stake_u': 0,
-                      'files': {n: hashlib.sha256(b).hexdigest() for n, b in files.items()}}
-          files['bundle-index.json'] = json.dumps(manifest, sort_keys=True).encode()
-          bundle = io.BytesIO()
-          with tarfile.open(fileobj=bundle, mode='w') as archive:
-              for name, data in sorted(files.items()):
-                  info = tarfile.TarInfo(name)
-                  info.size, info.mode = len(data), 0o600
-                  archive.addfile(info, io.BytesIO(data))
-          cipher = Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii'))
-          token = cipher.encrypt(bundle.getvalue())
-          if cipher.decrypt(token) != bundle.getvalue():
-              raise SystemExit('BLOCK_ENCRYPTION_ROUNDTRIP')
+                  digest=str(receipt.get('sha256','')).removeprefix('sha256:')
+                  if len(digest)!=64 or digest not in digests:raise SystemExit('BLOCK_RECEIPT_BYTES_MISMATCH')
+          manifest={'status':'DIAGNOSTIC_ONLY' if os.environ['MODEL_OUTCOME']=='success' else 'FAILED_RUN','wager_eligible':False,'approved_stake_u':0,'files':{n:hashlib.sha256(b).hexdigest() for n,b in files.items()}}
+          files['bundle-index.json']=json.dumps(manifest,sort_keys=True).encode();bundle=io.BytesIO()
+          with tarfile.open(fileobj=bundle,mode='w') as archive:
+              for name,data in sorted(files.items()):
+                  info=tarfile.TarInfo(name);info.size,info.mode=len(data),0o600;archive.addfile(info,io.BytesIO(data))
+          cipher=Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii'));token=cipher.encrypt(bundle.getvalue())
+          if cipher.decrypt(token)!=bundle.getvalue():raise SystemExit('BLOCK_ENCRYPTION_ROUNDTRIP')
           with tempfile.NamedTemporaryFile(dir=root) as staging:
-              os.chmod(staging.name, 0o600)
-              staging.write(token)
-              staging.flush()
-              os.fsync(staging.fileno())
-              os.link(staging.name, root / 'cbb-evidence.tar.fernet')
+              os.chmod(staging.name,0o600);staging.write(token);staging.flush();os.fsync(staging.fileno());os.link(staging.name,root/'cbb-evidence.tar.fernet')
           PY
       - name: Retain encrypted evidence only
         id: evidence
@@ -184,6 +242,7 @@ jobs:
           install -d -m 0700 "$RUNNER_TEMP/ledger-out"
           python -c "import os,pathlib;from cryptography.fernet import Fernet;t=pathlib.Path(os.environ['RUNNER_TEMP']);(t/'ledger-out'/'ledger.jsonl.fernet').write_bytes(Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).encrypt((t/'ledger'/'ledger.jsonl').read_bytes()))"
       - name: Retain encrypted ledger
+        id: ledger_upload
         if: success() && steps.evidence.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
@@ -194,7 +253,7 @@ jobs:
       - name: Sanitized diagnostic summary
         if: success() && steps.model.outcome == 'success' && steps.evidence.outcome == 'success'
         run: |
-          printf '%s\n' '## CBB diagnostic execution' 'Model command, evidence checks and encrypted upload succeeded.' 'PAPER / 0u. Not wager-eligible. Model calibration is unvalidated.' '' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' '## CBB diagnostic execution' 'Model command, evidence checks and encrypted upload succeeded. This alone does not establish nonzero forecasts.' 'PAPER / 0u. Not wager-eligible. Model calibration is unvalidated.' '' >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/evidence/card/cbb_card.md" >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/evidence/card/cbb_card.md"
       - name: Sanitized block reason (codes only, no bodies or URLs)
@@ -207,3 +266,34 @@ jobs:
         run: |
           echo '::error::CBB_EXECUTION_OR_EVIDENCE_FAILED'
           exit 1
+
+      - name: Write sanitized execution receipt
+        if: always()
+        env:
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          RESTORE: ${{ steps.restore.outcome }}
+          MODEL: ${{ steps.model.outcome }}
+          EVIDENCE: ${{ steps.evidence.outcome }}
+          LEDGER: ${{ steps.ledger_upload.outcome }}
+        run: |
+          python - <<'PY'
+          import datetime,json,os,pathlib,re
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          p=root/'evidence/card/cbb_card.json'
+          card=json.loads(p.read_text()) if p.is_file() else {}
+          counts={k:card[k] for k in ('projected_rows','priced_market_rows') if type(card.get(k)) is int and card[k]>=0}
+          stages={k.lower():os.environ[k] for k in ('PREFLIGHT','RESTORE','MODEL','EVIDENCE','LEDGER')}
+          err=root/'evidence/stderr.log'
+          codes=re.findall(r'^BLOCKED [A-Za-z]+: ([A-Z][A-Z0-9_:]{2,80})$',err.read_text(errors='replace'),re.M)[:3] if err.is_file() else []
+          receipt=dict(run_id=os.environ['GITHUB_RUN_ID'],attempt=os.environ['GITHUB_RUN_ATTEMPT'],trigger_revision=os.environ['GITHUB_SHA'],source_revision='123dede2268cf617720c948b9d1288bfb25fdecc',timestamp_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),stages=stages,counts=counts,error_codes=codes,approved_stake_u=0)
+          out=root/'public-receipt';out.mkdir(exist_ok=False)
+          (out/'run_receipt.json').write_text(json.dumps(receipt,indent=2,sort_keys=True))
+          PY
+      - name: Retain sanitized execution receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbb-run-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public-receipt/run_receipt.json
+          retention-days: 90
+          if-no-files-found: error
