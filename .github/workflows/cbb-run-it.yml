@@ -77,6 +77,7 @@ jobs:
       - name: Provider-free CBB ledger continuity regressions
         run: python -m unittest -v tools.test_cbb_run_it_ledger_bootstrap
       - name: Preflight before provider requests
+        id: preflight
         env:
           CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
@@ -101,6 +102,7 @@ jobs:
                   raise SystemExit('BLOCK_BOARD_PATH')
           PY
       - name: Restore and verify encrypted paper ledger from the previous run
+        id: restore
         env:
           GH_TOKEN: ${{ github.token }}
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
@@ -220,6 +222,7 @@ jobs:
           install -d -m 0700 "$RUNNER_TEMP/ledger-out"
           python -c "import os,pathlib;from cryptography.fernet import Fernet;t=pathlib.Path(os.environ['RUNNER_TEMP']);(t/'ledger-out'/'ledger.jsonl.fernet').write_bytes(Fernet(os.environ['SPORTSEDGE_ARCHIVE_FERNET_KEY'].encode('ascii')).encrypt((t/'ledger'/'ledger.jsonl').read_bytes()))"
       - name: Retain encrypted ledger
+        id: ledger_upload
         if: success() && steps.evidence.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
@@ -243,3 +246,34 @@ jobs:
         run: |
           echo '::error::CBB_EXECUTION_OR_EVIDENCE_FAILED'
           exit 1
+
+      - name: Write sanitized execution receipt
+        if: always()
+        env:
+          PREFLIGHT: ${{ steps.preflight.outcome }}
+          RESTORE: ${{ steps.restore.outcome }}
+          MODEL: ${{ steps.model.outcome }}
+          EVIDENCE: ${{ steps.evidence.outcome }}
+          LEDGER: ${{ steps.ledger_upload.outcome }}
+        run: |
+          python - <<'PY'
+          import datetime,json,os,pathlib,re
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          p=root/'evidence/card/cbb_card.json'
+          card=json.loads(p.read_text()) if p.is_file() else {}
+          counts={k:card[k] for k in ('projected_rows','priced_market_rows') if type(card.get(k)) is int and card[k]>=0}
+          stages={k.lower():os.environ[k] for k in ('PREFLIGHT','RESTORE','MODEL','EVIDENCE','LEDGER')}
+          err=root/'evidence/stderr.log'
+          codes=re.findall(r'^BLOCKED [A-Za-z]+: ([A-Z][A-Z0-9_:]{2,80})$',err.read_text(errors='replace'),re.M)[:3] if err.is_file() else []
+          receipt=dict(run_id=os.environ['GITHUB_RUN_ID'],attempt=os.environ['GITHUB_RUN_ATTEMPT'],trigger_revision=os.environ['GITHUB_SHA'],source_revision='123dede2268cf617720c948b9d1288bfb25fdecc',timestamp_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),stages=stages,counts=counts,error_codes=codes,approved_stake_u=0)
+          out=root/'public-receipt';out.mkdir(exist_ok=False)
+          (out/'run_receipt.json').write_text(json.dumps(receipt,indent=2,sort_keys=True))
+          PY
+      - name: Retain sanitized execution receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbb-run-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/public-receipt/run_receipt.json
+          retention-days: 90
+          if-no-files-found: error
