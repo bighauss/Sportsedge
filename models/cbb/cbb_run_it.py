@@ -247,6 +247,10 @@ def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
     matched, unmatched = [], []
     for b in board_rows:
         if b.get("sport") != "CBB" or b.get("market") not in MK: continue
+        if not PR.full_game_period(b):
+            unmatched.append((f"{b['away']} @ {b['home']}", b["market"],
+                              "UNSUPPORTED_PERIOD: full-game model cannot price period quote"))
+            continue
         order = _totals_order(b, totals_order_verified) if b["market"] == "TOTAL" else "ok"
         if order is None:
             unmatched.append((f"{b['away']} @ {b['home']}", "TOTAL",

@@ -94,6 +94,12 @@ def board_tip(row):
     return raw
 
 
+def full_game_period(row):
+    """Legacy boards omitted the period column; explicit non-FG values never
+    enter the full-game model. Blank explicit cells are ambiguous."""
+    return "period" not in row or row.get("period") == "FG"
+
+
 MAIN_MARKETS = ("SPREAD", "TOTAL", "ML")
 LINE_BOUNDS = {"alt_spread": (-60, 60), "alt_total": (80, 220),
                "team_total_home": (30, 130), "team_total_away": (30, 130)}
@@ -169,6 +175,11 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
             continue
         is_ladder = b.get("market") in LADDER_MARKETS
         if not is_ladder and b.get("market") not in MAIN_MARKETS:
+            continue
+        if not full_game_period(b):
+            if is_ladder:
+                skipped.append((f"{b.get('away')} @ {b.get('home')}", b["market"],
+                                "UNSUPPORTED_PERIOD: full-game model cannot price period quote"))
             continue
         g, why = match(slate_rows, b["home"], b["away"], b)
         cand.append((b, g, why, is_ladder))
