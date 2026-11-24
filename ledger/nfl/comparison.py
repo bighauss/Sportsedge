@@ -313,6 +313,7 @@ def _dedupe_runs(runs, capture_policy):
     superseded = 0
     seen_runs = set()
     by_game = {}
+    seen_game_captures = set()
     for run in runs:
         m = run["manifest"]
         if m["run_id"] in seen_runs:
@@ -327,14 +328,16 @@ def _dedupe_runs(runs, capture_policy):
             pregame.append(run)
             continue
         game = m["game"]
+        key = (game, capture)
+        if key in seen_game_captures:
+            raise ValueError("ambiguous pregame capture timestamp")
+        seen_game_captures.add(key)
         previous = by_game.get(game)
         if previous is None:
             by_game[game] = (capture, start, run)
         else:
             if start != previous[1]:
                 raise ValueError("ambiguous event identity: conflicting kickoff timestamps")
-            if capture == previous[0]:
-                raise ValueError("ambiguous latest pregame capture timestamp")
             if capture > previous[0]:
                 by_game[game] = (capture, start, run)
             superseded += 1
