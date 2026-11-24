@@ -61,7 +61,7 @@ def load_verified_events(directory, *, manifest_sha256, expected_game_count):
         eid=event['dk_event_id']
         if not isinstance(eid,str) or not eid.isdigit() or eid in known:raise ValueError('invalid or duplicate event record')
         known[eid]={k:event[k] for k in ('dk_event_id','home','away','tipoff_ct')}
-    grouped={};identities=set()
+    grouped={};identities=set();main_markets={}
     for index,(contract,row) in enumerate(zip(contracts,board),1):
         if type(contract['board_row']) is not int or contract['board_row']!=index:raise ValueError('invalid board row binding')
         if row!={k:str(contract[k]) for k in COLUMNS}:raise ValueError('CSV/contract value mismatch')
@@ -83,7 +83,12 @@ def load_verified_events(directory, *, manifest_sha256, expected_game_count):
         if not _time(lo)<=_time(hi)<_time(event['tipoff_ct']):raise ValueError('invalid capture chronology')
         identity=(eid,contract['period'],contract['market'],line)
         if identity in identities:raise ValueError('duplicate market contract')
+        markets=main_markets.setdefault(eid,set())
+        if contract['market'] in markets:raise ValueError('multiple main lines for event market')
+        markets.add(contract['market'])
         identities.add(identity);grouped.setdefault(eid,event)
+    if any(not {'SPREAD','TOTAL'}.issubset(markets) for markets in main_markets.values()):
+        raise ValueError('incomplete main market coverage')
     if set(grouped)!=set(known) or len(grouped)!=expected_game_count:raise ValueError('event denominator mismatch')
     if any(type(manifest.get(k)) is not int or manifest[k]!=n for k,n in [('games',len(grouped)),('paired_markets',len(contracts)),('offered_sides',2*len(contracts))]):
         raise ValueError('manifest denominator mismatch')
