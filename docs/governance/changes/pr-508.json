@@ -4,6 +4,7 @@
   "base_commit": "c4e55c81aef1541be0c5f81c7800ec564ff44bfa",
   "protected_paths": [
     ".github/workflows/cbb-grade.yml",
+    ".github/workflows/cbb-run-it.yml",
     "models/cbb/cbb_grade_request.py",
     "models/cbb/cbb_run_it.py",
     "models/cbb/cbbd_player_history.py",
@@ -16,7 +17,8 @@
   "assumptions": [
     "Two bounded player-history calls under existing API authorization; historical participation is not confirmed upcoming availability.",
     "Grade request only for prior completed Central date, no provider authentication claim.",
-    "Actual first-half forecasts use pooled prior scoring share, no calibrated predictive variance or price."
+    "Actual first-half forecasts use pooled prior scoring share, no calibrated predictive variance or price.",
+    "PR fixtures use separate groups; live grade and run remain serialized on cbb-run-it."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
