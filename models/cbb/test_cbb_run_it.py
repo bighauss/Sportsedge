@@ -462,10 +462,18 @@ class PlayerHistorySource(unittest.TestCase):
             self.assertEqual(result["graded"], 1)
             self.assertEqual(result["metrics"]["POINTS"]["mae"], 2)
             self.assertEqual(result["metrics"]["PRA"]["mae"], 2)
+            self.assertEqual(result["evaluated_utc"], "2026-11-22T05:00:00+00:00")
+            self.assertEqual(result["finals_receipt"], frec)
+            self.assertEqual(result["final_player_receipts"], [fb[0][1]])
+            self.assertEqual(check(batches=iter(fb)), result)
+            with self.assertRaisesRegex(ValueError, "PLAYER_SOURCE_RECEIPT_MISMATCH"):
+                check(batches=[(fb[0][0], dict(fb[0][1], sha256="bad"))])
             missing = check(batches=[])
             self.assertEqual(missing["graded"], 0)
             self.assertEqual(missing["withheld"], {"PLAYER_PARTICIPATION_UNOBSERVED_OR_REJECTED": 1})
             self.assertIsNone(missing["metrics"]["POINTS"]["mae"])
+            self.assertEqual(missing["finals_receipt"], frec)
+            self.assertEqual(missing["final_player_receipts"], [])
             with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH"):
                 check(rep=dict(report, conditional_mean_rows=999))
 
