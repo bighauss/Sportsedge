@@ -1,0 +1,62 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 510,
+  "base_commit": "af8d2bffb990fe02ec6c2ccf16f0b1dd64557fbb",
+  "protected_paths": [
+    ".github/workflows/cbb-grade.yml"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Publish complete allowlisted aggregate grading metrics without truncating serialized JSON.",
+  "assumptions": [
+    "Aggregate report only; exclude prospective per-game residuals and walk-forward internals from logs.",
+    "Encrypted full report and ledger unchanged.",
+    "No model or release changes."
+  ],
+  "agent_identity": "ChatGPT",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "cbb-grade-fixture-tests",
+    "before": null,
+    "unit": "tests",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s models/cbb -p test_cbb_grade*.py -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "af8d2bffb990fe02ec6c2ccf16f0b1dd64557fbb",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s models/cbb -p test_cbb_grade*.py -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
