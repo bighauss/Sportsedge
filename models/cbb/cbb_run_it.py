@@ -370,6 +370,23 @@ def render(card, names, extra):
         o += [f"Side balance of best-EV picks: {dict(_C(sides))}", ""]
     if card.get("context_error"):
         o += [f"**Context error (all games PASS):** {card['context_error']}", ""]
+    o += ["## Independent full-game score projections (before sportsbook prices)", "",
+          "Home margin = projected home minus away score; team totals are expected team scores. "
+          "No sportsbook line is needed for this section. No first-half or player-prop forecast is implied.", "",
+          "| Game | Tip (CT) | Away points | Home points | Home margin | Total | Possessions | Status |",
+          "|---|---|---:|---:|---:|---:|---:|---|"]
+    for r in card["rows"]:
+        a, h, tip = names.get(r["game_id"], ("?", "?", r["tipoff_utc"]))
+        when = parse_z(tip).astimezone(CT).strftime("%-I:%M %p")
+        if r["status"] != "PROJECTED":
+            o.append(f"| {a} @ {h} | {when} | — | — | — | — | — | PASS: {r['pass_reason']} |")
+            continue
+        p = r["projection"]
+        o.append(f"| {a} @ {h} | {when} | {p['away_points']:.2f} | {p['home_points']:.2f} | "
+                 f"{p['margin']:+.2f} | {p['total']:.2f} | {p['possessions']:.2f} | PROJECTED |")
+    o += ["", "**Pricing diagnostics below are not recommendations or validated positive EV.** "
+          "The same-book blend is experimental, not independent market consensus. "
+          "Large model-market disagreement, particularly longshots, requires calibration and event review.", ""]
     priced, blowouts = [], []
     for r in card["rows"]:
         for m in r["markets"]:
@@ -377,7 +394,7 @@ def render(card, names, extra):
                 side, ev = _best(m)
                 (blowouts if m.get("blowout_excluded") else priced).append((ev, r, m, side))
     priced.sort(key=lambda x: -x[0])
-    o += ["## Priced markets (best side by paper EV)", "",
+    o += ["## Priced markets (diagnostic side by paper EV)", "",
           "| # | Game | Tip (CT) | Market | Side | Line | Price | p model | p no-vig | Paper EV | Blend EV (exp.) |",
           "|---|---|---|---|---|---|---|---|---|---|---|"]
     for i, (ev, r, m, side) in enumerate(priced, 1):
