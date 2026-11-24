@@ -339,6 +339,30 @@ class PlayerHistorySource(unittest.TestCase):
         return normalize(b, rec(b, "cbbd_games_players"), g, rec(g, "cbbd_games_season"),
                          season=S.SEASON, asof_utc=R.utcz(NOW))
 
+    def test_schedule_density_windows_preserve_same_tip_and_report_omissions(self):
+        from cbbd_player_history import plan_player_windows
+        games, _ = self.inputs()
+        games.append(dict(games[-1], id=99))
+        plan = plan_player_windows(games, season=S.SEASON,
+            start_utc="2026-11-01T00:00:00Z", end_utc=R.utcz(NOW),
+            max_games=2, max_batches=2)
+        self.assertEqual(plan["known_games"], 6)
+        self.assertEqual(plan["planned_games"], 4)
+        self.assertEqual(plan["omitted_games"], 2)
+        windows = plan["windows"]
+        self.assertEqual([w["scheduled_games"] for w in windows], [2, 2])
+        self.assertLess(windows[0]["end_utc"], windows[1]["start_utc"])
+        self.assertEqual(windows[-1]["start_utc"], games[-1]["startDate"])
+        self.assertEqual(windows[-1]["end_utc"], games[-1]["startDate"])
+
+    def test_schedule_density_windows_reject_oversized_tied_tip(self):
+        from cbbd_player_history import plan_player_windows
+        games, _ = self.inputs()
+        games.append(dict(games[-1], id=99))
+        with self.assertRaisesRegex(ValueError, "PLAYER_WINDOW_SINGLE_TIP_CAPACITY"):
+            plan_player_windows(games, season=S.SEASON,
+                start_utc="2026-11-01T00:00:00Z", end_utc=R.utcz(NOW), max_games=1)
+
     def test_actual_id_and_pra_history(self):
         from cbbd_player_history import historical_baselines
         records, census = self.normalize(*self.inputs())
