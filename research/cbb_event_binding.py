@@ -11,11 +11,23 @@ def timestamp(value):
 def reconcile(events, slate, *, tolerance_seconds=900):
     """Exact oriented team names; no inferred aliases or provider identities."""
     events, slate = list(events), list(slate)
-    dk = Counter(str(e["dk_event_id"]) for e in events)
-    cb = Counter(str(g["game_id"]) for g in slate)
+    if type(tolerance_seconds) is not int or not 0 <= tolerance_seconds <= 900:
+        raise ValueError("invalid time tolerance")
+    def identity(record, key):
+        return str(record.get(key, "")) if isinstance(record, dict) else ""
+    dk = Counter(identity(e, "dk_event_id") for e in events)
+    cb = Counter(identity(g, "game_id") for g in slate)
+    valid_slate = []
+    for g in slate:
+        try:
+            if not identity(g, "game_id").isdigit() or not g["_home"] or not g["_away"] or g["_home"] == g["_away"]:
+                continue
+            valid_slate.append((g, timestamp(g["tipoff_utc"])))
+        except (ValueError, KeyError, TypeError, AttributeError):
+            continue
     results = []
     for e in events:
-        eid = str(e["dk_event_id"])
+        eid = identity(e, "dk_event_id")
         row = {"dk_event_id": eid, "status": "BLOCKED", "cbbd_game_id": None}
         try:
             if not eid.isdigit() or dk[eid] != 1:
@@ -23,9 +35,9 @@ def reconcile(events, slate, *, tolerance_seconds=900):
             if not e["home"] or not e["away"] or e["home"] == e["away"]:
                 raise ValueError("invalid team pair")
             tip = timestamp(e["tipoff_ct"])
-            hits = [g for g in slate if g["_home"] == e["home"]
+            hits = [g for g, game_tip in valid_slate if g["_home"] == e["home"]
                     and g["_away"] == e["away"]
-                    and abs((timestamp(g["tipoff_utc"]) - tip).total_seconds()) <= tolerance_seconds]
+                    and abs((game_tip - tip).total_seconds()) <= tolerance_seconds]
             if len(hits) != 1:
                 raise ValueError("no unique oriented time-matched game")
             gid = str(hits[0]["game_id"])
