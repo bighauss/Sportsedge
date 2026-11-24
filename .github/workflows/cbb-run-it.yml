@@ -1,5 +1,7 @@
 name: CBB RUN IT (manual, research diagnostic)
 on:
+  pull_request:
+    paths: [.github/workflows/cbb-run-it.yml, models/cbb/**]
   push:
     branches: [perplexity/alternate-distributions-20261124]
     paths: [.github/workflows/cbb-run-it.yml]
@@ -21,6 +23,24 @@ concurrency:
   group: cbb-run-it
   cancel-in-progress: false
 jobs:
+  offline-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 123dede2268cf617720c948b9d1288bfb25fdecc
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pinned offline runner tests
+        working-directory: models/cbb
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+        run: python -m unittest -v test_cbb_run_it test_cbb_run_it_neutral_unknown test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
   run-it:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/perplexity/alternate-distributions-20261124'
     runs-on: ubuntu-latest
