@@ -173,7 +173,7 @@ jobs:
           if [ "$TOTALS_VERIFIED" = "true" ]; then extra+=(--totals-order-verified); fi
           if [ -n "$SEASON_START" ]; then extra+=(--season-start-utc "$SEASON_START"); fi
           python models/cbb/cbb_run_it.py --board "$BOARD" --board-captured-utc "$BOARD_AT" --season "$SEASON" \
-            --run-id "$GITHUB_RUN_ID" ${extra[@]+"${extra[@]}"} \
+            --run-id "$GITHUB_RUN_ID" --diagnostic-repeat ${extra[@]+"${extra[@]}"} \
             --private-dir "$RUNNER_TEMP/evidence/capture" --out "$RUNNER_TEMP/evidence/card" \
             --ledger "$RUNNER_TEMP/ledger/ledger.jsonl" \
             > "$RUNNER_TEMP/evidence/stdout.log" 2> "$RUNNER_TEMP/evidence/stderr.log"
@@ -187,8 +187,9 @@ jobs:
           rec="$RUNNER_TEMP/evidence/card/run_receipt.json"
           if [ -f "$rec" ]; then
             d=$(python -c "import json,sys;print(json.load(open(sys.argv[1]))['date_ct'])" "$rec")
-            cp -- "$rec" "$RUNNER_TEMP/public/run_receipt_$d.json"
-            if [ -f "$RUNNER_TEMP/evidence/card/cbb_card.md" ]; then cp -- "$RUNNER_TEMP/evidence/card/cbb_card.md" "$RUNNER_TEMP/public/card_$d.md"; fi
+            suffix="${d}_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+            cp -- "$rec" "$RUNNER_TEMP/public/run_receipt_$suffix.json"
+            if [ -f "$RUNNER_TEMP/evidence/card/cbb_card.md" ]; then cp -- "$RUNNER_TEMP/evidence/card/cbb_card.md" "$RUNNER_TEMP/public/card_$suffix.md"; fi
           fi
       - name: Upload sanitized outputs
         if: always() && steps.stage.outcome == 'success'
@@ -294,9 +295,8 @@ jobs:
           echo '::error::CBB_EXECUTION_OR_EVIDENCE_FAILED'
           exit 1
   publish-outputs:
-    # Best-effort commit of outputs/cbb/run_receipt_<date>.json and card_<date>.md to main.
-    # Separate job so run-it keeps read-only permissions. If branch protection rejects the push, the
-    # outputs are still in the cbb-public-outputs artifact.
+    # Publish immutable sanitized outputs to a run-specific branch for a normal reviewed PR.
+    # Do not push directly to protected main; the public artifact remains authoritative.
     needs: run-it
     if: always() && needs.run-it.result != 'skipped' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -314,11 +314,15 @@ jobs:
         run: |
           set -eu
           mkdir -p outputs/cbb
-          cp -- "$RUNNER_TEMP"/public/run_receipt_*.json "$RUNNER_TEMP"/public/card_*.md outputs/cbb/ 2>/dev/null || true
+          for src in "$RUNNER_TEMP"/public/run_receipt_*.json "$RUNNER_TEMP"/public/card_*.md; do
+            [ -f "$src" ] || continue
+            cp -- "$src" outputs/cbb/
+          done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add outputs/cbb
           if git diff --cached --quiet; then echo "no new outputs"; exit 0; fi
           git commit -m "CBB RUN IT outputs (PAPER / 0u) run ${GITHUB_RUN_ID}"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          branch="outputs/cbb/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git push origin "HEAD:refs/heads/$branch"
+          printf "Output branch: %s\n" "$branch" >> "$GITHUB_STEP_SUMMARY"
