@@ -487,6 +487,13 @@ def render(card, names, extra):
             else:
                 ap, hp = r["away_points"], r["home_points"]
                 o.append(f"| {a} @ {h} | {when} | {ap:.2f} | {hp:.2f} | {ap+hp:.2f} | {r['status']} |")
+    if "player_history" in extra:
+        ph = extra["player_history"]
+        o += ["", "## Player historical participation census (not live props)", "",
+              f"State: {ph['label']}; historical players {ph.get('historical_players', 0)}; "
+              f"player-games {ph.get('accepted_player_games', 0)}; "
+              f"represented finals {ph.get('represented_final_games', 0)} of {ph.get('expected_final_games', 0)}.",
+              "No confirmed game-day activity, player projection or player-prop price inferred."]
     o += ["", "**Pricing diagnostics below are not recommendations or validated positive EV.** "
           "The same-book blend is experimental, not independent market consensus. "
           "Large model-market disagreement, particularly longshots, requires calibration and event review.", ""]
@@ -670,6 +677,7 @@ def main(argv=None):
     key = os.environ.get("CBBD_API_KEY")
     clock = (lambda: datetime.fromisoformat(x.now)) if x.now else (lambda: datetime.now(timezone.utc))
     half_source = None
+    player_batches, player_capture_error = [], None
     try:
         if not key and not x.fixture_dir: raise Hold("CBBD_API_KEY_ABSENT")
         if not x.private_dir: raise Hold("PRIVATE_DIR_REQUIRED")
@@ -709,6 +717,33 @@ def main(argv=None):
             espn_url = f"{ESPN_URL}?" + urllib.parse.urlencode({"dates": now.astimezone(CT).strftime("%Y%m%d"),
                                                                  "groups": 50, "limit": 500})
             espn, erec = capture_raw("espn_scoreboard", espn_url, priv / "games")
+            # Two bounded source calls, kept private. Historical participants are
+            # not active-player predictions. Failure never removes full-game rows.
+            try:
+                from cbbd_player_history import URL as PLAYER_URL
+                begin = parse_z(season_start)
+                midpoint = begin + (day0 - begin) / 2
+                midpoint = midpoint.replace(microsecond=0)
+                for index, (lo, hi) in enumerate(((begin, midpoint), (midpoint + timedelta(seconds=1), day0))):
+                    if lo >= hi:
+                        continue
+                    sub = priv / "games" / f"player_batch_{index}"
+                    sub.mkdir(mode=0o700)
+                    query = urllib.parse.urlencode({"season": x.season, "startDateRange": utcz(lo),
+                                                     "endDateRange": utcz(hi)})
+                    def bounded_player_get(url, secret):
+                        req = urllib.request.Request(url, headers={"Authorization": "Bearer " + secret,
+                            "Accept": "application/json", "User-Agent": "SportsEdgeResearchCapture/1.0"})
+                        body, ctype, _ = CAP._transport(req, 32 * 1024 * 1024)
+                        if ctype != "application/json" or len(body) > 32 * 1024 * 1024 or secret.encode() in body:
+                            raise Hold("PLAYER_SOURCE_BODY_REJECTED")
+                        return body
+                    _, receipt = capture_raw("cbbd_games_players", f"{PLAYER_URL}?{query}", sub, key,
+                                              get=bounded_player_get)
+                    player_batches.append(((sub / "cbbd_games_players.raw.json").read_bytes(), receipt))
+            except (ValueError, OSError, TypeError, KeyError, Hold) as exc:
+                player_capture_error = type(exc).__name__
+                player_batches = []
             now = clock()
             half_source = ((priv / "games" / "cbbd_games_season.raw.json").read_bytes(),
                            {"format": "CBBD_GAMES_CAPTURE_V1", "provider": "collegebasketballdata",
@@ -748,6 +783,20 @@ def main(argv=None):
         (out / "half_research.json").write_text(json.dumps(
             {"label": "PAPER_0U", "fit": fit, "rows": extra["half_projections"]},
             sort_keys=True, indent=1, allow_nan=False))
+    if half_source is not None:
+        from cbbd_player_history import collect_batches
+        try:
+            if not player_batches:
+                raise Hold("PLAYER_CAPTURE_UNAVAILABLE")
+            player_report = collect_batches(player_batches, half_source[0], srec,
+                                             season=x.season, asof_utc=card["freeze_utc"])
+            (out / "player_history_research.json").write_text(json.dumps(player_report, sort_keys=True,
+                                                                         allow_nan=False))
+            extra["player_history"] = {k: v for k, v in player_report.items() if k not in ("historical_baselines", "batches")}
+            receipts.extend(r for _, r in player_batches)
+        except (ValueError, TypeError, KeyError, OSError, Hold) as exc:
+            extra["player_history"] = {"label": "BLOCK_PLAYER_HISTORY", "reason": player_capture_error or type(exc).__name__,
+                                       "historical_players": 0, "confirmed_activity": False, "approved_stake_u": 0}
     (out / "cbb_card.json").write_text(json.dumps(card, indent=1, sort_keys=True))
     (out / "receipts.json").write_text(json.dumps(receipts, indent=1))
     md = render(card, names, extra) + "\n## Source receipts\n\n" + "\n".join(

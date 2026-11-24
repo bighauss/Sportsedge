@@ -324,6 +324,26 @@ class PlayerHistorySource(unittest.TestCase):
         self.assertEqual(p["mean_minutes"], 25)
         self.assertIn("NOT_PREGAME_FORECAST", p["status"])
 
+    def test_cross_batch_duplicate_and_missing_final_census(self):
+        from hashlib import sha256
+        from cbbd_player_history import collect_batches
+        games, boxes = self.inputs()
+        g = json.dumps(games).encode()
+        def rec(blob, source):
+            return {"source": source, "sha256": sha256(blob).hexdigest(),
+                    "bytes": len(blob), "observed_utc": OBS}
+        batches = []
+        for part in (boxes[:3], boxes[2:4]):
+            raw = json.dumps(part).encode()
+            batches.append((raw, rec(raw, "cbbd_games_players")))
+        report = collect_batches(batches, g, rec(g, "cbbd_games_season"),
+                                 season=S.SEASON, asof_utc=R.utcz(NOW))
+        self.assertEqual(report["cross_batch_duplicate_rows"], 2)
+        self.assertEqual(report["represented_final_games"], 3)
+        self.assertEqual(report["expected_final_games"], 5)
+        self.assertEqual(report["historical_players"], 0)
+        self.assertFalse(report["confirmed_activity"])
+
     def test_duplicate_missing_or_wrong_identity_is_not_zero_filled(self):
         from cbbd_player_history import historical_baselines
         games, boxes = self.inputs()
