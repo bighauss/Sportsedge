@@ -177,5 +177,33 @@ class Receipt(unittest.TestCase):
             rec = json.loads((Path(d) / "out" / "run_receipt.json").read_text())
             self.assertFalse(rec["ok"]); self.assertTrue(rec["errors"])
 
+class BoardAndSeasonStart(unittest.TestCase):
+    def test_missing_board_writes_receipt_error(self):
+        os.environ.pop("CBBD_API_KEY", None)
+        with tempfile.TemporaryDirectory() as d:
+            for board in (None, str(Path(d) / "nope.csv")):
+                args = ["--board-captured-utc", "2026-11-24T15:00:00Z", "--season", "2027",
+                        "--private-dir", str(Path(d) / "p"), "--out", str(Path(d) / "o"), "--run-id", "7"]
+                if board: args += ["--board", board]
+                self.assertEqual(R.main(args), 2)
+                rec = json.loads((Path(d) / "o" / "run_receipt.json").read_text())
+                self.assertFalse(rec["ok"]); self.assertEqual(rec["run_id"], "7")
+                self.assertEqual(rec["errors"], ["Hold: BOARD_REQUIRED" if board is None else "Hold: BOARD_FILE_MISSING"])
+            self.assertFalse((Path(d) / "p").exists())
+
+    def test_season_start_default_and_validation(self):
+        os.environ.pop("CBBD_API_KEY", None)
+        with tempfile.TemporaryDirectory() as d:
+            b = Path(d) / "b.csv"; b.write_text("sport\n")
+            base = ["--board", str(b), "--board-captured-utc", "2026-11-24T15:00:00Z", "--season", "2027",
+                    "--private-dir", str(Path(d) / "p"), "--out", str(Path(d) / "o")]
+            self.assertEqual(R.main(base + ["--season-start-utc", "11/01/2026"]), 2)
+            self.assertEqual(json.loads((Path(d) / "o" / "run_receipt.json").read_text())["errors"],
+                             ["Hold: SEASON_START_UTC_INVALID"])
+            # a valid / default start proceeds past validation (then blocks on the absent key, not on the date)
+            self.assertEqual(R.main(base), 2)
+            self.assertEqual(json.loads((Path(d) / "o" / "run_receipt.json").read_text())["errors"],
+                             ["Hold: CBBD_API_KEY_ABSENT"])
+
 if __name__ == "__main__":
     unittest.main()

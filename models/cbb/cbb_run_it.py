@@ -430,7 +430,8 @@ def main(argv=None):
     a.add_argument("--board"); a.add_argument("--board-captured-utc")
     a.add_argument("--season", type=int, required=True)
     a.add_argument("--private-dir"); a.add_argument("--out", required=True)
-    a.add_argument("--ledger"); a.add_argument("--season-start-utc", default="2026-11-01T00:00:00Z")
+    a.add_argument("--ledger")
+    a.add_argument("--season-start-utc", help="UTC Z start of the prior-finals window; default Nov 1 of the season's start year (2026-11-01 for season 2027)")
     a.add_argument("--fixture-dir", help="offline captures (tests only): ratings.json receipt.json games.json boxes.json espn.json")
     a.add_argument("--now", help="ISO UTC override (tests only)")
     a.add_argument("--totals-order-verified", action="store_true",
@@ -449,8 +450,20 @@ def main(argv=None):
         except (Hold, PC.Pass, ValueError, OSError, KeyError) as e:
             print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
         print(f"SHADOW REPLAY done; matches frozen card: {same}"); return 0
+    def blocked(code):
+        print(f"BLOCKED Hold: {code}", file=sys.stderr)
+        _write_receipt(x.out, x.run_id, datetime.now(timezone.utc), None, None, [f"Hold: {code}"], x.ledger)
+        return 2
     if not x.board or not x.board_captured_utc:
-        print("BLOCKED Hold: BOARD_REQUIRED", file=sys.stderr); return 2
+        return blocked("BOARD_REQUIRED")
+    if not Path(x.board).is_file():
+        return blocked("BOARD_FILE_MISSING")
+    season_start = x.season_start_utc or f"{x.season - 1}-11-01T00:00:00Z"
+    try:
+        if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", season_start): raise ValueError
+        parse_z(season_start)
+    except ValueError:
+        return blocked("SEASON_START_UTC_INVALID")
     key = os.environ.get("CBBD_API_KEY")
     clock = (lambda: datetime.fromisoformat(x.now)) if x.now else (lambda: datetime.now(timezone.utc))
     try:
@@ -482,12 +495,12 @@ def main(argv=None):
             gcap = CAP.capture_games(season=x.season, start_utc=utcz(day0),
                                      end_utc=utcz(day0 + timedelta(hours=24)), private_dir=priv / "games", key=key)
             today = json.loads(Path(gcap["raw_path"]).read_bytes())
-            qs = urllib.parse.urlencode({"season": x.season, "startDateRange": x.season_start_utc, "endDateRange": utcz(day0)})
+            qs = urllib.parse.urlencode({"season": x.season, "startDateRange": season_start, "endDateRange": utcz(day0)})
             season_rows, srec = capture_raw("cbbd_games_season", f"{CAP.BASE}?{qs}", priv / "games", key)
             by_id = {str(g.get("id")): g for g in season_rows}
             by_id.update({str(g.get("id")): g for g in today})
             games = list(by_id.values())
-            q = urllib.parse.urlencode({"season": x.season, "startDateRange": x.season_start_utc, "endDateRange": utcz(now)})
+            q = urllib.parse.urlencode({"season": x.season, "startDateRange": season_start, "endDateRange": utcz(now)})
             boxes, brec = capture_raw("cbbd_games_teams", f"{BOX_URL}?{q}", priv / "games", key)
             espn_url = f"{ESPN_URL}?" + urllib.parse.urlencode({"dates": now.astimezone(CT).strftime("%Y%m%d"),
                                                                  "groups": 50, "limit": 500})
