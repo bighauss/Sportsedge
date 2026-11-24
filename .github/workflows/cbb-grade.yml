@@ -30,7 +30,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: cbb-run-it
+  # Live runs and grades serialize the shared ledger; offline PR tests do not.
+  group: ${{ github.event_name == 'pull_request' && format('cbb-grade-pr-{0}', github.event.pull_request.number) || 'cbb-run-it' }}
   cancel-in-progress: false
 
 jobs:
