@@ -113,9 +113,9 @@ jobs:
           artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=cbb-run-it-ledger&per_page=1" \
             --jq 'if (.artifacts | length) == 0 then "NONE" else "\(.artifacts[0].id) \(.artifacts[0].expired)" end')
           if [ "$artifact" = "NONE" ]; then
-            # A genuine first run can bootstrap. Any earlier successful CBB RUN IT
-            # without a retained ledger is a continuity failure, not a fresh slate.
-            prior_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cbb-run-it.yml/runs?status=success&per_page=1" --jq '.total_count')
+            # Only successful main dispatches can have created a ledger. PR fixture-only
+            # successes must never prevent the first real run from bootstrapping.
+            prior_success=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cbb-run-it.yml/runs?event=workflow_dispatch&branch=main&status=success&per_page=1" --jq '.total_count')
             case "$prior_success" in ''|*[!0-9]*) echo "::error::CBB_LEDGER_HISTORY_UNVERIFIED"; exit 2;; esac
             if [ "$prior_success" -ne 0 ]; then
               echo "::error::CBB_LEDGER_MISSING_AFTER_PRIOR_SUCCESS"; exit 2
