@@ -34,8 +34,8 @@ jobs:
           suite = unittest.TestSuite()
           for pattern in ('test_cbb_event_binding.py','test_muse_cbb_intake.py','test_muse_event_adapter.py','test_muse_main_market_coverage.py'):
               suite.addTests(unittest.defaultTestLoader.discover('tests', pattern=pattern))
-          assert suite.countTestCases() == 39, suite.countTestCases()
+          assert suite.countTestCases() == 43, suite.countTestCases()
           result = unittest.TextTestRunner(verbosity=2).run(suite)
-          if not result.wasSuccessful() or result.skipped or result.testsRun != 39:
+          if not result.wasSuccessful() or result.skipped or result.testsRun != 43:
               raise SystemExit(1)
           PY
