@@ -87,6 +87,7 @@ def select_latest_pregame_runs(runs):
     superseded = 0
     postgame_excluded = 0
     seen_ids = set()
+    seen_captures = {}
 
     for run in runs:
         m = run["manifest"]
@@ -108,13 +109,15 @@ def select_latest_pregame_runs(runs):
                 f"inconsistent start_utc for {sport} event {m['event_id']!r}: "
                 f"{starts[key].isoformat()} vs {start_dt.isoformat()}")
         starts[key] = start_dt
+        capture_key = (key, cap_dt)
+        if capture_key in seen_captures:
+            raise IntegrityError(
+                f"ambiguous equal-time captures for {sport} event {m['event_id']!r} "
+                f"at {cap_dt.isoformat()}: {seen_captures[capture_key]!r} vs {rid!r}")
+        seen_captures[capture_key] = rid
         prev = by_event.get(key)
         if prev is None:
             by_event[key] = (cap_dt, run)
-        elif cap_dt == prev[0]:
-            raise IntegrityError(
-                f"ambiguous equal-time captures for {sport} event {m['event_id']!r} "
-                f"at {cap_dt.isoformat()}: {prev[1]['manifest']['run_id']!r} vs {rid!r}")
         elif cap_dt > prev[0]:
             by_event[key] = (cap_dt, run)
             superseded += 1
@@ -280,6 +283,9 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
             if row["result"] not in ("W", "L"):
                 exclusions["ungraded_rows"] += 1
                 continue
+            units = _profit_1u(row["price"], row["result"])
+            roi_obs.append({"sport": sport, "event_id": event_key,
+                            "family": row["family"], "units": units})
             mp = _cond_prob(sport, row, "model_p", default_prob_definition)
             kp = _cond_prob(sport, row, "market_p", default_prob_definition)
             bp = _cond_prob(sport, row, "blend_p", default_prob_definition)
@@ -287,9 +293,6 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
                 exclusions["missing_probability_rows"] += 1
                 continue
             y = int(row["result"] == "W")
-            units = _profit_1u(row["price"], row["result"])
-            roi_obs.append({"sport": sport, "event_id": event_key,
-                            "family": row["family"], "units": units})
             close_p = (closing_quotes or {}).get((m["run_id"], row.get("quote_id")))
             clv = (float(close_p) - kp) if close_p is not None else None
             probs = {
