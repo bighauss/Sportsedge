@@ -579,6 +579,11 @@ def render(card, names, extra):
               f"repeated team boxes: {ph.get('duplicate_team_boxes_across_batches', 'UNMEASURED')}. "
               "Representation is not complete roster coverage.",
               "No confirmed game-day activity, player projection or player-prop price inferred."]
+        plan = ph.get("capture_plan")
+        if plan:
+            o += [f"Player capture plan: {len(plan['windows'])} bounded windows, "
+                  f"{plan['planned_games']} of {plan['known_games']} known schedule games targeted; "
+                  f"{plan['omitted_games']} outside the request budget. Targeted is not represented."]
     if "slate_player_history" in extra:
         sp = extra["slate_player_history"]
         o += ["", f"Slate player-history coverage: {sp['team_rows_with_history']} of {sp['team_rows']} team-game rows "
@@ -767,7 +772,7 @@ def main(argv=None):
     key = os.environ.get("CBBD_API_KEY")
     clock = (lambda: datetime.fromisoformat(x.now)) if x.now else (lambda: datetime.now(timezone.utc))
     half_source = None
-    player_batches, player_capture_error = [], None
+    player_batches, player_capture_error, player_plan = [], None, None
     try:
         if not key and not x.fixture_dir: raise Hold("CBBD_API_KEY_ABSENT")
         if not x.private_dir: raise Hold("PRIVATE_DIR_REQUIRED")
@@ -807,20 +812,17 @@ def main(argv=None):
             espn_url = f"{ESPN_URL}?" + urllib.parse.urlencode({"dates": now.astimezone(CT).strftime("%Y%m%d"),
                                                                  "groups": 50, "limit": 500})
             espn, erec = capture_raw("espn_scoreboard", espn_url, priv / "games")
-            # Two bounded source calls, kept private. Historical participants are
-            # not active-player predictions. Failure never removes full-game rows.
+            # At most four schedule-density bounded source calls, kept private.
+            # Historical participation is not confirmed game-day availability.
             try:
-                from cbbd_player_history import URL as PLAYER_URL
-                begin = parse_z(season_start)
-                midpoint = begin + (day0 - begin) / 2
-                midpoint = midpoint.replace(microsecond=0)
-                for index, (lo, hi) in enumerate(((begin, midpoint), (midpoint + timedelta(seconds=1), day0))):
-                    if lo >= hi:
-                        continue
+                from cbbd_player_history import URL as PLAYER_URL, plan_player_windows
+                player_plan = plan_player_windows(season_rows, season=x.season,
+                                                  start_utc=season_start, end_utc=utcz(day0))
+                for index, window in enumerate(player_plan["windows"]):
                     sub = priv / "games" / f"player_batch_{index}"
                     sub.mkdir(mode=0o700)
-                    query = urllib.parse.urlencode({"season": x.season, "startDateRange": utcz(lo),
-                                                     "endDateRange": utcz(hi)})
+                    query = urllib.parse.urlencode({"season": x.season, "startDateRange": window["start_utc"],
+                                                     "endDateRange": window["end_utc"]})
                     def bounded_player_get(url, secret):
                         req = urllib.request.Request(url, headers={"Authorization": "Bearer " + secret,
                             "Accept": "application/json", "User-Agent": "SportsEdgeResearchCapture/1.0"})
@@ -892,6 +894,7 @@ def main(argv=None):
                 raise Hold("PLAYER_CAPTURE_UNAVAILABLE")
             player_report = collect_batches(player_batches, half_source[0], srec,
                                              season=x.season, asof_utc=card["freeze_utc"])
+            player_report["capture_plan"] = player_plan
             (out / "player_history_research.json").write_text(json.dumps(player_report, sort_keys=True,
                                                                          allow_nan=False))
             extra["player_history"] = {k: v for k, v in player_report.items() if k not in ("historical_baselines", "batches")}
