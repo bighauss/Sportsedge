@@ -198,6 +198,30 @@ class T(unittest.TestCase):
         self.assertAlmostEqual(g["ev"], 0.95 * (p * v5.payout(-110) - (1 - p)), 9)
         self.assertAlmostEqual(g["model_ev"], ev, 12)
 
+    def test_push_share_identity_on_real_v5_rows(self):
+        """BLEND_W = 1.0 must reproduce v5's push-aware EV exactly on every BLENDED row,
+        including integer lines (3, 7, 44) where the simulator produces pushes."""
+        old = run_nfl.BLEND_W
+        run_nfl.BLEND_W = 1.0
+        try:
+            r = run_nfl.build(board(game(24, 20, spread=-3, total=44, extra=[
+                dict(market="SPREAD", line=-7, price_a=105, price_b=-125),
+                dict(market="1H_SPREAD", line=-3, price_a=-110, price_b=-110),
+            ])))
+        finally:
+            run_nfl.BLEND_W = old
+        blended = [o for o in r["out"] if o["status"] == "BLENDED" and "push share" not in o["held"]]
+        self.assertTrue(blended)
+        pushy = 0
+        for o in blended:
+            self.assertAlmostEqual(o["ev"], o["model_ev"], 9, msg=o["pick"])
+            self.assertAlmostEqual(o["blend_p"], o["model_p"], 12)
+            den = o["model_p"] * v5.payout(o["price"]) - (1 - o["model_p"])
+            if abs(den) > 1e-6 and o["model_ev"] / den < 0.999:
+                pushy += 1
+        self.assertGreater(pushy, 0, "fixture must include rows with a nonzero push share")
+        self.assertTrue(all(o["approved_stake_u"] == 0 for o in r["out"]))
+
     def test_model_only_never_on_blended_card(self):
         g = run_nfl.guard(row(player="X", bet_type="REC_YDS|0|", model_p=0.4, market_p=None,
                               ev=0.2, price=200), {})
