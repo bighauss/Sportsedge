@@ -3,6 +3,10 @@ name: CBB home-court backtest (research only)
 # Walk-forward of the frozen CBBD-native model vs final margins and CBBD lines, with
 # research-only HCA candidates. No model changes, no picks, no ledger.
 on:
+  pull_request:
+    paths:
+      - 'research/cbb_hca/**'
+      - '.github/workflows/cbb-hca-backtest.yml'
   workflow_dispatch:
     inputs:
       season:
@@ -16,8 +20,21 @@ permissions:
   contents: read
 
 jobs:
+  offline-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest -v research.cbb_hca.test_cbb_hca_backtest
   backtest:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
