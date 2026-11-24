@@ -22,7 +22,7 @@ def bundle(raw_path, manifest_path, finals_path, report_path, ledger_path):
     if digest != hashlib.sha256(files["provider.raw.json"]).hexdigest():
         raise ValueError("GRADE_EVIDENCE_SOURCE_HASH")
     entries = LG.parse_ledger(files["ledger.jsonl"])
-    if report != LG.evaluate(entries):
+    if report != json.loads(json.dumps(LG.evaluate(entries), allow_nan=False)):
         raise ValueError("GRADE_EVIDENCE_REPORT_MISMATCH")
     if report.get("official_counted") != 0 or report.get("approved_stake_u") != 0:
         raise ValueError("GRADE_EVIDENCE_NON_PAPER")
