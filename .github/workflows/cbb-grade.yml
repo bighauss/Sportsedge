@@ -5,8 +5,14 @@ name: CBB GRADE (attach finals to the PAPER ledger)
 # ledger against the same-time market, and save the extended encrypted ledger. Never edits a
 # frozen card row; never produces picks. PAPER / 0u.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'models/cbb/grade_requests/current.json'
   pull_request:
     paths:
+      - 'models/cbb/cbb_grade_request.py'
+      - 'models/cbb/grade_requests/current.json'
       - 'models/cbb/cbbd_grade_evidence.py'
       - 'models/cbb/test_cbbd_grade_evidence.py'
       - 'models/cbb/cbbd_paper_ledger.py'
@@ -24,7 +30,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: cbb-run-it
+  # Live runs and grades serialize the shared ledger; offline PR tests do not.
+  group: ${{ github.event_name == 'pull_request' && format('cbb-grade-pr-{0}', github.event.pull_request.number) || 'cbb-run-it' }}
   cancel-in-progress: false
 
 jobs:
@@ -42,10 +49,10 @@ jobs:
           python-version: '3.12'
       - name: Offline grading evidence fixture gate
         working-directory: models/cbb
-        run: python -m unittest -v test_cbbd_grade_evidence test_cbbd_paper_ledger
+        run: python -m unittest -v test_cbb_grade_request test_cbbd_grade_evidence test_cbbd_paper_ledger
   grade:
     needs: fixture
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -111,10 +118,18 @@ jobs:
           from zoneinfo import ZoneInfo
           import cbbd_prospective_capture as CAP
           t = pathlib.Path(os.environ["RUNNER_TEMP"])
-          d = dt.date.fromisoformat(os.environ["DATE_CT"])
+          from cbb_grade_request import validate, SCHEMA
+          import json
+          if os.environ["GITHUB_EVENT_NAME"] == "push":
+              raw = pathlib.Path("models/cbb/grade_requests/current.json").read_bytes()
+          else:
+              raw = json.dumps({"schema": SCHEMA, "label": "PAPER_0U",
+                                "date_ct": os.environ["DATE_CT"],
+                                "season": int(os.environ["SEASON"])}).encode()
+          d, season = validate(raw, dt.datetime.now(dt.timezone.utc))
           day0 = dt.datetime.combine(d, dt.time(0, 0), ZoneInfo("America/Chicago")).astimezone(dt.timezone.utc)
           z = lambda x: x.strftime("%Y-%m-%dT%H:%M:%SZ")
-          cap = CAP.capture_games(season=int(os.environ["SEASON"]), start_utc=z(day0),
+          cap = CAP.capture_games(season=season, start_utc=z(day0),
                                   end_utc=z(day0 + dt.timedelta(hours=24)), private_dir=t / "finals")
           (t / "paths").write_text(cap["raw_path"] + "\n" + cap["manifest_path"] + "\n")
           PY
