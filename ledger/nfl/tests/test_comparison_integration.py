@@ -11,6 +11,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from comparison import (
     ProbabilityBindingError,
+    _dedupe_runs,
+    _game_clustered_ci,
+    _summarize_metric_rows,
     PushSemanticsError,
     compare,
     compare_prospective_candidates,
@@ -301,6 +304,64 @@ class ComparisonP0P1Tests(unittest.TestCase):
             self.assertEqual(cands["independent_model"]["clv"]["status"], "AUTHENTICATED_CLOSING_QUOTES")
             self.assertEqual(cands["independent_model"]["clv"]["n"], 2)
             self.assertAlmostEqual(cands["independent_model"]["clv"]["mean"], (0.04 + 0.03) / 2.0, places=6)
+
+
+class CaptureAndBootstrapTests(unittest.TestCase):
+    @staticmethod
+    def run_record(rid, capture, *, start="2026-11-24T01:00:00Z",
+                   quarantine=False, settled=True):
+        return {
+            "manifest": {"run_id": rid, "game": "CIN@WAS",
+                         "capture_utc": capture, "start_utc": start,
+                         "pregame": True},
+            "quarantined": quarantine,
+            "settlement": {"run_id": rid, "game": "CIN@WAS",
+                           "run_integrity_ok": True} if settled else None,
+        }
+
+    def test_latest_quarantined_or_unsettled_never_falls_back(self):
+        early = self.run_record("early", "2026-11-23T20:00:00Z")
+        for kwargs in ({"quarantine": True}, {"settled": False}):
+            late = self.run_record("late", "2026-11-23T22:00:00Z", **kwargs)
+            for runs in ([early, late], [late, early]):
+                self.assertEqual(_dedupe_runs(runs, "latest_pregame"), ([], 1, 1))
+
+    def test_timezone_normalization_and_kickoff_boundary(self):
+        early = self.run_record("early", "2026-11-23T23:00:00+00:00")
+        late = self.run_record("late", "2026-11-23T18:30:00-06:00")
+        kickoff = self.run_record("kickoff", "2026-11-23T19:00:00-06:00")
+        self.assertEqual(_dedupe_runs([early, kickoff, late], "latest_pregame"),
+                         ([late], 1, 1))
+        self.assertEqual(_dedupe_runs([kickoff], "all_captures"), ([], 1, 0))
+
+    def test_missing_naive_and_conflicting_timestamps_rejected(self):
+        good = self.run_record("good", "2026-11-23T20:00:00Z")
+        for bad in (None, "2026-11-23T20:00:00", "bad"):
+            with self.assertRaises(ValueError):
+                _dedupe_runs([self.run_record("bad", bad)], "latest_pregame")
+        tied = self.run_record("tied", "2026-11-23T14:00:00-06:00")
+        later = self.run_record("later", "2026-11-23T22:00:00Z")
+        for runs in ([good, later, tied], [later, tied, good]):
+            with self.assertRaises(ValueError):
+                _dedupe_runs(runs, "latest_pregame")
+        with self.assertRaises(ValueError):
+            _dedupe_runs([good, self.run_record("conflict", "2026-11-23T22:00:00Z",
+                                               start="2026-11-24T02:00:00Z")],
+                         "latest_pregame")
+
+    def test_row_weighted_bootstrap_matches_estimand(self):
+        # 30 clusters: same mean in each size stratum; the mixed resamples
+        # distinguish the row-weighted ratio from equal-cluster means.
+        by_game = {f"g{i:02}": ([0.5] * 10 if i < 15 else [-0.5])
+                   for i in range(30)}
+        row_ci = _game_clustered_ci(by_game, n_boot=1000, seed=42)
+        equal_ci = _game_clustered_ci(by_game, n_boot=1000, seed=42, equal_game=True)
+        self.assertGreater(row_ci[0], equal_ci[0])
+        self.assertGreater(row_ci[1], equal_ci[1])
+        rows = [dict(game="g1", left_p=0.7, right_p=0.5, y=1)]
+        summary = _summarize_metric_rows(rows)
+        self.assertTrue(summary["small_cluster_warning"])
+        self.assertIsNone(summary["delta_brier_ci95"])
 
 
 if __name__ == "__main__":
