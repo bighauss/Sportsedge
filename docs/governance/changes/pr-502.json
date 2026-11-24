@@ -38,14 +38,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "cd models/cbb && python -m unittest -v test_cbb_run_it test_cbb_end_to_end_fixes test_cbbd_paper_ledger",
+    "test_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "ec0fd57a7bc38fb462731aa89be87f06b89cee84",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "cd models/cbb && python -m unittest -v test_cbb_run_it test_cbb_end_to_end_fixes test_cbbd_paper_ledger"
+    "verification_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v"
   },
   "cost": {
     "currency": "USD",
