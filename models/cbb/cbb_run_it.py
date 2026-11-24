@@ -166,31 +166,66 @@ def _match(slate_rows, home, away, row=None):
                   else "ambiguous CBBD game")
 
 def registry(slate_rows, espn, espn_sha, captured_utc):
-    """ESPN neutral-site flags for exactly matched games (orientation and tip within 15 min)."""
-    rows, miss = [], []
-    evs = []
+    """Venue-only reconciliation. Reverse team designation is admissible ONLY when
+    both providers explicitly say neutral; no odds orientation or quote is changed.
+    All candidate games still require exact normalized teams, a unique ESPN
+    competition and the existing 15-minute window. Ambiguous reuse fails closed.
+    """
+    rows, miss, evs, proposed = [], [], [], []
     for e in espn.get("events", []):
-        c = (e.get("competitions") or [{}])[0]
-        teams = {x.get("homeAway"): x.get("team", {}) for x in c.get("competitors", [])}
-        if "home" in teams and "away" in teams and c.get("date"):
-            evs.append((teams, c))
+        competitions = e.get("competitions") or []
+        if len(competitions) != 1:
+            continue
+        c = competitions[0]
+        competitors = c.get("competitors") or []
+        if len(competitors) != 2 or {x.get("homeAway") for x in competitors} != {"home", "away"}:
+            continue
+        teams = {x["homeAway"]: x.get("team") or {} for x in competitors}
+        try:
+            tip = parse_z(c["date"])
+            if tip.utcoffset() is None:
+                continue
+        except (ValueError, TypeError, AttributeError, KeyError):
+            continue
+        names = {side: {norm(t.get(k, "")) for k in ("location", "shortDisplayName", "displayName")
+                        if isinstance(t.get(k), str) and norm(t[k])} for side, t in teams.items()}
+        evs.append((names, tip, c))
     for r in slate_rows:
         tip = parse_z(r["tipoff_utc"])
+        h, a = norm(r["_home"]), norm(r["_away"])
         hit = []
-        for teams, c in evs:
-            hn = {norm(teams["home"].get(k, "")) for k in ("location", "shortDisplayName", "displayName")}
-            an = {norm(teams["away"].get(k, "")) for k in ("location", "shortDisplayName", "displayName")}
-            if norm(r["_home"]) in hn and norm(r["_away"]) in an and \
-                    abs((parse_z(c["date"]) - tip).total_seconds()) <= 900:
-                hit.append(c)
+        if h and a and h != a:
+            for i, (names, etip, c) in enumerate(evs):
+                if abs((etip - tip).total_seconds()) > TIP_WINDOW_S:
+                    continue
+                direct = h in names["home"] and a in names["away"]
+                reverse = h in names["away"] and a in names["home"]
+                if direct or reverse:
+                    hit.append((i, c, direct, reverse))
         if len(hit) != 1:
-            miss.append((r["game_id"], "ESPN event not uniquely matched")); continue
-        if type(hit[0].get("neutralSite")) is not bool:
-            miss.append((r["game_id"], "ESPN neutral-site flag missing or not boolean")); continue
-        rows.append({"game_id": r["game_id"], "neutral": "1" if hit[0]["neutralSite"] else "0",
+            miss.append((r["game_id"], "ESPN event not uniquely matched"))
+            continue
+        i, c, direct, reverse = hit[0]
+        if direct and reverse:
+            miss.append((r["game_id"], "ESPN team orientation ambiguous"))
+            continue
+        if type(c.get("neutralSite")) is not bool:
+            miss.append((r["game_id"], "ESPN neutral-site flag missing or not boolean"))
+            continue
+        if reverse and not (r.get("neutral") == "1" and c["neutralSite"] is True):
+            miss.append((r["game_id"], "ESPN reversed designation requires both providers neutral"))
+            continue
+        proposed.append((i, r, c))
+    used = Counter(i for i, _, _ in proposed)
+    for i, r, c in proposed:
+        if used[i] != 1:
+            miss.append((r["game_id"], "ESPN event reused across CBBD games"))
+            continue
+        rows.append({"game_id": r["game_id"], "neutral": "1" if c["neutralSite"] else "0",
                      "source": "ESPN", "source_sha256": espn_sha, "published_utc": captured_utc,
                      "captured_utc": captured_utc, "tipoff_utc": r["tipoff_utc"]})
     return rows, miss
+
 
 MK = {"SPREAD": "spread", "TOTAL": "total", "ML": "moneyline"}
 
