@@ -551,6 +551,22 @@ def render(card, names, extra):
             else:
                 ap, hp = r["away_points"], r["home_points"]
                 o.append(f"| {a} @ {h} | {when} | {ap:.2f} | {hp:.2f} | {ap+hp:.2f} | {r['status']} |")
+    if "second_half_fit" in extra:
+        fit = extra["second_half_fit"]
+        o += ["", "## Second-half independent expected scores (pregame research only)", "",
+              f"Fit state: {fit['status']}; admitted {fit.get('admitted', 0)} of {fit.get('input_rows', 0)} source rows; "
+              f"regulation H2 share of full final points {fit.get('share_of_final_points')}.",
+              "Overtime excluded from H2 numerator. No halftime updates, probabilities or calibrated edge.", "",
+              "| Game | Tip (CT) | H2 away | H2 home | H2 total | Status |",
+              "|---|---|---:|---:|---:|---|"]
+        for r in extra["second_half_projections"]:
+            a, h, tip = names[r["game_id"]]
+            when = parse_z(tip).astimezone(CT).strftime("%-I:%M %p")
+            if r["status"] == "PASS":
+                o.append(f"| {a} @ {h} | {when} | — | — | — | PASS: {r['reason']} |")
+            else:
+                pa, ph = r["away_points"], r["home_points"]
+                o.append(f"| {a} @ {h} | {when} | {pa:.2f} | {ph:.2f} | {pa+ph:.2f} | {r['status']} |")
     if "player_history" in extra:
         ph = extra["player_history"]
         o += ["", "## Player historical participation census (not live props)", "",
@@ -851,6 +867,18 @@ def main(argv=None):
         extra["half_projections"] = project_first_halves(card, fit)
         (out / "half_research.json").write_text(json.dumps(
             {"label": "PAPER_0U", "fit": fit, "rows": extra["half_projections"]},
+            sort_keys=True, indent=1, allow_nan=False))
+    if half_source is not None:
+        from cbbd_half_evidence import fit_full_to_second_half, project_second_halves
+        try:
+            second_fit = fit_full_to_second_half(*half_source, asof_utc=card["freeze_utc"])
+        except (ValueError, TypeError, KeyError) as exc:
+            second_fit = {"status": "BLOCK_H2_SOURCE", "share_of_final_points": None,
+                          "reason": type(exc).__name__, "approved_stake_u": 0}
+        extra["second_half_fit"] = second_fit
+        extra["second_half_projections"] = project_second_halves(card, second_fit)
+        (out / "second_half_research.json").write_text(json.dumps(
+            {"label": "PAPER_0U", "fit": second_fit, "rows": extra["second_half_projections"]},
             sort_keys=True, indent=1, allow_nan=False))
     if half_source is not None:
         from cbbd_player_history import collect_batches

@@ -104,3 +104,33 @@ def project_first_halves(card, fit):
              "home_points": r["projection"]["home_points"] * share if r["status"] == "PROJECTED" and share is not None else None,
              "away_points": r["projection"]["away_points"] * share if r["status"] == "PROJECTED" and share is not None else None}
             for r in card["rows"]]
+
+
+def fit_full_to_second_half(raw, manifest, *, asof_utc):
+    """Train a regulation H2/full-final mean share independently from H1.
+
+    The final denominator includes overtime; the numerator contains only
+    regulation H2. The H1 historical report contract stays byte-compatible.
+    """
+    normalized, census = normalize(raw, manifest, asof_utc=asof_utc)
+    admitted = {int(json.loads(line)["event_id"]) for line in normalized.splitlines()}
+    training = [g for g in decoded(raw) if isinstance(g, dict) and g.get("id") in admitted]
+    days = {utc(g["startDate"], "tip").date() for g in training}
+    second = sum(g["homePeriodPoints"][1] + g["awayPeriodPoints"][1] for g in training)
+    full = sum(g["homePoints"] + g["awayPoints"] for g in training)
+    ready = len(training) >= 50 and len(days) >= 7 and 0 < second < full
+    return {"status": "TRAIN_ONLY_H2_MEAN_UNVALIDATED" if ready else "BLOCK_H2_TRAINING",
+            "source_sha256": census["source_sha256"], "source_observed_utc": manifest["local_observed_utc"],
+            "fit_asof_utc": asof_utc, "input_rows": census["input_rows"], "admitted": len(training),
+            "distinct_dates": len(days), "share_of_final_points": second / full if ready else None,
+            "scope": "REGULATION_SECOND_HALF_ONLY", "source_authenticated": False,
+            "holdout_calibrated": False, "approved_stake_u": 0}
+
+
+def project_second_halves(card, fit):
+    """Pregame expected regulation H2 score only, not a live halftime model."""
+    rows = project_first_halves(card, fit)
+    for r in rows:
+        if r["status"] == "PROJECTED_HALF_MEAN_RESEARCH":
+            r["status"] = "PROJECTED_H2_MEAN_RESEARCH"
+    return rows
