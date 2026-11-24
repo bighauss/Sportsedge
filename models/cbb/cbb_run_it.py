@@ -299,10 +299,10 @@ def replay(evidence_dir, season, out_dir):
     man = json.loads(today_raw[0].with_name(today_raw[0].name.replace(".raw.json", ".manifest.json")).read_text())
     raws = {"today": today_raw[0].read_bytes(), "season": one("cbbd_games_season.raw.json").read_bytes(),
             "boxes": one("cbbd_games_teams.raw.json").read_bytes(), "espn": one("espn_scoreboard.raw.json").read_bytes(),
-            "board": (ev / "board.csv").read_bytes()}
+            "board": (ev / "board.csv").read_bytes() if "dk_board" in receipts else b""}
     checks = {"today": man.get("source_sha256"), "season": receipts.get("cbbd_games_season", {}).get("sha256"),
               "boxes": receipts.get("cbbd_games_teams", {}).get("sha256"), "espn": receipts.get("espn_scoreboard", {}).get("sha256"),
-              "board": receipts.get("dk_board", {}).get("sha256")}
+              "board": receipts.get("dk_board", {}).get("sha256") if "dk_board" in receipts else sha(b"")}
     for k, want in checks.items():
         if sha(raws[k]) != str(want).replace("sha256:", ""): raise Hold(f"REPLAY_SOURCE_HASH_MISMATCH_{k.upper()}")
     by_id = {str(g.get("id")): g for g in json.loads(raws["season"])}
@@ -314,7 +314,7 @@ def replay(evidence_dir, season, out_dir):
                                espn=json.loads(raws["espn"]), espn_sha=receipts["espn_scoreboard"]["sha256"],
                                espn_captured=receipts["espn_scoreboard"]["observed_utc"],
                                board_rows=list(csv.DictReader(io.StringIO(raws["board"].decode("utf-8-sig")))),
-                               board_captured_utc=receipts["dk_board"]["observed_utc"], ledger_path=None)
+                               board_captured_utc=receipts.get("dk_board", {}).get("observed_utc"), ledger_path=None)
     strip = lambda c: [{k: v for k, v in r.items()} for r in c["rows"]]
     same = strip(card) == strip(original)
     md = ("# SHADOW REPLAY / 0u — not a pick, not frozen, no ledger write\n\n"
