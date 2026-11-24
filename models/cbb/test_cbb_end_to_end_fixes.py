@@ -47,6 +47,34 @@ class TotalsBinding(unittest.TestCase):
                                R.slate(T.provider()[0], T.NOW.date(), T.NOW, S.SEASON), "2026-11-21T14:30:00Z")
         self.assertEqual([x["line"] for x in q], ["141.5"]); self.assertEqual(len(un), 1)
 
+class RowCaptureProvenance(unittest.TestCase):
+    def test_main_quote_uses_row_timestamp_and_rejects_future_quote(self):
+        board = [row("SPREAD", "-3.5", captured_utc="2026-11-21T15:01:00Z"),
+                 row("TOTAL", "140.5", totals_order="over_under",
+                     captured_utc="2026-11-21T14:20:00Z")]
+        card, _, _ = go(board)
+        self.assertEqual(m_of(card, "9001", "spread")["status"], "PASS")
+        total = m_of(card, "9001", "total")
+        self.assertEqual(total["status"], "PRICED_PAPER")
+        self.assertEqual(total["quote"]["captured_utc"], "2026-11-21T14:20:00Z")
+
+    def test_explicit_invalid_order_cannot_be_overridden_by_format_flag(self):
+        card, _, extra = go([row("TOTAL", "140.5", totals_order="unknown"),
+                             row("TT_HOME", "72.5", totals_order="unknown")],
+                            totals_order_verified=True, config=LOOSE)
+        self.assertEqual(m_of(card, "9001", "total")["status"], "PASS")
+        self.assertEqual(extra["ladders"], [])
+        self.assertTrue(any("TOTALS_ORDER_UNVERIFIED" in w[2] for w in extra["ladders_skipped"]))
+
+    def test_ladder_preserves_row_timestamp(self):
+        _, _, extra = go([row("TT_HOME", "72.5", totals_order="over_under",
+                              captured_utc="2026-11-21T14:20:00Z",
+                              dk_event_id="E1", tip_utc=S.TIP)])
+        self.assertEqual(len(extra["ladders"]), 1)
+        self.assertEqual(extra["ladders"][0]["captured_utc"], "2026-11-21T14:20:00Z")
+        self.assertEqual(extra["ladders"][0]["dk_event_id"], "E1")
+
+
 class Matching(unittest.TestCase):
     def slate(self):
         return R.slate(T.provider()[0], T.NOW.date(), T.NOW, S.SEASON)

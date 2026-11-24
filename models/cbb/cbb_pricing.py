@@ -256,5 +256,6 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
                         "blend_ev": (NM.ev_per_unit(blend(a, ma, w, push=push), push, pa),
                                      NM.ev_per_unit(blend(c, mb, w, push=push), push, pb)),
                         "blowout_excluded": is_blowout("spread", line, cfg) if kind == "alt_spread" else False,
-                        "captured_utc": captured_utc})
+                        "captured_utc": str(v[0].get("captured_utc") or captured_utc),
+                        "dk_event_id": event_id(v[0])})
     return out, skipped
