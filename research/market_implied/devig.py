@@ -1,192 +1,223 @@
-"""Market-implied probability engine (RESEARCH ONLY, PAPER / 0u).
-
-Never feeds production v5. Converts sportsbook prices to fair (no-vig)
-probabilities, builds a multi-book consensus that can exclude the execution
-book (DraftKings), and reverse-engineers team scores from spread + total.
-
-Methods: multiplicative, additive, power, Shin (Shin 1993; Strumbelj 2014).
-Missing opposing prices fail closed with status NO_PRICE: a one-sided raw
-implied probability is never returned as fair.
+"""Market-implied probability engine. Research only; PAPER / 0u.
+Quote identity checks are not source authentication.
 """
-from __future__ import annotations
-
 import math
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from statistics import NormalDist
-from typing import Dict, List, Optional, Sequence
 
 METHODS = ("multiplicative", "additive", "power", "shin")
 
 
-# ---------- odds conversion ----------
-def american_to_decimal(a: float) -> float:
-    if a == 0 or -100 < a < 100:
-        raise ValueError(f"invalid American odds {a}")
+def finite(x):
+    if isinstance(x, bool):
+        raise ValueError("boolean numeric input")
+    x = float(x)
+    if not math.isfinite(x):
+        raise ValueError("nonfinite input")
+    return x
+
+
+def american_to_decimal(a):
+    a = finite(a)
+    if abs(a) < 100:
+        raise ValueError("invalid American odds")
     return 1 + (a / 100 if a > 0 else 100 / -a)
 
 
-def decimal_to_american(d: float) -> float:
+def decimal_to_american(d):
+    d = finite(d)
     if d <= 1:
-        raise ValueError(f"invalid decimal odds {d}")
-    return (d - 1) * 100 if d >= 2 else -100 / (d - 1)
+        raise ValueError("decimal odds must exceed 1")
+    return (d - 1)*100 if d >= 2 else -100/(d - 1)
 
 
-def implied(dec: float) -> float:
-    return 1.0 / dec
+def implied(d):
+    decimal_to_american(d)
+    return 1/float(d)
 
 
-def overround(decs: Sequence[float]) -> float:
-    return sum(implied(d) for d in decs) - 1.0
-
-
-# ---------- de-vig methods ----------
-def _multiplicative(q: List[float]) -> List[float]:
-    s = sum(q)
-    return [x / s for x in q]
-
-
-def _additive(q: List[float]) -> List[float]:
-    m = (sum(q) - 1) / len(q)
-    p = [x - m for x in q]
-    if min(p) <= 0:  # additive breaks on extreme longshots -> fail closed
-        raise ValueError("additive method produced non-positive probability")
-    return p
+def overround(decs):
+    return sum(map(implied, decs)) - 1
 
 
 def _bisect(f, lo, hi, it=200):
-    flo = f(lo)
+    lo, hi = finite(lo), finite(hi)
+    if lo >= hi or type(it) is not int or it < 1:
+        raise ValueError("invalid root search")
+    a, b = finite(f(lo)), finite(f(hi))
+    if abs(a) <= 1e-12:
+        return lo
+    if abs(b) <= 1e-12:
+        return hi
+    if (a > 0) == (b > 0):
+        raise ValueError("root not bracketed")
     for _ in range(it):
-        mid = (lo + hi) / 2
-        fm = f(mid)
-        if (fm > 0) == (flo > 0):
-            lo, flo = mid, fm
+        mid = (lo + hi)/2
+        v = finite(f(mid))
+        if abs(v) <= 1e-12:
+            return mid
+        if (v > 0) == (a > 0):
+            lo, a = mid, v
         else:
             hi = mid
-    return (lo + hi) / 2
-
-
-def _power(q: List[float]) -> List[float]:
-    # find k with sum(q_i^k) = 1 ; k>1 when overround>0
-    k = _bisect(lambda k: sum(x ** k for x in q) - 1, 1e-6, 50)
-    return [x ** k for x in q]
-
-
-def _shin(q: List[float]) -> List[float]:
-    s = sum(q)
-    if s <= 1:
-        return _multiplicative(q)
-
-    def probs(z):
-        return [
-            (math.sqrt(z * z + 4 * (1 - z) * x * x / s) - z) / (2 * (1 - z))
-            for x in q
-        ]
-
-    z = _bisect(lambda z: sum(probs(z)) - 1, 0.0, 0.999)
-    p = probs(z)
-    t = sum(p)
-    return [x / t for x in p]
-
-
-_FN = {"multiplicative": _multiplicative, "additive": _additive,
-       "power": _power, "shin": _shin}
+    raise ValueError("root did not converge")
 
 
 @dataclass
 class FairResult:
-    status: str                      # OK | NO_PRICE | INVALID
+    status: str
     method: str
-    fair: Optional[List[float]] = None
-    overround: Optional[float] = None
+    fair: object = None
+    overround: object = None
     reason: str = ""
 
 
-def devig(prices: Sequence[Optional[float]], method: str = "power",
-          fmt: str = "american") -> FairResult:
-    """prices: every outcome of ONE market (2-way or multiway, incl. draw).
-    Any missing side -> NO_PRICE (never fabricate the opposing price)."""
-    if method not in _FN:
-        raise ValueError(method)
+def devig(prices, method="power", fmt="american"):
+    if method not in METHODS:
+        raise ValueError("unknown method")
     if len(prices) < 2 or any(p is None for p in prices):
         return FairResult("NO_PRICE", method, reason="missing opposing price")
     try:
-        decs = [american_to_decimal(p) if fmt == "american" else float(p)
-                for p in prices]
-        if any(d <= 1 for d in decs):
-            raise ValueError("decimal odds must exceed 1")
-        q = [implied(d) for d in decs]
-        orr = sum(q) - 1
-        if orr < -0.02:
-            return FairResult("INVALID", method, overround=orr,
-                              reason="negative overround (stale/mixed quotes)")
-        return FairResult("OK", method, _FN[method](q), orr)
-    except ValueError as e:
-        return FairResult("INVALID", method, reason=str(e))
+        if fmt not in ("american", "decimal"):
+            raise ValueError("unknown odds format")
+        ds = [american_to_decimal(p) if fmt == "american" else finite(p) for p in prices]
+        q = [implied(d) for d in ds]
+        s = sum(q)
+        if s < .98:
+            raise ValueError("negative overround; freshness not established by prices")
+        if method == "multiplicative" or (method == "shin" and s <= 1):
+            p = [x/s for x in q]
+        elif method == "additive":
+            p = [x-(s-1)/len(q) for x in q]
+        elif method == "power":
+            k = _bisect(lambda k: sum(x**k for x in q)-1, 1e-6, 50)
+            p = [x**k for x in q]
+        else:
+            def probs(z):
+                return [2*x*x/s/(math.sqrt(z*z+4*(1-z)*x*x/s)+z) for x in q]
+            z = _bisect(lambda z: sum(probs(z))-1, 0, .999999)
+            p = probs(z)
+        if any(not math.isfinite(x) or not 0 < x < 1 for x in p) or abs(sum(p)-1) > 1e-9:
+            raise ValueError("invalid or unconverged fair vector")
+        return FairResult("OK", method, p, s-1)
+    except (ValueError, TypeError, OverflowError, ZeroDivisionError) as exc:
+        return FairResult("INVALID", method, reason=str(exc))
 
 
-def devig_all(prices, fmt="american") -> Dict[str, FairResult]:
+def devig_all(prices, fmt="american"):
     return {m: devig(prices, m, fmt) for m in METHODS}
 
 
-# ---------- push-aware fair odds ----------
-def fair_win_given_push(p_win: float, p_push: float) -> float:
-    """Fair decimal odds for a bet that refunds on push."""
-    if not 0 < p_win < 1 - p_push:
-        raise ValueError("bad probabilities")
-    return 1 + (1 - p_win - p_push) / p_win
+def _push(p_win, p_push):
+    w, p = finite(p_win), finite(p_push)
+    if not 0 <= w <= 1 or not 0 <= p <= 1 or w+p > 1:
+        raise ValueError("invalid outcome probabilities")
+    return w, p
 
 
-def ev_per_unit(p_win: float, dec_offered: float, p_push: float = 0.0) -> float:
-    p_lose = 1 - p_win - p_push
-    return p_win * (dec_offered - 1) - p_lose
+def fair_win_given_push(p_win, p_push):
+    w, p = _push(p_win, p_push)
+    if w == 0 or p == 1:
+        raise ValueError("unidentifiable fair odds")
+    return (1-p)/w
 
 
-# ---------- consensus ----------
-@dataclass
+def ev_per_unit(p_win, dec_offered, p_push=0):
+    w, p = _push(p_win, p_push)
+    implied(dec_offered)
+    return w*(float(dec_offered)-1)-(1-w-p)
+
+
+def utc(value):
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        raise ValueError("timezone required")
+    return dt.astimezone(timezone.utc)
+
+
+@dataclass(frozen=True)
 class BookQuote:
     book: str
-    prices: Sequence[Optional[float]]
-    weight: float = 1.0
-    copies: Optional[str] = None  # book this one copies -> not independent
+    prices: object
+    weight: float = 1
+    copies: object = None
+    event_id: str = ""
+    player_id: object = None
+    market: str = ""
+    period: str = ""
+    line: object = None
+    outcomes: tuple = ()
+    capture_utc: str = ""
+    start_utc: str = ""
+    rules: str = ""
+    sport: str = ""
+    fmt: str = "american"
 
 
-def consensus(quotes: Sequence[BookQuote], method="power",
-              exclude: Sequence[str] = ("draftkings",)) -> FairResult:
-    """Weighted log-odds consensus of independent books' fair probs.
-    Excludes the execution book and books flagged as copies."""
-    ex = {b.lower() for b in exclude}
-    used = [qt for qt in quotes
-            if qt.book.lower() not in ex and qt.copies is None]
-    fairs = []
-    for qt in used:
-        r = devig(qt.prices, method)
-        if r.status == "OK":
-            fairs.append((qt.weight, r.fair))
-    if not fairs:
+def consensus(quotes, method="power", exclude=("draftkings",), *, as_of=None, max_age_seconds=None):
+    # DraftKings exclusion is mandatory, even if callers override exclude.
+    ex = {b.strip().casefold() for b in exclude} | {"draftkings"}
+    used = [q for q in quotes if q.book.strip().casefold() not in ex and q.copies is None]
+    if not used:
         return FairResult("NO_PRICE", method, reason="no independent book")
-    n = len(fairs[0][1])
-    w = sum(x for x, _ in fairs)
-    logs = [sum(wt * math.log(f[i]) for wt, f in fairs) / w for i in range(n)]
-    e = [math.exp(v) for v in logs]
-    s = sum(e)
-    return FairResult("OK", f"consensus/{method}", [x / s for x in e],
-                      reason=f"books={len(fairs)}")
+    try:
+        now, age = utc(as_of), finite(max_age_seconds)
+        if age <= 0:
+            raise ValueError("positive freshness limit required")
+        contract, seen, fairs = None, set(), []
+        for q in used:
+            if not all(isinstance(x, str) and x.strip() for x in (q.book,q.event_id,q.market,q.period,q.rules,q.sport)):
+                raise ValueError("incomplete quote identity")
+            if q.player_id is not None and (not isinstance(q.player_id,str) or not q.player_id.strip()):
+                raise ValueError("invalid player identity")
+            if q.market.startswith("prop") and q.player_id is None:
+                raise ValueError("prop requires player identity")
+            line = finite(q.line) if q.line is not None else None
+            labels = tuple(q.outcomes)
+            if len(labels) != len(q.prices) or len(labels) < 2 or any(not isinstance(x,str) or not x.strip() for x in labels) or len(set(labels)) != len(labels):
+                raise ValueError("invalid outcome vector")
+            cap, start = utc(q.capture_utc), utc(q.start_utc)
+            if not cap <= now < start or (now-cap).total_seconds() > age:
+                raise ValueError("stale, future, or live quote")
+            identity = (q.sport,q.event_id,q.player_id,q.market,q.period,line,labels,q.rules,start)
+            if contract is not None and identity != contract:
+                raise ValueError("incompatible quote contracts")
+            contract = identity
+            book = q.book.strip().casefold()
+            if book in seen:
+                raise ValueError("duplicate sportsbook")
+            seen.add(book)
+            w = finite(q.weight)
+            if w <= 0:
+                raise ValueError("positive sportsbook weight required")
+            r = devig(q.prices, method, q.fmt)
+            if r.status != "OK":
+                return r
+            fairs.append((w,r.fair))
+        scale = max(w for w,_ in fairs)
+        weights = [w/scale for w,_ in fairs]
+        total = sum(weights)
+        logs = [sum(w*math.log(f[i]) for w,(_,f) in zip(weights,fairs))/total for i in range(len(fairs[0][1]))]
+        peak = max(logs)
+        es = [math.exp(v-peak) for v in logs]
+        return FairResult("OK", "consensus/"+method, [v/sum(es) for v in es], reason=f"books={len(fairs)}")
+    except (ValueError,TypeError,AttributeError,OverflowError) as exc:
+        return FairResult("INVALID", method, reason=str(exc))
 
 
-# ---------- reverse-engineer game projection ----------
-def implied_team_scores(spread_home: float, total: float):
-    """spread_home is the home line (e.g. -3.5 => home favored by 3.5)."""
-    margin = -spread_home
-    return (total + margin) / 2, (total - margin) / 2
+def implied_team_scores(spread_home, total):
+    margin, total = -finite(spread_home), finite(total)
+    if total < abs(margin):
+        raise ValueError("negative implied team score")
+    return (total+margin)/2, (total-margin)/2
 
 
-def implied_margin_sd(spread_home: float, p_home_fair_ml: float) -> float:
-    """Solve the normal margin SD that reconciles spread with fair ML.
-    Rough for discrete sports (NFL key numbers) - flag, don't trust blindly."""
-    mu = -spread_home
-    if mu == 0 or not 0 < p_home_fair_ml < 1:
-        raise ValueError("unidentifiable: pick'em or bad prob")
-    z = NormalDist().inv_cdf(p_home_fair_ml)
+def implied_margin_sd(spread_home, p_home_fair_ml):
+    mu, p = -finite(spread_home), finite(p_home_fair_ml)
+    if mu == 0 or not 0 < p < 1:
+        raise ValueError("unidentifiable margin dispersion")
+    z = NormalDist().inv_cdf(p)
     if z == 0 or (mu > 0) != (z > 0):
-        raise ValueError("inconsistent: spread and ML disagree on favorite")
-    return mu / z
+        raise ValueError("spread and ML disagree")
+    return mu/z
