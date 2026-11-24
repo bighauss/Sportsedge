@@ -1,0 +1,36 @@
+name: CBB research integration
+on:
+  push:
+    branches: [research/chatgpt-cbb-runtime-binding-20261124]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 3bb26f1a77ca4cd6fcd8d55c1c3d296d09a49449
+          path: pinned-intake
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Assemble pinned research modules
+        run: |
+          mkdir -p research/market_implied
+          cp pinned-intake/research/market_implied/{muse_cbb_intake,muse_event_adapter}.py research/market_implied/
+          cp pinned-intake/tests/test_muse_{cbb_intake,event_adapter}.py tests/
+      - name: Execute combined suite without skips
+        run: |
+          python - <<'PY'
+          import unittest
+          suite = unittest.TestSuite()
+          for pattern in ('test_cbb_event_binding.py','test_muse_cbb_intake.py','test_muse_event_adapter.py'):
+              suite.addTests(unittest.defaultTestLoader.discover('tests', pattern=pattern))
+          assert suite.countTestCases() == 33, suite.countTestCases()
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful() or result.skipped or result.testsRun != 33:
+              raise SystemExit(1)
+          PY
