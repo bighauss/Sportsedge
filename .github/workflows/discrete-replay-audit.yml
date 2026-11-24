@@ -1,0 +1,123 @@
+name: Discrete replay audit ca290d9
+run-name: Discrete replay ca290d9 / attempt ${{ github.run_attempt }}
+
+on:
+  push:
+    branches: [perplexity/alternate-distributions-20261124]
+    paths: [.github/workflows/discrete-replay-audit.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TESTED_REVISION: ca290d9a05a68cb9692a09bad2a8d4d234dda9af
+      MANIFEST_PIN: 24fc4590647e36619db78e829d78d438b06f9bab0cd35fa921b8f0bc8ca00628
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ca290d9a05a68cb9692a09bad2a8d4d234dda9af
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reserve evidence directory and record exact checkout
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          export EVIDENCE_ROOT="$RUNNER_TEMP/discrete-replay-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir "$EVIDENCE_ROOT"
+          echo "EVIDENCE_ROOT=$EVIDENCE_ROOT" >> "$GITHUB_ENV"
+          python - <<'PY'
+          import hashlib,json,os,subprocess
+          from pathlib import Path
+          revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert revision==os.environ['TESTED_REVISION']
+          pins={
+              'research/market_implied/discrete_replay.py':'ecce2c0bcae156ce1b8930e528ab98ef7f597d4b09ad0e2aaf788267e9e8c682',
+              'tests/test_discrete_replay.py':'33ce27ea603cdb734c025845583465a05fdf26196b329ffc51cbcd05b71d649d',
+              'research/fixtures/cbb/2026-11-24/ohio_nmsu_ladders.csv':'00c05e07ca4757c7ffeb9bca3cfd5330d817cba2d268ea2017d1fb1cfc4226d9',
+              'research/fixtures/cbb/2026-11-24/ohio_nmsu_execution_receipt.json':'ab1602a5916205165d89e5ab0f6f031690d1e8357be221d6a46dd37e50957597',
+              'research/fixtures/cbb/2026-11-24/ohio_nmsu_manifest.json':os.environ['MANIFEST_PIN'],
+          }
+          observed={name:hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in pins}
+          assert observed==pins
+          provenance=dict(tested_revision=revision,trigger_revision=os.environ['GITHUB_SHA'],run_id=os.environ['GITHUB_RUN_ID'],run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],input_sha256=observed,book_origin_authenticated=False)
+          with (Path(os.environ['EVIDENCE_ROOT'])/'provenance.json').open('x') as stream:json.dump(provenance,stream,indent=2)
+          PY
+      - name: Execute exactly 34 regressions with zero skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' 2>&1 | tee "$EVIDENCE_ROOT/regression.log"
+          import json,os,unittest
+          from pathlib import Path
+          suite=unittest.defaultTestLoader.discover('tests',pattern='test_discrete_replay.py')
+          result=unittest.TextTestRunner(verbosity=2).run(suite)
+          status=dict(tests_run=result.testsRun,failures=len(result.failures),errors=len(result.errors),skipped=len(result.skipped),successful=result.wasSuccessful())
+          with (Path(os.environ['EVIDENCE_ROOT'])/'test_result.json').open('x') as stream:json.dump(status,stream,indent=2)
+          if result.testsRun!=34 or result.skipped or not result.wasSuccessful():raise SystemExit(1)
+          PY
+      - name: Execute published actual captured-quote fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m research.market_implied.discrete_replay \
+            --fixture research/fixtures/cbb/2026-11-24/ohio_nmsu_ladders.csv \
+            --receipt research/fixtures/cbb/2026-11-24/ohio_nmsu_execution_receipt.json \
+            --manifest research/fixtures/cbb/2026-11-24/ohio_nmsu_manifest.json \
+            --manifest-sha256 "$MANIFEST_PIN" \
+            --output "$EVIDENCE_ROOT/fixture"
+      - name: Verify numerical denominators, output hashes and research guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib,json,math,os
+          from pathlib import Path
+          root=Path(os.environ['EVIDENCE_ROOT']);directory=root/'fixture'
+          complete=json.loads((directory/'COMPLETE.json').read_text())
+          assert complete['manifest_sha256']==os.environ['MANIFEST_PIN']
+          assert set(complete['output_sha256'])=={'distribution_bins.json','missing_rung_bounds.json','replay_audit.json'}
+          for name,digest in complete['output_sha256'].items():assert hashlib.sha256((directory/name).read_bytes()).hexdigest()==digest
+          audit=json.loads((directory/'replay_audit.json').read_text())
+          assert audit['event_id']=='35078384' and audit['paired_quotes']==92
+          assert audit['evaluations']==368 and audit['mass_bin_count']==384
+          assert audit['monotonicity_violations']==0 and audit['reference_max_abs_error']<1e-9
+          assert audit['manifest_sha256']==os.environ['MANIFEST_PIN']
+          assert audit['receipt_sha256']=='ab1602a5916205165d89e5ab0f6f031690d1e8357be221d6a46dd37e50957597'
+          assert audit['engine_git_blob']=='073c78db57b664801d9e644c9c95af811c74cab7'
+          assert audit['capture_before_tipoff'] is True and audit['main_anchor_coverage_verified'] is True
+          for key in ('eligible_for_pricing','settlement_rules_verified','external_consensus_eligible'):assert audit[key] is False
+          assert type(audit['approved_stake_u']) is int and audit['approved_stake_u']==0
+          assert audit['independent_forecasts']==0 and audit['hybrid_forecasts']==0
+          bins=json.loads((directory/'distribution_bins.json').read_text())
+          assert bins['methods']==['multiplicative','additive','power','shin'] and len(bins['series'])==4
+          assert sum(len(series['bins']) for series in bins['series'])==96
+          for series in bins['series']:
+              rows=series['bins'];assert rows[0][0] is None and rows[-1][1] is None
+              for method in range(4):
+                  masses=[row[2][method] for row in rows]
+                  assert all(math.isfinite(p) and 0<=p<=1 for p in masses)
+                  assert abs(sum(masses)-1)<1e-9
+          bounds=json.loads((directory/'missing_rung_bounds.json').read_text())
+          assert len(bounds['gaps'])==1 and bounds['gaps'][0]['threshold_interval_exclusive']==[-1.5,1.5]
+          assert len(audit['research_ev_intervals'])==184
+          for row in audit['research_ev_intervals']:
+              assert row['eligible_for_pricing'] is False
+              assert math.isfinite(row['lower']) and math.isfinite(row['upper']) and row['lower']<=row['upper']
+          with (root/'fixture_verification.json').open('x') as stream:json.dump(dict(verified=True,evaluations=368,offered_side_ev_intervals=184,pricing_authorized=False,book_origin_authenticated=False),stream,indent=2)
+          PY
+      - name: Archive hosted audit evidence, including failures
+        if: ${{ always() && steps.evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: discrete-replay-ca290d9-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/discrete-replay-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 30
