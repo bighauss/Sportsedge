@@ -4,13 +4,15 @@
   "base_commit": "d93bc7858d5cf942a60fa01f96bc52d044b07663",
   "protected_paths": [
     "models/cbb/cbbd_half_forward_quality.py",
+    "models/cbb/run_requests/current.json",
     "models/cbb/test_cbbd_grade_evidence.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "CBB: prospective first-half forecast error audit",
+  "change_summary": "First-half forward forecast error audit and explicit original-board live player-history diagnostic.",
   "assumptions": [
     "Requires immutable archived source bytes and actual after-tip finals. No retrospective reconstructed forecasts or probability calibration.",
-    "No price or release claim."
+    "No price or release claim.",
+    "Dated same-board request preserves original odds clock, no live quote claim. Merge only after current grading run completes to preserve live ledger serialization."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
