@@ -208,6 +208,39 @@ class Matching(unittest.TestCase):
         self.assertEqual(q, [])
         self.assertEqual(un[0][2], "DK event id conflict")
 
+    def test_neutral_total_alignment_preserves_prices_and_source_rows(self):
+        s = self.slate()
+        reg, _ = R.registry(s, T.espn(), "a" * 64, T.OBS)
+        b = row("TOTAL", "140.5", "-120", "+100", home="Synthetic 4", away="Synthetic 3",
+                dk_event_id="E1", tip_utc=S.TIP, totals_order="over_under")
+        original = dict(b)
+        side = dict(b, market="SPREAD", line="-3.5")
+        aligned, audit = R.align_neutral_totals([b, side], s, reg, T.NOW)
+        self.assertEqual(b, original)
+        self.assertEqual(aligned[0], dict(b, home=b["away"], away=b["home"]))
+        self.assertEqual(aligned[1], side)
+        self.assertEqual(audit[0]["game_id"], "9002")
+        q, _ = R.board_quotes(aligned, s, T.OBS)
+        self.assertEqual(len(q), 1)
+        self.assertEqual((q[0]["price_a"], q[0]["price_b"]), ("-120", "+100"))
+
+    def test_neutral_total_alignment_requires_evidence_and_no_event_conflict(self):
+        s = self.slate()
+        reg, _ = R.registry(s, T.espn(), "a" * 64, T.OBS)
+        b = row("TOTAL", "140.5", home="Synthetic 4", away="Synthetic 3",
+                dk_event_id="E1", tip_utc=S.TIP, totals_order="over_under")
+        for board, registry in (([b], []), ([dict(b, tip_utc="")], reg),
+                                ([dict(b, dk_event_id="")], reg),
+                                ([b, dict(b, market="ML", dk_event_id="E2")], reg),
+                                ([b, dict(b, home="Synthetic 1", away="Synthetic 2")], reg),
+                                ([b], [dict(r, captured_utc="2026-11-21T16:00:00Z") for r in reg])):
+            with self.subTest(board=board, registry=registry):
+                aligned, audit = R.align_neutral_totals(board, s, registry, T.NOW)
+                self.assertEqual(aligned, board)
+                self.assertEqual(audit, [])
+        nonneutral = dict(b, home="Synthetic 2", away="Synthetic 1")
+        self.assertEqual(R.align_neutral_totals([nonneutral], s, reg, T.NOW)[1], [])
+
     def test_names_only_boards_still_work(self):
         q, _ = R.board_quotes([row("SPREAD", "-3.5")], self.slate(), "2026-11-21T14:30:00Z")
         self.assertEqual(len(q), 1)
