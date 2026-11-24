@@ -344,6 +344,34 @@ class PlayerHistorySource(unittest.TestCase):
         self.assertEqual(report["historical_players"], 0)
         self.assertFalse(report["confirmed_activity"])
 
+    def test_player_coverage_distinguishes_both_teams_and_repeated_boxes(self):
+        from hashlib import sha256
+        from cbbd_player_history import collect_batches
+        from copy import deepcopy
+        games, boxes = self.inputs()
+        away = deepcopy(boxes[0])
+        away.update(teamId=2, opponentId=1, isHome=False)
+        away["players"][0]["athleteId"] = 56
+        conflicting = deepcopy(boxes[1])
+        conflicting["players"][0]["athleteId"] = 99
+        g = json.dumps(games).encode()
+        def rec(blob, source):
+            return {"source": source, "sha256": sha256(blob).hexdigest(),
+                    "bytes": len(blob), "observed_utc": OBS}
+        batches = []
+        for part in ([boxes[0], away, boxes[1], boxes[2]], [conflicting]):
+            raw = json.dumps(part).encode()
+            batches.append((raw, rec(raw, "cbbd_games_players")))
+        report = collect_batches(batches, g, rec(g, "cbbd_games_season"),
+                                 season=S.SEASON, asof_utc=R.utcz(NOW))
+        self.assertEqual(report["accepted_player_games"], 3)
+        self.assertEqual(report["duplicate_team_boxes_across_batches"], 1)
+        self.assertEqual(report["both_teams_represented_final_games"], 1)
+        self.assertEqual(report["one_team_represented_final_games"], 1)
+        self.assertEqual(report["unrepresented_final_games"], 3)
+        self.assertEqual(report["represented_final_games"], 2)
+        self.assertFalse(report["confirmed_activity"])
+
     def test_duplicate_missing_or_wrong_identity_is_not_zero_filled(self):
         from cbbd_player_history import historical_baselines
         games, boxes = self.inputs()
