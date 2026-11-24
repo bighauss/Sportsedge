@@ -144,7 +144,15 @@ jobs:
           import json, os, pathlib
           r = json.loads((pathlib.Path(os.environ["RUNNER_TEMP"]) / "finals" / "eval.json").read_text())
           print("## CBB grading — PAPER / 0u (graded results, losses kept)\n")
-          print("```json"); print(json.dumps({k: v for k, v in r.items() if not isinstance(v, list)}, indent=1, sort_keys=True)[:6000]); print("```")
+          # Publish complete aggregate-only sections; never slice serialized JSON.
+          for key in ("status", "official_counted", "approved_stake_u", "census",
+                      "card_pass_reasons", "forecast_accuracy",
+                      "nine_weight_same_book_comparison",
+                      "paper_returns_separate_from_accuracy", "warnings"):
+              print("### " + key)
+              print("```json")
+              print(json.dumps(r[key], sort_keys=True, separators=(",", ":"), allow_nan=False))
+              print("```")
           PY
       - name: Verify and encrypt original grading evidence before publishing ledger
         env:
