@@ -342,8 +342,8 @@ def main(argv=None):
         except (Hold, PC.Pass, ValueError, OSError, KeyError) as e:
             print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
         print(f"SHADOW REPLAY done; matches frozen card: {same}"); return 0
-    if not x.board or not x.board_captured_utc:
-        print("BLOCKED Hold: BOARD_REQUIRED", file=sys.stderr); return 2
+    if bool(x.board) != bool(x.board_captured_utc):
+        print("BLOCKED Hold: BOARD_AND_TIMESTAMP_MUST_BE_PAIRED", file=sys.stderr); return 2
     key = os.environ.get("CBBD_API_KEY")
     clock = (lambda: datetime.fromisoformat(x.now)) if x.now else (lambda: datetime.now(timezone.utc))
     try:
@@ -386,8 +386,8 @@ def main(argv=None):
                                                                  "groups": 50, "limit": 500})
             espn, erec = capture_raw("espn_scoreboard", espn_url, priv / "games")
             now = clock()
-        board_raw = Path(x.board).read_bytes()
-        board = list(csv.DictReader(io.StringIO(board_raw.decode("utf-8-sig"))))
+        board_raw = Path(x.board).read_bytes() if x.board else b""
+        board = list(csv.DictReader(io.StringIO(board_raw.decode("utf-8-sig")))) if x.board else []
         card, names, extra = build(work=Path(x.out) / "work", season=x.season, now_utc=now, games=games,
                                    boxes=boxes, observed_utc=gcap["observed_utc"], ratings_body=ratings,
                                    ratings_receipt=rec[0], espn=espn, espn_sha=erec["sha256"],
@@ -397,8 +397,8 @@ def main(argv=None):
         print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
     receipts = [{"source": "cbbd_ratings_adjusted", **{k: rec[0].get(k) for k in ("bytes", "sha256", "observed_utc")}},
                 {"source": "cbbd_games", "sha256": gcap["sha256"], "observed_utc": gcap["observed_utc"]},
-                brec, erec, *([srec] if not x.fixture_dir else []), {"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
-                             "observed_utc": x.board_captured_utc}]
+                brec, erec, *([srec] if not x.fixture_dir else []), *([{"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
+                             "observed_utc": x.board_captured_utc}] if x.board else [])]
     out = Path(x.out); out.mkdir(parents=True, exist_ok=True)
     (out / "cbb_card.json").write_text(json.dumps(card, indent=1, sort_keys=True))
     (out / "receipts.json").write_text(json.dumps(receipts, indent=1))
