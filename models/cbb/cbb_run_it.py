@@ -459,7 +459,7 @@ def render(card, names, extra):
         o += [f"**Context error (all games PASS):** {card['context_error']}", ""]
     o += ["## Independent full-game score projections (before sportsbook prices)", "",
           "Home margin = projected home minus away score; team totals are expected team scores. "
-          "No sportsbook line is needed for this section. No first-half or player-prop forecast is implied.", "",
+          "No sportsbook line is needed for this section. No player-prop forecast is implied.", "",
           "| Game | Tip (CT) | Away points | Home points | Home margin | Total | Possessions | Status |",
           "|---|---|---:|---:|---:|---:|---:|---|"]
     for r in card["rows"]:
@@ -471,6 +471,22 @@ def render(card, names, extra):
         p = r["projection"]
         o.append(f"| {a} @ {h} | {when} | {p['away_points']:.2f} | {p['home_points']:.2f} | "
                  f"{p['margin']:+.2f} | {p['total']:.2f} | {p['possessions']:.2f} | PROJECTED |")
+    if "half_fit" in extra:
+        fit = extra["half_fit"]
+        o += ["", "## First-half independent expected scores (research only)", "",
+              f"Fit state: {fit['status']}; admitted {fit.get('admitted', 0)} of {fit.get('input_rows', 0)} source rows; "
+              f"share of full final points {fit.get('share_of_final_points')}.",
+              "No H1 probability, variance, betting line or calibrated edge is inferred.", "",
+              "| Game | Tip (CT) | H1 away | H1 home | H1 total | Status |",
+              "|---|---|---:|---:|---:|---|"]
+        for r in extra["half_projections"]:
+            a, h, tip = names[r["game_id"]]
+            when = parse_z(tip).astimezone(CT).strftime("%-I:%M %p")
+            if r["status"] == "PASS":
+                o.append(f"| {a} @ {h} | {when} | — | — | — | PASS: {r['reason']} |")
+            else:
+                ap, hp = r["away_points"], r["home_points"]
+                o.append(f"| {a} @ {h} | {when} | {ap:.2f} | {hp:.2f} | {ap+hp:.2f} | {r['status']} |")
     o += ["", "**Pricing diagnostics below are not recommendations or validated positive EV.** "
           "The same-book blend is experimental, not independent market consensus. "
           "Large model-market disagreement, particularly longshots, requires calibration and event review.", ""]
@@ -508,6 +524,7 @@ def render(card, names, extra):
                      f"{L['model_prob'][i]:.3f} | {L['paper_ev'][i]*100:+.1f}% | {L['blend_ev'][i]*100:+.1f}% |")
     o += ["", "## Market intake coverage (all supplied rows)", "",
           "Counts describe input rows, not unique markets. No absent market is assumed captured.",
+          "First-half pricing and player-prop forecasts are not implemented in this runner." if "half_fit" in extra else
           "First-half and player-prop forecasts are not implemented in this runner.", "",
           "| Period | Market | Admission state | Input rows |", "|---|---|---|---:|"]
     for c in extra.get("board_coverage", []):
@@ -652,6 +669,7 @@ def main(argv=None):
         return blocked("SEASON_START_UTC_INVALID")
     key = os.environ.get("CBBD_API_KEY")
     clock = (lambda: datetime.fromisoformat(x.now)) if x.now else (lambda: datetime.now(timezone.utc))
+    half_source = None
     try:
         if not key and not x.fixture_dir: raise Hold("CBBD_API_KEY_ABSENT")
         if not x.private_dir: raise Hold("PRIVATE_DIR_REQUIRED")
@@ -692,6 +710,11 @@ def main(argv=None):
                                                                  "groups": 50, "limit": 500})
             espn, erec = capture_raw("espn_scoreboard", espn_url, priv / "games")
             now = clock()
+            half_source = ((priv / "games" / "cbbd_games_season.raw.json").read_bytes(),
+                           {"format": "CBBD_GAMES_CAPTURE_V1", "provider": "collegebasketballdata",
+                            "documented_endpoint": CAP.BASE, "source_sha256": srec["sha256"],
+                            "source_bytes": srec["bytes"], "returned_rows": len(season_rows),
+                            "season": x.season, "local_observed_utc": srec["observed_utc"]})
         board_raw = Path(x.board).read_bytes()
         board = list(csv.DictReader(io.StringIO(board_raw.decode("utf-8-sig"))))
         card, names, extra = build(work=Path(x.out) / "work", season=x.season, now_utc=now, games=games,
@@ -713,6 +736,18 @@ def main(argv=None):
                 brec, erec, *([srec] if not x.fixture_dir else []), {"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
                              "observed_utc": x.board_captured_utc}]
     out = Path(x.out); out.mkdir(parents=True, exist_ok=True)
+    if half_source is not None:
+        from cbbd_half_evidence import fit_full_to_first_half, project_first_halves
+        try:
+            fit = fit_full_to_first_half(*half_source, asof_utc=card["freeze_utc"])
+        except (ValueError, TypeError, KeyError) as exc:
+            fit = {"status": "BLOCK_HALF_SOURCE", "share_of_final_points": None,
+                   "reason": type(exc).__name__, "approved_stake_u": 0}
+        extra["half_fit"] = fit
+        extra["half_projections"] = project_first_halves(card, fit)
+        (out / "half_research.json").write_text(json.dumps(
+            {"label": "PAPER_0U", "fit": fit, "rows": extra["half_projections"]},
+            sort_keys=True, indent=1, allow_nan=False))
     (out / "cbb_card.json").write_text(json.dumps(card, indent=1, sort_keys=True))
     (out / "receipts.json").write_text(json.dumps(receipts, indent=1))
     md = render(card, names, extra) + "\n## Source receipts\n\n" + "\n".join(
