@@ -579,6 +579,11 @@ def render(card, names, extra):
               f"repeated team boxes: {ph.get('duplicate_team_boxes_across_batches', 'UNMEASURED')}. "
               "Representation is not complete roster coverage.",
               "No confirmed game-day activity, player projection or player-prop price inferred."]
+    if "slate_player_history" in extra:
+        sp = extra["slate_player_history"]
+        o += ["", f"Slate player-history coverage: {sp['team_rows_with_history']} of {sp['team_rows']} team-game rows "
+              f"have eligible historical candidates; {sp['team_rows_without_history']} have none.",
+              "Historical team IDs are not confirmed rosters or game-day availability; no prop forecasts or prices."]
     o += ["", "**Pricing diagnostics below are not recommendations or validated positive EV.** "
           "The same-book blend is experimental, not independent market consensus. "
           "Large model-market disagreement, particularly longshots, requires calibration and event review.", ""]
@@ -890,6 +895,10 @@ def main(argv=None):
             (out / "player_history_research.json").write_text(json.dumps(player_report, sort_keys=True,
                                                                          allow_nan=False))
             extra["player_history"] = {k: v for k, v in player_report.items() if k not in ("historical_baselines", "batches")}
+            from cbbd_player_history import slate_history_coverage
+            slate_players = slate_history_coverage(card, player_report)
+            (out / "slate_player_history_research.json").write_text(json.dumps(slate_players, sort_keys=True, allow_nan=False))
+            extra["slate_player_history"] = {k: v for k, v in slate_players.items() if k != "rows"}
             receipts.extend(r for _, r in player_batches)
         except (ValueError, TypeError, KeyError, OSError, Hold) as exc:
             extra["player_history"] = {"label": "BLOCK_PLAYER_HISTORY", "reason": player_capture_error or type(exc).__name__,
