@@ -192,6 +192,22 @@ class Matching(unittest.TestCase):
         q, un = R.board_quotes(board, s, "2026-11-21T14:30:00Z")
         self.assertEqual(len(q), 2)
 
+    def test_main_and_ladder_event_conflict_quarantines_both(self):
+        board = [row("SPREAD", "-3.5", dk_event_id="E1", tip_utc=S.TIP),
+                 row("TT_HOME", "72.5", totals_order="over_under", dk_event_id="E2", tip_utc=S.TIP)]
+        card, _, extra = go(board)
+        self.assertEqual(m_of(card, "9001", "spread")["status"], "PASS")
+        self.assertTrue(any("DK event id conflict" in x[2] for x in extra["quotes_unmatched"]))
+        self.assertEqual(extra["ladders"], [])
+        self.assertTrue(any("EVENT_BINDING_CONFLICT" in x[2] for x in extra["ladders_skipped"]))
+
+    def test_main_missing_id_cannot_mix_with_identified_ladder(self):
+        board = [row("SPREAD", "-3.5"),
+                 row("TT_HOME", "72.5", totals_order="over_under", dk_event_id="E1", tip_utc=S.TIP)]
+        q, un = R.board_quotes(board, self.slate(), "2026-11-21T14:30:00Z")
+        self.assertEqual(q, [])
+        self.assertEqual(un[0][2], "DK event id conflict")
+
     def test_names_only_boards_still_work(self):
         q, _ = R.board_quotes([row("SPREAD", "-3.5")], self.slate(), "2026-11-21T14:30:00Z")
         self.assertEqual(len(q), 1)
