@@ -244,10 +244,10 @@ class HalfSourceEvidence(unittest.TestCase):
 
 
 class LiveHalfMean(unittest.TestCase):
-    def fit(self, count=56):
+    def fit(self, count=56, *, second=False):
         from datetime import timedelta
         from hashlib import sha256
-        from cbbd_half_evidence import fit_full_to_first_half
+        from cbbd_half_evidence import fit_full_to_first_half, fit_full_to_second_half
         rows = []
         for i in range(count):
             tip = NOW - timedelta(days=8-i//8, hours=2)
@@ -260,7 +260,8 @@ class LiveHalfMean(unittest.TestCase):
                "documented_endpoint": "https://api.collegebasketballdata.com/games",
                "source_sha256": sha256(raw).hexdigest(), "source_bytes": len(raw),
                "returned_rows": len(rows), "season": S.SEASON, "local_observed_utc": OBS}
-        return fit_full_to_first_half(raw, man, asof_utc=R.utcz(NOW))
+        fitter = fit_full_to_second_half if second else fit_full_to_first_half
+        return fitter(raw, man, asof_utc=R.utcz(NOW))
 
     def test_first_half_share_uses_full_final_including_ot_and_retains_passes(self):
         from cbbd_half_evidence import project_first_halves
@@ -281,6 +282,31 @@ class LiveHalfMean(unittest.TestCase):
             extra.update(half_fit=fit, half_projections=rows)
             self.assertIn("First-half independent expected scores", R.render(card, names, extra))
             self.assertIn("No H1 probability", R.render(card, names, extra))
+
+    def test_second_half_independent_share_excludes_ot_and_renders(self):
+        from cbbd_half_evidence import project_second_halves
+        fit = self.fit(second=True)
+        self.assertEqual(fit["status"], "TRAIN_ONLY_H2_MEAN_UNVALIDATED")
+        self.assertAlmostEqual(fit["share_of_final_points"], 75/153)
+        self.assertLess(fit["share_of_final_points"] + self.fit()["share_of_final_points"], 1)
+        with tempfile.TemporaryDirectory() as d:
+            card, names, extra = run(d)
+            rows = project_second_halves(card, fit)
+            self.assertEqual(len(rows), len(card["rows"]))
+            for r, half in zip(card["rows"], rows):
+                if r["status"] == "PROJECTED":
+                    self.assertEqual(half["status"], "PROJECTED_H2_MEAN_RESEARCH")
+                    self.assertAlmostEqual(half["home_points"], r["projection"]["home_points"]*75/153)
+                else:
+                    self.assertEqual(half["status"], "PASS")
+                    self.assertIsNone(half["away_points"])
+            extra.update(second_half_fit=fit, second_half_projections=rows)
+            self.assertIn("Second-half independent expected scores", R.render(card, names, extra))
+
+    def test_second_half_insufficient_history_is_held(self):
+        fit = self.fit(48, second=True)
+        self.assertEqual(fit["status"], "BLOCK_H2_TRAINING")
+        self.assertIsNone(fit["share_of_final_points"])
 
     def test_insufficient_history_never_invents_share(self):
         fit = self.fit(48)
