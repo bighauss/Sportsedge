@@ -1,0 +1,158 @@
+{
+  "scope": "PARTIAL_MAIN_MARKETS_ONLY",
+  "source": "OPERATOR_TRANSCRIPTION_NOT_INDEPENDENTLY_AUTHENTICATED",
+  "date_ct": "2026-11-24",
+  "event_census": 78,
+  "accepted_events": 63,
+  "contract_rows": 189,
+  "locked_rows": 4,
+  "board_capture_utc": "2026-11-24T14:45:00Z",
+  "excluded_events": [
+    {
+      "event_id": "35078383",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078385",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078387",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "reason": "MAIN_MARKET_FORMAT_UNPARSED"
+    },
+    {
+      "event_id": "35078389",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131618597",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078390",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "reason": "MOVEMENT_REQUIRES_MANUAL_RECONCILIATION"
+    },
+    {
+      "event_id": "35073826",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078392",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078393",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7131650403",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078394",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135808264",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35073883",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7135816106",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078421",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078414",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136624251",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078418",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078423",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136671072",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    },
+    {
+      "event_id": "35078437",
+      "source_comment": "https://github.com/bighauss/Sportsedge/issues/57#issuecomment-7136760785",
+      "reason": "CAPTURE_TIME_NOT_SINGLE_EXPLICIT"
+    }
+  ],
+  "accepted_event_ids": [
+    "35078384",
+    "35078386",
+    "35078388",
+    "35078970",
+    "35073825",
+    "35078391",
+    "35080068",
+    "35078395",
+    "35078396",
+    "35078397",
+    "35078402",
+    "35078401",
+    "35078399",
+    "35078398",
+    "35078400",
+    "35078404",
+    "35078403",
+    "35073827",
+    "35078408",
+    "35078413",
+    "35078407",
+    "35078412",
+    "35078410",
+    "35078406",
+    "35078419",
+    "35078426",
+    "35078416",
+    "35078431",
+    "35078405",
+    "35078417",
+    "35078411",
+    "35078422",
+    "35078420",
+    "35078409",
+    "35078430",
+    "35078429",
+    "35078424",
+    "35078415",
+    "35078428",
+    "35078427",
+    "35078425",
+    "35078432",
+    "35078433",
+    "35078438",
+    "35078440",
+    "35078436",
+    "35078439",
+    "35078434",
+    "35078972",
+    "35078441",
+    "35073828",
+    "35078435",
+    "35078442",
+    "35078445",
+    "35078443",
+    "35078444",
+    "35078447",
+    "35078446",
+    "35080069",
+    "35073829",
+    "35073830",
+    "35078448",
+    "35073831"
+  ],
+  "notes": [
+    "Home-side spread and prices normalized from reported away/home order; totals over/under order explicit.",
+    "Only a single explicit main-section timestamp admitted; ambiguous formats or movements not parsed automatically.",
+    "No alt, team total, half or prop rows in this fallback. Full board handoff remains needed.",
+    "No provider authentication, actual run, or betting release claimed."
+  ]
+}
