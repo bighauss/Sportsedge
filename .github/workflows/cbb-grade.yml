@@ -5,6 +5,12 @@ name: CBB GRADE (attach finals to the PAPER ledger)
 # ledger against the same-time market, and save the extended encrypted ledger. Never edits a
 # frozen card row; never produces picks. PAPER / 0u.
 on:
+  pull_request:
+    paths:
+      - 'models/cbb/cbbd_grade_evidence.py'
+      - 'models/cbb/test_cbbd_grade_evidence.py'
+      - 'models/cbb/cbbd_paper_ledger.py'
+      - '.github/workflows/cbb-grade.yml'
   workflow_dispatch:
     inputs:
       date_ct:
@@ -22,8 +28,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline grading evidence fixture gate
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbbd_grade_evidence test_cbbd_paper_ledger
   grade:
-    if: github.ref == 'refs/heads/main'
+    needs: fixture
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -109,6 +131,34 @@ jobs:
           print("## CBB grading — PAPER / 0u (graded results, losses kept)\n")
           print("```json"); print(json.dumps({k: v for k, v in r.items() if not isinstance(v, list)}, indent=1, sort_keys=True)[:6000]); print("```")
           PY
+      - name: Verify and encrypt original grading evidence before publishing ledger
+        env:
+          SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python - <<'PY'
+          import os, pathlib
+          from cryptography.fernet import Fernet
+          from cbbd_grade_evidence import bundle
+          t = pathlib.Path(os.environ["RUNNER_TEMP"])
+          raw, man = (t / "paths").read_text().splitlines()
+          data = bundle(raw, man, t / "finals/finals.json", t / "finals/eval.json",
+                        t / "ledger/ledger.jsonl")
+          cipher = Fernet(os.environ["SPORTSEDGE_ARCHIVE_FERNET_KEY"].encode("ascii"))
+          encrypted = cipher.encrypt(data)
+          if cipher.decrypt(encrypted) != data:
+              raise SystemExit("GRADE_EVIDENCE_ENCRYPTION_ROUNDTRIP")
+          with (t / "cbb-grade-evidence.tar.fernet").open("xb") as out:
+              out.write(encrypted)
+          PY
+      - name: Retain encrypted original finals and grading evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbb-grade-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cbb-grade-evidence.tar.fernet
+          retention-days: 90
+          if-no-files-found: error
       - name: Encrypt extended ledger
         env:
           SPORTSEDGE_ARCHIVE_FERNET_KEY: ${{ secrets.SPORTSEDGE_ARCHIVE_FERNET_KEY }}
