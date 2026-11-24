@@ -243,5 +243,52 @@ class HalfSourceEvidence(unittest.TestCase):
             self.fixture([self.game()], asof="2026-11-22T03:00:00Z")
 
 
+class PlayerHistorySource(unittest.TestCase):
+    def inputs(self):
+        from datetime import timedelta
+        games, boxes = [], []
+        for i in range(5):
+            tip = R.utcz(NOW - timedelta(days=8-i))
+            games.append({"id": i+1, "season": S.SEASON, "status": "final", "startTimeTbd": False,
+                          "startDate": tip, "homeTeamId": 1, "awayTeamId": 2})
+            boxes.append({"gameId": i+1, "season": S.SEASON, "startTimeTbd": False, "startDate": tip,
+                          "teamId": 1, "opponentId": 2, "isHome": True,
+                          "players": [{"athleteId": 55, "minutes": 25, "points": 10+i,
+                                       "rebounds": {"total": 5}, "assists": 3,
+                                       "threePointFieldGoals": {"made": 2}}]})
+        return games, boxes
+
+    def normalize(self, games, boxes):
+        from hashlib import sha256
+        from cbbd_player_history import normalize
+        g, b = json.dumps(games).encode(), json.dumps(boxes).encode()
+        def rec(blob, source):
+            return {"source": source, "sha256": sha256(blob).hexdigest(),
+                    "bytes": len(blob), "observed_utc": OBS}
+        return normalize(b, rec(b, "cbbd_games_players"), g, rec(g, "cbbd_games_season"),
+                         season=S.SEASON, asof_utc=R.utcz(NOW))
+
+    def test_actual_id_and_pra_history(self):
+        from cbbd_player_history import historical_baselines
+        records, census = self.normalize(*self.inputs())
+        self.assertEqual(census["accepted_player_games"], 5)
+        self.assertFalse(census["confirmed_activity"])
+        p = historical_baselines(records)[0]
+        self.assertEqual(p["player_id"], "55")
+        self.assertEqual(p["stats"]["PRA"]["mean"], 20)
+        self.assertEqual(p["mean_minutes"], 25)
+        self.assertIn("NOT_PREGAME_FORECAST", p["status"])
+
+    def test_duplicate_missing_or_wrong_identity_is_not_zero_filled(self):
+        from cbbd_player_history import historical_baselines
+        games, boxes = self.inputs()
+        boxes[0]["players"][0]["points"] = None
+        boxes[1]["opponentId"] = 999
+        boxes.append(dict(boxes[2]))
+        records, census = self.normalize(games, boxes)
+        self.assertEqual(census["accepted_player_games"], 2)
+        self.assertEqual(historical_baselines(records), [])
+
+
 if __name__ == "__main__":
     unittest.main()
