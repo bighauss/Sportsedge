@@ -69,3 +69,38 @@ def normalize(raw, manifest, *, asof_utc):
               "rejected": rejected, "official_counted": 0, "approved_stake_u": 0}
     return ("".join(json.dumps(r, sort_keys=True, allow_nan=False) + "\n" for r in rows).encode(),
             report)
+
+
+def fit_full_to_first_half(raw, manifest, *, asof_utc):
+    """Current-snapshot training only: aggregate first-half/full-final ratio.
+
+    Full-game model predicts final scores, so denominator includes OT, unlike
+    regulation-only period-share fitting. No fitted predictive distribution.
+    This fit cannot be applied retrospectively before the snapshot observation.
+    """
+    normalized, census = normalize(raw, manifest, asof_utc=asof_utc)
+    source = decoded(raw)
+    admitted = {int(json.loads(line)["event_id"]) for line in normalized.splitlines()}
+    training = [g for g in source if isinstance(g, dict) and g.get("id") in admitted]
+    days = {utc(g["startDate"], "tip").date() for g in training}
+    first = sum(g["homePeriodPoints"][0] + g["awayPeriodPoints"][0] for g in training)
+    full = sum(g["homePoints"] + g["awayPoints"] for g in training)
+    ready = len(training) >= 50 and len(days) >= 7 and 0 < first < full
+    return {"status": "TRAIN_ONLY_HALF_MEAN_UNVALIDATED" if ready else "BLOCK_HALF_TRAINING",
+            "source_sha256": census["source_sha256"], "source_observed_utc": manifest["local_observed_utc"],
+            "fit_asof_utc": asof_utc, "input_rows": census["input_rows"], "admitted": len(training),
+            "rejected": len(census["rejected"]), "rejected_reasons": dict(Counter(r["reason"] for r in census["rejected"])),
+            "distinct_dates": len(days), "share_of_final_points": first / full if ready else None,
+            "source_authenticated": False, "holdout_calibrated": False, "approved_stake_u": 0}
+
+
+def project_first_halves(card, fit):
+    """Expected scores only; do not price H1 contracts without a fitted variance."""
+    share = fit.get("share_of_final_points")
+    return [{"game_id": r["game_id"],
+             "status": "PROJECTED_HALF_MEAN_RESEARCH" if r["status"] == "PROJECTED" and share is not None else "PASS",
+             "reason": None if r["status"] == "PROJECTED" and share is not None else
+                       (r.get("pass_reason") or fit["status"]),
+             "home_points": r["projection"]["home_points"] * share if r["status"] == "PROJECTED" and share is not None else None,
+             "away_points": r["projection"]["away_points"] * share if r["status"] == "PROJECTED" and share is not None else None}
+            for r in card["rows"]]

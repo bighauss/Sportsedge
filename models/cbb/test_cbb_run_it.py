@@ -243,6 +243,51 @@ class HalfSourceEvidence(unittest.TestCase):
             self.fixture([self.game()], asof="2026-11-22T03:00:00Z")
 
 
+class LiveHalfMean(unittest.TestCase):
+    def fit(self, count=56):
+        from datetime import timedelta
+        from hashlib import sha256
+        from cbbd_half_evidence import fit_full_to_first_half
+        rows = []
+        for i in range(count):
+            tip = NOW - timedelta(days=8-i//8, hours=2)
+            rows.append({"id": i+1, "season": S.SEASON, "homeTeamId": 1, "awayTeamId": 2,
+                         "status": "final", "startTimeTbd": False, "startDate": R.utcz(tip),
+                         "homePeriodPoints": [30, 40, 8], "awayPeriodPoints": [35, 35, 5],
+                         "homePoints": 78, "awayPoints": 75})
+        raw = json.dumps(rows).encode()
+        man = {"format": "CBBD_GAMES_CAPTURE_V1", "provider": "collegebasketballdata",
+               "documented_endpoint": "https://api.collegebasketballdata.com/games",
+               "source_sha256": sha256(raw).hexdigest(), "source_bytes": len(raw),
+               "returned_rows": len(rows), "season": S.SEASON, "local_observed_utc": OBS}
+        return fit_full_to_first_half(raw, man, asof_utc=R.utcz(NOW))
+
+    def test_first_half_share_uses_full_final_including_ot_and_retains_passes(self):
+        from cbbd_half_evidence import project_first_halves
+        fit = self.fit()
+        self.assertEqual(fit["status"], "TRAIN_ONLY_HALF_MEAN_UNVALIDATED")
+        self.assertAlmostEqual(fit["share_of_final_points"], 65/153)
+        self.assertEqual(fit["distinct_dates"], 7)
+        with tempfile.TemporaryDirectory() as d:
+            card, names, extra = run(d)
+            rows = project_first_halves(card, fit)
+            self.assertEqual(len(rows), len(card["rows"]))
+            for r, half in zip(card["rows"], rows):
+                if r["status"] == "PROJECTED":
+                    self.assertAlmostEqual(half["home_points"], r["projection"]["home_points"]*65/153)
+                else:
+                    self.assertEqual(half["status"], "PASS")
+                    self.assertIsNone(half["away_points"])
+            extra.update(half_fit=fit, half_projections=rows)
+            self.assertIn("First-half independent expected scores", R.render(card, names, extra))
+            self.assertIn("No H1 probability", R.render(card, names, extra))
+
+    def test_insufficient_history_never_invents_share(self):
+        fit = self.fit(48)
+        self.assertEqual(fit["status"], "BLOCK_HALF_TRAINING")
+        self.assertIsNone(fit["share_of_final_points"])
+
+
 class PlayerHistorySource(unittest.TestCase):
     def inputs(self):
         from datetime import timedelta
