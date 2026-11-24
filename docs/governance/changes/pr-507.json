@@ -4,13 +4,15 @@
   "base_commit": "eba5d4cfef7557c6408b7202829bb4716770cdb1",
   "protected_paths": [
     "models/cbb/cbbd_player_history.py",
+    "models/cbb/run_requests/current.json",
     "models/cbb/test_cbb_run_it.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "CBB: source-bound prior player history and conditional baseline",
+  "change_summary": "Source-bound prior player history and explicit live first-half baseline diagnostic run request.",
   "assumptions": [
     "Documented provider schema needs actual sample verification. Historical participation is not confirmed upcoming availability.",
-    "No pricing or release."
+    "No pricing or release.",
+    "Dated run uses original operator board without source authentication or changed timestamps; newly merged first-half baseline needs actual execution."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
