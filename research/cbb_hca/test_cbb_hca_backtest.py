@@ -23,5 +23,51 @@ class Walk(unittest.TestCase):
         # synthetic truth HCA is 3.0: the intercept estimate should be close to it
         self.assertLess(abs(rows[-1]["hca_c1"] - S.HCA_TRUE), 1.5)
 
+class PITChallenger(unittest.TestCase):
+    def row(self, i, x, *, neutral=False, delay=0):
+        f = dt.datetime(2026, 11, 1, 12, tzinfo=dt.timezone.utc) + dt.timedelta(days=i)
+        z = lambda d: d.isoformat().replace("+00:00", "Z")
+        return dict(event_id=str(i), freeze_utc=z(f), tipoff_utc=z(f+dt.timedelta(hours=3)),
+                    final_observed_utc=z(f+dt.timedelta(hours=6, days=delay)), neutral=neutral,
+                    neutral_margin=x, baseline_margin=x+(0 if neutral else 8),
+                    actual_margin=1.4*x+(0 if neutral else 3),
+                    prediction_sha256="a"*64, final_sha256="b"*64)
+
+    def test_recovers_intercept_and_slope_on_synthetic_truth(self):
+        from research.cbb_hca.pit_challenger import audit
+        rows = [self.row(i, x) for i,x in enumerate((-10, 0, 10, 20, -20))]
+        result = audit(rows, min_train=3)
+        self.assertEqual(result["compared_rows"], 2)
+        self.assertAlmostEqual(result["rows"][0]["hca"], 3)
+        self.assertAlmostEqual(result["rows"][0]["slope"], .4)
+        self.assertAlmostEqual(result["paired_mae"]["intercept_slope"], 0)
+        self.assertEqual(result["input_rows"], len(result["holds"])+result["compared_rows"])
+
+    def test_late_final_not_available_for_fit(self):
+        from research.cbb_hca.pit_challenger import audit
+        rows = [self.row(0,-10,delay=8), self.row(1,0), self.row(2,10), self.row(3,20)]
+        result = audit(rows, min_train=3)
+        self.assertEqual(result["compared_rows"], 0)
+
+    def test_duplicate_events_quarantined(self):
+        from research.cbb_hca.pit_challenger import audit
+        a = self.row(0,0)
+        result = audit([a,dict(a)], min_train=3)
+        self.assertEqual(len(result["holds"]), 2)
+        self.assertTrue(all(x["reason"]=="DUPLICATE_OR_INVALID_EVENT" for x in result["holds"]))
+
+    def test_neutral_target_does_not_receive_hca(self):
+        from research.cbb_hca.pit_challenger import audit
+        rows = [self.row(0,-10), self.row(1,0), self.row(2,10), self.row(3,20,neutral=True)]
+        result = audit(rows, min_train=3)
+        self.assertAlmostEqual(result["rows"][0]["intercept_only"],20)
+        self.assertAlmostEqual(result["rows"][0]["intercept_slope"],28)
+
+    def test_constant_predictors_are_unidentified(self):
+        from research.cbb_hca.pit_challenger import audit
+        result = audit([self.row(i, 0) for i in range(4)], min_train=3)
+        self.assertEqual(result["compared_rows"],0)
+        self.assertIn("UNIDENTIFIED_MARGIN_SLOPE", [h["reason"] for h in result["holds"]])
+
 if __name__ == "__main__":
     unittest.main()
