@@ -66,14 +66,10 @@
           "market": "ALT_TEAM_TOTAL",
           "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
           "source_text": " moved to -105/-127 by 6:02 AM)"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078384",
@@ -89,14 +85,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078385",
@@ -112,14 +103,9 @@
         "TT_HOME": 21,
         "TT_AWAY": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078386",
@@ -135,14 +121,9 @@
         "TT_HOME": 1,
         "TT_AWAY": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078387",
@@ -185,14 +166,9 @@
         "TT_HOME": 1,
         "TT_AWAY": 1
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078388",
@@ -250,14 +226,10 @@
           "market": "ALT_SPREAD",
           "reason": "RUNG_TEXT_NOT_EXACT_PAIR",
           "source_text": " OSU +2.5 -930 / SF -2.5 +479"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078970",
@@ -359,14 +331,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078391",
@@ -382,14 +350,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078393",
@@ -409,14 +372,10 @@
           "market": "ALT_SPREAD",
           "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
           "source_text": "ALT SPREAD (LBS / Ark; main not repeated)"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35080068",
@@ -432,14 +391,9 @@
         "TT_HOME": 1,
         "TT_AWAY": 1
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078395",
@@ -459,14 +413,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078396",
@@ -482,14 +432,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078397",
@@ -505,14 +450,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078402",
@@ -528,14 +468,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078401",
@@ -555,14 +490,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078399",
@@ -578,14 +509,9 @@
         "TT_HOME": 21,
         "TT_AWAY": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078398",
@@ -605,14 +531,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078400",
@@ -628,14 +550,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078404",
@@ -651,14 +568,9 @@
         "TT_HOME": 21,
         "TT_AWAY": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078403",
@@ -678,14 +590,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078394",
@@ -701,14 +609,9 @@
         "TT_AWAY": 1,
         "TT_HOME": 1
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35073827",
@@ -788,14 +691,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078413",
@@ -815,14 +713,10 @@
           "market": "ALT_SPREAD",
           "reason": "HEADER_SIDE_ALIAS_NOT_EXACT",
           "source_text": "2) ALT SPREAD (GW line/price, BG price)"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078407",
@@ -838,14 +732,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078412",
@@ -861,14 +750,9 @@
         "TT_HOME": 21,
         "TT_AWAY": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078410",
@@ -884,14 +768,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078406",
@@ -907,14 +786,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078419",
@@ -943,14 +817,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078421",
@@ -993,14 +863,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078426",
@@ -1016,14 +882,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078416",
@@ -1046,14 +907,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078414",
@@ -1076,14 +933,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078431",
@@ -1103,14 +956,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078405",
@@ -1126,14 +975,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078417",
@@ -1149,14 +993,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078411",
@@ -1184,14 +1023,10 @@
           "market": "ALT_TEAM_TOTAL",
           "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
           "source_text": "   Coppin alt TT (O/U): 46.5 -640/+386; 47.5 -522/+334; 48.5 -422/+283; 49.5 -344/+239; 50.5 -283/+202; 51.5 -238/+173; "
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078418",
@@ -1211,14 +1046,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078422",
@@ -1246,14 +1077,10 @@
           "market": "ALT_TEAM_TOTAL",
           "reason": "PRE_MOVE_OR_SIDE_NOT_EXACT",
           "source_text": "   USF alt TT (O/U): 76.5 -570/+357; 77.5 -468/+307; 78.5 -389/+265; 79.5 -328/+229; 80.5 -274/+196; 81.5 -231/+169; 82."
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078423",
@@ -1278,14 +1105,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078420",
@@ -1301,14 +1124,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078409",
@@ -1328,14 +1146,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078430",
@@ -1355,14 +1169,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078429",
@@ -1378,14 +1188,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078424",
@@ -1401,14 +1206,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078415",
@@ -1447,14 +1247,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078427",
@@ -1470,14 +1265,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078425",
@@ -1520,14 +1310,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078433",
@@ -1543,14 +1328,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078438",
@@ -1570,14 +1350,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078437",
@@ -1713,14 +1489,10 @@
           "market": "ALT_SPREAD",
           "line": "-30.5",
           "reason": "DUPLICATE_OR_MAIN_RUNG"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078440",
@@ -1740,14 +1512,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078436",
@@ -1767,14 +1535,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078439",
@@ -1813,14 +1577,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078972",
@@ -1971,14 +1730,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078445",
@@ -1994,14 +1749,9 @@
         "TT_AWAY": 21,
         "TT_HOME": 21
       },
-      "omissions": [
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
-        }
-      ],
+      "omissions": [],
       "halves_reported": false,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078443",
@@ -2021,14 +1771,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078444",
@@ -2048,14 +1794,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078447",
@@ -2075,14 +1817,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35078446",
@@ -2102,14 +1840,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     },
     {
       "event_id": "35080069",
@@ -2269,14 +2003,10 @@
         {
           "market": "1H",
           "reason": "RUNNER_UNSUPPORTED"
-        },
-        {
-          "market": "PLAYER_PROP",
-          "reason": "RUNNER_UNSUPPORTED_ONE_SIDED_OR_IDENTITY_UNVERIFIED"
         }
       ],
       "halves_reported": true,
-      "props_reported": true
+      "props_reported": false
     }
   ]
 }
