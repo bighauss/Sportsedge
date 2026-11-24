@@ -61,7 +61,7 @@ def make_config(**over):
     if type(cfg["require_event_and_tip"]) is not bool:
         raise ValueError("REQUIRE_EVENT_AND_TIP_INVALID")
     # Derived SD and age conversion must remain finite too.
-    team_sd = cfg["sd_total"] * cfg["team_total_sd_factor"]
+    team_sd = float(cfg["sd_total"]) * float(cfg["team_total_sd_factor"])
     if not math.isfinite(team_sd) or team_sd <= 0:
         raise ValueError("SD_CONFIG_INVALID")
     if not math.isfinite(cfg["max_quote_age_hours"] * 3600.0):
