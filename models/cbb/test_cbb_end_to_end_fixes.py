@@ -129,12 +129,12 @@ class PricingConfig(unittest.TestCase):
 
     def test_push_aware_ladder_ev(self):
         for w in PR.CANDIDATE_BLEND_WEIGHTS:
-            _, _, extra = go([row("ALT_TOTAL", "145", "-120", "100")],
+            _, _, extra = go([row("TOTAL", "140.5"), row("ALT_TOTAL", "145", "+130", "-150")],
                              totals_order_verified=True, config={"blend_weight_model": w})
             L = extra["ladders"][0]
             self.assertGreater(L["push"], 0)
             self.assertAlmostEqual(sum(L["model_prob"]) + L["push"], 1)
-            for i, price in enumerate((-120, 100)):
+            for i, price in enumerate((130, -150)):
                 want = w * L["model_prob"][i] + (1-w) * (1-L["push"]) * L["market_novig"][i]
                 self.assertAlmostEqual(L["blend_ev"][i], NM.ev_per_unit(want, L["push"], price))
 
@@ -154,8 +154,8 @@ class Ladders(unittest.TestCase):
     def test_ladders_use_same_mean_and_sd(self):
         board = [row("SPREAD", "-3.5"), row("ALT_SPREAD", "-6.5", "+150", "-190"),
                  row("ALT_TOTAL", "145.5", "+120", "-150"), row("TT_HOME", "72.5"), row("TT_AWAY", "68.5"),
-                 row("TT_AWAY", "", "-110", "-110"), row("ALT_TOTAL", "150.5", "+200", "n/a")]
-        card, names, extra = go(board)
+                 row("TT_AWAY", "", "-110", "-110"), row("ALT_TOTAL", "150.5", "+200", "n/a"), row("TOTAL", "140.5")]
+        card, names, extra = go(board, totals_order_verified=True)
         p = next(r for r in card["rows"] if r["game_id"] == "9001")["projection"]
         L = {(x["kind"], x["line"]): x for x in extra["ladders"]}
         self.assertEqual(len(extra["ladders"]), 4); self.assertEqual(len(extra["ladders_skipped"]), 2)
@@ -169,12 +169,88 @@ class Ladders(unittest.TestCase):
         self.assertIn("Alt ladders and team totals", md); self.assertIn("ladder row skipped", md)
 
     def test_alt_blowout_rung_flagged_and_unposted_skipped(self):
-        card, _, extra = go([row("ALT_SPREAD", "-20.5", "+300", "-400"), row("TT_HOME", "")])
+        card, _, extra = go([row("SPREAD", "-3.5"), row("ALT_SPREAD", "-20.5", "+300", "-400"), row("TT_HOME", "")],
+                              totals_order_verified=True)
         self.assertTrue(extra["ladders"][0]["blowout_excluded"]); self.assertEqual(len(extra["ladders_skipped"]), 1)
 
     def test_ladders_never_enter_ledger_card_rows(self):
-        card, _, _ = go([row("ALT_TOTAL", "145.5", "+120", "-150")])
+        card, _, _ = go([row("TOTAL", "140.5"), row("ALT_TOTAL", "145.5", "+120", "-150")], totals_order_verified=True)
         self.assertEqual({m["market"] for r in card["rows"] for m in r["markets"]}, {"moneyline", "spread", "total"})
+
+def ladders(board, **kw):
+    kw.setdefault("totals_order_verified", True)
+    _, _, extra = go(board, **kw)
+    return {(x["kind"], x["line"]) for x in extra["ladders"]}, [w[2] for w in extra["ladders_skipped"]]
+
+MAIN = [row("SPREAD", "-3.5"), row("TOTAL", "140.5")]
+
+class AltQuoteValidation(unittest.TestCase):
+    def test_one_sided_or_missing_price_skipped(self):
+        got, why = ladders(MAIN + [row("ALT_SPREAD", "-6.5", "+150", ""), row("ALT_SPREAD", "-7.5", "", "-190"),
+                                   row("ALT_TOTAL", "145.5", "+120", "n/a"), row("ALT_TOTAL", "", "+120", "-150")])
+        self.assertEqual(got, set()); self.assertEqual(len(why), 4)
+
+    def test_implausible_prices_and_no_vig_sum_rejected(self):
+        got, why = ladders(MAIN + [row("ALT_SPREAD", "-6.5", "+150", "+150"),      # sum < 1 (arb-like)
+                                   row("ALT_SPREAD", "-7.5", "-400", "-400"),      # overround ~ 0.6
+                                   row("ALT_SPREAD", "-8.5", "+9000", "-9500"),    # absurd magnitude
+                                   row("ALT_SPREAD", "-5.5", "+120", "-150")])     # fine
+        self.assertEqual(got, {("alt_spread", -5.5)}); self.assertEqual(len(why), 3)
+        self.assertTrue(any("no-vig" in w for w in why)); self.assertTrue(any("magnitude" in w for w in why))
+
+    def test_line_grid_and_bounds(self):
+        got, why = ladders(MAIN + [row("ALT_SPREAD", "-6.3", "+150", "-190"), row("ALT_TOTAL", "10.5", "+120", "-150")])
+        self.assertEqual(got, set()); self.assertEqual(len(why), 2)
+
+    def test_unposted_rungs_are_never_priced(self):
+        got, _ = ladders(MAIN)
+        self.assertEqual(got, set())
+
+    def test_orientation_must_agree_with_main_line(self):
+        # home laying MORE points (-8.5) but priced SHORTER than the -3.5 main line: reversed order
+        got, why = ladders(MAIN + [row("ALT_SPREAD", "-8.5", "-250", "+200")])
+        self.assertEqual(got, set()); self.assertIn("orientation inconsistent with main line / ladder", why)
+        got, _ = ladders(MAIN + [row("ALT_SPREAD", "-8.5", "+200", "-250")]); self.assertEqual(got, {("alt_spread", -8.5)})
+        # over at a HIGHER total priced shorter than the main over: reversed
+        got, why = ladders(MAIN + [row("ALT_TOTAL", "150.5", "-250", "+200")])
+        self.assertEqual(got, set()); self.assertIn("orientation inconsistent with main line / ladder", why)
+        got, _ = ladders(MAIN + [row("ALT_TOTAL", "150.5", "+200", "-250")]); self.assertEqual(got, {("alt_total", 150.5)})
+
+    def test_alt_without_main_line_not_priced(self):
+        got, why = ladders([row("ALT_SPREAD", "-6.5", "+150", "-190")])
+        self.assertEqual(got, set()); self.assertIn("no posted main line to orient against", why)
+
+    def test_team_total_ladder_must_be_monotone(self):
+        got, _ = ladders([row("TT_HOME", "70.5", "-150", "+120"), row("TT_HOME", "75.5", "+150", "-190")])
+        self.assertEqual(got, {("team_total_home", 70.5), ("team_total_home", 75.5)})
+        got, why = ladders([row("TT_HOME", "70.5", "+150", "-190"), row("TT_HOME", "75.5", "-150", "+120")])
+        self.assertEqual(got, set()); self.assertEqual(len(why), 2)
+
+    def test_duplicate_rung_quarantined(self):
+        got, why = ladders(MAIN + [row("ALT_SPREAD", "-6.5", "+150", "-190"), row("ALT_SPREAD", "-6.5", "+140", "-180")])
+        self.assertEqual(got, set()); self.assertEqual(len(why), 2)
+
+    def test_totals_orientation_binds_ladders_too(self):
+        got, why = ladders(MAIN + [row("ALT_TOTAL", "145.5", "+120", "-150"), row("TT_HOME", "72.5")], totals_order_verified=False)
+        self.assertEqual(got, set()); self.assertEqual(len(why), 2)
+        got, _ = ladders([row("SPREAD", "-3.5"), row("TOTAL", "140.5", totals_order="over_under"),
+                          row("ALT_TOTAL", "145.5", "-150", "+120", totals_order="under_over")], totals_order_verified=False)
+        self.assertEqual(got, {("alt_total", 145.5)})
+
+    def test_event_id_binding_for_ladders(self):
+        main = [row("SPREAD", "-3.5", dk_event_id="E1"), row("TOTAL", "140.5", dk_event_id="E1")]
+        got, _ = ladders(main + [row("ALT_SPREAD", "-6.5", "+150", "-190", dk_event_id="E1")]); self.assertEqual(len(got), 1)
+        got, why = ladders(main + [row("ALT_SPREAD", "-6.5", "+150", "-190", dk_event_id="E2")])
+        self.assertEqual(got, set()); self.assertIn("DK event id conflict or missing for this game", why)
+        got, why = ladders(main + [row("ALT_SPREAD", "-6.5", "+150", "-190")])       # event id missing on the rung
+        self.assertEqual(got, set())
+
+    def test_tip_time_mismatch_and_stale_or_post_freeze_board(self):
+        got, why = ladders(MAIN + [row("ALT_SPREAD", "-6.5", "+150", "-190", tip_utc="2026-11-21T20:00:00Z")])
+        self.assertEqual(got, set()); self.assertTrue(any("15 min" in w for w in why))
+        for stamp in ("2026-11-21T15:30:00Z", "2026-11-19T15:00:00Z"):                  # after freeze / >24h old
+            _, _, extra = go(MAIN + [row("ALT_SPREAD", "-6.5", "+150", "-190")], board_captured_utc=stamp)
+            self.assertEqual(extra["ladders"], []); self.assertTrue(extra["ladders_skipped"])
 
 class Receipt(unittest.TestCase):
     def _args(self, d, fx, board, extra=()):

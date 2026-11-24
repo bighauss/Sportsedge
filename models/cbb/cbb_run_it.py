@@ -263,7 +263,9 @@ def build(*, work, season, now_utc, games, boxes, observed_utc, ratings_body, ra
                              ratings_body=ratings_body, ratings_receipt=ratings_receipt,
                              prior_games=pg, quotes=[(q, "OPERATOR") for q in quotes],
                              input_sha256={"espn_scoreboard": espn_sha})
-    ladders, ladders_skipped = PR.price_ladders(board_rows, _match, s, card, cfg, board_captured_utc)
+    ladders, ladders_skipped = PR.price_ladders(
+        board_rows, _match, s, card, cfg, board_captured_utc, event_id=board_event_id,
+        totals_order=lambda b: _totals_order(b, totals_order_verified))
     ledger = None
     if ledger_path:
         ledger = LG.append(ledger_path, LG.card_entries(card), clock=lambda: now_utc)
