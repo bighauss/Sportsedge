@@ -344,6 +344,20 @@ class PlayerHistorySource(unittest.TestCase):
         self.assertEqual(report["historical_players"], 0)
         self.assertFalse(report["confirmed_activity"])
 
+    def test_empty_player_batches_still_require_valid_finals_receipt(self):
+        from hashlib import sha256
+        from cbbd_player_history import collect_batches
+        games, _ = self.inputs()
+        raw = json.dumps(games).encode()
+        receipt = {"source": "cbbd_games_season", "sha256": sha256(raw).hexdigest(),
+                   "bytes": len(raw), "observed_utc": OBS}
+        report = collect_batches([], raw, receipt, season=S.SEASON, asof_utc=R.utcz(NOW))
+        self.assertEqual(report["unrepresented_final_games"], 5)
+        self.assertEqual(report["represented_final_games"], 0)
+        with self.assertRaisesRegex(ValueError, "PLAYER_SOURCE_RECEIPT_MISMATCH"):
+            collect_batches([], raw, dict(receipt, sha256="bad"),
+                            season=S.SEASON, asof_utc=R.utcz(NOW))
+
     def test_player_coverage_distinguishes_both_teams_and_repeated_boxes(self):
         from hashlib import sha256
         from cbbd_player_history import collect_batches
