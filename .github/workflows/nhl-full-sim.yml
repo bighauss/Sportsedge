@@ -1,0 +1,24 @@
+name: NHL full shared simulation tests
+on:
+  pull_request:
+    paths:
+      - 'models/nhl/nhl_full_sim.py'
+      - 'models/nhl/test_nhl_full_sim.py'
+      - '.github/workflows/nhl-full-sim.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Shared-draw consistency checks
+        working-directory: models/nhl
+        run: python -m unittest -v test_nhl_full_sim
