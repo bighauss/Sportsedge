@@ -1,0 +1,66 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 483,
+  "base_commit": "9267e10ca9c500a9ea66ba82ef4831c63fe338b8",
+  "protected_paths": [
+    ".github/workflows/cbb-run-it.yml",
+    "models/cbb/cbb_pricing.py",
+    "models/cbb/cbb_run_it.py",
+    "models/cbb/test_cbb_end_to_end_fixes.py",
+    "models/cbb/test_cbb_run_it_parity.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "CBB RUN IT adapter and workflow fixes: totals-order binding to board format, DK event ID plus tip-time match, configurable SD constants, experimental blend weight, blowout-spread exclusion, alt ladder and team-total pricing, run receipts, PR fixture-gate trigger. Frozen native model, paper card and ledger files are unchanged. PAPER / 0u.",
+  "assumptions": [
+    "The SD constants (margin 12.5, total 17) and the 0.25 blend weight are experimental placeholders from an unvalidated fallback; the nine-weight chronological test has not been run.",
+    "Team-total SD assumes equal, uncorrelated team variances; ladder rows are normal-model paper prices, not verified edges.",
+    "The publish-outputs job commit to main is untested and may be rejected by branch protection; outputs then remain in the workflow artifact."
+  ],
+  "agent_identity": "Claude-Code-Sonnet-5.5",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "cbb-run-it-fixture-tests",
+    "before": null,
+    "unit": "tests",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest models.cbb.test_cbb_end_to_end_fixes -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "9267e10ca9c500a9ea66ba82ef4831c63fe338b8",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest tools.test_cbb_run_it_workflow_security tools.test_cbb_run_it_ledger_bootstrap -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
