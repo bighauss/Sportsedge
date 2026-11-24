@@ -13,6 +13,7 @@ from cbbd_player_history import collect_batches, conditional_player_means
 def audit(card, report, training_batches, training_finals_raw, training_finals_receipt,
           final_batches, finals_raw, finals_receipt, *, season, evaluated_utc):
     freeze = utc(card["freeze_utc"], "freeze")
+    final_batches = tuple(final_batches)
     if utc(finals_receipt["observed_utc"], "final_observed") <= freeze:
         raise Hold("PLAYER_EVALUATION_NOT_AFTER_FREEZE")
     for _, receipt in final_batches:
@@ -67,5 +68,9 @@ def audit(card, report, training_batches, training_finals_raw, training_finals_r
     return {"label": "PAPER_0U_CONDITIONAL_PLAYER_FORWARD_DIAGNOSTIC",
             "card_sha256": card["card_sha256"], "input_rows": len(rows), "graded": len(graded),
             "withheld": dict(Counter(r["reason"] for r in rows if r["state"] == "PASS")),
+            "evaluated_utc": utc(evaluated_utc, "evaluated").isoformat(),
+            "finals_receipt": {k: finals_receipt[k] for k in ("source", "sha256", "bytes", "observed_utc")},
+            "final_player_receipts": [{k: receipt[k] for k in ("source", "sha256", "bytes", "observed_utc")}
+                                      for _, receipt in final_batches],
             "metrics": metrics, "rows": rows, "holdout_calibrated": False,
             "official_counted": 0, "approved_stake_u": 0}
