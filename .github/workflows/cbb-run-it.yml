@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: b936c45fb4467b741071cfb280b5eb3c4f07ec99
+          ref: 123dede2268cf617720c948b9d1288bfb25fdecc
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -147,7 +147,7 @@ jobs:
           python - <<'PY'
           import json,os,pathlib,subprocess
           revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
-          if revision!='b936c45fb4467b741071cfb280b5eb3c4f07ec99':raise SystemExit('BLOCK_SOURCE_REVISION')
+          if revision!='123dede2268cf617720c948b9d1288bfb25fdecc':raise SystemExit('BLOCK_SOURCE_REVISION')
           value=dict(source_revision=revision,trigger_revision=os.environ['GITHUB_SHA'],run_id=os.environ['GITHUB_RUN_ID'],run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],sport='CBB',model_track='INDEPENDENT',approved_stake_u=0,board_supplied=bool(os.environ['BOARD']))
           with (pathlib.Path(os.environ['RUNNER_TEMP'])/'evidence'/'execution.json').open('x') as stream:json.dump(value,stream,sort_keys=True)
           PY
@@ -158,6 +158,12 @@ jobs:
           fi
           python models/cbb/cbb_run_it.py "${args[@]}" > "$RUNNER_TEMP/evidence/stdout.log" 2> "$RUNNER_TEMP/evidence/stderr.log"
           cp -- "$RUNNER_TEMP/ledger/ledger.jsonl" "$RUNNER_TEMP/evidence/capture/ledger.jsonl"
+          python - <<'PY'
+          import json, os, pathlib
+          card=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"evidence/card/cbb_card.json").read_text())
+          if type(card.get("projected_rows")) is not int or card["projected_rows"] <= 0:
+              raise SystemExit("BLOCK_ZERO_INDEPENDENT_PROJECTIONS")
+          PY
       - name: Encrypt captured evidence or failure diagnostics
         id: encrypt
         if: always() && steps.model.outcome != 'skipped'
