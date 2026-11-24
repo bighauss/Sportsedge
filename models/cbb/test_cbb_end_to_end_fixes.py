@@ -41,6 +41,29 @@ class IndependentReport(unittest.TestCase):
         self.assertEqual(card["priced_market_rows"], 0)
         self.assertIn("not recommendations or validated positive EV", report)
 
+class MarketIntakeCensus(unittest.TestCase):
+    def test_unsupported_period_and_props_remain_in_input_denominator(self):
+        board = [row("SPREAD", "-3.5", period="FG"),
+                 row("TOTAL", "70.5", period="1H"),
+                 row("PLAYER_POINTS", "15.5", period="FG"),
+                 row("PLAYER_REBOUNDS", "5.5", period="1H"),
+                 row("TOTAL", "140.5", period=""),
+                 dict(row("TOTAL", "140.5"), sport="NBA")]
+        card, names, extra = go(board)
+        census = extra["board_coverage"]
+        self.assertEqual(sum(x["rows"] for x in census), len(board))
+        states = {x["market"]: x["state"] for x in census if x["market"].startswith("PLAYER")}
+        self.assertEqual(states, {"PLAYER_POINTS": "MARKET_NOT_IMPLEMENTED",
+                                  "PLAYER_REBOUNDS": "PERIOD_NOT_IMPLEMENTED"})
+        self.assertEqual(card["priced_market_rows"], 1)
+        self.assertIn("First-half and player-prop forecasts are not implemented", R.render(card, names, extra))
+        self.assertIn("PLAYER_POINTS", R.render(card, names, extra))
+
+    def test_legacy_and_empty_board_census(self):
+        self.assertEqual(R.board_coverage([]), [])
+        self.assertEqual(R.board_coverage([row("ML", "")])[0]["state"], "FULL_GAME_ADAPTER_ATTEMPT")
+
+
 class PeriodIdentity(unittest.TestCase):
     def test_explicit_non_full_game_main_quotes_are_withheld(self):
         for period in ("1H", "2H", "", "Q1", None):
