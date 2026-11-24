@@ -191,6 +191,35 @@ class MultiSportFrameworkTests(unittest.TestCase):
             self.assertAlmostEqual(overall["roi_all_quotes_1u"], (100.0 / 110.0 - 1.0) / 2)
         self.assertEqual(report["exclusion_audit"]["missing_probability_rows"], 1)
 
+    def test_invalid_prices_rejected_even_on_pushes(self):
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        for line in (29.5, 30.0, 30.5):
+            for price in (float("inf"), float("-inf"), "nan", 0, -110.5, None, "bad"):
+                with self.subTest(line=line, price=price):
+                    rows = [dict(quote_id="q", market="total", pick="over", player=None,
+                                 line=line, price=price, model_p=0.6, market_p=0.5,
+                                 blend_p=0.55, prob_definition="conditional_no_push",
+                                 approved_stake_u=0)]
+                    run = _make_run("r", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z",
+                                    "2026-11-24T01:00:00Z", rows, finals)
+                    with self.assertRaises(IntegrityError):
+                        evaluate_multisport([run], "baseline")
+
+    def test_closing_probability_is_validated_and_not_authenticated(self):
+        rows = [dict(quote_id="q", market="spread", pick="WAS", player=None, line=-3.5,
+                     price=-110, model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        run = _make_run("r", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z",
+                        "2026-11-24T01:00:00Z", rows, finals)
+        for invalid in (True, -0.1, 1.1, float("inf"), "nan"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(IntegrityError):
+                    evaluate_multisport([run], "baseline", closing_quotes={("r", "q"): invalid})
+        report = evaluate_multisport([run], "baseline", closing_quotes={("r", "q"): 0.55})
+        clv = report["candidates"]["independent_model"]["overall"]["clv"]
+        self.assertAlmostEqual(clv["mean"], 0.05)
+        self.assertEqual(clv["status"], "CALLER_SUPPLIED_CLOSING_PROBABILITIES_UNVERIFIED")
+
     def test_invalid_american_price_fails_closed(self):
         rows = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5, price=0,
                      model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
