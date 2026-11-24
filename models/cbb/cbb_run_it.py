@@ -48,9 +48,21 @@ def norm(s):
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]", "", s.lower().replace("&", ""))
 
-def cands(name):
+# Explicit board-to-CBBD spellings observed in the Nov 24 board and
+# independent slate report (run 45445318093). No fuzzy names or mascot matching.
+# These additional aliases require a dated, identified sportsbook event.
+DATED_BOARD_ALIASES = {
+    "illinoischicago": "uic", "appalachianstate": "appstate",
+    "mountsaintmarys": "mountstmarys", "semissouristate": "southeastmissouristate",
+    "ulm": "ulmonroe", "alcorn": "alcornstate", "umkc": "kansascity",
+}
+
+def cands(name, *, dated=False):
     n = norm(name)
-    return [n] + [a for a in ALIASES.get(n, []) if a != n]
+    out = [n] + [a for a in ALIASES.get(n, []) if a != n]
+    if dated and n in DATED_BOARD_ALIASES:
+        out.append(DATED_BOARD_ALIASES[n])
+    return out
 
 def sha(b):
     return hashlib.sha256(b).hexdigest()
@@ -151,19 +163,32 @@ def board_event_id(row):
 def _match(slate_rows, home, away, row=None):
     """Names must match exactly; when the board carries a tip time it must be within 15 min of the
     CBBD tip (this also separates same-name doubleheaders). DK event IDs are bound in board_quotes."""
-    hs, as_ = set(cands(home)), set(cands(away))
-    hits = [r for r in slate_rows if norm(r["_home"]) in hs and norm(r["_away"]) in as_]
     try:
         tip = board_tip(row)
-    except ValueError:
+    except (ValueError, TypeError, AttributeError):
         return None, "board tip time unparsable"
+    dated = tip is not None and bool(board_event_id(row))
+    hs, as_ = set(cands(home, dated=dated)), set(cands(away, dated=dated))
+    if not norm(home) or not norm(away) or hs & as_:
+        return None, "invalid or overlapping board team identities"
+    direct = [r for r in slate_rows if norm(r["_home"]) in hs and norm(r["_away"]) in as_]
+    reverse = [r for r in slate_rows if norm(r["_home"]) in as_ and norm(r["_away"]) in hs]
+    hits, rev = direct, reverse
     if tip is not None:
-        hits = [r for r in hits if abs((parse_z(r["tipoff_utc"]) - tip).total_seconds()) <= TIP_WINDOW_S]
-        if not hits: return None, "no CBBD game within 15 min of board tip time"
-    if len(hits) == 1: return hits[0], None
-    rev = [r for r in slate_rows if norm(r["_home"]) in as_ and norm(r["_away"]) in hs]
-    return None, ("home/away orientation mismatch" if rev else "no unique CBBD game for names" if not hits
-                  else "ambiguous CBBD game")
+        def in_window(r):
+            return abs((parse_z(r["tipoff_utc"]) - tip).total_seconds()) <= TIP_WINDOW_S
+        hits = [r for r in direct if in_window(r)]
+        rev = [r for r in reverse if in_window(r)]
+    if len(hits) == 1 and not rev:
+        return hits[0], None
+    if hits:
+        return None, "ambiguous CBBD game"
+    if rev:
+        return None, "home/away orientation mismatch"
+    if tip is not None and (direct or reverse):
+        return None, "no CBBD game within 15 min of board tip time"
+    return None, "no unique CBBD game for names"
+
 
 def registry(slate_rows, espn, espn_sha, captured_utc):
     """Venue-only reconciliation. Reverse team designation is admissible ONLY when

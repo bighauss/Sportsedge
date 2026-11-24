@@ -116,6 +116,30 @@ class RowCaptureProvenance(unittest.TestCase):
         self.assertEqual(extra["ladders"][0]["dk_event_id"], "E1")
 
 
+class DatedAliases(unittest.TestCase):
+    def test_seven_observed_aliases_require_dated_event(self):
+        for alias, official in R.DATED_BOARD_ALIASES.items():
+            with self.subTest(alias=alias):
+                g = {"_home": official, "_away": "Opponent", "game_id": "99", "tipoff_utc": S.TIP}
+                q = {"tip_utc": S.TIP, "dk_event_id": "1234"}
+                self.assertEqual(R._match([g], alias, "Opponent", q)[0], g)
+                self.assertIsNone(R._match([g], alias, "Opponent", {"tip_utc": S.TIP})[0])
+                self.assertIsNone(R._match([g], alias, "Opponent", {"dk_event_id": "1234"})[0])
+                self.assertIsNone(R._match([g], alias, "Opponent", dict(q, tip_utc="2026-11-21T20:00:00Z"))[0])
+                self.assertIsNone(R._match([g], "Opponent", alias, q)[0])
+
+    def test_alias_cannot_override_ambiguity_or_reverse_orientation(self):
+        q = {"tip_utc": S.TIP, "dk_event_id": "1234"}
+        g = {"_home": "UIC", "_away": "Rice", "game_id": "99", "tipoff_utc": S.TIP}
+        dup = dict(g, game_id="100")
+        rev = dict(g, _home="Rice", _away="UIC", game_id="101")
+        self.assertIsNone(R._match([g, dup], "Illinois Chicago", "Rice", q)[0])
+        self.assertIsNone(R._match([g, rev], "Illinois Chicago", "Rice", q)[0])
+        self.assertIn("orientation", R._match([rev], "Illinois Chicago", "Rice", q)[1])
+        self.assertIn("names", R._match([g], "Unknown University", "Rice", q)[1])
+        self.assertIsNone(R._match([g], "Illinois Chicago", "UIC", q)[0])
+
+
 class Matching(unittest.TestCase):
     def slate(self):
         return R.slate(T.provider()[0], T.NOW.date(), T.NOW, S.SEASON)
