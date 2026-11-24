@@ -3,8 +3,8 @@
   "pr_number": 492,
   "base_commit": "7dc3f4997e4446487bcf7bcf8a10e7d6d22a6466",
   "protected_paths": [
-    "models/cbb/cbb_run_it.py",
     "models/cbb/cbb_pricing.py",
+    "models/cbb/cbb_run_it.py",
     "models/cbb/test_cbb_end_to_end_fixes.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
