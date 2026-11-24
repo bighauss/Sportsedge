@@ -172,7 +172,7 @@ def historical_baselines(records):
     return out
 
 
-def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
+def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc, include_records=False):
     """Preserve cross-batch duplicate census and expose missing final-game coverage.
 
     A batch is (original bytes, capture receipt). No player is inferred active.
@@ -238,7 +238,8 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
             "unrepresented_final_games": len(expected) - any_team,
             "duplicate_team_boxes_across_batches": sum(n > 1 for n in box_batch_counts.values()),
             "historical_players": len(models), "confirmed_activity": False,
-            "approved_stake_u": 0, "historical_baselines": models}
+            "approved_stake_u": 0, "historical_baselines": models,
+            **({"accepted_records": clean} if include_records else {})}
 
 
 def slate_history_coverage(card, history):
