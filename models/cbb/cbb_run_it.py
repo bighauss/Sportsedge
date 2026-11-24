@@ -204,7 +204,7 @@ def _totals_order(row, verified):
     verified flag or a per-row totals_order column ('over_under' = verified, 'under_over' = swap)."""
     t = str(row.get("totals_order") or "").strip().lower()
     if t == "under_over": return "swap"
-    if t == "over_under" or verified: return "ok"
+    if t == "over_under" or (not t and verified): return "ok"
     return None
 
 def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
@@ -233,7 +233,7 @@ def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
         pa, pb = (b["price_b"], b["price_a"]) if order == "swap" else (b["price_a"], b["price_b"])
         out.append({"game_id": g["game_id"], "market": MK[b["market"]], "book": book,
                     "line": b["line"] or None, "price_a": pa, "price_b": pb,
-                    "captured_utc": captured_utc})
+                    "captured_utc": str(b.get("captured_utc") or captured_utc)})
     return out, unmatched
 
 def write_csv(path, header, rows):
