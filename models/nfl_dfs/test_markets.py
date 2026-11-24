@@ -141,6 +141,31 @@ class MarketsTests(unittest.TestCase):
         self.assertNotIn("AvgPointsPerGame",json.dumps(a))
         self.assertTrue(all(row.get("player") in cfg["players"] for row in a["props"]))
 
+    def test_periods_priced_from_same_draws(self):
+        here=Path(__file__).resolve().parent
+        cfg=json.loads((here/"games"/"PIT_CIN_2026-11-15.json").read_text())
+        raw=[]
+        m.mc.run(cfg,400,seed=3,raw=raw)
+        away,home=list(cfg["teams"])
+        for r in raw:   # quarters reconcile exactly with each team's simulated points
+            self.assertEqual(sum(r["_periods"][home]),r[home][1])
+            self.assertEqual(sum(r["_periods"][away]),r[away][1])
+        out=m.price(cfg,400,seed=3)
+        per=out["game"]["periods"]
+        self.assertEqual(set(per),{"Q1","Q2","Q3","Q4","1H","2H"})
+        for v in per.values():
+            self.assertAlmostEqual(v["home_win"]+v["tie"]+v["away_win"],1,places=3)
+        self.assertAlmostEqual(per["1H"]["proj_total"]+per["2H"]["proj_total"],out["game"]["proj"]["total"],places=1)
+        self.assertGreater(per["Q1"]["tie"],per["1H"]["tie"])
+        self.assertNotIn("halves",out["inventory"]["blocked"])
+
+    def test_period_rng_does_not_change_dfs_draws(self):
+        here=Path(__file__).resolve().parent
+        cfg=json.loads((here/"games"/"PIT_CIN_2026-11-15.json").read_text())
+        a,_=m.mc.run(cfg,50,seed=7)
+        b,_=m.mc.run(cfg,50,seed=7,raw=[])
+        self.assertEqual(a,b)
+
     def test_invalid_simulation_count_fails(self):
         with self.assertRaises(ValueError):
             m.price({"teams":{"a":{},"b":{}}},0)
