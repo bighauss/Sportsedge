@@ -524,7 +524,8 @@ def render(card, names, extra):
                      f"{L['model_prob'][i]:.3f} | {L['paper_ev'][i]*100:+.1f}% | {L['blend_ev'][i]*100:+.1f}% |")
     o += ["", "## Market intake coverage (all supplied rows)", "",
           "Counts describe input rows, not unique markets. No absent market is assumed captured.",
-          "First-half pricing and player-prop forecasts are not implemented in this runner." if "half_fit" in extra else\n          "First-half and player-prop forecasts are not implemented in this runner.", "",
+          "First-half pricing and player-prop forecasts are not implemented in this runner." if "half_fit" in extra else
+          "First-half and player-prop forecasts are not implemented in this runner.", "",
           "| Period | Market | Admission state | Input rows |", "|---|---|---|---:|"]
     for c in extra.get("board_coverage", []):
         clean = lambda v: str(v).replace("|", "/").replace("\\n", " ").replace("\\r", " ")
