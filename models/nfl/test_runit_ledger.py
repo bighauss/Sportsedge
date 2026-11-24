@@ -194,5 +194,77 @@ class LegacyRoundingBoundaryTests(unittest.TestCase):
         self.assertEqual(s["filter_basis"], "v3_note_1dp")
 
 
+class PredictionLogHookTests(unittest.TestCase):
+    """RUN IT -> ledger/prediction_log.py hook. Synthetic kickoffs and clocks."""
+    from datetime import datetime, timezone
+    NOW = datetime(2026, 11, 29, 12, 0, tzinfo=timezone.utc)
+    KO = {"AAA@BBB": "2026-11-29T13:00:00-05:00"}     # 18:00Z
+
+    def setUp(self):
+        self.rows, _ = L.build_ledger([GAME], PROPS, PROJ, ABBR)
+        self.calls = []
+
+    def log(self, **kw):
+        return L.log_predictions(self.rows, kw.get("ko", self.KO), self.calls.append,
+                                 now=kw.get("now", self.NOW))
+
+    def test_one_row_per_priced_side_in_one_write(self):
+        n = self.log()
+        priced = [r for r in self.rows if r["status"] != "rejected_input"]
+        self.assertEqual(n, len(priced))
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(len(self.calls[0]), n)
+        self.assertEqual(n, 12 + 3)       # 12 game sides + Qual/Neg/Over QB props
+        self.assertTrue(all(p["start_utc"] == "2026-11-29T18:00:00+00:00" for p in self.calls[0]))
+
+    def test_values_are_ledger_values_unchanged(self):
+        self.log()
+        by_pick = {p["pick"]: p for p in self.calls[0]}
+        for r in self.rows:
+            if r["status"] == "rejected_input":
+                self.assertNotIn(r["selection"], by_pick)
+                continue
+            p = by_pick[r["selection"]]
+            self.assertEqual(p["model_p"], r["model_p"])
+            self.assertEqual(p["price_american"], r["odds"])
+            if r["kind"] == "game":
+                self.assertEqual(p["market_p_novig"], r["market_p"])
+            else:
+                self.assertEqual(p["market_p_novig"], "")    # one-sided assumed vig
+
+    def test_game_novig_pairs_sum_to_one(self):
+        self.log()
+        game = [p for p in self.calls[0] if p["market_p_novig"] != ""]
+        for a, b in zip(game[::2], game[1::2]):
+            self.assertAlmostEqual(a["market_p_novig"] + b["market_p_novig"], 1.0, places=12)
+
+    def test_fail_closed_writes_nothing(self):
+        cases = [dict(ko={}), dict(ko={"AAA@BBB": "2026-11-29T18:00:00"}),
+                 dict(ko={"AAA@BBB": "2026-11-29T12:00:00+00:00"})]
+        for kw in cases:
+            with self.assertRaises(ValueError):
+                self.log(**kw)
+        self.rows[0]["model_p"] = float("nan")
+        with self.assertRaises(ValueError):
+            self.log()
+        self.assertEqual(self.calls, [])
+
+    def test_writes_through_prediction_log_with_pregame_ts(self):
+        import importlib.util, tempfile
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "ledger", "prediction_log.py")
+        spec = importlib.util.spec_from_file_location("prediction_log_hook_test", path)
+        P = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(P)
+        with tempfile.TemporaryDirectory() as d:
+            P.PATH = os.path.join(d, "prediction_log.csv")
+            now = self.datetime.now(self.timezone.utc)
+            ko = {"AAA@BBB": (now.replace(microsecond=0) + __import__("datetime").timedelta(hours=2)).isoformat()}
+            n = L.log_predictions(self.rows, ko, P.log_run)
+            got = P._read()
+        self.assertEqual(len(got), n)
+        self.assertTrue(all(r["ts_utc"] < r["start_utc"] and r["result"] == "" for r in got))
+        self.assertTrue(all(0 <= float(r["model_p"]) <= 1 for r in got))
+
+
 if __name__ == "__main__":
     unittest.main()

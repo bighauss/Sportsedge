@@ -363,3 +363,56 @@ def build_ledger(games, props, projections, abbr, legacy_note_rounding=True):
     if summary["ledger_rows"] != attempted:
         raise AssertionError(f"denominator mismatch {summary}")
     return rows, summary
+
+
+def _utc_iso(v):
+    """Normalise an ISO-8601 timestamp with an explicit offset to UTC seconds,
+    in the same format ledger/prediction_log.py writes ts_utc in."""
+    from datetime import datetime, timezone
+    t = datetime.fromisoformat(v)
+    if t.tzinfo is None:
+        raise ValueError(f"start_utc without timezone: {v!r}")
+    return t.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def prediction_log_rows(rows, start_utc, sport="NFL", now=None):
+    """Map ledger rows to ledger/prediction_log.py rows. Logging only: no
+    pricing, threshold or selection change.
+
+    One row per priced side (every non-rejected row, qualifying or not).
+    Rejected inputs carry no model probability and are not predictions.
+    Fails closed (raises, nothing returned) on a priced row whose game has no
+    timezone-aware kickoff, whose kickoff is not after `now`, or whose model_p
+    is not finite in [0, 1]. market_p_novig is filled only for two-sided game
+    markets; prop market_p uses an assumed one-sided vig, so it is left blank
+    rather than presented as a no-vig probability."""
+    from datetime import datetime, timezone
+    now = now or datetime.now(timezone.utc)
+    now_s = now.astimezone(timezone.utc).isoformat(timespec="seconds")
+    out = []
+    for r in rows:
+        if r.get("status") == "rejected_input":
+            continue
+        p = r.get("model_p")
+        if not _num(p) or not 0 <= p <= 1:
+            raise ValueError(f"invalid model_p for {r.get('game')} {r.get('selection')}: {p!r}")
+        ko = start_utc.get(r["game"])
+        if not ko:
+            raise ValueError(f"missing start_utc for {r['game']}")
+        ko = _utc_iso(ko)
+        if ko <= now_s:
+            raise ValueError(f"kickoff {ko} not after log time {now_s} for {r['game']}")
+        mk = r.get("market_p") if r["kind"] == "game" else None
+        out.append(dict(sport=sport, game=r["game"], start_utc=ko, market=r["market"],
+                        pick=r["selection"], price_american=r["odds"], model_p=p,
+                        market_p_novig=mk if _num(mk) else ""))
+    return out
+
+
+def log_predictions(rows, start_utc, log_run, sport="NFL", now=None):
+    """RUN IT hook: build every prediction row first, then make one log_run call.
+    Any validation error raises before anything is written. Returns rows logged."""
+    preds = prediction_log_rows(rows, start_utc, sport, now)
+    if preds:
+        log_run(preds)
+    return len(preds)
