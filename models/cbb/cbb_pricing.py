@@ -24,6 +24,8 @@ DEFAULT_CONFIG = {
     "blend_weight_model": 0.25,          # EXPERIMENTAL
     "blowout_spread_abs": 15.0,
     "team_total_sd_factor": 1 / math.sqrt(2),
+    "max_quote_age_hours": 24.0,         # alt rungs older than this at freeze are rejected (STALE_QUOTE)
+    "require_event_and_tip": True,       # alt rungs must carry a DK event ID AND a tip time that match
 }
 LADDER_MARKETS = {"ALT_SPREAD": "alt_spread", "ALT_TOTAL": "alt_total",
                   "TT_HOME": "team_total_home", "TT_AWAY": "team_total_away"}
@@ -33,6 +35,8 @@ def make_config(**over):
     cfg = {**DEFAULT_CONFIG, **{k: v for k, v in over.items() if v is not None}}
     if not (cfg["sd_margin"] > 0 and cfg["sd_total"] > 0 and cfg["team_total_sd_factor"] > 0):
         raise ValueError("SD_CONFIG_INVALID")
+    if not cfg["max_quote_age_hours"] > 0:
+        raise ValueError("MAX_QUOTE_AGE_INVALID")
     if not 0.0 <= cfg["blend_weight_model"] <= 1.0:
         raise ValueError("BLEND_WEIGHT_OUT_OF_RANGE")
     return cfg
@@ -82,6 +86,14 @@ def patched_card(cfg):
         PC.project, PC._price_market = orig_project, orig_price
 
 
+def board_tip(row):
+    """Optional board tip time (UTC Z); None if absent, ValueError if present but bad."""
+    raw = next((str(row[k]).strip() for k in ("tip_utc", "start_utc") if row and str(row.get(k) or "").strip()), "")
+    if not raw: return None
+    NM.utc(raw, "tip")
+    return raw
+
+
 MAIN_MARKETS = ("SPREAD", "TOTAL", "ML")
 LINE_BOUNDS = {"alt_spread": (-60, 60), "alt_total": (80, 220),
                "team_total_home": (30, 130), "team_total_away": (30, 130)}
@@ -94,20 +106,20 @@ def _rung(b, kind):
     """(line, price_a, price_b) from a board row, or (None, reason). Both sides required."""
     raw = [b.get(k) for k in ("line", "price_a", "price_b")]
     if any(v is None or str(v).strip() == "" for v in raw):
-        return None, "rung not posted two-sided (missing line or price)"
+        return None, "NOT_POSTED_TWO_SIDED: rung not posted two-sided (missing line or price)"
     try:
         line = float(raw[0]); pa, pb = int(str(raw[1]).strip()), int(str(raw[2]).strip())
         NM.decimal_odds(pa); NM.decimal_odds(pb)
     except (TypeError, ValueError, NM.Pass):
-        return None, "rung price or line not valid American/numeric"
+        return None, "INVALID_PRICE_OR_LINE: rung price or line not valid American/numeric"
     lo, hi = LINE_BOUNDS[kind]
     if not math.isfinite(line) or not lo <= line <= hi or (line * 2) % 1:
-        return None, "rung line outside plausible range or off the half-point grid"
+        return None, "LINE_OUT_OF_RANGE_OR_OFF_GRID: rung line outside plausible range or off the half-point grid"
     if abs(pa) > MAX_ABS_PRICE or abs(pb) > MAX_ABS_PRICE:
-        return None, "implausible price magnitude"
+        return None, "IMPLAUSIBLE_PRICE_MAGNITUDE: implausible price magnitude"
     _, _, over = NM.no_vig(pa, pb)
     if not OVERROUND_RANGE[0] <= over <= OVERROUND_RANGE[1]:
-        return None, f"no-vig sum out of range (overround {over:.3f})"
+        return None, f"NOVIG_SUM_OUT_OF_RANGE: overround {over:.3f}"
     return (line, pa, pb), None
 
 
@@ -122,27 +134,34 @@ def _main_ref(card, gid):
 
 
 def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
-                  totals_order=None, event_id=None, max_age_hours=24):
-    """Price alt spread/total and team-total rungs for PROJECTED games. Returns (rows, skipped).
+                  totals_order=None, event_id=None):
+    """Price alt spread/total and team-total rungs for PROJECTED games. Returns (rows, rejected).
 
-    Every rung must be: captured before the card freeze and not stale; two-sided with valid, plausible
-    prices and a sane no-vig sum; on the half-point grid; matched by name + tip (+ DK event ID bound
-    one-to-one with the main-line rows); totals order verified for the board format (swap honoured);
-    and oriented consistently with the main line (alt spread/total must move the home-cover / over
-    no-vig probability the right way relative to the posted main line; team totals must be monotone
-    within their own ladder). Duplicate (game, kind, line) rows quarantine every copy.
+    Every rejected rung stays in the output as (game, market, "REASON_CODE: text"). A rung is priced
+    only if: both prices are explicitly posted, valid and plausible with a sane no-vig sum; the line is
+    on the half-point grid; name + tip (+ DK event ID, required when cfg.require_event_and_tip) match
+    one CBBD game and the event<->game binding is one-to-one with the main rows; its capture time (row
+    ``captured_utc`` column, else the board capture) is before the freeze and the tip and not older than
+    cfg.max_quote_age_hours; totals order is verified for the board format (swap honoured); it is oriented
+    consistently with the main line (alt spread/total) or monotone within its ladder (team totals); and it
+    is not a duplicate (game, kind, line), which quarantines every copy.
     """
     freeze = NM.utc(card["freeze_utc"], "freeze_utc")
     proj = {r["game_id"]: r["projection"] for r in card["rows"] if r["status"] == "PROJECTED"}
     event_id = event_id or (lambda b: None)
     skipped = []
-    try:
-        cap = NM.utc(captured_utc, "board_captured_utc")
-        if cap > freeze: raise NM.Pass("after freeze")
-        if (freeze - cap).total_seconds() > max_age_hours * 3600: raise NM.Pass("stale")
-        stamp_ok = True
-    except NM.Pass as exc:
-        stamp_ok = False; stamp_why = f"board capture time invalid for freeze ({exc})"
+
+    def stamp_reason(b, g):
+        try:
+            cap = NM.utc(str(b.get("captured_utc") or captured_utc), "captured_utc")
+            tip = NM.utc(g["tipoff_utc"], "tipoff_utc")
+        except NM.Pass:
+            return "CAPTURE_TIME_INVALID: capture time missing or not UTC Z"
+        if cap >= tip: return "CAPTURED_AFTER_TIP: quote not pregame"
+        if cap > freeze: return "CAPTURED_AFTER_FREEZE: quote newer than the card freeze"
+        if (freeze - cap).total_seconds() > cfg["max_quote_age_hours"] * 3600:
+            return f"STALE_QUOTE: older than {cfg['max_quote_age_hours']:g}h at freeze"
+        return None
     # pass 1: match every relevant board row (main + ladder) to build the event <-> game binding
     cand = []
     for b in board_rows:
@@ -165,20 +184,27 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
             continue
         kind = LADDER_MARKETS[b["market"]]; name = f"{b.get('away')} @ {b.get('home')}"
         def skip(reason, name=name, m=b["market"]): skipped.append((name, m, reason))
-        if not stamp_ok: skip(stamp_why); continue
-        if not g: skip(why); continue
+        if not g: skip("NO_UNIQUE_GAME_MATCH: " + why); continue
         e = event_id(b)
+        if cfg["require_event_and_tip"]:
+            if not e: skip("EVENT_ID_REQUIRED: rung has no DK event id"); continue
+            try:
+                if board_tip(b) is None: skip("TIP_REQUIRED: rung has no tip time"); continue
+            except ValueError:
+                skip("TIP_REQUIRED: tip time unparsable"); continue
         if (e and (len(ev_games[e]) > 1 or len(game_evs[g["game_id"]]) > 1)) or (
                 not e and game_evs.get(g["game_id"])):
-            skip("DK event id conflict or missing for this game"); continue
+            skip("EVENT_BINDING_CONFLICT: DK event id conflict or missing for this game"); continue
+        bad_stamp = stamp_reason(b, g)
+        if bad_stamp: skip(bad_stamp); continue
         p = proj.get(g["game_id"])
-        if p is None: skip("game not projected"); continue
+        if p is None: skip("GAME_NOT_PROJECTED: game passed or not projected"); continue
         rung, why2 = _rung(b, kind)
         if rung is None: skip(why2); continue
         line, pa, pb = rung
         if kind in ("alt_total", "team_total_home", "team_total_away"):
             order = totals_order(b) if totals_order else None
-            if order is None: skip("over/under price order not verified for this board format"); continue
+            if order is None: skip("TOTALS_ORDER_UNVERIFIED: over/under price order not verified for this board format"); continue
             if order == "swap": pa, pb = pb, pa
         valid.append((b, g, kind, line, pa, pb, name))
     dup = {}
@@ -188,7 +214,7 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
     for v in valid:
         _, g, kind, line, pa, pb, name = v
         if dup[(g["game_id"], kind, line)] > 1:
-            skipped.append((name, kind, "duplicate rung (all copies quarantined)")); continue
+            skipped.append((name, kind, "DUPLICATE_RUNG: all copies quarantined")); continue
         ladders.setdefault((g["game_id"], kind), []).append(v)
     out = []
     for (gid, kind), rungs in ladders.items():
@@ -196,7 +222,7 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
         rungs.sort(key=lambda v: v[3])
         key = {"alt_spread": "spread", "alt_total": "total"}.get(kind)
         if key and key not in ref:
-            skipped += [(v[6], kind, "no posted main line to orient against") for v in rungs]; continue
+            skipped += [(v[6], kind, "NO_MAIN_LINE: no posted main line to orient against") for v in rungs]; continue
         # points: (line, no-vig prob of side_a); side_a = home cover (spread) or over (totals)
         pts = [(v[3], NM.no_vig(v[4], v[5])[0]) for v in rungs]
         if key:
@@ -213,7 +239,7 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
         for v in rungs:
             line, pa, pb, name = v[3], v[4], v[5], v[6]
             if line in bad:
-                skipped.append((name, kind, "orientation inconsistent with main line / ladder")); continue
+                skipped.append((name, kind, "ORIENTATION_INCONSISTENT: inconsistent with main line / ladder")); continue
             if kind == "alt_spread":
                 a, push, c = NM._line_probs(p["margin"], cfg["sd_margin"], -line); sides = ("home", "away")
             elif kind == "alt_total":

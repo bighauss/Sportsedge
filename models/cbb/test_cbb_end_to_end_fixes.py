@@ -130,7 +130,7 @@ class PricingConfig(unittest.TestCase):
     def test_push_aware_ladder_ev(self):
         for w in PR.CANDIDATE_BLEND_WEIGHTS:
             _, _, extra = go([row("TOTAL", "140.5"), row("ALT_TOTAL", "145", "+130", "-150")],
-                             totals_order_verified=True, config={"blend_weight_model": w})
+                             totals_order_verified=True, config={"blend_weight_model": w, **LOOSE})
             L = extra["ladders"][0]
             self.assertGreater(L["push"], 0)
             self.assertAlmostEqual(sum(L["model_prob"]) + L["push"], 1)
@@ -155,7 +155,7 @@ class Ladders(unittest.TestCase):
         board = [row("SPREAD", "-3.5"), row("ALT_SPREAD", "-6.5", "+150", "-190"),
                  row("ALT_TOTAL", "145.5", "+120", "-150"), row("TT_HOME", "72.5"), row("TT_AWAY", "68.5"),
                  row("TT_AWAY", "", "-110", "-110"), row("ALT_TOTAL", "150.5", "+200", "n/a"), row("TOTAL", "140.5")]
-        card, names, extra = go(board, totals_order_verified=True)
+        card, names, extra = go(board, totals_order_verified=True, config=LOOSE)
         p = next(r for r in card["rows"] if r["game_id"] == "9001")["projection"]
         L = {(x["kind"], x["line"]): x for x in extra["ladders"]}
         self.assertEqual(len(extra["ladders"]), 4); self.assertEqual(len(extra["ladders_skipped"]), 2)
@@ -170,15 +170,18 @@ class Ladders(unittest.TestCase):
 
     def test_alt_blowout_rung_flagged_and_unposted_skipped(self):
         card, _, extra = go([row("SPREAD", "-3.5"), row("ALT_SPREAD", "-20.5", "+300", "-400"), row("TT_HOME", "")],
-                              totals_order_verified=True)
+                              totals_order_verified=True, config=LOOSE)
         self.assertTrue(extra["ladders"][0]["blowout_excluded"]); self.assertEqual(len(extra["ladders_skipped"]), 1)
 
     def test_ladders_never_enter_ledger_card_rows(self):
-        card, _, _ = go([row("TOTAL", "140.5"), row("ALT_TOTAL", "145.5", "+120", "-150")], totals_order_verified=True)
+        card, _, _ = go([row("TOTAL", "140.5"), row("ALT_TOTAL", "145.5", "+120", "-150")], totals_order_verified=True, config=LOOSE)
         self.assertEqual({m["market"] for r in card["rows"] for m in r["markets"]}, {"moneyline", "spread", "total"})
+
+LOOSE = {"require_event_and_tip": False}      # name-only boards; strict event+tip mode is tested separately
 
 def ladders(board, **kw):
     kw.setdefault("totals_order_verified", True)
+    kw["config"] = {**LOOSE, **kw.get("config", {})}
     _, _, extra = go(board, **kw)
     return {(x["kind"], x["line"]) for x in extra["ladders"]}, [w[2] for w in extra["ladders_skipped"]]
 
@@ -196,7 +199,7 @@ class AltQuoteValidation(unittest.TestCase):
                                    row("ALT_SPREAD", "-8.5", "+9000", "-9500"),    # absurd magnitude
                                    row("ALT_SPREAD", "-5.5", "+120", "-150")])     # fine
         self.assertEqual(got, {("alt_spread", -5.5)}); self.assertEqual(len(why), 3)
-        self.assertTrue(any("no-vig" in w for w in why)); self.assertTrue(any("magnitude" in w for w in why))
+        self.assertTrue(any("NOVIG_SUM_OUT_OF_RANGE" in w for w in why)); self.assertTrue(any("IMPLAUSIBLE_PRICE_MAGNITUDE" in w for w in why))
 
     def test_line_grid_and_bounds(self):
         got, why = ladders(MAIN + [row("ALT_SPREAD", "-6.3", "+150", "-190"), row("ALT_TOTAL", "10.5", "+120", "-150")])
@@ -209,16 +212,16 @@ class AltQuoteValidation(unittest.TestCase):
     def test_orientation_must_agree_with_main_line(self):
         # home laying MORE points (-8.5) but priced SHORTER than the -3.5 main line: reversed order
         got, why = ladders(MAIN + [row("ALT_SPREAD", "-8.5", "-250", "+200")])
-        self.assertEqual(got, set()); self.assertIn("orientation inconsistent with main line / ladder", why)
+        self.assertEqual(got, set()); self.assertTrue(any("ORIENTATION_INCONSISTENT" in w for w in why))
         got, _ = ladders(MAIN + [row("ALT_SPREAD", "-8.5", "+200", "-250")]); self.assertEqual(got, {("alt_spread", -8.5)})
         # over at a HIGHER total priced shorter than the main over: reversed
         got, why = ladders(MAIN + [row("ALT_TOTAL", "150.5", "-250", "+200")])
-        self.assertEqual(got, set()); self.assertIn("orientation inconsistent with main line / ladder", why)
+        self.assertEqual(got, set()); self.assertTrue(any("ORIENTATION_INCONSISTENT" in w for w in why))
         got, _ = ladders(MAIN + [row("ALT_TOTAL", "150.5", "+200", "-250")]); self.assertEqual(got, {("alt_total", 150.5)})
 
     def test_alt_without_main_line_not_priced(self):
         got, why = ladders([row("ALT_SPREAD", "-6.5", "+150", "-190")])
-        self.assertEqual(got, set()); self.assertIn("no posted main line to orient against", why)
+        self.assertEqual(got, set()); self.assertTrue(any("NO_MAIN_LINE" in w for w in why))
 
     def test_team_total_ladder_must_be_monotone(self):
         got, _ = ladders([row("TT_HOME", "70.5", "-150", "+120"), row("TT_HOME", "75.5", "+150", "-190")])
@@ -241,7 +244,7 @@ class AltQuoteValidation(unittest.TestCase):
         main = [row("SPREAD", "-3.5", dk_event_id="E1"), row("TOTAL", "140.5", dk_event_id="E1")]
         got, _ = ladders(main + [row("ALT_SPREAD", "-6.5", "+150", "-190", dk_event_id="E1")]); self.assertEqual(len(got), 1)
         got, why = ladders(main + [row("ALT_SPREAD", "-6.5", "+150", "-190", dk_event_id="E2")])
-        self.assertEqual(got, set()); self.assertIn("DK event id conflict or missing for this game", why)
+        self.assertEqual(got, set()); self.assertTrue(any("EVENT_BINDING_CONFLICT" in w for w in why))
         got, why = ladders(main + [row("ALT_SPREAD", "-6.5", "+150", "-190")])       # event id missing on the rung
         self.assertEqual(got, set())
 
@@ -249,8 +252,78 @@ class AltQuoteValidation(unittest.TestCase):
         got, why = ladders(MAIN + [row("ALT_SPREAD", "-6.5", "+150", "-190", tip_utc="2026-11-21T20:00:00Z")])
         self.assertEqual(got, set()); self.assertTrue(any("15 min" in w for w in why))
         for stamp in ("2026-11-21T15:30:00Z", "2026-11-19T15:00:00Z"):                  # after freeze / >24h old
-            _, _, extra = go(MAIN + [row("ALT_SPREAD", "-6.5", "+150", "-190")], board_captured_utc=stamp)
+            _, _, extra = go(MAIN + [row("ALT_SPREAD", "-6.5", "+150", "-190")], board_captured_utc=stamp, config=LOOSE)
             self.assertEqual(extra["ladders"], []); self.assertTrue(extra["ladders_skipped"])
+
+STRICT_BOARD = lambda **kw: [row("SPREAD", "-3.5", dk_event_id="E1", tip_utc=S.TIP),
+                             row("TOTAL", "140.5", dk_event_id="E1", tip_utc=S.TIP),
+                             row("ALT_SPREAD", "-6", "+150", "-190", dk_event_id="E1", tip_utc=S.TIP, **kw)]
+
+def reasons(extra):
+    return [w[2] for w in extra["ladders_skipped"]]
+
+class ChecklistRequirements(unittest.TestCase):
+    def test_event_id_teams_and_tip_all_required_and_matched(self):
+        _, _, extra = go(STRICT_BOARD())                       # default config is strict
+        self.assertEqual([(x["kind"], x["line"]) for x in extra["ladders"]], [("alt_spread", -6.0)])
+        def one(**kw):
+            b = [row("SPREAD", "-3.5", dk_event_id="E1", tip_utc=S.TIP), row("TOTAL", "140.5", dk_event_id="E1", tip_utc=S.TIP)]
+            base = dict(dk_event_id="E1", tip_utc=S.TIP); base.update(kw)
+            b.append(row("ALT_SPREAD", "-6", "+150", "-190", **{k: v for k, v in base.items() if v is not None}))
+            return go(b)[2]
+        e = one(dk_event_id=None); self.assertEqual(e["ladders"], []); self.assertTrue(reasons(e)[0].startswith("EVENT_ID_REQUIRED"))
+        e = one(tip_utc=None); self.assertEqual(e["ladders"], []); self.assertTrue(reasons(e)[0].startswith("TIP_REQUIRED"))
+        e = one(tip_utc="2026-11-21T20:00:00Z"); self.assertTrue(reasons(e)[0].startswith("NO_UNIQUE_GAME_MATCH"))
+        e = one(dk_event_id="E9"); self.assertEqual(e["ladders"], []); self.assertTrue(reasons(e)[0].startswith("EVENT_BINDING_CONFLICT"))
+        b = STRICT_BOARD(); b[2] = row("ALT_SPREAD", "-6", "+150", "-190", home="Synthetic 2", away="Synthetic 1", dk_event_id="E1", tip_utc=S.TIP)
+        e = go(b)[2]; self.assertEqual(e["ladders"], []); self.assertTrue(reasons(e)[0].startswith("NO_UNIQUE_GAME_MATCH"))   # teams swapped
+
+    def test_capture_must_be_fresh_and_pregame(self):
+        def one(cap, **cfg):
+            b = STRICT_BOARD(captured_utc=cap) if cap else STRICT_BOARD()
+            return go(b, config=cfg or None)[2]
+        self.assertEqual(len(one("2026-11-21T14:00:00Z")["ladders"]), 1)
+        e = one("2026-11-21T23:30:00Z"); self.assertTrue(reasons(e)[0].startswith("CAPTURED_AFTER_TIP"))
+        e = one("2026-11-21T15:30:00Z"); self.assertTrue(reasons(e)[0].startswith("CAPTURED_AFTER_FREEZE"))
+        e = one("2026-11-20T10:00:00Z"); self.assertTrue(reasons(e)[0].startswith("STALE_QUOTE"))          # 29h old, max 24
+        self.assertEqual(len(one("2026-11-20T10:00:00Z", max_quote_age_hours=48)["ladders"]), 1)           # configurable
+        e = one("not-a-time"); self.assertTrue(reasons(e)[0].startswith("CAPTURE_TIME_INVALID"))
+        with self.assertRaises(ValueError): PR.make_config(max_quote_age_hours=0)
+
+    def test_duplicates_and_conflicts_quarantined_with_codes(self):
+        b = STRICT_BOARD() + [row("ALT_SPREAD", "-6", "+140", "-180", dk_event_id="E1", tip_utc=S.TIP)]
+        e = go(b)[2]; self.assertEqual(e["ladders"], [])
+        self.assertEqual(len(reasons(e)), 2); self.assertTrue(all(r.startswith("DUPLICATE_RUNG") for r in reasons(e)))
+
+    def test_every_rejection_is_kept_with_a_reason_code(self):
+        import re
+        b = STRICT_BOARD() + [row("ALT_SPREAD", "-7", "+150", "", dk_event_id="E1", tip_utc=S.TIP),
+                              row("ALT_TOTAL", "145.5", "+120", "-150", dk_event_id="E1", tip_utc=S.TIP),   # totals unverified
+                              row("TT_HOME", "72.5", "-110", "-110", dk_event_id="E1")]                      # no tip
+        card, names, extra = go(b)
+        codes = [r.split(":")[0] for r in reasons(extra)]
+        self.assertEqual(len(codes), 3); self.assertTrue(all(re.fullmatch(r"[A-Z_]+", c) for c in codes))
+        self.assertEqual(set(codes), {"NOT_POSTED_TWO_SIDED", "TOTALS_ORDER_UNVERIFIED", "TIP_REQUIRED"})
+        md = R.render(card, names, extra)
+        for c in codes: self.assertIn(f"ladder row skipped ({c}:", md)
+
+    def test_push_aware_ev_all_nine_weights_on_integer_ladders(self):
+        board = [row("SPREAD", "-3.5", dk_event_id="E1", tip_utc=S.TIP), row("TOTAL", "140.5", dk_event_id="E1", tip_utc=S.TIP),
+                 row("ALT_SPREAD", "-6", "+150", "-190", dk_event_id="E1", tip_utc=S.TIP),
+                 row("ALT_TOTAL", "145", "+130", "-150", dk_event_id="E1", tip_utc=S.TIP),
+                 row("TT_HOME", "72", "-110", "-110", dk_event_id="E1", tip_utc=S.TIP)]
+        for w in PR.CANDIDATE_BLEND_WEIGHTS:
+            _, _, extra = go(board, totals_order_verified=True, config={"blend_weight_model": w})
+            self.assertEqual(len(extra["ladders"]), 3)
+            for L in extra["ladders"]:
+                with self.subTest(weight=w, kind=L["kind"]):
+                    self.assertGreater(L["push"], 0)
+                    for i in (0, 1):
+                        want = w * L["model_prob"][i] + (1 - w) * (1 - L["push"]) * L["market_novig"][i]
+                        self.assertAlmostEqual(L["blend_ev"][i], NM.ev_per_unit(want, L["push"], L["price"][i]))
+                        if w == 1.0: self.assertAlmostEqual(L["blend_ev"][i], L["paper_ev"][i])
+                        if w == 0.0:
+                            self.assertAlmostEqual(L["blend_ev"][i], NM.ev_per_unit((1 - L["push"]) * L["market_novig"][i], L["push"], L["price"][i]))
 
 class Receipt(unittest.TestCase):
     def _args(self, d, fx, board, extra=()):
@@ -272,6 +345,7 @@ class Receipt(unittest.TestCase):
             rec = json.loads((Path(d) / "out" / "run_receipt.json").read_text())
             self.assertEqual((rec["run_id"], rec["ok"], rec["errors"], rec["ledger_rows"]), ("12345", True, [], 1))
             self.assertEqual(rec["rows_pulled"]["board_rows"], len(T.BOARD)); self.assertEqual(rec["games_projected"], 2)
+            self.assertIn("ladders_rejected_by_code", rec)
             self.assertEqual(rec["date_ct"], "2026-11-21"); self.assertEqual(rec["label"], "PAPER_0U")
             # second run refuses re-freeze -> BLOCKED receipt with error
             (Path(d) / "out" / "run_receipt.json").unlink()

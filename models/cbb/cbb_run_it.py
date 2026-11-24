@@ -16,6 +16,7 @@ New here (adapters only, no model code):
     explicit aliases; unmatched rows are listed, never guessed). price_a = home / over.
 """
 from __future__ import annotations
+from collections import Counter
 import argparse, csv, hashlib, io, json, os, re, sys, unicodedata, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -417,6 +418,8 @@ def _write_receipt(out_dir, run_id, now, card, extra, errors, ledger_path):
            "priced_markets": None if card is None else card["priced_market_rows"],
            "ladder_rows_priced": None if extra is None else len(extra["ladders"]),
            "ledger_rows": n_ledger, "errors": errors,
+           "ladders_rejected_by_code": None if extra is None else dict(sorted(
+               Counter(w.split(":")[0] for _, _, w in extra["ladders_skipped"]).items())),
            "unmatched": None if extra is None else {"quotes": len(extra["quotes_unmatched"]),
                                                     "registry": len(extra["registry_unmatched"]),
                                                     "ladders": len(extra["ladders_skipped"])}}
