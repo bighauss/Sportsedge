@@ -162,6 +162,35 @@ class MultiSportFrameworkTests(unittest.TestCase):
         self.assertEqual(report["sample_census"]["paired_metric_events"], 0)
         self.assertEqual(report["sample_census"]["events_without_paired_rows"], ["NFL:CIN@WAS"])
 
+    def test_superseded_equal_time_conflicts_rejected_in_every_order(self):
+        from itertools import permutations
+        row = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5, price=-110,
+                    model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        runs = [_make_run(rid, "NFL", "CIN@WAS", cap, "2026-11-24T01:00:00Z", row, finals)
+                for rid, cap in (("a", "2026-11-23T18:00:00Z"), ("b", "2026-11-23T18:00:00Z"),
+                                 ("c", "2026-11-23T20:00:00Z"))]
+        for order in permutations(runs):
+            with self.subTest(order=[r["manifest"]["run_id"] for r in order]):
+                with self.assertRaisesRegex(IntegrityError, "ambiguous equal-time"):
+                    evaluate_multisport(order, "baseline")
+
+    def test_all_quote_roi_counts_missing_probability_losses(self):
+        rows = [dict(quote_id="win", market="spread", pick="WAS", player=None, line=-3.5, price=-110,
+                     model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0),
+                dict(quote_id="loss", market="spread", pick="CIN", player=None, line=3.5, price=-110,
+                     model_p=None, market_p=0.5, blend_p=0.4, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        run = _make_run("r_missing_loss", "NFL", "CIN@WAS", "2026-11-23T20:00:00Z",
+                        "2026-11-24T01:00:00Z", rows, finals)
+        report = evaluate_multisport([run], "baseline")
+        for candidate in report["candidates"].values():
+            overall = candidate["overall"]
+            self.assertEqual(overall["n"], 1)
+            self.assertEqual(overall["n_settled_quotes"], 2)
+            self.assertAlmostEqual(overall["roi_all_quotes_1u"], (100.0 / 110.0 - 1.0) / 2)
+        self.assertEqual(report["exclusion_audit"]["missing_probability_rows"], 1)
+
     def test_invalid_american_price_fails_closed(self):
         rows = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5, price=0,
                      model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
