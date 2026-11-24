@@ -1,0 +1,35 @@
+{
+ "date_ct": "2026-11-24",
+ "errors": [],
+ "games_projected": 73,
+ "generated_utc": "2026-11-24T17:09:36Z",
+ "label": "PAPER_0U",
+ "ladder_rows_priced": 4400,
+ "ladders_rejected_by_code": {
+  "NO_UNIQUE_GAME_MATCH": 1665
+ },
+ "ledger_reconciliation": {
+  "already_frozen": 82,
+  "appended": 0,
+  "approved_stake_u": 0,
+  "newly_frozen": 0,
+  "official_counted": 0,
+  "rows": 0,
+  "source_card_sha256": "a6fa34ab81417ec1febea660f4515e030319843057a14257ac61316f2bf37948",
+  "state": "DIAGNOSTIC_ONLY_EXISTING_GAMES"
+ },
+ "ledger_rows": 44,
+ "ok": true,
+ "priced_markets": 168,
+ "rows_pulled": {
+  "board_rows": 6295,
+  "prior_finals_used": 1262,
+  "slate_games": 82
+ },
+ "run_id": "45445318093",
+ "unmatched": {
+  "ladders": 1665,
+  "quotes": 62,
+  "registry": 2
+ }
+}
