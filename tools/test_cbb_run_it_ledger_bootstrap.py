@@ -43,7 +43,11 @@ if os.getenv('FAKE_GH_ERROR') == '1':
 if '/actions/artifacts?name=cbb-run-it-ledger' in url:
     print(os.getenv('FAKE_GH_ARTIFACT', 'NONE'))
 elif '/actions/workflows/cbb-run-it.yml/runs?' in url:
-    print(os.getenv('FAKE_GH_PRIOR_SUCCESS', '0'))
+    # Simulate GitHub filtering: fixture-only PR successes must not count.
+    if 'event=workflow_dispatch' not in url or 'branch=main' not in url:
+        print('99')
+    else:
+        print(os.getenv('FAKE_GH_PRIOR_SUCCESS', '0'))
 elif '/actions/artifacts/123/zip' in url:
     sys.stdout.buffer.write(pathlib.Path(os.environ['FAKE_GH_ZIP']).read_bytes())
 else:
@@ -89,7 +93,7 @@ class Continuity(unittest.TestCase):
         self.assertEqual(code, 0, msg)
         self.assertIn('initialize PAPER chain', msg)
         self.assertIsNone(raw)
-        self.assertIn('/actions/workflows/cbb-run-it.yml/runs?', calls)
+        self.assertIn('/actions/workflows/cbb-run-it.yml/runs?event=workflow_dispatch&branch=main&status=success', calls)
 
     def test_missing_artifact_after_prior_success_refused(self):
         code, msg, calls, raw = self.run_restore(prior='1')
