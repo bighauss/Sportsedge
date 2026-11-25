@@ -42,7 +42,12 @@ jobs:
             curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_${season}.parquet" -o "$RUNNER_TEMP/cbb-player-data/mbb_schedule_${season}.parquet"
             curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_player_boxscores/player_box_${season}.csv" -o "$RUNNER_TEMP/cbb-player-data/player_box_${season}.csv"
           done
-      - run: python research/cbb_public_player_backtest.py --root "$RUNNER_TEMP/cbb-player-data" --output "$RUNNER_TEMP/cbb-player-report/player_benchmark.json"
+      - name: Evaluate each season and include probability distributions
+        run: |
+          set -euo pipefail
+          for season in 2023 2024 2025; do
+            python research/cbb_public_player_backtest.py --root "$RUNNER_TEMP/cbb-player-data" --output "$RUNNER_TEMP/cbb-player-report/player_benchmark_${season}.json" --seasons "$season" --prop-distributions
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: cbb-public-player-benchmark
