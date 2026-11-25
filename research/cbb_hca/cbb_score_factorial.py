@@ -4,6 +4,7 @@ import json
 import math
 import os
 from datetime import datetime, timezone
+from .evidence_io import atomic_publish
 
 VARIANTS = ("additive_product", "additive_arithmetic", "multiplicative_product", "multiplicative_arithmetic")
 
@@ -58,10 +59,9 @@ def freeze(ctx, game, path, *, clock=None):
                context_sha256=hashlib.sha256(json.dumps(ctx,sort_keys=True,allow_nan=False).encode()).hexdigest(),
                source_authenticity="CALLER_MUST_VERIFY", official_counted=0, approved_stake_u=0)
     raw=(json.dumps(out,sort_keys=True,allow_nan=False)+"\n").encode()
-    # Recheck after calculation; never claim a record created after tip was pre-tip.
-    if (clock or (lambda: datetime.now(timezone.utc)))() >= tip:
-        raise native.Pass("TIP_PASSED_DURING_BUILD")
-    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-    with os.fdopen(fd,"wb") as f:
-        f.write(raw);f.flush();os.fsync(f.fileno())
+    def before_publish():
+        current=(clock or (lambda: datetime.now(timezone.utc)))()
+        if current.tzinfo is None or not start <= current < tip:
+            raise native.Pass("TIP_PASSED_DURING_BUILD_OR_CLOCK_REGRESSED")
+    atomic_publish(path,raw,before_publish=before_publish)
     return out
