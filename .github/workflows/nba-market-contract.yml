@@ -1,0 +1,28 @@
+name: NBA market-contract ingestion guard
+on:
+  pull_request:
+    paths:
+      - 'models/nba/market_contract.py'
+      - 'models/nba/run_it.py'
+      - 'models/nba/test_market_contract.py'
+      - 'models/nba/sportsedge_nba_model.py'
+      - '.github/workflows/nba-market-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  market-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Frozen model blob must be unchanged
+        run: python -c "import hashlib,pathlib; p=pathlib.Path('models/nba/sportsedge_nba_model.py'); b=p.read_bytes(); h=hashlib.sha1(b'blob %d\0'%len(b)+b).hexdigest(); assert h=='b353de86445188288cab4050f6cae13eee76bff6', h"
+      - name: Market-contract guard tests
+        working-directory: models/nba
+        run: python -m unittest -v test_market_contract
