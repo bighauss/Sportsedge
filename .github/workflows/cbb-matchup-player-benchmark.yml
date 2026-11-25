@@ -1,0 +1,57 @@
+name: CBB matchup historical player benchmark
+on:
+  push:
+    branches: [research/cbb-all-market-contract-safety-20261125]
+    paths:
+      - research/cbb_player_matchup_date_benchmark.py
+      - research/test_cbb_player_matchup_date_benchmark.py
+      - .github/workflows/cbb-matchup-player-benchmark.yml
+  pull_request:
+    paths:
+      - research/cbb_player_matchup_date_benchmark.py
+      - research/test_cbb_player_matchup_date_benchmark.py
+      - .github/workflows/cbb-matchup-player-benchmark.yml
+permissions:
+  contents: read
+jobs:
+  retrospective:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: PYTHONPATH=research python -m unittest discover -s research -p test_cbb_player_matchup_date_benchmark.py
+      - uses: actions/checkout@v4
+        with:
+          ref: b2b1e5e31de4a3fe10814a739be92fdb744c8bc0
+          path: source-player
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 0518a7d3a2e9b366bc66be8b91544307b17b5f7c
+          path: source-pace
+          persist-credentials: false
+      - run: python -m pip install pyarrow==19.0.1
+      - name: Acquire public player boxes and schedules
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/cbb-matchup-data"
+          for season in 2023 2024 2025; do
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_${season}.parquet" -o "$RUNNER_TEMP/cbb-matchup-data/mbb_schedule_${season}.parquet"
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_player_boxscores/player_box_${season}.csv" -o "$RUNNER_TEMP/cbb-matchup-data/player_box_${season}.csv"
+          done
+      - name: Run chronological common-row evaluation
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/source-player:$GITHUB_WORKSPACE/source-player/models/cbb"
+          python research/cbb_player_matchup_date_benchmark.py --root "$RUNNER_TEMP/cbb-matchup-data" --pace-root source-pace/research/cbb_backtest/data --out "$RUNNER_TEMP/cbb-matchup-results.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cbb-matchup-player-benchmark
+          path: ${{ runner.temp }}/cbb-matchup-results.json
+          retention-days: 14
+          if-no-files-found: error
