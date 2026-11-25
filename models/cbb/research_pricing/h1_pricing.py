@@ -116,18 +116,39 @@ def fair_decimal(p_win: float, p_push: float) -> Optional[float]:
     p_cond = p_win / (p_win + (1.0 - p_win - p_push))
     return 1.0 / _clip(p_cond)
 
-def nine_blends(p_model: float, p_push: float, p_market: Optional[float], american: float) -> List[Dict[str, float]]:
-    """Blended EV uses the same push probability as the independent model."""
+def nine_blends(
+    p_model: float,
+    p_push: float,
+    p_market: Optional[float],
+    american: float,
+    market_is_conditional: bool = True,
+) -> List[Dict[str, float]]:
+    """
+    Blend model and market on a common unconditional basis.
+
+    p_market is assumed to be a de-vigged conditional probability (P(win | decisive))
+    unless market_is_conditional=False. It is converted to unconditional win
+    probability by multiplying by (1 - p_push) before blending.
+
+    Every blend is required to normalize: p_win + p_loss + p_push == 1.
+    Invalid distributions raise Hold instead of being silently clipped.
+    """
     out = []
     for w in BLEND_WEIGHTS:
         if p_market is None:
             bp = p_model if abs(w - 1.0) < 1e-9 else None
         else:
-            bp = w * p_model + (1.0 - w) * p_market
+            if market_is_conditional:
+                p_market_uncond = p_market * (1.0 - p_push)
+            else:
+                p_market_uncond = p_market
+            bp = w * p_model + (1.0 - w) * p_market_uncond
         blended_ev = None
         if bp is not None:
-            # Preserve independent push mass; remaining probability is loss
-            p_loss = max(0.0, 1.0 - bp - p_push)
+            p_loss = 1.0 - bp - p_push
+            if p_loss < -1e-9 or bp < -1e-9 or p_push < -1e-9:
+                raise Hold("BLEND_PROBABILITY_NOT_NORMALIZED")
+            p_loss = max(0.0, p_loss)
             blended_ev = ev(bp, p_loss, american)
         out.append({
             "model_weight": w,

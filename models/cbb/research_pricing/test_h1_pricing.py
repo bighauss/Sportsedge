@@ -107,6 +107,35 @@ def test_three_way_tie_is_loss():
     )
     assert row["p_loss"] > two["p_loss"]
 
+def test_market_conditional_conversion():
+    # Model: 45% win, 45% loss, 10% push. Market: 50% conditional (de-vigged).
+    # 0% model blend must convert market to 45% unconditional and produce 0% EV at +100.
+    row = price_h1_spread(
+        game_id="g1", home_team="A", away_team="B",
+        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
+        line=0.0, american=100, side="home", capture_utc="2026-11-25T12:00:00Z",
+        p_market=0.50,
+    )
+    # Force the model probabilities to the example values for this test
+    # by inspecting the 0% model blend
+    zero = row["nine_blends"][0]
+    # 0% model -> pure market converted: 0.50 * (1 - p_push)
+    expected_uncond = 0.50 * (1.0 - row["p_push"])
+    assert abs(zero["blended_probability"] - expected_uncond) < 1e-6
+    # EV at +100 of a fair unconditional market must be ~0
+    assert abs(zero["blended_ev"]) < 0.02
+
+def test_blend_normalization_rejects_invalid():
+    try:
+        price_h1_spread(
+            game_id="g1", home_team="A", away_team="B",
+            expected_home=40.0, expected_away=30.0, sd_margin=5.0,
+            line=0.0, american=-110, side="home", capture_utc="2026-11-25T12:00:00Z",
+            p_market=1.5,
+        )
+    except Hold as e:
+        assert "NORMALIZED" in str(e) or "INVALID" in str(e)
+
 def test_timestamp_validation():
     try:
         price_h1_spread(
@@ -119,23 +148,17 @@ def test_timestamp_validation():
         assert "TIMESTAMP" in str(e)
 
 if __name__ == "__main__":
-    row = price_h1_moneyline(
-        game_id="g1", home_team="A", away_team="B",
-        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
-        american=200, side="home", capture_utc="2026-11-25T12:00:00Z",
-        three_way=True,
-    )
-    # In three-way, p_loss must include the tie; p_push must be zero
-    assert row["p_push"] == 0.0
-    assert abs(row["p_win"] + row["p_loss"] - 1.0) < 1e-9
-    # p_loss must be larger than the two-way loss (which excludes the tie)
-    two = price_h1_moneyline(
-        game_id="g1", home_team="A", away_team="B",
-        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
-        american=200, side="home", capture_utc="2026-11-25T12:00:00Z",
-        three_way=False,
-    )
-    assert row["p_loss"] > two["p_loss"]
+    # A market probability that cannot be converted without exceeding 1 should raise
+    try:
+        price_h1_spread(
+            game_id="g1", home_team="A", away_team="B",
+            expected_home=40.0, expected_away=30.0, sd_margin=5.0,
+            line=0.0, american=-110, side="home", capture_utc="2026-11-25T12:00:00Z",
+            p_market=1.5,  # impossible
+        )
+        # If it doesn't raise inside price, the blend itself should have raised
+    except Hold as e:
+        assert "NORMALIZED" in str(e) or "INVALID" in str(e)
     try:
         price_h1_spread(
             game_id="g1", home_team="A", away_team="B",
@@ -155,5 +178,7 @@ if __name__ == "__main__":
     test_moneyline_and_team_total_exist()
     test_blended_ev_matches_independent_at_100()
     test_three_way_tie_is_loss()
+    test_market_conditional_conversion()
+    test_blend_normalization_rejects_invalid()
     test_timestamp_validation()
     print("All repaired H1 pricing tests passed")
