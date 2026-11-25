@@ -6,6 +6,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from adapters import SPORTS, dead_heat_win_fraction, grade_row
 from comparison import IntegrityError, evaluate_multisport
+from ledger.multisport.cbb_star_audit import audit_stars
+from ledger.multisport.comparison import IntegrityError as StarIntegrityError
 
 
 def _make_run(run_id, sport, event_id, capture_utc, start_utc, rows, finals,
@@ -228,6 +230,28 @@ class MultiSportFrameworkTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             evaluate_multisport([run], "baseline")
 
+
+class CBBStarTests(unittest.TestCase):
+    def make(self):
+        rows=[
+            dict(quote_id="q1",market="spread",pick="UNC",player=None,line=-2.5,price=-110,model_p=.7,market_p=.5,blend_p=.6,on_card=True,stars=5),
+            dict(quote_id="q2",market="total",pick="over",player=None,line=145.0,price=-110,model_p=.6,market_p=.5,blend_p=.55,on_card=True,stars=5),
+            dict(quote_id="q3",market="total",pick="under",player=None,line=150.5,price=-110,model_p=.6,market_p=.5,blend_p=.55,on_card=True),
+            dict(quote_id="q4",market="total",pick="over",player=None,line=140.5,price=-110,model_p=.6,market_p=.5,blend_p=.55,on_card=False,stars=5)]
+        return _make_run("cbb","CBB","DUKE@UNC","2026-11-23T20:00:00Z","2026-11-24T00:00:00Z",rows,dict(away="DUKE",home="UNC",away_score=70,home_score=75))
+    def test_original_labels_and_push(self):
+        report=audit_stars([self.make()],"baseline")
+        five=report["stars"]["5"]
+        self.assertEqual((five["wins"],five["losses"],five["pushes"]),(1,0,1))
+        self.assertEqual(five["paired_n"],1)
+        self.assertAlmostEqual(five["paper_roi_per_1u_risked"],100/110/2)
+        self.assertEqual(report["holds"]["ORIGINAL_STAR_LABEL_MISSING_OR_INVALID"],1)
+        self.assertEqual(report["holds"]["NOT_EXPLICITLY_ON_CARD"],1)
+    def test_duplicate_event_and_late_run(self):
+        run=self.make()
+        with self.assertRaises(StarIntegrityError):audit_stars([run,run],"baseline")
+        run["manifest"]["capture_utc"]=run["manifest"]["start_utc"]
+        with self.assertRaises(StarIntegrityError):audit_stars([run],"baseline")
 
 if __name__ == "__main__":
     unittest.main()
