@@ -507,7 +507,7 @@ def ev_report_rows(card, extra):
     rows = []
     def append(gid, market, line, side, price, pm, push, mk, ev, captured, book, excluded):
         grid = [ev_per_unit(PR.blend(pm, mk, w, push=push), push, price)
-                for w in PR.OWNER_BLEND_WEIGHTS]
+                for w in PR.CANDIDATE_BLEND_WEIGHTS]
         if not math.isclose(grid[-1], ev, rel_tol=1e-10, abs_tol=1e-12):
             raise ValueError("REPORT_INDEPENDENT_EV_PARITY_FAILED")
         rows.append(dict(game_id=gid, market=market, line=line, side=side, price=price,
@@ -564,8 +564,8 @@ def render_ev_report(card, names, extra):
         o.append("No positive independent EV among priced sides. Unpriced markets are not evaluated.")
     o += ["", "### All priced sides — nine same-book model/market weights", "",
           "| Game | Tip CT | Market | Side | Line | Book | Price | Captured UTC | Independent EV | "
-          + " | ".join(f"{round(100*w)}/{round(100*(1-w))}" for w in PR.OWNER_BLEND_WEIGHTS) + " | Validation |",
-          "|---|---|---|---|---:|---|---:|---|---:|" + "---:|"*len(PR.OWNER_BLEND_WEIGHTS) + "---|"]
+          + " | ".join(f"{round(100*w)}/{round(100*(1-w))}" for w in PR.CANDIDATE_BLEND_WEIGHTS) + " | Validation |",
+          "|---|---|---|---|---:|---|---:|---|---:|" + "---:|"*len(PR.CANDIDATE_BLEND_WEIGHTS) + "---|"]
     for r in rows:
         g,t=name(r)
         o.append(f"| {g} | {t} | {r['market']} | {r['side']} | {line(r)} | {r['book']} | {r['price']:+d} | "
@@ -595,7 +595,7 @@ def render(card, names, extra):
     cfg = extra.get("config") or PR.DEFAULT_CONFIG
     o += [f"Config: SD margin {cfg['sd_margin']} / total {cfg['sd_total']} (constants, not fitted) · model-vs-market blend "
           f"weight on model {cfg['blend_weight_model']} (EXPERIMENTAL, chronological test pending; candidates "
-          f"{[int(w*100) for w in PR.OWNER_BLEND_WEIGHTS]}%) · spreads with |line| > {cfg['blowout_spread_abs']:g} excluded from best plays", ""]
+          f"{[int(w*100) for w in PR.CANDIDATE_BLEND_WEIGHTS]}%) · spreads with |line| > {cfg['blowout_spread_abs']:g} excluded from best plays", ""]
     sides = [(_best(m)[0]) for r in card["rows"] for m in r["markets"] if m["status"] == "PRICED_PAPER"]
     if sides:
         from collections import Counter as _C
