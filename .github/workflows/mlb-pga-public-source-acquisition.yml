@@ -3,6 +3,8 @@ on:
   push:
     branches: [research/mlb-pga-public-source-acquisition-20261124]
     paths: ['.github/workflows/mlb-pga-public-source-acquisition.yml']
+  pull_request:
+    paths: ['.github/workflows/mlb-pga-public-source-acquisition.yml']
   workflow_dispatch:
 permissions:
   contents: read
