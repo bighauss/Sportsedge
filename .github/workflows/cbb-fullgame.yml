@@ -32,9 +32,8 @@ jobs:
       - name: Compile challenger modules
         run: python -m compileall -q models/cbb/fullgame models/cbb/cbb_pricing.py
       - name: Run full-game unit tests (stdlib, no network, committed fixtures)
-        env:
-          http_proxy: http://127.0.0.1:1
-          https_proxy: http://127.0.0.1:1
-          HTTP_PROXY: http://127.0.0.1:1
-          HTTPS_PROXY: http://127.0.0.1:1
-        run: cd models/cbb && python -m unittest -v fullgame.test_fullgame
+        # Both casings are set in the shell; workflow `env:` treats them as duplicates.
+        run: |
+          export http_proxy=http://127.0.0.1:1 https_proxy=http://127.0.0.1:1
+          export HTTP_PROXY=http://127.0.0.1:1 HTTPS_PROXY=http://127.0.0.1:1
+          cd models/cbb && python -m unittest -v fullgame.test_fullgame
