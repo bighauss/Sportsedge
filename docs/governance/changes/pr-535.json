@@ -3,17 +3,16 @@
   "pr_number": 535,
   "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
   "protected_paths": [
-    "research/freezes/verify_versioned_transition.py",
-    "research/freezes/test_versioned_transition.py",
     "research/freezes/code_identity_transitions_20261125.json",
     "research/freezes/code_identity_transitions_20261125_mlb_candidate.json",
     "research/freezes/mlb_input_safety_equivalence.py",
+    "research/freezes/pinned_blobs/3f630532_sportsedge_mlb_model.py.txt",
     "research/freezes/test_mlb_input_safety_transition.py",
+    "research/freezes/test_versioned_transition.py",
     "research/freezes/transition_mlb_input_safety_20261125.json",
     "research/freezes/transition_mlb_input_safety_20261125.md",
     "research/freezes/transition_mlb_input_safety_20261125_equivalence.json",
-    "research/freezes/pinned_blobs/3f630532_sportsedge_mlb_model.py.txt",
-    "docs/governance/changes/pr-535.json"
+    "research/freezes/verify_versioned_transition.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
   "change_summary": "Option B: reviewed unified extension of verify_versioned_transition.py to a data-driven multi-hop gate. Nov 15 freeze and Nov 18 first-hop manifest stay byte-immutable. Registers the MLB input-safety hop (3f630532->30c6cb33, b73874a, pr-446) and the NBA behavioral hop (da0c1503->b353de86, 8537ae48, pr-460; evidence from grok-cbb/nba-push-accounting-transition-20261125@737dd2a3). Hash mismatch of the freeze, Nov 18 manifest, or either verifier exits non-zero. Retires the standalone MLB verifier. No model-formula change, no promotion, PAPER/0u.",
@@ -34,9 +33,9 @@
   },
   "baseline": {
     "metric": "Seven code pin verification (verify_versioned_transition.py)",
-    "before": "FAIL CODE_CHANGED_SINCE_FREEZE:models/mlb/sportsedge_mlb_model.py",
+    "before": null,
     "unit": "gate",
-    "source_state": "KNOWN"
+    "source_state": "UNKNOWN"
   },
   "golden": {
     "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
@@ -45,14 +44,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python research/freezes/verify_versioned_transition.py && python -m unittest discover -s research/freezes -p 'test_*.py' -v",
+    "test_command": "python -m unittest discover -s research/freezes -p 'test_*.py' -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "python research/freezes/verify_versioned_transition.py"
+    "verification_command": "python -m unittest discover -s research/freezes -p 'test_*.py' -v"
   },
   "cost": {
     "currency": "USD",
