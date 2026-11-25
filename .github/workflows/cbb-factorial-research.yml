@@ -2,9 +2,9 @@ name: CBB factorial research native integration
 on:
   push:
     branches: [research/cbb-factorial-distributions-20261124]
-    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', '.github/workflows/cbb-factorial-research.yml']
+    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', 'models/cbb/cbb_run_it.py', '.github/workflows/cbb-factorial-research.yml']
   pull_request:
-    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', '.github/workflows/cbb-factorial-research.yml']
+    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', 'models/cbb/cbb_run_it.py', '.github/workflows/cbb-factorial-research.yml']
 permissions:
   contents: read
 jobs:
@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Native, chronology, distribution and publication regressions
-        run: python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io research.cbb_hca.test_cbb_critical_path
+        run: python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io research.cbb_hca.test_cbb_critical_path research.cbb_hca.test_cbb_sidecar_contract
       - name: Public reconstruction regression tests
         run: python -m research.cbb_hca.public_factorial_backtest --self-test
       - name: Public residual calibration regression tests
