@@ -2143,7 +2143,7 @@
    "venue_state": "HI"
   }
  ],
- "note": "ESPN odds are a CURRENT feed at retrieval time (provider label as given by ESPN); used only as an orientation cross-check, never as a price source.",
+ "note": "ESPN odds are an AUXILIARY RESEARCH COMPARATOR ONLY, taken from a CURRENT feed at retrieval time (provider label as given by ESPN). They are not an admitted odds source, not used for pricing, and are not quote authentication. Event-ID verification is a separate fact and does not authenticate quotes.",
  "raw_bytes": 1188829,
  "raw_sha256": "aa77613790c8e74136559c286d799cb51894a592b581c7f9a105f3fcea592949",
  "retrieved_utc": "2026-11-25T17:03:18Z",
