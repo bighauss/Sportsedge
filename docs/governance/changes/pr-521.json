@@ -4,11 +4,12 @@
   "base_commit": "d7d608ca387cbcea04225d5253bb6331b10f145c",
   "protected_paths": [".github/workflows/cbb-factorial-research.yml"],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Register provider-free native scoring challenger, paired uncertainty and residual distribution regressions in push/PR CI. No baseline, ledger or production runner modification.",
+  "change_summary": "Register provider-free challenger, chronology, distribution and publication regressions. Forecast records require parent-card and source receipt digests. No baseline, ledger or production-runner modification.",
   "assumptions": [
     "Synthetic regression success is not evidence of predictive improvement or source authenticity.",
-    "Daily-runner hookup, authenticated pre-tip forecasts, final/possession joins and chronological evaluations remain outstanding.",
-    "Copilot review was requested; no completed external review or approval is asserted."
+    "The sidecar collector fails closed until ratings and prior-game filenames are exactly contracted.",
+    "Daily live execution remains main-only; this branch cannot collect production forecasts before a reviewed merge.",
+    "No completed external acceptance of the latest repair is asserted."
   ],
   "agent_identity": "Perplexity",
   "permissions": {
@@ -32,7 +33,7 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest",
+    "test_command": "python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io research.cbb_hca.test_cbb_critical_path",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },

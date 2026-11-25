@@ -20,5 +20,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Actual native module, paired scoring, publication safety and distribution regressions
-        run: python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io
+      - name: Native, chronology, distribution and publication regressions
+        run: python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io research.cbb_hca.test_cbb_critical_path
