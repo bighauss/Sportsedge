@@ -4,10 +4,12 @@ on:
     branches: [research/nfl-public-score-benchmark-20261124]
     paths:
       - research/nfl_public_score_benchmark.py
+      - research/nfl_public_epa_challenger.py
       - .github/workflows/nfl-public-score-benchmark.yml
   pull_request:
     paths:
       - research/nfl_public_score_benchmark.py
+      - research/nfl_public_epa_challenger.py
       - .github/workflows/nfl-public-score-benchmark.yml
 permissions:
   contents: read
@@ -21,6 +23,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python research/nfl_public_score_benchmark.py --self-test
+      - run: python research/nfl_public_epa_challenger.py --self-test
   retrospective:
     needs: offline
     runs-on: ubuntu-latest
@@ -48,9 +51,11 @@ jobs:
       - name: Reconstructed score-only common-sample evaluation
         run: |
           python research/nfl_public_score_benchmark.py --input "$RUNNER_TEMP"/pbp/*.csv.gz --schedule "$RUNNER_TEMP/pbp/games.csv" --output "$RUNNER_TEMP/report/benchmark.json"
+      - name: Fitted EPA and success-rate held-out comparison
+        run: python research/nfl_public_epa_challenger.py --root "$RUNNER_TEMP/pbp" --schedule "$RUNNER_TEMP/pbp/games.csv" --benchmark "$RUNNER_TEMP/report/benchmark.json" --output "$RUNNER_TEMP/report/epa.json"
       - uses: actions/upload-artifact@v4
         with:
           name: nfl-retrospective-score-benchmark
-          path: ${{ runner.temp }}/report/benchmark.json
+          path: ${{ runner.temp }}/report/*.json
           retention-days: 14
           if-no-files-found: error
