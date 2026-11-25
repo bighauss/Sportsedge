@@ -1499,6 +1499,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
                           "ml_tie_rule": HALVES_ML_TIE_RULE, "caveat": HALVES_CAVEAT} if halves else None),
               "priced": [C.row_dict(r) for r, _ in ranked],
               "player_bundle_sha256": players.sha256 if players else None,
+              "player_bundle_evidence_class": players.evidence_class if players else None,
               "nine_weight_grid": [[r.game_id, r.market, r.line, r.side] +
                                    [round(PR.blend(r.prob_model, r.prob_market_novig, wt, push=r.prob_push), 5)
                                     for wt in C.CANONICAL_BLEND_WEIGHTS] for r, _ in ranked],
@@ -1583,7 +1584,9 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
         meta["warnings"].append(HALVES_CAVEAT)
     if players:
         meta["warnings"] = [x for x in meta["warnings"] if not x.startswith("First-half, second-half")]
-        meta["warnings"].append("Player pricing is conditional on participation, unvalidated and not gradable without exact player finals; bundle hash " + players.sha256)
+        meta["warnings"].append("Player pricing conditional on participation and unvalidated; evidence class " +
+                                players.evidence_class + "; bundle hash " + players.sha256 +
+                                ". No prospective validation or sportsbook settlement implied.")
     (out / "pipeline_card.md").write_text(render(meta, list(gm.values()), projections, market_views, hybrids,
                                                  ranked, rejects, a, gsum))
     summary = {"date_ct": date_ct, "freeze_utc": utcz(freeze), "freeze_kind": kind, "slate_games": len(slate_ids),
