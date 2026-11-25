@@ -400,5 +400,48 @@ class ConditionalPlayerGrade(unittest.TestCase):
         self.assertFalse(cal)
 
 
+class NativeAdapterWiring(unittest.TestCase):
+    def test_native_research_extensions_and_tampered_parent(self):
+        from unittest.mock import patch
+        from cbbd_paper_card import CARD_STATUS, card_digest
+        tip, freeze = "2026-11-25T20:00:00Z", "2026-11-25T15:00:00Z"
+        card = {"status":CARD_STATUS,"season":2027,"freeze_utc":freeze,
+                "approved_stake_u":0,"official_counted":0,
+                "rows":[{"game_id":"g1","status":"PROJECTED","home_team_id":"h","away_team_id":"a",
+                         "neutral":False,"projection":{"home_points":75,"away_points":70,"margin":5,"total":145}}]}
+        card["card_sha256"] = card_digest(card)
+        names = {"g1":("Away U","Home U",tip)}
+        def hp(*args,**kwargs):
+            return {"p_win":0.5,"p_push":0.0}
+        half = {"HM":SimpleNamespace(project_period=lambda *a,**k:{}),
+                "HP":SimpleNamespace(price_half_market=hp),"coef":{},"sha256":"halfhash","version":"test"}
+        bundle = SimpleNamespace(identity_namespace="CBBD",evidence_class="TEST",sha256="bundlehash",
+                                 probs=lambda *args:(0.6,0.0,0.4))
+        with tempfile.TemporaryDirectory() as tmp:
+            board=Path(tmp)/"board.csv"
+            board.write_text("home,away,period,market,line,price_a,price_b,dk_event_id,tip_utc,captured_utc,totals_order,player_id,player_team_id\\n"
+                             "Home U,Away U,1H,TOTAL,70.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,,\\n"
+                             "Home U,Away U,FG,PLAYER_PTS_OU,12.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,p,h\\n")
+            match=lambda *args: ({"game_id":"g1","tipoff_utc":tip},None)
+            with patch("cbb_run_it._match",side_effect=match), patch.object(P,"load_halves",return_value=half), \\
+                    patch("cbb_player_residual_pricing.PlayerBundle",return_value=bundle):
+                result=P.run_from_card(card,names,board,"2026-11-25T12:00:00Z",Path(tmp)/"out",
+                                       adapters_requested=("halves","players"),player_bundle="fixture",n_sims=1000)
+                self.assertEqual(result["priced_sides"],4)
+                frozen=json.loads((Path(tmp)/"out/pipeline_card.json").read_text())
+                self.assertEqual(frozen["adapters"]["players"],"ACTIVE")
+                self.assertEqual(frozen["adapters"]["halves"],"ACTIVE")
+                self.assertEqual(frozen["player_bundle_identity_namespace"],"CBBD")
+                self.assertEqual(frozen["freeze_kind"],"NATIVE_PARENT_RESEARCH_OVERLAY_NOT_PROSPECTIVE")
+                self.assertEqual(len(frozen["nine_weight_grid"]),4)
+                self.assertEqual(frozen["approved_stake_u"],0)
+                bundle.identity_namespace="ESPN"
+                result=P.run_from_card(card,names,board,"2026-11-25T12:00:00Z",Path(tmp)/"wrong",
+                                       adapters_requested=("players",),player_bundle="fixture",n_sims=1000)
+                self.assertEqual(result["priced_sides"],0)
+                with self.assertRaisesRegex(ValueError,"NATIVE_PARENT_CARD_INVALID"):
+                    P.run_from_card(dict(card,approved_stake_u=1),names,board,freeze,Path(tmp)/"bad")
+
+
 if __name__ == "__main__":
     unittest.main()
