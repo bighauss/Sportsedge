@@ -470,8 +470,10 @@ def run_card(inputs, out_dir="."):
     return {"projections": projs, "picks": picks, "csv": csv_path, "md": md_path}
 
 if __name__ == "__main__":
+    # Execution boundary (NBA safety transition): this frozen module is a library of pure projection and
+    # pricing functions. Running it directly priced a raw board with no contract validation, so direct
+    # execution is refused. There is no environment-variable or argument bypass. No card files are written.
     import sys
-    d = sys.argv[1] if len(sys.argv) > 1 else "sample"
-    names = ["teams", "games", "injuries", "players", "positional_defense", "odds", "props"]
-    res = run_card({n: os.path.join(d, n + ".csv") for n in names}, out_dir=sys.argv[2] if len(sys.argv) > 2 else "out")
-    print(open(res["md"]).read())
+    sys.stderr.write("ERROR: direct execution of sportsedge_nba_model.py is disabled (unguarded pricing).\n"
+                     "Use the guarded runner: python models/nba/run_it.py --source-kind <kind> ...\n")
+    sys.exit(2)
