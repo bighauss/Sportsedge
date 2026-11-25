@@ -36,6 +36,16 @@ def number(x, *, count=False):
     if not math.isfinite(v) or not 0<=v<=250 or (count and not v.is_integer()):raise ValueError("INVALID_STAT")
     return int(v) if count else v
 
+def field_number(r, col, label, *, count=False):
+    """Keep absent source values separate from malformed observed values."""
+    raw=r.get(col)
+    if raw is None or (isinstance(raw,str) and not raw.strip()):
+        raise ValueError("MISSING_"+label)
+    try:
+        return number(raw,count=count)
+    except ValueError:
+        raise ValueError("INVALID_"+label) from None
+
 def schedule(rows,season):
     groups=defaultdict(list);counts=Counter()
     for r in rows:
@@ -67,15 +77,19 @@ def admit(rows,games,season):
         try:
             if len(rr)!=1:raise ValueError("DUPLICATE_PLAYER_GAME_ALL_COPIES")
             r=rr[0];tid=ident(r["team_id"])
-            d=date.fromisoformat(r["game_date"])
+            try:d=date.fromisoformat(r["game_date"])
+            except (ValueError,TypeError):raise ValueError("INVALID_PLAYER_DATE") from None
             if r["season"]!=str(season) or gid not in games or d!=games[gid][0] or tid not in games[gid][1]:raise ValueError("SCHEDULE_PLAYER_IDENTITY_MISMATCH")
-            m=number(r["minutes"])
-            if not 0<m<=100:raise ValueError("NO_POSITIVE_PARTICIPATION")
-            v={k:number(r[col],count=True) for k,col in CORE.items()}
+            m=field_number(r,"minutes","MINUTES")
+            if m==0:raise ValueError("ZERO_RECORDED_MINUTES_UNKNOWN_PARTICIPATION")
+            if m>100:raise ValueError("INVALID_MINUTES_RANGE")
+            v={k:field_number(r,col,"CORE_"+k,count=True) for k,col in CORE.items()}
             v["PRA"]=v["POINTS"]+v["REBOUNDS"]+v["ASSISTS"]
             for k,col in EXTRA.items():
-                try:v[k]=number(r[col],count=True)
-                except ValueError:v[k]=None
+                try:v[k]=field_number(r,col,"OPTIONAL_"+k,count=True)
+                except ValueError as e:
+                    v[k]=None
+                    counts[str(e)]+=1
             v.update(PR=v["POINTS"]+v["REBOUNDS"],PA=v["POINTS"]+v["ASSISTS"],RA=v["REBOUNDS"]+v["ASSISTS"])
             clean.append(dict(player_id=pid,game_id=gid,team_id=tid,day=d,minutes=m,stats=v))
         except ValueError as e:
@@ -187,6 +201,26 @@ class Tests(unittest.TestCase):
         r=self.raw(1);g={"1":(date(2024,1,1),{"2","3"})}
         self.assertEqual(admit([dict(r,points="NaN")],g,2024)[0],[])
         self.assertIsNone(admit([dict(r,steals="")],g,2024)[0][0]["stats"]["STEALS"])
+    def test_reason_census_distinguishes_missing_invalid_and_zero(self):
+        r=self.raw(1);g={"1":(date(2024,1,1),{"2","3"})}
+        for changes,reason in (
+            ({"minutes":""},"MISSING_MINUTES"),
+            ({"minutes":"NaN"},"INVALID_MINUTES"),
+            ({"minutes":"0"},"ZERO_RECORDED_MINUTES_UNKNOWN_PARTICIPATION"),
+            ({"minutes":"101"},"INVALID_MINUTES_RANGE"),
+            ({"points":""},"MISSING_CORE_POINTS"),
+            ({"points":"-1"},"INVALID_CORE_POINTS"),
+            ({"game_date":None},"INVALID_PLAYER_DATE")):
+            clean,census,rejects=admit([dict(r,**changes)],g,2024)
+            self.assertEqual(clean,[])
+            self.assertEqual(census[reason],1)
+            self.assertEqual(rejects[0]["reason"],reason)
+        clean,census,_=admit([dict(r,steals="",blocks="NaN")],g,2024)
+        self.assertEqual(len(clean),1)
+        self.assertEqual(census["MISSING_OPTIONAL_STEALS"],1)
+        self.assertEqual(census["INVALID_OPTIONAL_BLOCKS"],1)
+        self.assertIsNone(clean[0]["stats"]["STEALS"])
+        self.assertIsNone(clean[0]["stats"]["BLOCKS"])
     def test_chronology_and_native(self):
         rs=[self.raw(i,f"2024-01-{i*3:02d}") for i in range(1,7)]
         g={r["game_id"]:(date.fromisoformat(r["game_date"]),{"2","3"}) for r in rs}
