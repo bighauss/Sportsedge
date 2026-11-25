@@ -5,13 +5,17 @@ on sparse early-season graphs) with single-pass prior-season Division I membersh
 filtering (`d1_set`) and Gauss-Seidel ridge regression (`fullgame.ratings.AdjustedFit`)
 anchored to a prior-season carryover.
 
-HCA is estimated strictly from verified-venue prior evidence (never hardcoded to a
-predetermined range). Does not touch frozen production models or DEFAULT_CONFIG.
+HCA is estimated by the fit from verified-venue evidence (never hardcoded). The returned
+diagnostics state this so integrators do not add a home-court term a second time.
+Fail-closed rules: unknown Division I membership is dropped (never assumed true), games
+missing required fields are dropped, games on or after the as-of date are excluded, and
+output efficiencies outside the native parser contract (60-160) raise.
 """
 from __future__ import annotations
 
 from datetime import date
 import json
+import math
 
 from . import ratings as R
 
@@ -23,25 +27,45 @@ DEFAULT_PARAMS = {
     "carry": 0.85,
     "carry_pace": 0.70,
 }
+REQUIRED_FIELDS = ("game_id", "date", "home", "away", "site")
+EFFICIENCY_MIN, EFFICIENCY_MAX = 60.0, 160.0
 
 
-def filter_d1_single_pass(games, d1_set=None):
-    """Exclude non-D1 and missing-possession rows in a single pass (no iterative k-core pruning)."""
-    usable, dropped_non_d1, dropped_missing_poss = [], 0, 0
+def filter_d1_single_pass(games, d1_set=None, as_of=None):
+    """Single-pass admission. No iterative k-core pruning; every drop is counted by reason."""
+    usable = []
+    census = {"dropped_non_d1": 0, "dropped_unknown_d1": 0, "dropped_missing_poss": 0,
+              "dropped_missing_fields": 0, "dropped_bad_date": 0, "dropped_future": 0}
     for g in games:
+        if any(g.get(k) in (None, "") for k in REQUIRED_FIELDS):
+            census["dropped_missing_fields"] += 1
+            continue
         if g.get("possessions") is None or g.get("home") == g.get("away"):
-            dropped_missing_poss += 1
+            census["dropped_missing_poss"] += 1
             continue
+        if as_of is not None:
+            try:
+                day = date.fromisoformat(str(g["date"])[:10])
+            except ValueError:
+                census["dropped_bad_date"] += 1
+                continue
+            if day >= as_of:
+                census["dropped_future"] += 1
+                continue
         if d1_set is not None:
-            in_d1 = str(g["home"]) in d1_set and str(g["away"]) in d1_set
+            if not (str(g["home"]) in d1_set and str(g["away"]) in d1_set):
+                census["dropped_non_d1"] += 1
+                continue
         else:
-            in_d1 = bool(g.get("home_d1", True)) and bool(g.get("away_d1", True))
-        if not in_d1:
-            dropped_non_d1 += 1
-            continue
+            flags = (g.get("home_d1"), g.get("away_d1"))
+            if any(f is None for f in flags):
+                census["dropped_unknown_d1"] += 1
+                continue
+            if not all(f is True for f in flags):
+                census["dropped_non_d1"] += 1
+                continue
         usable.append(g)
-    return usable, {"usable": len(usable), "dropped_non_d1": dropped_non_d1,
-                    "dropped_missing_poss": dropped_missing_poss, "iterative_pruning_disabled": True}
+    return usable, {"usable": len(usable), **census, "iterative_pruning_disabled": True}
 
 
 def fit_public_adjusted_ratings(games, *, season, as_of_date, d1_set=None, prev_final=None,
@@ -49,10 +73,12 @@ def fit_public_adjusted_ratings(games, *, season, as_of_date, d1_set=None, prev_
     """Fit ridge-regularized schedule-adjusted ratings without iterative k-core collapse.
 
     Returns (json_bytes, diagnostics). Teams in `d1_set` or `prev_final` with zero current-season
-    games still receive regularized carryover ratings rather than being dropped.
+    games still receive regularized carryover ratings rather than being dropped. The caller must
+    supply prev_final built only from seasons that ended before as_of_date.
     """
     cfg = {**DEFAULT_PARAMS, **(params or {})}
-    usable, census = filter_d1_single_pass(games, d1_set=d1_set)
+    cutoff = date.fromisoformat(as_of_date[:10]) if isinstance(as_of_date, str) else as_of_date
+    usable, census = filter_d1_single_pass(games, d1_set=d1_set, as_of=cutoff)
     prior, new_team = ({}, (0.0, 0.0, 0.0))
     mu0, pi0 = 103.0, 68.0
     if prev_final is not None:
@@ -71,15 +97,18 @@ def fit_public_adjusted_ratings(games, *, season, as_of_date, d1_set=None, prev_
         pi0=pi0,
     )
     fit.default_prior = new_team
-    cutoff = date.fromisoformat(as_of_date[:10]) if isinstance(as_of_date, str) else as_of_date
     if usable:
         fit.fit(usable, cutoff)
     team_ids = sorted(set(fit.o) | set(prior) | (set(d1_set) if d1_set is not None else set()))
-    rows = []
+    rows, out_of_contract = [], []
     for tid in team_ids:
         o, d, q = fit.team(tid)
         ortg = fit.mu + o
         drtg = fit.mu + d
+        for value in (ortg, drtg):
+            if not math.isfinite(value) or not EFFICIENCY_MIN <= value <= EFFICIENCY_MAX:
+                out_of_contract.append(str(tid))
+                break
         rows.append({
             "teamId": int(tid) if str(tid).isdigit() else tid,
             "team": str(tid),
@@ -91,6 +120,9 @@ def fit_public_adjusted_ratings(games, *, season, as_of_date, d1_set=None, prev_
             "n_games": int(fit.n.get(tid, 0)),
             "rating_basis": "ADJUSTED_FIT_RIDGE_CARRYOVER_NO_ITERATIVE_FILTER",
         })
+    if out_of_contract:
+        raise ValueError("RATINGS_OUT_OF_CONTRACT: efficiency outside 60-160 for teams "
+                         + ",".join(sorted(set(out_of_contract))[:20]))
     diag = {
         **census,
         "season": int(season),
@@ -98,6 +130,7 @@ def fit_public_adjusted_ratings(games, *, season, as_of_date, d1_set=None, prev_
         "rated_teams": len(rows),
         "teams_with_current_games": len(fit.o),
         "hca_per100": round(fit.h, 4),
+        "hca_basis": "ESTIMATED_IN_FIT_FROM_VERIFIED_VENUE_GAMES_DO_NOT_ADD_AGAIN",
         "league_ortg": round(fit.mu, 4),
         "league_pace": round(fit.pi, 4),
         "label": "PAPER_0U",
