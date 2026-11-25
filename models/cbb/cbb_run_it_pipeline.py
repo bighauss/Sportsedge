@@ -602,6 +602,18 @@ class Challenger:
         return self.FP.ev_audit({"ev": ev, "price": price, "p_model": p_model, "p_novig": p_novig})
 
 
+def load_player_bundle(path, freeze_utc, namespace):
+    """Fail closed on foreign/unspecified IDs or malformed optional player inputs."""
+    try:
+        from cbb_player_residual_pricing import PlayerBundle
+        candidate = PlayerBundle(path, freeze_utc)
+        if candidate.identity_namespace != namespace:
+            raise ValueError(f"PLAYER_BUNDLE_{namespace}_NAMESPACE_REQUIRED")
+        return candidate, candidate
+    except (ValueError, OSError, KeyError, TypeError, ImportError, AttributeError) as exc:
+        return None, f"LOAD_FAILED:{type(exc).__name__}:{exc}"
+
+
 def load_adapter_flags(requested, loaded=None):
     """Adapter status by flag. ``loaded`` maps a stream name to an object the caller already built from
     that stream's checkout (halves: load_halves(); fullgame: Challenger) -> ACTIVE. Missing or failed
@@ -1425,9 +1437,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     freeze = parse_z(freeze_utc)
     loaded, halves, challenger, players = {}, None, None, None
     if "players" in req and player_bundle:
-        from cbb_player_residual_pricing import PlayerBundle
-        players = PlayerBundle(player_bundle, freeze_utc)
-        loaded["players"] = players
+        players, loaded["players"] = load_player_bundle(player_bundle, freeze_utc, "ESPN")
     if "halves" in req:
         halves = load_halves(halves_path)
         loaded["halves"] = halves or "ADAPTER_NOT_LANDED"
@@ -1656,15 +1666,7 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
         except (ValueError, OSError, KeyError, TypeError, ImportError) as exc:
             loaded["halves"] = f"LOAD_FAILED:{type(exc).__name__}"
     if "players" in req and player_bundle:
-        from cbb_player_residual_pricing import PlayerBundle
-        try:
-            candidate = PlayerBundle(player_bundle, card["freeze_utc"])
-            if candidate.identity_namespace != "CBBD":
-                raise ValueError("PLAYER_BUNDLE_CBBD_NAMESPACE_REQUIRED")
-            players = candidate
-            loaded["players"] = players
-        except (ValueError, OSError, KeyError, TypeError) as exc:
-            loaded["players"] = f"LOAD_FAILED:{type(exc).__name__}:{exc}"
+        players, loaded["players"] = load_player_bundle(player_bundle, card["freeze_utc"], "CBBD")
     adapter_status, active = load_adapter_flags(req, loaded)
     cap = BoardFileCapture(board_path, board_captured_utc).capture()
     quotes, cap_rejects = normalize_quotes(cap, totals_order_verified=totals_order_verified)
