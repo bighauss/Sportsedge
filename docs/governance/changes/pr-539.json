@@ -9,12 +9,12 @@
     "models/nba/test_market_contract.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Research-only NBA ingestion guard at the board-loader boundary, isolated from #536. Rejects Tie/Draw in two-way ML, three-way, incomplete, duplicate, ambiguous, mixed-period, unsupported-period, fractional/malformed American odds and invalid-line contracts before pricing, for every source kind. models/nba/sportsedge_nba_model.py (blob b353de86) is not edited. PAPER/0u, NON_COUNTED.",
+  "change_summary": "Research-only NBA ingestion guard v2 at the board-loader boundary, isolated from #536. All source kinds pass one universal validation (event identity, strict integer odds, period, selection, line/complement, capture chronology) before pricing; invalid rows go to a persisted rejection ledger with reason codes; player props are validated too; each run uses a unique atomic workspace. models/nba/sportsedge_nba_model.py (blob b353de86) is not edited. PAPER/0u, NON_COUNTED.",
   "assumptions": [
-    "Guard sits in front of the frozen pricer; direct calls to frozen run_card/price_games/price_game_market/__main__ remain for frozen-file tests and are not guarded. A census test fails if any other script or workflow runs the frozen pricer.",
-    "Tie/Draw semantics follow DraftKings General Rules C.ii (two-selection market with no Tie/Draw settles a tie as Push), cited in pr-536.json with URLs, retrieval times and sha256. A Tie selection never reaches two-way pricing.",
-    "Prices must be whole-number American quotes with abs value >= 100. PDF and screenshot inputs fail closed unless structured odds rows are supplied; no parser is added.",
-    "Not implemented: capture-time chronology and source authentication. This guard validates structure only, not quote provenance, authentication or freshness.",
+    "Frozen run_card/price_games/price_game_market/price_props/__main__ remain for frozen-file regression tests only. The frozen __main__ cannot be guarded without editing blob b353de86, so it stays reachable as a script; the census test fails if any other module, workflow or script reaches frozen pricing.",
+    "Tie/Draw semantics follow DraftKings General Rules C.ii (a two-selection market with no Tie/Draw settles a tie as Push), cited with URLs, retrieval times and sha256 in pr-536.json. Tie selections never reach two-way pricing.",
+    "Quotes need capture_id plus tz-aware captured_at at or before tip-off and the run as-of time. Captures are never paired; the newest valid capture wins and older ones are ledgered. This is structural chronology, not source authentication.",
+    "Prices must be whole-number American quotes with abs value >= 100 and coherent two-sided hold. PDF and screenshot inputs fail closed unless structured rows are supplied; no parser is added. Roster checks verify structure, not player availability.",
     "No promotion, no certification, no source authentication, official_counted=0, approved_stake_u=0, PAPER/0u, NON_COUNTED."
   ],
   "agent_identity": "SportsEdge Constructions bot (grok-cbb/*)",
