@@ -13,9 +13,7 @@ from pathlib import Path
 
 from . import evaluate as E
 from . import espn_odds as O
-
-OWNER_WEIGHTS = (1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0)
-
+import cbb_pricing as PR
 
 def logit(p):
     p = min(1 - 1e-9, max(1e-9, p)); return math.log(p / (1 - p))
@@ -95,8 +93,8 @@ def main():
     for mk in ("spread", "total", "moneyline"):
         val = [m for s in (2024, 2025) for m in mk_store[s] if m["market"] == mk]
         tst = [m for s in (2026, 2027) for m in mk_store[s] if m["market"] == mk]
-        vres = {str(w): E.prob_metrics(blend_pairs(val, w))["log_loss"] for w in OWNER_WEIGHTS}
-        best = min(OWNER_WEIGHTS, key=lambda w: vres[str(w)])
+        vres = {str(w): E.prob_metrics(blend_pairs(val, w))["log_loss"] for w in PR.OWNER_BLEND_WEIGHTS}
+        best = min(PR.OWNER_BLEND_WEIGHTS, key=lambda w: vres[str(w)])
         tres = E.prob_metrics(blend_pairs(tst, best))
         rep["blend"][mk] = {"validation_log_loss": vres, "selected_model_weight": best,
                             "test": {k: tres[k] for k in ("n", "brier", "log_loss", "ece")},
@@ -105,8 +103,8 @@ def main():
     for mk in ("spread", "total", "moneyline"):
         val = [m for s in (2024, 2025) for m in mk_open[s] if m["market"] == mk]
         tst = [m for s in (2026, 2027) for m in mk_open[s] if m["market"] == mk]
-        vres = {str(w): E.prob_metrics(blend_pairs(val, w))["log_loss"] for w in OWNER_WEIGHTS}
-        best = min(OWNER_WEIGHTS, key=lambda w: vres[str(w)])
+        vres = {str(w): E.prob_metrics(blend_pairs(val, w))["log_loss"] for w in PR.OWNER_BLEND_WEIGHTS}
+        best = min(PR.OWNER_BLEND_WEIGHTS, key=lambda w: vres[str(w)])
         rep["blend_open"][mk] = {"validation_log_loss": vres, "selected_model_weight": best,
                                  "test": {k: E.prob_metrics(blend_pairs(tst, best))[k] for k in ("n", "brier", "log_loss", "ece")},
                                  "test_market_only": {k: E.prob_metrics(blend_pairs(tst, 0.0))[k] for k in ("n", "brier", "log_loss", "ece")},

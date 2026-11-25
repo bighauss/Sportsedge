@@ -1,5 +1,6 @@
 """stdlib unittest for the full-game CHALLENGER (run from models/cbb: python -m unittest -v fullgame.test_fullgame)."""
 import math
+import re
 import random
 import sys
 import unittest
@@ -374,6 +375,110 @@ class TAdjustments(unittest.TestCase):
         # applying the frozen fit to a later row does not refit
         adj = A.apply_fit(later, {"margin": fit1}, later["f"]["FG1"])
         self.assertTrue(math.isfinite(adj["margin"]))
+
+
+CANONICAL_BLEND = (1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0)
+
+class TCanonicalBlend(unittest.TestCase):
+    def test_single_canonical_definition(self):
+        self.assertEqual(PR.OWNER_BLEND_WEIGHTS, CANONICAL_BLEND)
+        self.assertFalse(hasattr(PR, "CANDIDATE_BLEND_WEIGHTS"))
+        # 100/0 ... 0/100 in model/market percent
+        pct = [(100 * w, 100 * (1 - w)) for w in PR.OWNER_BLEND_WEIGHTS]
+        self.assertEqual(pct, [(100, 0), (87.5, 12.5), (75, 25), (62.5, 37.5),
+                               (50, 50), (37.5, 62.5), (25, 75), (12.5, 87.5), (0, 100)])
+
+    def test_no_other_blend_grid_in_cbb_python(self):
+        """Fail if the obsolete nine-weight grid or a second competing grid is reintroduced."""
+        root = HERE.parent  # models/cbb
+        obsolete_pat = re.compile(
+            r"0\.0\s*,\s*0\.25\s*,\s*0\.5\s*,\s*0\.6\s*,\s*0\.75\s*,\s*0\.8\s*,\s*0\.9\s*,\s*0\.95\s*,\s*1\.0")
+        obsolete_pct = re.compile(
+            r"\(\s*0\s*,\s*25\s*,\s*50\s*,\s*60\s*,\s*75\s*,\s*80\s*,\s*90\s*,\s*95\s*,\s*100\s*\)")
+        name_pat = re.compile(r"\bCANDIDATE_BLEND_WEIGHTS\b")
+        # 9-float tuples assigned in source (0-1), other than the canonical grid
+        lit = re.compile(
+            r"=[^=]*?\(\s*(" + r"(?:[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*,\s*" * 8
+            + r"(?:[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*)\)")
+        hits = []
+        for path in sorted(root.rglob("*.py")):
+            text = path.read_text(encoding="utf-8")
+            rel = str(path.relative_to(root))
+            # Tests may name the forbidden identifier; production modules may not.
+            if name_pat.search(text) and path.name != "test_fullgame.py" and not path.name.startswith("test_"):
+                hits.append(f"{rel}: CANDIDATE_BLEND_WEIGHTS")
+            if obsolete_pat.search(text) or obsolete_pct.search(text):
+                hits.append(f"{rel}: obsolete 0/25/50/60/75/80/90/95/100 grid")
+            for m in lit.finditer(text):
+                nums = tuple(float(x) for x in re.split(r"\s*,\s*", m.group(1)))
+                if len(nums) != 9:
+                    continue
+                if all(0 <= n <= 1 for n in nums):
+                    # only the canonical 0-1 definition (and assertions of it) may appear
+                    if nums == CANONICAL_BLEND:
+                        continue
+                    hits.append(f"{rel}: other 9-weight grid {nums}")
+                elif all(0 <= n <= 100 for n in nums) and any(n > 1 for n in nums):
+                    # percent form must be derived from OWNER_BLEND_WEIGHTS, never handwritten
+                    hits.append(f"{rel}: handwritten 9-weight percent grid {nums}")
+        self.assertEqual(hits, [], msg="non-canonical blend grid(s): " + "; ".join(hits))
+
+
+class TAmericanQuote(unittest.TestCase):
+    def test_parse_accepts_exact_integers_and_signed_strings(self):
+        for raw, want in ((110, 110), (-110, -110), ("+110", 110), ("-110", -110),
+                          ("110", 110), (" +3500 ", 3500), (100, 100), (-10000, -10000)):
+            self.assertEqual(PR.parse_american(raw), want)
+            self.assertIsInstance(PR.parse_american(raw), int)
+            self.assertEqual(P.parse_american(raw), want)
+
+    def test_parse_rejects_floats_fractions_bools_and_malformed(self):
+        # The pre-fix bug: int(110.7) == 110. The contract must raise instead.
+        for raw, code in (
+            (110.7, "NON_INTEGER_AMERICAN_PRICE"),
+            (110.0, "NON_INTEGER_AMERICAN_PRICE"),
+            (True, "NON_INTEGER_AMERICAN_PRICE"),
+            (False, "NON_INTEGER_AMERICAN_PRICE"),
+            (None, "NON_INTEGER_AMERICAN_PRICE"),
+            ("110.7", "MALFORMED_AMERICAN_PRICE"),
+            ("110.0", "MALFORMED_AMERICAN_PRICE"),
+            ("0100", "MALFORMED_AMERICAN_PRICE"),
+            ("+", "MALFORMED_AMERICAN_PRICE"),
+            ("", "MALFORMED_AMERICAN_PRICE"),
+            ("EVEN", "MALFORMED_AMERICAN_PRICE"),
+            ("1e2", "MALFORMED_AMERICAN_PRICE"),
+            ("+0", "MALFORMED_AMERICAN_PRICE"),
+            (0, "INVALID_AMERICAN_PRICE"),
+            (99, "INVALID_AMERICAN_PRICE"),
+            (100001, "INVALID_AMERICAN_PRICE"),
+        ):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError) as ctx:
+                    PR.parse_american(raw)
+                self.assertEqual(str(ctx.exception), code)
+                with self.assertRaises(ValueError):
+                    P.decimal_odds(raw)
+
+    def test_decimal_odds_matches_exact_int_and_refuses_truncation(self):
+        self.assertAlmostEqual(P.decimal_odds(110), 2.1)
+        self.assertAlmostEqual(P.decimal_odds(-110), 1 + 100 / 110)
+        self.assertAlmostEqual(P.decimal_odds("+150"), 2.5)
+        with self.assertRaises(ValueError):
+            P.decimal_odds(110.7)
+        # rungs reject a fractional American price with an explicit contract code
+        kind = "alt_spread"
+        board = {"line": "-3.5", "price_a": 110.7, "price_b": -130}
+        rung, reason = PR._rung(board, kind)
+        self.assertIsNone(rung)
+        self.assertIn("NON_INTEGER_AMERICAN_PRICE", reason)
+        board2 = {"line": "-3.5", "price_a": "110.5", "price_b": "-130"}
+        rung, reason = PR._rung(board2, kind)
+        self.assertIsNone(rung)
+        self.assertIn("MALFORMED_AMERICAN_PRICE", reason)
+        ok, reason = PR._rung({"line": "-3.5", "price_a": "+110", "price_b": "-130"}, kind)
+        self.assertIsNotNone(ok)
+        self.assertIsNone(reason)
+        self.assertEqual(ok[1], 110)
 
 
 if __name__ == "__main__":
