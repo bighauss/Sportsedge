@@ -32,6 +32,19 @@ class NativeIntegration(unittest.TestCase):
         clock=lambda: dt.datetime(2026,11,24,23,1,tzinfo=dt.timezone.utc)
         with tempfile.TemporaryDirectory() as td:
             with self.assertRaises(native.Pass): freeze(context(), g, Path(td)/"x.json", clock=clock, parent_card_sha256="bad", source_receipts=BIND["source_receipts"])
+    def test_binding_missing_required_with_extra_receipts(self):
+        g=dict(game_id="1000",season=2027,home_team_id="1",away_team_id="2",neutral=False,tipoff_utc="2026-11-25T01:00:00Z")
+        clock=lambda: dt.datetime(2026,11,24,23,1,tzinfo=dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/"bad.json"
+            for missing in ("ratings","prior_games"):
+                receipts={k:v for k,v in BIND["source_receipts"].items() if k!=missing}
+                receipts["extra"]="d"*64
+                with self.assertRaisesRegex(native.Pass,"SOURCE_OR_PARENT_BINDING_REQUIRED"):
+                    freeze(context(),g,p,clock=clock,parent_card_sha256=BIND["parent_card_sha256"],source_receipts=receipts)
+                self.assertFalse(p.exists())
+            valid=dict(BIND["source_receipts"],extra="d"*64)
+            self.assertEqual(freeze(context(),g,p,clock=clock,parent_card_sha256=BIND["parent_card_sha256"],source_receipts=valid)["source_receipts"],valid)
     def test_create_only_and_pretip(self):
         g=dict(game_id="1000",season=2027,home_team_id="1",away_team_id="2",neutral=False,tipoff_utc="2026-11-25T01:00:00Z")
         clock=lambda: dt.datetime(2026,11,24,23,1,tzinfo=dt.timezone.utc)
