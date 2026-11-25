@@ -145,6 +145,9 @@ class PlayerBundle:
             raise ValueError("PLAYER_BUNDLE_SCHEMA")
         self.as_of_utc = as_of_utc
         self.evidence_class = doc.get("evidence_class", "UNVERIFIED_EXTERNAL_BUNDLE")
+        self.identity_namespace = doc.get("identity_namespace", "UNSPECIFIED")
+        if self.identity_namespace not in ("UNSPECIFIED", "ESPN", "CBBD"):
+            raise ValueError("PLAYER_BUNDLE_IDENTITY_NAMESPACE")
         self.targets = {}
         for item in doc["targets"]:
             f = Forecast(**item)
