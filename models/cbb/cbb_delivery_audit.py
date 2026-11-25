@@ -55,6 +55,7 @@ def delivery_audit(card, delivery_utc, *, max_age_minutes=MAX_QUOTE_AGE_MINUTES)
         why = []
         gid = r["game_id"]
         g = game_map.get(gid)
+        advisory = []
         try:
             cap = utc(r.get("captured_utc"))
             tip = utc(g["tipoff_utc"] if g else None)
@@ -65,7 +66,7 @@ def delivery_audit(card, delivery_utc, *, max_age_minutes=MAX_QUOTE_AGE_MINUTES)
             if tip <= now:
                 why.append("GAME_STARTED")
             if (now - cap).total_seconds() > 60 * max_age_minutes:
-                why.append("STALE_AT_DELIVERY")
+                advisory.append("QUOTE_AGE_EXCEEDS_RESEARCH_TARGET")
         except (TypeError, ValueError, KeyError):
             why.append("CLOCK_OR_GAME_ID_UNVERIFIED")
         if r.get("provenance") != "AUTHENTICATED_DK_CAPTURE":
@@ -98,12 +99,14 @@ def delivery_audit(card, delivery_utc, *, max_age_minutes=MAX_QUOTE_AGE_MINUTES)
         rows.append({"game_id": gid, "period": period, "market": market,
                      "line": r.get("line"), "side": r.get("side"),
                      "ev_hybrid": ev, "reasons": sorted(set(why)),
+                     "advisories": advisory,
                      "status": "HOLD" if why else "RESEARCH_ONLY",
                      "approved_stake_u": 0})
     correlated = sorted(g for g, n in groups.items() if n > 1)
     return {"delivery_utc": delivery_utc, "freeze_utc": card["freeze_utc"],
             "card_sha256": card.get("card_sha256"), "max_quote_age_minutes": max_age_minutes,
             "min_ev": MIN_EV, "rows": rows, "reason_counts": counts,
+            "age_advisory_count": sum(bool(r["advisories"]) for r in rows),
             "multi_candidate_games": correlated, "released": 0,
             "label": "PAPER_0U", "counted": "NON_COUNTED"}
 
