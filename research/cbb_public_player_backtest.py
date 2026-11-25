@@ -16,6 +16,7 @@ from statistics import mean
 import tempfile
 import unittest
 from cbbd_player_history import historical_baselines
+from research import cbb_player_distribution as distribution
 
 SCHED=("game_id","season","game_date","home_id","away_id","home_score","away_score","status_type_completed","status_type_name")
 CORE={"POINTS":"points","REBOUNDS":"rebounds","ASSISTS":"assists","THREES":"three_point_field_goals_made"}
@@ -82,7 +83,7 @@ def admit(rows,games,season):
     counts["admitted_appearances"]=len(clean)
     return clean,dict(counts),rejects
 
-def walk(records):
+def walk(records, *, include_distribution=False):
     by_player=defaultdict(list)
     for r in records:by_player[r["player_id"]].append(r)
     out=[]
@@ -118,6 +119,8 @@ def walk(records):
                     alt[k]=mean(vals) if all(v is not None for v in vals) else None
                 row["forecasts"]={"native_5":base,"rolling_8":alt}
                 row["history_game_ids"]=[p["game_id"] for p in recent]
+                if include_distribution:
+                    row["prop_distribution"]=distribution.for_history(recent)
             out.append(row)
     return out
 
@@ -160,7 +163,11 @@ def run(args):
             reader=csv.DictReader(f)
             if not set(PLAYER_FIELDS)<=set(reader.fieldnames or ()):raise ValueError("PLAYER_CSV_SCHEMA_MISMATCH:"+str(reader.fieldnames))
             clean,census,rejects=admit(reader,games,season)
-        rows=walk(clean);summary=summarize(rows)
+        rows=walk(clean,include_distribution=args.prop_distributions);summary=summarize(rows)
+        if args.prop_distributions:
+            summary['prop_distributions']=distribution.summary(rows)
+            report['distribution_code_sha256']=digest(Path(distribution.__file__))
+            report['limitations'].append('Fixed illustrative half-lines, all families use identical (n*p+0.5)/(n+1) smoothing; NB uses explicit Poisson limit for non-overdispersion. Week-block CIs descriptive; no real price or push settlement.')
         if not summary["paired_appearances"]:raise ValueError("NO_PAIRED_APPEARANCES")
         report["seasons"][str(season)]={"schedule_sha256":digest(s),"player_csv_sha256":digest(b),
             "schedule_census":sc,"player_census":census,"rejected_rows":rejects,"summary":summary,"rows":rows}
@@ -190,6 +197,15 @@ class Tests(unittest.TestCase):
         self.assertEqual(walk(c)[-1]["forecasts"]["native_5"]["POINTS"],10)
         c[-1]["day"]=c[-2]["day"]
         self.assertFalse(walk(c)[-1]["forecasts"])
+    def test_distribution_uses_prior_only(self):
+        rs=[self.raw(i,f"2024-01-{i*3:02d}") for i in range(1,7)]
+        g={r["game_id"]:(date.fromisoformat(r["game_date"]),{"2","3"}) for r in rs}
+        c,_,_=admit(rs,g,2024)
+        a=walk(c,include_distribution=True)[-1]["prop_distribution"]
+        c[-1]["stats"]["POINTS"]=99
+        b=walk(c,include_distribution=True)[-1]["prop_distribution"]
+        self.assertEqual(a,b)
+        self.assertEqual(len(a),11)
     def test_transfer_hold(self):
         rs=[self.raw(i,f"2024-01-{i*3:02d}") for i in range(1,7)]
         g={r["game_id"]:(date.fromisoformat(r["game_date"]),{"2","3"}) for r in rs}
@@ -198,6 +214,7 @@ class Tests(unittest.TestCase):
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("--self-test",action="store_true")
+    p.add_argument("--prop-distributions",action="store_true")
     p.add_argument("--root",type=Path);p.add_argument("--output",type=Path);p.add_argument("--seasons",nargs="+",type=int,default=[2023,2024,2025]);a=p.parse_args()
     if a.self_test:unittest.main(argv=[__file__],verbosity=2)
     else:
