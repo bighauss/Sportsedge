@@ -167,6 +167,10 @@ class MarketQuote:
     row_key: Optional[str] = None        # upstream stable row key, e.g. dk/ runner_board row_key
     player_id: Optional[str] = None
     player_team_id: Optional[str] = None
+    quote_available_utc: Optional[str] = None
+    identity_available_utc: Optional[str] = None
+    identity_basis: Optional[str] = None
+    replay_basis: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -218,6 +222,13 @@ class PricedMarket:
     player_id: Optional[str] = None
     player_team_id: Optional[str] = None
     player: Optional[str] = None
+    board_index: Optional[int] = None
+    source_sha256: Optional[str] = None
+    row_key: Optional[str] = None
+    quote_available_utc: Optional[str] = None
+    identity_available_utc: Optional[str] = None
+    identity_basis: Optional[str] = None
+    replay_basis: Optional[str] = None
 
 
 @dataclass(frozen=True)
