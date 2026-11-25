@@ -19,7 +19,6 @@ from contextlib import contextmanager
 import cbbd_paper_card as PC
 import cbbd_native_score_model as NM
 
-CANDIDATE_BLEND_WEIGHTS = (0.0, 0.25, 0.5, 0.6, 0.75, 0.8, 0.9, 0.95, 1.0)  # model weight; test pending
 DEFAULT_CONFIG = {
     "sd_margin": 12.5,
     "sd_total": 17.0,
