@@ -20,7 +20,7 @@ import unittest
 FIELDS = ("game_id", "season", "season_type", "week", "game_date",
           "home_team", "away_team", "play_id", "desc",
           "total_home_score", "total_away_score")
-MODELS = ("league_mean", "rolling_ppg", "offense_defense")
+MODELS = ("league_mean", "rolling_ppg", "offense_defense", "offense_defense_fixed_hfa")
 
 
 def integer(s):
@@ -84,6 +84,48 @@ def read_games(path, season):
     return out, dict(counts)
 
 
+def read_schedule(path, seasons):
+    """Reconstructed public schedule finals; independently census PBP coverage."""
+    out, seen, counts = [], set(), Counter()
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        required = {"game_id","season","game_type","week","gameday","home_team",
+                    "away_team","home_score","away_score"}
+        if not required <= set(reader.fieldnames or ()):
+            raise ValueError("schedule schema mismatch")
+        for r in reader:
+            if integer(r["season"]) not in seasons or r["game_type"] != "REG":
+                continue
+            gid = r["game_id"]
+            if not gid or gid in seen:
+                raise ValueError("duplicate or missing schedule event")
+            seen.add(gid)
+            yr,wk = integer(r["season"]),integer(r["week"])
+            h,a = r["home_team"],r["away_team"]
+            day = date.fromisoformat(r["gameday"])
+            if not h or not a or h == a or not 1 <= wk <= 18:
+                raise ValueError("invalid schedule identity")
+            if not r["home_score"] or not r["away_score"]:
+                counts["missing_final"] += 1
+                continue
+            hs,aws = integer(r["home_score"]),integer(r["away_score"])
+            out.append(dict(game_id=gid,season=yr,week=wk,day=day.isoformat(),
+                            home=h,away=a,home_score=hs,away_score=aws))
+    counts["regular_schedule_events"] = len(seen)
+    counts["eligible_finals"] = len(out)
+    return out,dict(counts)
+
+
+def reconcile_finals(schedule, pbp):
+    """Report exact-ID and score conflicts; never silently substitute PBP."""
+    s,p = ({g["game_id"]:g for g in seq} for seq in (schedule,pbp))
+    shared = set(s) & set(p)
+    keys = ("season","week","day","home","away","home_score","away_score")
+    conflict = sorted(g for g in shared if any(s[g][k]!=p[g][k] for k in keys))
+    return dict(schedule_only=sorted(set(s)-set(p)),pbp_only=sorted(set(p)-set(s)),
+                matching=len(shared)-len(conflict),conflicts=conflict)
+
+
 def forecast(games, start_week=9):
     ids = [g["game_id"] for g in games]
     if len(ids) != len(set(ids)):
@@ -115,6 +157,8 @@ def forecast(games, start_week=9):
                 "rolling_ppg": [mean(pf[h]), mean(pf[a])],
                 "offense_defense": [(mean(pf[h])+mean(pa[a]))/2,
                                     (mean(pf[a])+mean(pa[h]))/2],
+                "offense_defense_fixed_hfa": [(mean(pf[h])+mean(pa[a]))/2+1.5,
+                                              (mean(pf[a])+mean(pa[h]))/2-1.5],
             }
         rows.append(row)
     return rows
@@ -172,8 +216,21 @@ def run(args):
         games.extend(gs)
         sources.append(dict(season=season, sha256=raw_hash, census=census,
                             source_url=f"https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_{season}.csv.gz"))
+    comparison = None
+    if args.schedule:
+        schedule,census = read_schedule(args.schedule,{s["season"] for s in sources})
+        comparison = reconcile_finals(schedule,games)
+        # The schedule is the explicit score-only source; conflicts are quarantined.
+        bad = set(comparison["conflicts"])
+        games = [g for g in schedule if g["game_id"] not in bad]
+        with open(args.schedule,"rb") as stream:
+            schedule_hash = hashlib.file_digest(stream,"sha256").hexdigest()
+        comparison["schedule_sha256"] = schedule_hash
+        comparison["schedule_census"] = census
+        comparison["schedule_url"] = "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv"
     rows = forecast(games)
-    report = dict(status="RETROSPECTIVE_RECONSTRUCTED_PAPER_0U",
+    report = dict(final_source="schedule" if args.schedule else "terminal_pbp",
+                  source_reconciliation=comparison,status="RETROSPECTIVE_RECONSTRUCTED_PAPER_0U",
                   source_attribution="nflverse / nflverse-pbp", sources=sources,
                   evaluated_utc=datetime.now(timezone.utc).isoformat(),
                   code_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -231,6 +288,20 @@ class Regression(unittest.TestCase):
     def test_late_prior_week_excluded(self):
         g=self.fixture(); g[0]["day"]=g[-1]["day"]
         self.assertEqual(forecast(g)[0]["training_n"],7)
+    def test_schedule_reconciliation(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/"games.csv"
+            p.write_text("game_id,season,game_type,week,gameday,home_team,away_team,home_score,away_score\n"
+                         "2023_01_B_A,2023,REG,1,2023-09-01,A,B,20,10\n"
+                         "2023_02_B_A,2023,REG,2,2023-09-08,A,B,,\n"
+                         "2023_19_B_A,2023,WC,19,2024-01-10,A,B,20,10\n")
+            games,census=read_schedule(p,{2023})
+            self.assertEqual(census,{"regular_schedule_events":2,"eligible_finals":1,"missing_final":1})
+            self.assertEqual(reconcile_finals(games,[])["schedule_only"],["2023_01_B_A"])
+            self.assertEqual(reconcile_finals(games,[dict(games[0],home_score=21)])["conflicts"],["2023_01_B_A"])
+    def test_fixed_hfa_model(self):
+        row=forecast(self.fixture())[0]["forecasts"]
+        self.assertEqual(row["offense_defense_fixed_hfa"],[21.5,8.5])
     def test_no_replace(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/"report.json";publish(p,{"a":1})
@@ -245,6 +316,7 @@ if __name__ == "__main__":
     parser.add_argument("--self-test",action="store_true")
     parser.add_argument("--input",nargs="+")
     parser.add_argument("--output")
+    parser.add_argument("--schedule")
     args=parser.parse_args()
     if args.self_test:
         unittest.main(argv=[__file__],verbosity=2)
