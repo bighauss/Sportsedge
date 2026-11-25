@@ -1,0 +1,130 @@
+{
+ "adapter_status": {
+  "fullgame": "ACTIVE_CHALLENGER_DEFAULT_STAYS_FROZEN",
+  "halves": "ACTIVE",
+  "players": "OFF"
+ },
+ "bias": {
+  "fav_dog_balance_p": 0.0488,
+  "favorite_selections": 87,
+  "flags": [
+   "FAV_DOG_IMBALANCE",
+   "OVER_UNDER_IMBALANCE"
+  ],
+  "games_with_both_views": 34,
+  "mean_abs_model_minus_market_margin": 3.897,
+  "mean_model_minus_market_home_margin": 0.946,
+  "mean_model_minus_market_total": 2.287,
+  "note": "selections within a game/ladder are correlated, so balance p-values are optimistic",
+  "over_selections": 49,
+  "over_under_balance_p": 0.0053,
+  "positive_ev_selections": 202,
+  "under_selections": 25,
+  "underdog_selections": 115
+ },
+ "challenger": {
+  "audit_flag_census": {
+   "EV_GT_30_PCT": 6,
+   "FROZEN_EV_GT_30_PCT": 53
+  },
+  "ev_audit": "fullgame.pricing.ev_audit per side (flag only, no caps); identical rule to cbb_pricing.ev_sanity_audit, which takes the production card shape",
+  "ev_gt_30": 6,
+  "hybrid_ev_gt_30": 0,
+  "mean_chal_minus_market_margin": -0.497,
+  "mean_chal_minus_market_total": 0.722,
+  "meta": {
+   "games_csv_sha256": "01459e06df4e3270bb069fbfc4f472082dc1572f0090241f2ea0cabae5de3126",
+   "hca_fit": 5.702246014208379,
+   "max_prior_tip_utc": "2026-11-25T06:00Z",
+   "params": {
+    "carry": 0.85,
+    "carry_pace": 0.7,
+    "half_life": 40,
+    "hca_lam": 400,
+    "lam": 4,
+    "lam_pace": 4
+   },
+   "prior_games": 1052,
+   "summary_sha256": "8c3d4109be3c1abcc4fe31369ba57416dab56483244ab603b2972deca1f1eed2"
+  },
+  "pass_reasons": {
+   "CHALLENGER_PASS:CHALLENGER_TEAM_UNRATED": 12
+  },
+  "priced_sides": 392,
+  "projected": 57,
+  "sites": {
+   "HOME_VERIFIED": 27,
+   "NEUTRAL": 30
+  }
+ },
+ "consistency": {
+  "closed_form_team_sd_in_cbb_pricing": 12.021,
+  "draws_per_game": 20000,
+  "implied_home_away_score_corr": 0.298,
+  "joint_team_sd": 10.55,
+  "ml_sim_vs_closed_max_abs": 0.0079,
+  "note": "pipeline prices every family from the same joint draws (spread, total, ML, team totals, alts are mutually consistent by construction); cbb_pricing's closed-form team-total SD assumes zero home/away correlation and differs (reported, not changed: WS1 owns cbb_pricing). Halves and players are not simulated until their adapters land.",
+  "sim_vs_closed_form_by_market": {
+   "ALT_SPREAD": 0.0192,
+   "ALT_TOTAL": 0.0162,
+   "ML": 0.0079,
+   "SPREAD": 0.0163,
+   "TOTAL": 0.0173
+  },
+  "sim_vs_closed_form_max_abs": 0.0192,
+  "simulated_games": 59
+ },
+ "ev_gt_30_count": 53,
+ "leakage": {
+  "finals_used_before_grade": false,
+  "fitted_sd": {
+   "basis": "RETRO_PRIOR_FINALS_IN_SAMPLE_LIKELY_UNDERSTATED",
+   "margin": 10.510628492698082,
+   "min_n": 30,
+   "n": 1111,
+   "prospective_available": 0,
+   "total": 13.418333357572774
+  },
+  "flags": [],
+  "freeze_utc": "2026-11-25T12:40:00Z",
+  "hca": {
+   "basis": "MEAN_RESIDUAL_PRIOR_NON_NEUTRAL_FINALS",
+   "mean": 6.281036885378868,
+   "min_n": 50,
+   "n": 937,
+   "sd": 10.85130836900089,
+   "se": 0.3544967923609214,
+   "value": 6.281036885378868
+  },
+  "independent_view_reads_prices": false,
+  "league_ortg": 106.82461535176334,
+  "league_pace": 70.73808280828082,
+  "max_prior_tip_utc": "2026-11-25T06:00:00Z",
+  "note": "independent projections are computed before and without quotes; market view separate",
+  "prior_census": {
+   "eligible": 1111
+  },
+  "prior_finals_dropped_low_count_teams": 248,
+  "prior_finals_used": 1111,
+  "prior_rule": "tip + 3h <= freeze (final availability ASSUMED, not observed)",
+  "ratings_sha256": "a1918829572329a682aa46244ca4ec717a902100140038a12d974c95c947f018",
+  "reconstruction_home_edge_per100": 4.180540335269294
+ },
+ "match_census": {
+  "DK_TEAM_CROSSWALK_ESPN_ID": 22,
+  "ESPN_LOCATION_EXACT": 214,
+  "ESPN_SHORT_NAME_EXACT": 5
+ },
+ "provenance_census": {
+  "UNAUTHENTICATED_PDF": 367
+ },
+ "slate": {
+  "espn_games_on_date_after_freeze": 69,
+  "espn_games_started_before_as_of": 1,
+  "games_with_accepted_quotes": 47,
+  "pass_reasons": {
+   "GAME_NOT_PROJECTED:UNMAPPED_CBBD_TEAM_ID": 10
+  },
+  "projected": 59
+ }
+}

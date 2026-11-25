@@ -170,9 +170,10 @@ class NineWeightTest(LedgerBase):
         rows = L.nine_weight_comparison([(0.6, 0.2, 0.4, 1)])
         self.assertEqual([x["weight_model_pct"] for x in rows], list(L.BLEND_GRID))
         self.assertTrue(all(x["n"] == 1 for x in rows))
-        self.assertAlmostEqual(rows[0]["brier"], 0.36)
-        self.assertAlmostEqual(rows[-1]["brier"], 0.0625)
-        self.assertAlmostEqual(rows[2]["brier"], (0.575 - 1)**2)
+        by_w = {x["weight_model_pct"]: x for x in rows}
+        self.assertAlmostEqual(by_w[0]["brier"], 0.36)
+        self.assertAlmostEqual(by_w[100]["brier"], 0.0625)
+        self.assertAlmostEqual(by_w[50]["brier"], (0.575 - 1)**2)
         self.assertTrue(all(x["brier"] is None and x["n"] == 0 for x in L.nine_weight_comparison([])))
 
     def test_real_ledger_integration_endpoints_match_existing_metrics(self):
@@ -181,10 +182,11 @@ class NineWeightTest(LedgerBase):
         report = L.evaluate(L.read(self.ledger))
         for family, grid in report["nine_weight_same_book_comparison"]["families"].items():
             base = report["forecast_accuracy"][family + "_brier"]
-            self.assertEqual(grid[0]["n"], base["n"])
+            by_w = {x["weight_model_pct"]: x for x in grid}
+            self.assertEqual(by_w[0]["n"], base["n"])
             if base["n"]:
-                self.assertAlmostEqual(grid[0]["brier"], base["market"])
-                self.assertAlmostEqual(grid[-1]["brier"], base["model"])
+                self.assertAlmostEqual(by_w[0]["brier"], base["market"])
+                self.assertAlmostEqual(by_w[100]["brier"], base["model"])
         self.assertEqual(report["approved_stake_u"], 0)
 
     def test_invalid_probabilities_fail_closed(self):

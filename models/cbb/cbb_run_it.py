@@ -815,6 +815,12 @@ def _write_receipt(out_dir, run_id, now, card, extra, errors, ledger_path):
         pass
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ["pipeline"]:
+        # Single command for the full pipeline on public inputs / grading / DK auth requirements:
+        #   python models/cbb/cbb_run_it.py pipeline --mode public-replay|grade|auth-requirements ...
+        import cbb_run_it_pipeline as PIPE
+        return PIPE.main(argv[1:])
     a = argparse.ArgumentParser()
     a.add_argument("--replay-evidence", help="decrypted evidence dir: SHADOW REPLAY, read-only, no ledger")
     a.add_argument("--board"); a.add_argument("--board-captured-utc")
@@ -835,6 +841,8 @@ def main(argv=None):
                    help="EXPERIMENTAL model weight in [0,1] (default 0.25; chronological test pending)")
     a.add_argument("--blowout-spread-abs", type=float)
     a.add_argument("--run-id", default=os.environ.get("GITHUB_RUN_ID", "local"))
+    a.add_argument("--pipeline-out", help="also run simulate/price/rank/audit/full card on the frozen card "
+                                         "(cbb_run_it_pipeline.run_from_card); PAPER/0u")
     x = a.parse_args(argv)
     if x.replay_evidence:
         if x.ledger: print("BLOCKED Hold: REPLAY_NEVER_WRITES_LEDGER", file=sys.stderr); return 2
@@ -1017,6 +1025,15 @@ def main(argv=None):
     (out / "cbb_card.md").write_text(md)
     _write_receipt(x.out, x.run_id, now, card, extra, [], x.ledger)
     print(f"slate {extra['slate_games']}, projected {card['projected_rows']}, priced {card['priced_market_rows']}")
+    if x.pipeline_out:
+        import cbb_run_it_pipeline as PIPE
+        try:
+            res = PIPE.run_from_card(card, names, x.board, x.board_captured_utc, x.pipeline_out,
+                                     totals_order_verified=x.totals_order_verified)
+            print("PIPELINE", json.dumps(res, sort_keys=True))
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            print(f"PIPELINE BLOCKED {type(exc).__name__}", file=sys.stderr)
+            return 2
     return 0
 
 if __name__ == "__main__":

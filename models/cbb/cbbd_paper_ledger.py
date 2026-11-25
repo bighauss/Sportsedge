@@ -370,7 +370,7 @@ def _walkforward_rows(graded, family):
 
 
 # Fixed, predeclared model-weight grid; market benchmark is the SAME book.
-BLEND_GRID = (0, 25, 50, 60, 75, 80, 90, 95, 100)
+BLEND_GRID = (100, 87.5, 75, 62.5, 50, 37.5, 25, 12.5, 0)  # model percent; matches OWNER_BLEND_WEIGHTS
 
 def nine_weight_comparison(pairs):
     """Paired frozen probabilities only. No weight selection or refitting.

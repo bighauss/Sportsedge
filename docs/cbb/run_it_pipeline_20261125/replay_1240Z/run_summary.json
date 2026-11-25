@@ -1,0 +1,35 @@
+{
+ "board_provenance": "UNAUTHENTICATED_PDF",
+ "board_rows": 367,
+ "card_sha256": "6ab20cf95419cf0cade21344b2cb8eb363c3b8ea48a58c6f763f2abd5e3054bb",
+ "counted": "NON_COUNTED",
+ "date_ct": "2026-11-25",
+ "ev_gt_30": 53,
+ "freeze_kind": "REPLAY_RECORD_NOT_PROSPECTIVE",
+ "freeze_utc": "2026-11-25T12:40:00Z",
+ "games_with_accepted_quotes": 47,
+ "graded": {
+  "L": 0,
+  "P": 0,
+  "W": 0,
+  "clv_rows": 0,
+  "max_drawdown_u": 0.0,
+  "n": 0,
+  "roi": null,
+  "units": 0
+ },
+ "label": "PAPER_0U",
+ "priced_quotes": 241,
+ "priced_sides": 482,
+ "projected": 59,
+ "rejections": 126,
+ "rejections_by_code": {
+  "ORIENTATION_MISMATCH": 3,
+  "TOTALS_ORDER_UNVERIFIED": 123
+ },
+ "results_census": {
+  "PENDING_NO_FINAL": 482
+ },
+ "slate_games": 69,
+ "started_before_as_of": 1
+}
