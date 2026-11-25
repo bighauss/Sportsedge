@@ -40,6 +40,10 @@ class MatchupForecast(unittest.TestCase):
         self.assertEqual(bundle["evidence_class"], "CHRONOLOGICAL_REPLAY_NOT_PROSPECTIVE")
         self.assertEqual(len(bundle["rejections"]), 5)
         self.assertEqual(bundle["approved_stake_u"], 0)
+        metrics = bundle["paired_replay_metrics"]
+        self.assertEqual(metrics["PRA"]["n"], 5)
+        self.assertEqual(metrics["PTS"]["baseline"]["mae"], 0)
+        self.assertGreater(metrics["PTS"]["model"]["mae"], 0)
 
     def test_invalid_duplicate_and_missing_history(self):
         r = sample(1)
