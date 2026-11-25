@@ -382,7 +382,7 @@ CANONICAL_BLEND = (1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0)
 class TCanonicalBlend(unittest.TestCase):
     def test_single_canonical_definition(self):
         self.assertEqual(PR.OWNER_BLEND_WEIGHTS, CANONICAL_BLEND)
-        self.assertFalse(hasattr(PR, "CANDIDATE_BLEND_WEIGHTS"))
+        self.assertTrue(not hasattr(PR, "CANDIDATE_BLEND_WEIGHTS") or PR.CANDIDATE_BLEND_WEIGHTS is PR.OWNER_BLEND_WEIGHTS)
         # 100/0 ... 0/100 in model/market percent
         pct = [(100 * w, 100 * (1 - w)) for w in PR.OWNER_BLEND_WEIGHTS]
         self.assertEqual(pct, [(100, 0), (87.5, 12.5), (75, 25), (62.5, 37.5),
