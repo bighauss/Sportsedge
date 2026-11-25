@@ -41,7 +41,8 @@ jobs:
       - name: Acquire public historical inputs
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/cbb-data" "$RUNNER_TEMP/cbb-report"
+          mkdir -p "$RUNNER_TEMP/cbb-data"
+          mkdir -m 700 "$RUNNER_TEMP/cbb-report"
           for season in 2019 2020 2021 2022 2023 2024 2025; do
             curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_${season}.parquet" -o "$RUNNER_TEMP/cbb-data/mbb_schedule_${season}.parquet"
             curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_team_boxscores/team_box_${season}.parquet" -o "$RUNNER_TEMP/cbb-data/team_box_${season}.parquet"
