@@ -10,9 +10,28 @@
    "REJECTED": 359
   },
   "transcript_0517_0534CT": {
+   "HELD": 86,
    "REJECTED": 171,
-   "SUPERSEDED": 93
+   "SUPERSEDED": 7
   }
+ },
+ "chronology": {
+  "espn_retrieved_utc": "2026-11-25T17:03:18Z",
+  "identity_basis_counts": {
+   "LATER_PUBLIC_PAGE_CORROBORATION": 943,
+   "NONE": 59
+  },
+  "identity_evidence_retrieved_utc_range": [
+   "2026-11-25T16:59:37Z",
+   "2026-11-25T17:03:01Z"
+  ],
+  "issue57_hold_input": [
+   "Saint Bonaventure@Belmont"
+  ],
+  "pr530_correction_available_utc": "2026-11-25T13:08:56Z",
+  "rows_after_as_of_dropped": 0,
+  "rows_with_unusable_clock": 0,
+  "rule": "Output depends only on rows with captured_utc <= as_of_utc. Later rows are dropped before supersession, duplicate detection, identity checks and holds, and leave no trace in the outputs."
  },
  "cross_capture_saint_bonaventure_belmont": [
   {
@@ -741,9 +760,9 @@
  "date": "2026-11-25",
  "dispositions": {
   "ACCEPTED": 244,
-  "HELD": 135,
+  "HELD": 221,
   "REJECTED": 530,
-  "SUPERSEDED": 93
+  "SUPERSEDED": 7
  },
  "espn_current_feed_orientation": [
   {
@@ -1151,7 +1170,7 @@
   "rows_with_verified_id": 943,
   "verified": 48
  },
- "generated_utc": "2026-11-25T17:27:02Z",
+ "generated_utc": "2026-11-25T17:49:18Z",
  "identity_checks": {
   "alt_spread": {
    "pdf_0636CT | Abilene Christian | South Dakota State | FG": "AGREE",
@@ -1718,11 +1737,12 @@
   "ISSUE57_ORIENTATION_HOLD": 310,
   "ONE_SIDED_QUOTE": 460,
   "PLAYER_TEAM_NOT_ESTABLISHED": 310,
-  "SUPERSEDED_BY_LATER_CAPTURE": 243,
+  "SUPERSEDED_BY_LATER_CAPTURE": 39,
   "TOTALS_ORDER_CONFLICT": 4,
   "TOTALS_ORDER_UNVERIFIED": 183,
   "UNSUPPORTED_MARKET": 21
  },
+ "replay_basis": "RETROSPECTIVE_LATER_IDENTITY",
  "rows_in": 1002,
  "runner_board_rows": 367,
  "schema": "sportsedge-cbb-dk-derived-v1",
