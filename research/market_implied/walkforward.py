@@ -9,7 +9,9 @@ import random
 from collections import defaultdict
 from datetime import datetime, timezone
 
-MARKET_WEIGHTS = (0., .25, .50, .60, .75, .80, .90, .95, 1.)
+INDEPENDENT_WEIGHTS = (0., .25, .50, .60, .75, .80, .90, .95, 1.)
+# Public blend API uses market weight. Complement the owner-approved independent grid.
+MARKET_WEIGHTS = tuple(sorted(round(1-w, 2) for w in INDEPENDENT_WEIGHTS))
 SPORTS = frozenset(("NFL", "CFB", "CBB", "NBA", "MLB", "NHL", "PGA"))
 
 
