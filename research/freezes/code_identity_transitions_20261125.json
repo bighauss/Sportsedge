@@ -1,0 +1,49 @@
+{
+  "schema": "sportsedge-code-identity-transitions-v1",
+  "status": "PENDING_OWNER_MERGE",
+  "recording_act": "OWNER_MERGE",
+  "owner_decision": "VERSIONED_RESEARCH_CANDIDATES_ONLY",
+  "owner_decision_ct": "2026-11-25",
+  "chains_from": "research/freezes/code_identity_transitions_20261118.json",
+  "supplements_manifest": {
+    "path": "research/freezes/code_identity_transitions_20261118.json",
+    "git_blob_sha1": "399a4df65036eb236f9f56699bc4090507786a3c",
+    "edited_by_this_change": false
+  },
+  "original_baseline_commit": "29c85365e27665f16ba378cf2c7fc9c81f5754c1",
+  "original_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
+  "nov18_transition_manifest_git_blob_sha1": "399a4df65036eb236f9f56699bc4090507786a3c",
+  "verify_code_freezes_git_blob_sha1": "27d2b51d27d4b7da6f22dad31d55257541af8f67",
+  "verify_versioned_transition_git_blob_sha1": "62e5a091d1bcca671193a4e47f6d941f06c8e047",
+  "frozen_engine_v5_unchanged": true,
+  "official_counted": 0,
+  "approved_stake_u": 0,
+  "candidates": [
+    {
+      "sport": "MLB",
+      "path": "models/mlb/sportsedge_mlb_model.py",
+      "original_git_blob_sha1": "bdedf10c09c307ee51fcec0f7da32cb4fa7974b8",
+      "prior_approved_candidate_git_blob_sha1": "3f630532e9ff499912bc06041906d3b7c11d9887",
+      "prior_first_introducing_commit": "85adaf523dbc46b6a7839151d5593c1ceade2be9",
+      "prior_change_pr": 293,
+      "approved_candidate_git_blob_sha1": "30c6cb3355ac5f6b6cbb018729c4fdc41255e057",
+      "first_introducing_commit": "b73874a2ecf8d558780bacf6b636b70e409f2cb4",
+      "change_pr": 446,
+      "governance_record": "docs/governance/changes/pr-446.json",
+      "change_class": "INPUT_SAFETY_FAIL_CLOSED_LOADER_ONLY"
+    },
+    {
+      "sport": "NBA",
+      "path": "models/nba/sportsedge_nba_model.py",
+      "original_git_blob_sha1": "0036cb9a2a7eff9fed9b175a0175a963d20e6b3e",
+      "prior_approved_candidate_git_blob_sha1": "da0c1503af5ed9ad548d1458588505f695b749e5",
+      "prior_first_introducing_commit": "098c92bfd538fbb664b1c8eccccf61779cabe2b2",
+      "prior_change_pr": 294,
+      "approved_candidate_git_blob_sha1": "b353de86445188288cab4050f6cae13eee76bff6",
+      "first_introducing_commit": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
+      "change_pr": 460,
+      "governance_record": "docs/governance/changes/pr-460.json",
+      "change_class": "BEHAVIORAL_TWO_WAY_1H_1Q_ML_TIE_PUSH_ACCOUNTING"
+    }
+  ]
+}
