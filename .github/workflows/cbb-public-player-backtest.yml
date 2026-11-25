@@ -2,9 +2,9 @@ name: CBB public player historical evaluation
 on:
   push:
     branches: [research/cbb-player-forward-quality-20261124]
-    paths: ['research/cbb_public_player_backtest.py', '.github/workflows/cbb-public-player-backtest.yml', 'docs/governance/changes/pr-519.json']
+    paths: ['research/cbb_public_player_backtest.py', 'research/cbb_player_distribution.py', '.github/workflows/cbb-public-player-backtest.yml', 'docs/governance/changes/pr-519.json']
   pull_request:
-    paths: ['research/cbb_public_player_backtest.py', '.github/workflows/cbb-public-player-backtest.yml']
+    paths: ['research/cbb_public_player_backtest.py', 'research/cbb_player_distribution.py', '.github/workflows/cbb-public-player-backtest.yml']
 permissions:
   contents: read
 env:
@@ -20,11 +20,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - run: python -m unittest -v research.cbb_player_distribution
       - run: python research/cbb_public_player_backtest.py --self-test
   retrospective:
     needs: offline
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
