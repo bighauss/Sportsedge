@@ -1,0 +1,64 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 529,
+  "base_commit": "d23794a3f1be5679c7589b47968f39a0b8667969",
+  "protected_paths": [
+    "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture.csv",
+    "models/cbb/run_requests/current.json"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Ingest owner-uploaded November 25 DK PDF capture and request existing pregame diagnostic.",
+  "assumptions": [
+    "13 unique user-uploaded PDFs; times from screenshot filenames, not authenticated provider receipts.",
+    "738 visible-price rows, 53 matchup pairs; selected alternate rungs and one-sided milestones only; no unseen prices invented.",
+    "Only previously verified event 35083406 bound; remaining event IDs absent and relevant safeguards stay in force.",
+    "No model, pricing, calibration, ledger or release change; existing first freeze retained."
+  ],
+  "agent_identity": "ChatGPT",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "cbb-run-it-fixture-tests",
+    "before": null,
+    "unit": "tests",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest tools.test_cbb_run_request -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "d23794a3f1be5679c7589b47968f39a0b8667969",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest tools.test_cbb_run_request -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
