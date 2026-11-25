@@ -1,0 +1,64 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 541,
+  "base_commit": "2899f92c16b268ab5f7522ed14a7323cbddfeb4d",
+  "protected_paths": [
+    ".github/workflows/cbb-dk.yml",
+    "models/cbb/dk/team_total_order_audit.py",
+    "models/cbb/dk/test_team_total_order_audit.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Read-only team-total selection-order diagnostic; preserve all held contracts and zero stakes.",
+  "assumptions": [
+    "Equal prices are arithmetic invariance only, not source authentication.",
+    "Unequal prices require original labeled selections.",
+    "No held rows released; PAPER/0u NON_COUNTED."
+  ],
+  "agent_identity": "ChatGPT SportsEdge research engineering",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Authenticated team-total selection-order coverage",
+    "before": null,
+    "unit": "markets",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v models.cbb.dk.test_dk_reconcile models.cbb.dk.test_team_total_order_audit",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "2899f92c16b268ab5f7522ed14a7323cbddfeb4d",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v models.cbb.dk.test_dk_reconcile models.cbb.dk.test_team_total_order_audit"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
