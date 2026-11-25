@@ -45,9 +45,9 @@ def admit(rows):
             if type(minutes) not in (int, float) or not math.isfinite(minutes) or not 0 < minutes <= 100:
                 raise ValueError("INVALID_PARTICIPATION_MINUTES")
             vals = vector(p["stats"], actual=True)
-            totals[tid] = [a + b for a, b in zip(totals[tid], vals)]
+            totals[tid] = [a+b for a,b in zip(totals[tid], vals)]
         for tid, vals in totals.items():
-            if any(a > b for a, b in zip(vals, vector(r["team_stats"][tid], actual=True))):
+            if any(a > b for a,b in zip(vals, vector(r["team_stats"][tid], actual=True))):
                 raise ValueError("PLAYER_TOTAL_EXCEEDS_TEAM")
         result.append(r)
     return sorted(result, key=lambda r: (clock(r["observed_final_utc"]), r["event_id"]))
@@ -64,7 +64,7 @@ def forecast(target, admitted):
     team_games, def_allowed, league, appearances = defaultdict(list), defaultdict(list), [], []
     for r in sorted(prior, key=lambda row: clock(row["tip_utc"])):
         h, a, pace = r["home_id"], r["away_id"], r["possessions"]
-        for team, other in ((h, a), (a, h)):
+        for team, other in ((h,a),(a,h)):
             team_games[team].append(pace)
             vals = vector(r["team_stats"][other], actual=True)
             rate = tuple(v / pace for v in vals)
@@ -73,26 +73,28 @@ def forecast(target, admitted):
         for p in r["players"]:
             if p["player_id"] == pid and p["team_id"] == tid:
                 appearances.append((r, p))
-    if len(appearances) < MIN_APPEARANCES or min(len(team_games[tid]), len(team_games[opp])) < MIN_TEAM_GAMES:
+    if len(appearances) < MIN_APPEARANCES or min(len(team_games[tid]),len(team_games[opp])) < MIN_TEAM_GAMES:
         raise ValueError("INSUFFICIENT_MATCHUP_HISTORY")
+    # Latest 10 by game tip, not order received. No inferred availability or minutes cap.
     recent = sorted(appearances, key=lambda rp: clock(rp[0]["tip_utc"]))[-10:]
-    minutes = mean(p["minutes"] for _, p in recent)
+    minutes = mean(p["minutes"] for _,p in recent)
     pace = (mean(team_games[tid][-10:]) + mean(team_games[opp][-10:])) / 2
-    player_pace = mean(r["possessions"] for r, _ in recent)
+    player_pace = mean(r["possessions"] for r,_ in recent)
     lg = [mean(v[i] for v in league) for i in range(4)]
     opp_rows = def_allowed[opp]
     n = len(opp_rows)
-    factors = [((sum(v[i] for v in opp_rows) + SHRINK * lg[i]) / (n + SHRINK)) / lg[i]
+    # Shrink opponent allowed per possession toward prior-only league baseline.
+    factors = [((sum(v[i] for v in opp_rows)+SHRINK*lg[i])/(n+SHRINK))/lg[i]
                if lg[i] > 0 else 1.0 for i in range(4)]
     means = {}
     for i, stat in enumerate(STATS):
-        rate = sum(p["stats"][stat] for _, p in recent) / sum(p["minutes"] for _, p in recent)
-        means[stat] = rate * minutes * pace / player_pace * factors[i]
-    means["3PM"] = min(means["3PM"], means["PTS"] / 3)
+        rate = sum(p["stats"][stat] for _,p in recent)/sum(p["minutes"] for _,p in recent)
+        means[stat] = rate * minutes * pace/player_pace * factors[i]
+    means["3PM"] = min(means["3PM"], means["PTS"]/3)
     f = Forecast(gid, tid, pid, target["tip_utc"], target["frozen_utc"], means, VERSION)
     validate_forecast(f)
     return f, {"minutes_if_participating": minutes, "pace": pace,
-               "opponent_factors": dict(zip(STATS, factors)),
+               "opponent_factors": dict(zip(STATS,factors)),
                "appearances": len(recent), "opponent_games": n,
                "prior_games": len(prior), "max_observed_final_utc": prior[-1]["observed_final_utc"],
                "baseline_means": {stat: mean(p["stats"][stat] for _, p in recent) for stat in STATS}}
@@ -106,8 +108,9 @@ def build(rows, targets):
     for r in admitted:
         for p in r["players"]:
             tid = p["team_id"]
+            # Historical cutoff is game tip minus one second, not a claim of original capture.
             from datetime import timedelta
-            cutoff = (clock(r["tip_utc"]) - timedelta(seconds=1)).isoformat()
+            cutoff = (clock(r["tip_utc"])-timedelta(seconds=1)).isoformat()
             target = {"event_id": r["event_id"], "team_id": tid, "player_id": p["player_id"],
                       "opponent_id": r["away_id"] if tid == r["home_id"] else r["home_id"],
                       "tip_utc": r["tip_utc"], "frozen_utc": cutoff}
@@ -121,7 +124,7 @@ def build(rows, targets):
                 rejects.append({"stage": "historical", "event_id": r["event_id"], "player_id": p["player_id"], "reason": str(exc)})
     seen = set()
     for t in targets:
-        key = tuple(t[k] for k in ("event_id", "team_id", "player_id"))
+        key = tuple(t[k] for k in ("event_id","team_id","player_id"))
         if key in seen:
             raise ValueError("DUPLICATE_TARGET")
         seen.add(key)
@@ -140,7 +143,9 @@ def build(rows, targets):
 
 
 def compare(rows):
-    """Paired chronological mean error versus unadjusted recent-player averages."""
+    """Paired chronological mean error versus unadjusted recent-player averages.
+    Correlated player/game rows are not independent; no ROI or significance claim.
+    """
     from cbb_player_residual_pricing import COMBOS
     out = {}
     for name, keys in {**{s: (s,) for s in STATS}, **COMBOS}.items():
@@ -148,7 +153,7 @@ def compare(rows):
         for model in ("model", "baseline"):
             errors = [sum(r[model][k] - r["actual"][k] for k in keys) for r in rows]
             out[name][model] = {"mae": mean(abs(e) for e in errors) if errors else None,
-                                "rmse": math.sqrt(mean(e * e for e in errors)) if errors else None,
+                                "rmse": math.sqrt(mean(e*e for e in errors)) if errors else None,
                                 "bias_forecast_minus_actual": mean(errors) if errors else None}
     return out
 

@@ -1,0 +1,70 @@
+name: CBB real-board retrospective pipeline
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cbb-real-board-replay.yml'
+      - 'models/cbb/cbb_run_it_pipeline.py'
+  push:
+    branches: [research/cbb-all-market-contract-safety-20261125]
+    paths:
+      - '.github/workflows/cbb-real-board-replay.yml'
+permissions:
+  contents: read
+jobs:
+  public-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          ref: 2899f92c16b268ab5f7522ed14a7323cbddfeb4d
+          path: source-dk
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: d6ccd412993f1e7000cd8ffd28f35337bb29e659
+          path: source-halves
+          persist-credentials: false
+      - name: Real-board historical reconstruction (no secrets or live wagers)
+        run: |
+          set -euo pipefail
+          umask 077
+          python models/cbb/cbb_run_it_pipeline.py --mode public-replay --date-ct 2026-11-25 \
+            --board source-dk/models/cbb/dk/derived/2026-11-25/runner_board.csv \
+            --board-captured-utc 2026-11-25T12:36:15Z --freeze-utc 2026-11-25T17:25:00Z \
+            --season 2027 --raw-dir "$RUNNER_TEMP/espn-raw" --out "$RUNNER_TEMP/replay" \
+            --team-crosswalk source-dk/models/cbb/lines/dk_team_crosswalk_2026-11-25.csv \
+            --adapters halves,players --halves-path source-halves/models/cbb --no-grade
+      - name: Check non-counted evidence and publish coverage only
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ["RUNNER_TEMP"]) / "replay"
+          card = json.loads((p/"pipeline_card.json").read_text())
+          summary = json.loads((p/"run_summary.json").read_text())
+          assert card["approved_stake_u"] == 0
+          assert card["counted"] == "NON_COUNTED"
+          assert card["freeze_kind"].endswith("NOT_PROSPECTIVE")
+          assert card["adapters"]["halves"] == "ACTIVE"
+          assert card["adapters"]["players"] != "ACTIVE"
+          assert summary["priced_sides"] > 0
+          assert all(r["approved_stake_u"] == 0 and r["counted"] == "NON_COUNTED" for r in card["priced"])
+          print(json.dumps(summary,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cbb-retrospective-real-board
+          path: |
+            ${{ runner.temp }}/replay/run_summary.json
+            ${{ runner.temp }}/replay/audit.json
+          retention-days: 14
+          if-no-files-found: error
