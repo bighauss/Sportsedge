@@ -6,11 +6,13 @@
     ".github/workflows/nfl-public-score-benchmark.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Add read-only public NFL retrospective score benchmark CI; no private data, secrets, frozen model, odds or ledger changes.",
+  "change_summary": "Add read-only public NFL retrospective score benchmark CI; no private data, secrets, frozen model, odds or ledger changes. Add corrected EPA and success-rate fitted challengers using the same schedule and PBP bytes and held-out seasons; no frozen model changes.",
   "assumptions": [
     "Prior week and calendar lag are reconstructed availability proxies, not authenticated final release clocks.",
     "Public nflverse PBP source bytes hashed at execution; raw PBP is not redistributed. Confirm coverage and source rights before any additional use.",
-    "No external review or predictive improvement claimed."
+    "No external review or predictive improvement claimed.",
+    "EPA/success allowed is measured from opposing offense perspective; average rather than subtract. Exclude incomplete rate history and report coverage; fit 2015–19 only and report 2020–24 only.",
+    "Week-block intervals are descriptive, not independent inference; fixed HFA and filters are research assumptions."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
@@ -34,7 +36,7 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python research/nfl_public_score_benchmark.py --self-test",
+    "test_command": "python research/nfl_public_score_benchmark.py --self-test && python research/nfl_public_epa_challenger.py --self-test",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
