@@ -11,27 +11,31 @@ from typing import Dict, List
 
 import pandas as pd
 
-def estimate_possessions(row) -> float:
-    """Standard possessions estimate. Use 'turnovers' not 'team_turnovers'."""
-    fga = row.get("field_goals_attempted") or 0
-    fta = row.get("free_throws_attempted") or 0
-    orb = row.get("offensive_rebounds") or 0
-    tov = row.get("turnovers") or 0  # not team_turnovers
-    return fga - orb + tov + 0.475 * fta
+def estimate_possessions(row) -> float | None:
+    """Standard possessions estimate. Reject if any required input is missing."""
+    for col in ("field_goals_attempted", "free_throws_attempted", "offensive_rebounds", "turnovers"):
+        v = row.get(col)
+        if v is None or (isinstance(v, float) and not math.isfinite(v)):
+            return None
+    return (row["field_goals_attempted"]
+            - row["offensive_rebounds"]
+            + row["turnovers"]
+            + 0.475 * row["free_throws_attempted"])
 
 def build_team_season_summary(box: pd.DataFrame) -> pd.DataFrame:
     """Aggregate per-team offensive and defensive efficiency and pace."""
     rows = []
     for team, g in box.groupby("team_display_name"):
         poss = g.apply(estimate_possessions, axis=1)
-        pts = g["team_score"]
-        opp_pts = g["opponent_team_score"]
-        n = len(g)
-        if n < 3 or poss.sum() <= 0:
+        valid = poss.notna()
+        poss = poss[valid]
+        if len(poss) < 3 or poss.sum() <= 0:
             continue
+        pts = g.loc[valid, "team_score"]
+        opp_pts = g.loc[valid, "opponent_team_score"]
         rows.append({
             "team": team,
-            "games": n,
+            "games": len(poss),
             "possessions_per_game": poss.mean(),
             "off_efficiency": 100 * pts.sum() / poss.sum(),
             "def_efficiency": 100 * opp_pts.sum() / poss.sum(),
@@ -40,15 +44,22 @@ def build_team_season_summary(box: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("net_efficiency", ascending=False)
 
 def project_matchup(summary: pd.DataFrame, home: str, away: str) -> Dict:
-    """Simple research projection using team efficiencies and average pace."""
+    """Research projection using both offensive and defensive efficiency.
+
+    Expected points = (team_off * opp_def / league_avg) * pace / 100.
+    Requires both teams to have measured defense. PAPER/0u research only.
+    """
     h = summary[summary["team"] == home]
     a = summary[summary["team"] == away]
     if h.empty or a.empty:
         return {"status": "MISSING_TEAM"}
     h, a = h.iloc[0], a.iloc[0]
+    league_avg = summary["off_efficiency"].mean()
+    if not math.isfinite(league_avg) or league_avg <= 0:
+        return {"status": "INVALID_LEAGUE_AVG"}
     pace = (h["possessions_per_game"] + a["possessions_per_game"]) / 2
-    home_pts = h["off_efficiency"] * pace / 100
-    away_pts = a["off_efficiency"] * pace / 100
+    home_pts = (h["off_efficiency"] * a["def_efficiency"] / league_avg) * pace / 100
+    away_pts = (a["off_efficiency"] * h["def_efficiency"] / league_avg) * pace / 100
     return {
         "status": "RESEARCH_PROJECTION",
         "home": home,
@@ -60,7 +71,8 @@ def project_matchup(summary: pd.DataFrame, home: str, away: str) -> Dict:
         "pace": round(pace, 1),
         "games_home": int(h["games"]),
         "games_away": int(a["games"]),
-        "label": "PAPER_0U_RESEARCH_BASELINE",
+        "league_avg_used": round(league_avg, 1),
+        "label": "PAPER_0U_RESEARCH_BASELINE_BOTH_SIDES",
     }
 
 if __name__ == "__main__":
