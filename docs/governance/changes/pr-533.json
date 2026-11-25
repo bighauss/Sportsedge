@@ -1,0 +1,70 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 533,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "protected_paths": [
+    ".github/workflows/cbb-halves.yml",
+    "models/cbb/halves/README.md",
+    "models/cbb/halves/__init__.py",
+    "models/cbb/halves/coefficients_halves_v1.json",
+    "models/cbb/halves/halves_model.py",
+    "models/cbb/halves/halves_pricing.py",
+    "models/cbb/halves/test_halves.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Add a research-only CBB first-half and second-half model: a rebuilt public sportsdataverse ESPN PBP dataset (2019-2026; the reported 6,297-game set was not found and is not claimed), chronological residual fits, integer-PMF distributions, and push-aware pricing for spread, total, moneyline and both team totals. Pregame H2 and halftime-adjusted H2 are separately labelled. Dedicated workflow cbb-halves.yml runs both test suites. PAPER/0u, NON_COUNTED, approved_stake_u=0. No frozen coefficients, pins or production promotion.",
+  "assumptions": [
+    "The 6,297-game H1 dataset reported in issue #57 was not located in the repo, branches, issues, PRs or workflow artifacts; this PR rebuilds from public sportsdataverse files and does not claim to be that dataset.",
+    "Season 2026 was held out and scored once in this research run. That evaluation is self-reported, not independently verified; unseen_data_verified remains false.",
+    "Fitted means are scaled to the research point-in-time projector, not the production or challenger full-game model, and need a separate refit before any use beside those projections.",
+    "Totals bias on 2026 (H1 +1.10, H2 +1.38) is disclosed and is not corrected on the test window. There are no historical half-market prices, so ROI and CLV are not computed. Margin/total and H1-H2 dependence are not jointly modelled in this commit.",
+    "Hosted workflow .github/workflows/cbb-halves.yml runs both suites: python -m unittest -v halves.test_halves (from models/cbb) and python -m unittest -v research.cbb_halves.test_halves_research. A green check is not validation or a staking authorization."
+  ],
+  "agent_identity": "SportsEdge Constructions bot (grok-cbb/*)",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "legacy H1 margin MAE on held-out season 2026",
+    "before": null,
+    "unit": "points",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v research.cbb_halves.test_halves_research",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v research.cbb_halves.test_halves_research"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
