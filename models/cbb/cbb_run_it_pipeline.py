@@ -665,7 +665,8 @@ def espn_games(raw_dir, days):
                     row["home_score"], row["away_score"] = int(comp["home"]["score"]), int(comp["away"]["score"])
                     ls = [[int(float(x.get("value", x.get("displayValue")))) for x in comp[s].get("linescores", [])]
                           for s in ("home", "away")]
-                    if all(len(l) >= 2 for l in ls):
+                    if all(len(l) >= 2 and all(v >= 0 for v in l) for l in ls) and \
+                            sum(ls[0]) == row["home_score"] and sum(ls[1]) == row["away_score"]:
                         row["h1"] = [ls[0][0], ls[1][0]]
                 except (TypeError, ValueError, KeyError):
                     row["completed"] = False
@@ -976,27 +977,34 @@ def grade(frozen, finals, close_quotes=None):
             grades += [C.GradeRow(gid, period, market, r["line"], r["side"], r["price"], "PENDING_NO_FINAL", None,
                                   r["prob_model"]) for r in sides]
             continue
-        if period != "FG":
+        scores = (f["home"], f["away"]) if period == "FG" else f.get("h1") if period == "1H" else None
+        if (not isinstance(scores, (list, tuple)) or len(scores) != 2 or
+                any(type(v) is not int or v < 0 for v in scores) or
+                (period == "1H" and (scores[0] > f["home"] or scores[1] > f["away"])) or
+                (market == "ML" and scores[0] == scores[1])):
+            # Half ML tie and all H2 settlement terms are not verified.
             grades.append(C.GradeRow(gid, period, market, best["line"], best["side"], best["price"], "NOT_GRADABLE",
                                      None, best["prob_model"]))
             continue
-        oc = outcome(market, hl, f["home"], f["away"])
+        oc = outcome(market, hl, *scores)
         if oc != "push":
             for r in sides:
-                cal.append({"market": market, "p_model": r["prob_model"] / (1 - r["prob_push"]),
+                if r["prob_push"] >= 1:
+                    continue
+                cal.append({"market": market if period == "FG" else f"{period}:{market}", "p_model": r["prob_model"] / (1 - r["prob_push"]),
                             "p_market": r["prob_market_novig"], "y": int(oc == r["side"])})
         if best["ev_model"] <= 0:
-            grades.append(C.GradeRow(gid, "FG", market, best["line"], best["side"], best["price"], "NO_SELECTION",
+            grades.append(C.GradeRow(gid, period, market, best["line"], best["side"], best["price"], "NO_SELECTION",
                                      None, best["prob_model"]))
             continue
         dec = NM.decimal_odds(best["price"])
         res, ret = ("P", 0.0) if oc == "push" else (("W", dec - 1) if oc == best["side"] else ("L", -1.0))
         clv = None
-        cq = (close_quotes or {}).get((gid, "FG", market, hl))
+        cq = (close_quotes or {}).get((gid, period, market, hl)) if period == "FG" else None
         if cq:
             ca, cb, _ = NM.no_vig(cq.price_a, cq.price_b)
             clv = round(100 * ((ca if best["side"] in ("home", "over") else cb) - best["prob_market_novig"]), 3)
-        grades.append(C.GradeRow(gid, "FG", market, best["line"], best["side"], best["price"], res, ret,
+        grades.append(C.GradeRow(gid, period, market, best["line"], best["side"], best["price"], res, ret,
                                  best["prob_model"], clv))
     return grades, cal
 
@@ -1029,7 +1037,7 @@ def grade_summary(grades):
     sel = [g for g in grades if g.result in ("W", "L", "P")]
     by = defaultdict(list)
     for g in sel:
-        by[g.market].append(g)
+        by[g.market if g.period == "FG" else f"{g.period}:{g.market}"].append(g)
 
     def s(xs):
         n = len(xs); ret = sum(g.return_1u for g in xs)
@@ -1493,7 +1501,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
         reread = json.loads((out / "pipeline_card.json").read_text())
         if digest({k: v for k, v in reread.items() if k != "card_sha256"}) != reread["card_sha256"]:
             raise ValueError("FROZEN_CARD_DIGEST_MISMATCH")
-        finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"]}
+        finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"], "h1": games[gid].get("h1")}
                   for gid in slate_ids if games[gid]["completed"] and games[gid]["home_score"] is not None}
         grades, cal = grade(reread, finals)
         gsum = grade_summary(grades)
@@ -1662,7 +1670,7 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
         espn_capture(day, day, raw_dir, fetch=True, refresh_days={k})
     games, _ = espn_games(raw_dir, [k])
     ids = {g["game_id"] for g in card["games"]}
-    finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"]}
+    finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"], "h1": games[gid].get("h1")}
               for gid in ids if gid in games and games[gid]["completed"] and games[gid]["home_score"] is not None}
     grades, cal = grade(card, finals)
     gsum = grade_summary(grades)
