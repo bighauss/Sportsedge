@@ -514,15 +514,17 @@ class EVReporting(unittest.TestCase):
             rows=R.ev_report_rows(card,extra)
             self.assertGreater(len(rows),0)
             self.assertEqual(len(rows),2*(card["priced_market_rows"]+len(extra["ladders"])))
+            from cbb_pricing import OWNER_BLEND_WEIGHTS
+            model_only = OWNER_BLEND_WEIGHTS.index(1.0)
             for row in rows:
                 self.assertEqual(len(row["grid"]),9)
-                self.assertAlmostEqual(row["grid"][-1],row["independent_ev"])
+                self.assertAlmostEqual(row["grid"][model_only],row["independent_ev"])
                 self.assertEqual(row["approved_stake_u"],0)
                 self.assertTrue(row["captured_utc"])
                 self.assertEqual(row["external_consensus"],"BLOCKED_NO_EXTERNAL_CONSENSUS")
                 self.assertEqual(row["state"],"ESTIMATED_POSITIVE_WITHHELD" if row["independent_ev"]>0 else "NO_POSITIVE_INDEPENDENT_EV")
             md=R.render(card,names,extra)
-            for token in ("Estimated EV delivery","Captured UTC","95/5","100/0","BLOCKED_NO_EXTERNAL_CONSENSUS","approved bets: 0"):
+            for token in ("Estimated EV delivery","Captured UTC","87.5/12.5","100/0","0/100","BLOCKED_NO_EXTERNAL_CONSENSUS","approved bets: 0"):
                 self.assertIn(token,md)
             self.assertEqual(json.dumps(card,sort_keys=True),before)
     def test_ladder_push_and_blowout_preserved(self):
@@ -531,10 +533,12 @@ class EVReporting(unittest.TestCase):
                price=(-110,-110),model_prob=(.60,.30),push=.10,market_novig=(.5,.5),
                paper_ev=(ev_per_unit(.6,.1,-110),ev_per_unit(.3,.1,-110)),
                captured_utc=OBS,blowout_excluded=True)
+        from cbb_pricing import OWNER_BLEND_WEIGHTS
         rows=R.ev_report_rows({"rows":[]},{"ladders":[m]})
         self.assertEqual(len(rows),2)
+        market_only = OWNER_BLEND_WEIGHTS.index(0.0)
         for row in rows:
-            self.assertAlmostEqual(row["grid"][0],ev_per_unit(.45,.1,-110))
+            self.assertAlmostEqual(row["grid"][market_only],ev_per_unit(.45,.1,-110))
             self.assertEqual(row["guard"],"BLOWOUT_EXCLUDED")
             self.assertEqual(row["line"],-20 if row["side"]=="home" else 20)
     def test_empty_report_does_not_claim_unpriced_negative(self):

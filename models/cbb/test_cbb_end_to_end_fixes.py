@@ -273,10 +273,10 @@ class PricingConfig(unittest.TestCase):
         self.assertAlmostEqual(m["blend"]["paper_ev_per_1u_at_price"]["home"], m["paper_ev_per_1u_at_price"]["home"])
         for bad in (-0.1, 1.1):
             with self.assertRaises(ValueError): PR.make_config(blend_weight_model=bad)
-        self.assertIn(0.25, PR.CANDIDATE_BLEND_WEIGHTS); self.assertEqual(len(PR.CANDIDATE_BLEND_WEIGHTS), 9)
+        self.assertIn(0.25, PR.OWNER_BLEND_WEIGHTS); self.assertEqual(len(PR.OWNER_BLEND_WEIGHTS), 9)
 
     def test_push_aware_blend_all_nine_weights(self):
-        for w in PR.CANDIDATE_BLEND_WEIGHTS:
+        for w in PR.OWNER_BLEND_WEIGHTS:
             for market, line in (("SPREAD", "-3"), ("TOTAL", "140")):
                 with self.subTest(weight=w, market=market):
                     card, _, _ = go([row(market, line, "-120", "100")],
@@ -293,7 +293,7 @@ class PricingConfig(unittest.TestCase):
                                                NM.ev_per_unit(want, pm["push"], price))
 
     def test_push_aware_ladder_ev(self):
-        for w in PR.CANDIDATE_BLEND_WEIGHTS:
+        for w in PR.OWNER_BLEND_WEIGHTS:
             _, _, extra = go([row("TOTAL", "140.5"), row("ALT_TOTAL", "145", "+130", "-150")],
                              totals_order_verified=True, config={"blend_weight_model": w, **LOOSE})
             L = extra["ladders"][0]
@@ -477,7 +477,7 @@ class ChecklistRequirements(unittest.TestCase):
                  row("ALT_SPREAD", "-6", "+150", "-190", dk_event_id="E1", tip_utc=S.TIP),
                  row("ALT_TOTAL", "145", "+130", "-150", dk_event_id="E1", tip_utc=S.TIP),
                  row("TT_HOME", "72", "-110", "-110", dk_event_id="E1", tip_utc=S.TIP)]
-        for w in PR.CANDIDATE_BLEND_WEIGHTS:
+        for w in PR.OWNER_BLEND_WEIGHTS:
             _, _, extra = go(board, totals_order_verified=True, config={"blend_weight_model": w})
             self.assertEqual(len(extra["ladders"]), 3)
             for L in extra["ladders"]:

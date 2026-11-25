@@ -31,6 +31,7 @@ from cbbd_frozen_final_join import _final_verified, verify_provider_originals, _
 from cbbd_prospective_capture import safe_path
 from point_in_time_score_walkforward import (Blocked, _paired_ci, _parse_final,
                                              audit as walkforward_audit)
+from cbb_pricing import OWNER_BLEND_WEIGHTS
 
 LEDGER_SCHEMA = "sportsedge-cbbd-paper-ledger-v1"
 GENESIS = "0" * 64
@@ -369,8 +370,9 @@ def _walkforward_rows(graded, family):
     return rows
 
 
-# Fixed, predeclared model-weight grid; market benchmark is the SAME book.
-BLEND_GRID = (0, 25, 50, 60, 75, 80, 90, 95, 100)
+# Percent-on-model form of the single canonical grid in cbb_pricing.OWNER_BLEND_WEIGHTS
+# (100/0, 87.5/12.5, ... 0/100). Not a second definition.
+BLEND_GRID = tuple(100 * w for w in OWNER_BLEND_WEIGHTS)
 
 def nine_weight_comparison(pairs):
     """Paired frozen probabilities only. No weight selection or refitting.

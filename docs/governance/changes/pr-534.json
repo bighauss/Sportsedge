@@ -1,0 +1,93 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 534,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "protected_paths": [
+    ".github/workflows/cbb-fullgame.yml",
+    "models/cbb/cbb_pricing.py",
+    "models/cbb/cbb_run_it.py",
+    "models/cbb/cbbd_paper_ledger.py",
+    "models/cbb/fullgame/REPORT.md",
+    "models/cbb/fullgame/__init__.py",
+    "models/cbb/fullgame/adjustments.py",
+    "models/cbb/fullgame/backtest.py",
+    "models/cbb/fullgame/context.py",
+    "models/cbb/fullgame/espn_odds.py",
+    "models/cbb/fullgame/evaluate.py",
+    "models/cbb/fullgame/evidence/improve_summary.json",
+    "models/cbb/fullgame/evidence/improve_tables.md",
+    "models/cbb/fullgame/evidence/nov24_rows.json",
+    "models/cbb/fullgame/evidence/summary.json",
+    "models/cbb/fullgame/evidence/tables.md",
+    "models/cbb/fullgame/fetch_espn_odds.py",
+    "models/cbb/fullgame/improve_eval.py",
+    "models/cbb/fullgame/make_report.py",
+    "models/cbb/fullgame/nov24_diagnosis.py",
+    "models/cbb/fullgame/pricing.py",
+    "models/cbb/fullgame/ratings.py",
+    "models/cbb/fullgame/run_eval.py",
+    "models/cbb/fullgame/sdv_loader.py",
+    "models/cbb/fullgame/test_fullgame.py",
+    "models/cbb/test_cbb_end_to_end_fixes.py",
+    "models/cbb/test_cbb_run_it.py",
+    "models/cbb/test_cbbd_paper_ledger.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Add a PAPER/0u NON_COUNTED CBB full-game research challenger (FG1/FG1C/FG2/FG2C) that diagnoses Nov 24 paper-EV inflation, adds frozen-from-2020-22 rest/travel/neutral/early residual adjustments and outcome-only tail maps, additive cbb_pricing helpers, a dedicated offline unittest workflow, and this review-only governance manifest. Unify every consumer on OWNER_BLEND_WEIGHTS (100/0 through 0/100), delete the obsolete CANDIDATE_BLEND_WEIGHTS and ledger (0,25,...,100) grids, and add a source test that fails if another grid appears. Parse American odds exactly via a quote contract; reject floats, fractional strings, bools and malformed tokens without truncation. Frozen production coefficients and DEFAULT_CONFIG are unchanged. Not a market promotion.",
+  "assumptions": [
+    "This change is a research challenger only. PAPER/0u, official_counted=0, NON_COUNTED. No production coefficient, pin, runner rewire or market promotion follows from this PR.",
+    "Frozen model files (sportsedge_cbb_model.py, cbbd_native_score_model.py) and cbb_pricing.DEFAULT_CONFIG are not edited. Added cbb_pricing helpers are additive.",
+    "Historical ESPN core-API odds (DraftKings / ESPN BET) are an unadmitted auxiliary comparator, not execution prices or CLV evidence. Close-line CLV is zero by construction.",
+    "Unit tests are deterministic and offline. They use in-test synthetic games and the already-committed Nov 24 card fixture at outputs/cbb/card_2026-11-24_45452279760_1.md. They do not fetch the network.",
+    "The 2026-27 backtest window was already used for the first confirmatory read; the improvement-pass numbers on that window are labeled confirmatory reuse and are not a fresh holdout.",
+    "The independent model still has worse Brier than the market after the improvement pass. Tune-window longshot and favourite maps did not transfer to 2023-27. ML-favourite and market-line over bias remain. Player availability and returning minutes are documented gaps, not filled with leaky proxies.",
+    "cbb_run_it.py, cbbd_paper_ledger.py and their tests were updated only to consume the single canonical blend grid and the American-odds quote contract, because this PR merges before #533, #538 and #537. DEFAULT_CONFIG, including blend_weight_model 0.25, is unchanged."
+  ],
+  "agent_identity": "SportsEdge Constructions bot (grok-cbb/*)",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Nov 24 card (run 45452279760) markets with paper EV above 30 percent",
+    "before": null,
+    "unit": "markets",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v fullgame.test_fullgame",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v fullgame.test_fullgame"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
