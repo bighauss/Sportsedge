@@ -22,3 +22,24 @@ Finals input: array of event_id, home_id, away_id, tip_utc, observed_final_utc, 
 The fixed research challenger uses the latest ten eligible appearances (minimum five), player minutes and per-minute production, recent team pace, and opponent per-possession allowed rates shrunk toward the prior league average. This is an unvalidated heuristic, not a fitted opponent-specific usage model. Historical forecast cutoffs are reconstructed just before tip and clearly labeled CHRONOLOGICAL_REPLAY_NOT_PROSPECTIVE; only earlier observed finals enter each forecast. Metrics include paired MAE, RMSE and bias against recent-player averages for all eight stat families. Do not select model parameters on the reported evaluation set.
 
 Inputs are hashed. Replay may be slow on a full multi-season corpus; minimum twenty same-team/player/version residuals for pricing can leave many players unpriced. No real-data run or validated improvement is asserted. Existing cached box scores without actual observation receipts cannot demonstrate historical availability; collect timestamped sources rather than backdating.
+
+
+## Native runner integration and real-board replay
+
+The frozen native card supports opt-in research extensions via
+`--pipeline-out <output> --pipeline-adapters halves,players --pipeline-halves-path <models/cbb> --pipeline-player-bundle <json>`.
+The native player bundle must explicitly declare `identity_namespace: "CBBD"`.
+No cross-provider identity mapping is inferred. This label alone does not
+authenticate the bundle, verify current participation, or authorize a wager.
+The native overlay verifies the parent card digest and zero-stake status,
+preserves the input hashes, and labels its output research rather than prospective.
+
+The CBB real-board retrospective pipeline workflow pins the Nov 25 DK board
+revision 2899f92c16b268ab5f7522ed14a7323cbddfeb4d and halves revision
+d6ccd412993f1e7000cd8ffd28f35337bb29e659. It requests public ESPN inputs,
+reconstructs the 17:25Z freeze, verifies the paper policy and active half
+adapter, and retains summary and audit artifacts only. It does not use CBBD
+secrets, touch the ledger, or supply a player bundle that does not exist.
+The team-total holds, missing player prices, unknown availability, and
+retrospective input timing remain visible. A successful hosted job is an
+integration replay, not a genuine live slate run or proof of market edge.
