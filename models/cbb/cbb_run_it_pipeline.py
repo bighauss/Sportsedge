@@ -675,13 +675,21 @@ def public_ratings(prior, season, shrink_games=2.0, iters=25):
     """Opponent- and venue-adjusted efficiencies from prior finals only (public reconstruction,
     disclosed): additive opponent adjustment, a pooled home edge h (points per 100 possessions,
     re-estimated each iteration from non-neutral games) removed half from each side, then shrinkage
-    toward the league mean by ``shrink_games``."""
+    toward the league mean by ``shrink_games``.
+
+    Raises ValueError("RATINGS_INSUFFICIENT_SAMPLE") with a coverage diagnostic when the filtered
+    prior set is empty. Does not invent ratings or lower the min-games threshold.
+    """
+    if not prior:
+        raise ValueError("RATINGS_INSUFFICIENT_SAMPLE:no_prior_games_after_d1_filter")
     per = defaultdict(list)
     for g in prior:
         p = g["possessions"]
         v = 0 if g["neutral"] is not False else 1
         per[g["home_id"]].append((g["away_id"], 100 * g["home_score"] / p, 100 * g["away_score"] / p, v))
         per[g["away_id"]].append((g["home_id"], 100 * g["away_score"] / p, 100 * g["home_score"] / p, -v))
+    if not per:
+        raise ValueError("RATINGS_INSUFFICIENT_SAMPLE:no_teams_after_build")
     lg = mean(o for v in per.values() for _, o, _, _ in v)
     off = {t: lg for t in per}; de = {t: lg for t in per}; h = 0.0
     for _ in range(iters):
@@ -709,7 +717,13 @@ def public_replay_project(games, slate_ids, season, freeze_utc, cfg):
              and parse_z(g["tip_utc"]) + timedelta(hours=3) <= freeze and g["home_score"] != g["away_score"]]
     n_all = len(prior)
     prior = d1_filter(prior)
-    body, lg = public_ratings(prior, season)
+    try:
+        body, lg = public_ratings(prior, season)
+    except ValueError as e:
+        if "RATINGS_INSUFFICIENT_SAMPLE" in str(e):
+            # Explicit withhold: do not invent ratings. Downstream stages will see empty projections.
+            return {}, {"reason": str(e), "prior_raw": n_all, "prior_after_filter": len(prior)}, b""
+        raise
     rows = [{"game_id": g["id"], "season": season, "tipoff_utc": g["tip_utc"],
              "final_captured_utc": utcz(parse_z(g["tip_utc"]) + timedelta(hours=3)),
              "home_team_id": g["home_id"], "away_team_id": g["away_id"], "neutral": g["neutral"],
