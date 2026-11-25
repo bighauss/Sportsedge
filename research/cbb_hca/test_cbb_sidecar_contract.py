@@ -49,6 +49,17 @@ class Sidecar(unittest.TestCase):
             c,cap=setup(Path(d));r=json.loads(c.read_bytes());r["approved_stake_u"]=False;c.write_text(json.dumps(r))
             with self.assertRaisesRegex(ValueError,"PARENT_CARD_INVALID"):
                 source_context(c,cap)
+    def test_rehashed_card_with_changed_tip_is_rejected(self):
+        import cbbd_paper_card as pc
+        with tempfile.TemporaryDirectory() as d:
+            c,cap=setup(Path(d))
+            card=json.loads(c.read_bytes())
+            row=next(r for r in card["rows"] if r["status"]=="PROJECTED")
+            row["tipoff_utc"]="2026-11-25T01:00:00Z"
+            card["card_sha256"]=pc.card_digest(card)
+            c.write_text(json.dumps(card))
+            with self.assertRaisesRegex(ValueError,"PARENT_PROJECTED_SCHEDULE_IDENTITY_MISMATCH"):
+                source_context(c,cap)
     def test_expired_game_no_forecast(self):
         with tempfile.TemporaryDirectory() as d:
             c,cap=setup(Path(d))
