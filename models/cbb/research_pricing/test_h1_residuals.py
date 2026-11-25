@@ -1,33 +1,64 @@
-"""Tests for empirical H1 residual calibration."""
+"""Tests for chronological residual calibration safeguards."""
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from research_pricing.h1_residuals import residual_sd, fit_h1_residuals, sds_for_pricing, Hold
+from research_pricing.h1_residuals import fit_h1_residuals, withhold_team_total_if_missing, Hold
 
-def test_residual_sd_basic():
-    pairs = [(30.0, 32.0), (28.0, 27.0), (35.0, 36.0)] * 15  # n=45
-    r = residual_sd(pairs)
-    assert r["n"] == 45
-    assert r["residual_sd"] > 0
+def _row(i, forecast="2026-11-20T12:00:00Z", tip="2026-11-20T18:00:00Z",
+         result="2026-11-20T22:00:00Z", **kw):
+    base = {
+        "game_id": f"g{i}",
+        "forecast_utc": forecast,
+        "tipoff_utc": tip,
+        "result_available_utc": result,
+        "predicted_margin": 3.0,
+        "actual_margin": 2.0 + (i % 5) - 2,
+        "predicted_total": 60.0,
+        "actual_total": 61.0 + (i % 7) - 3,
+    }
+    base.update(kw)
+    return base
 
-def test_insufficient_sample_rejected():
+def test_chronology_and_duplicates():
+    rows = [_row(i) for i in range(40)]
+    # Duplicate
+    rows.append(_row(0))
+    # Future result
+    rows.append(_row(99, result="2026-11-26T00:00:00Z"))
+    # Forecast after tip
+    rows.append(_row(98, forecast="2026-11-20T19:00:00Z"))
+    fit = fit_h1_residuals(rows, cutoff_utc="2026-11-25T00:00:00Z", min_n=30)
+    assert fit["admitted_n"] == 40
+    assert fit["sds"]["sd_margin"] > 0
+    assert fit["fit"]["margin"]["residual_bias"] is not None
+
+def test_insufficient_after_rejection():
+    rows = [_row(i) for i in range(10)]
     try:
-        residual_sd([(1.0, 2.0)] * 10, min_n=30)
+        fit_h1_residuals(rows, cutoff_utc="2026-11-25T00:00:00Z", min_n=30)
         assert False
     except Hold as e:
         assert "INSUFFICIENT" in str(e)
 
-def test_fit_returns_pricing_sds():
-    margin = [(5.0, 3.0), (2.0, 4.0), (0.0, -1.0)] * 20
-    total = [(60.0, 62.0), (55.0, 53.0), (70.0, 71.0)] * 20
-    fit = fit_h1_residuals(margin, total)
-    sds = sds_for_pricing(fit)
-    assert sds["sd_margin"] > 0
-    assert sds["sd_total"] > 0
-    assert sds["sd_home_team_total"] is None
+def test_team_total_withheld_when_missing():
+    rows = [_row(i) for i in range(40)]
+    fit = fit_h1_residuals(rows, cutoff_utc="2026-11-25T00:00:00Z")
+    assert withhold_team_total_if_missing(fit["sds"], "home") is None
+    assert withhold_team_total_if_missing(fit["sds"], "away") is None
+
+def test_provenance_preserved():
+    rows = [_row(i) for i in range(40)]
+    fit = fit_h1_residuals(
+        rows, cutoff_utc="2026-11-25T00:00:00Z",
+        model_version="h1-research-v1", evidence_sha256="a"*64,
+    )
+    assert fit["model_version"] == "h1-research-v1"
+    assert fit["evidence_sha256"] == "a"*64
+    assert fit["status"] == "PAPER_0U_RESEARCH_CALIBRATION"
 
 if __name__ == "__main__":
-    test_residual_sd_basic()
-    test_insufficient_sample_rejected()
-    test_fit_returns_pricing_sds()
-    print("H1 residual tests passed")
+    test_chronology_and_duplicates()
+    test_insufficient_after_rejection()
+    test_team_total_withheld_when_missing()
+    test_provenance_preserved()
+    print("Chronological residual safeguards passed")
