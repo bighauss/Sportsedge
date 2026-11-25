@@ -62,7 +62,7 @@ def forecast(target, admitted):
         raise ValueError("TARGET_NOT_PREGAME")
     prior = [r for r in admitted if r["event_id"] != gid and clock(r["observed_final_utc"]) < cutoff]
     team_games, def_allowed, league, appearances = defaultdict(list), defaultdict(list), [], []
-    for r in prior:
+    for r in sorted(prior, key=lambda row: clock(row["tip_utc"])):
         h, a, pace = r["home_id"], r["away_id"], r["possessions"]
         for team, other in ((h,a),(a,h)):
             team_games[team].append(pace)
@@ -96,14 +96,15 @@ def forecast(target, admitted):
     return f, {"minutes_if_participating": minutes, "pace": pace,
                "opponent_factors": dict(zip(STATS,factors)),
                "appearances": len(recent), "opponent_games": n,
-               "prior_games": len(prior), "max_observed_final_utc": prior[-1]["observed_final_utc"]}
+               "prior_games": len(prior), "max_observed_final_utc": prior[-1]["observed_final_utc"],
+               "baseline_means": {stat: mean(p["stats"][stat] for _, p in recent) for stat in STATS}}
 
 
 def build(rows, targets):
     """Bundle of replay residuals plus current forecasts. Replay is NOT prospective evidence."""
     from dataclasses import asdict
     admitted = admit(rows)
-    history, forecasts, diagnostics, rejects = [], [], [], []
+    history, forecasts, diagnostics, rejects, comparisons = [], [], [], [], []
     for r in admitted:
         for p in r["players"]:
             tid = p["team_id"]
@@ -114,7 +115,9 @@ def build(rows, targets):
                       "opponent_id": r["away_id"] if tid == r["home_id"] else r["home_id"],
                       "tip_utc": r["tip_utc"], "frozen_utc": cutoff}
             try:
-                f, _ = forecast(target, admitted)
+                f, diag = forecast(target, admitted)
+                comparisons.append({"event_id": r["event_id"], "player_id": p["player_id"],
+                                    "actual": p["stats"], "model": f.means, "baseline": diag["baseline_means"]})
                 history.append({"forecast": asdict(f), "observed_final_utc": r["observed_final_utc"],
                                 "actual": p["stats"], "participated": True})
             except ValueError as exc:
@@ -132,9 +135,27 @@ def build(rows, targets):
             forecasts.append(asdict(f)); diagnostics.append({"key": key, **diag})
         except ValueError as exc:
             rejects.append({"stage": "target", "event_id": key[0], "player_id": key[2], "reason": str(exc)})
+    metrics = compare(comparisons)
     return {"schema": "CBB_PLAYER_RESIDUAL_BUNDLE_V1", "targets": forecasts, "history": history,
+            "paired_replay_metrics": metrics,
             "evidence_class": "CHRONOLOGICAL_REPLAY_NOT_PROSPECTIVE", "diagnostics": diagnostics,
             "rejections": rejects, "approved_stake_u": 0}
+
+
+def compare(rows):
+    """Paired chronological mean error versus unadjusted recent-player averages.
+    Correlated player/game rows are not independent; no ROI or significance claim.
+    """
+    from cbb_player_residual_pricing import COMBOS
+    out = {}
+    for name, keys in {**{s: (s,) for s in STATS}, **COMBOS}.items():
+        out[name] = {"n": len(rows), "games": len({r["event_id"] for r in rows})}
+        for model in ("model", "baseline"):
+            errors = [sum(r[model][k] - r["actual"][k] for k in keys) for r in rows]
+            out[name][model] = {"mae": mean(abs(e) for e in errors) if errors else None,
+                                "rmse": math.sqrt(mean(e*e for e in errors)) if errors else None,
+                                "bias_forecast_minus_actual": mean(errors) if errors else None}
+    return out
 
 
 def main():
