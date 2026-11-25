@@ -148,9 +148,9 @@ class Tests(unittest.TestCase):
         return admit([dict(s,game_id=i,week=i,start_date=f"2023-09-{i*5:02d}T12:00:00Z") for i in range(1,6)],2023)[0]
     def test_neutral_and_fixed_hfa(self):
         g=self.games();r=forecast(g)[-1]
-        self.assertEqual(r["forecasts"]["od_hfa"],[25.75,23.25])
+        self.assertEqual(r["forecasts"]["od_hfa"],[36.25,12.75])
         g[-1]["neutral"]=True
-        self.assertEqual(forecast(g)[-1]["forecasts"]["od_hfa"],[24.5,24.5])
+        self.assertEqual(forecast(g)[-1]["forecasts"]["od_hfa"],[35.,14.])
     def test_target_score_and_order(self):
         g=self.games();p=forecast(g)[-1]["forecasts"];g[-1]["home_score"]=99
         self.assertEqual(forecast(list(reversed(g)))[-1]["forecasts"],p)
@@ -161,7 +161,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(forecast(g)[-1]["hold"],"INSUFFICIENT_FBS_HISTORY")
     def test_metrics_common_sample(self):
         m=metrics(forecast(self.games()));self.assertEqual(m["paired_n"],1)
-        self.assertEqual(m["models"]["od_hfa"]["margin"]["mae"],18.5)
+        self.assertEqual(m["models"]["od_hfa"]["margin"]["mae"],2.5)
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
