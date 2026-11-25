@@ -62,6 +62,7 @@ REASON_CODES = {
     "ORIENTATION_MISMATCH": "home/away designation disagrees with the slate",
     "ORIENTATION_INCONSISTENT": "spread sign / moneyline favourite / ladder monotonicity disagree",
     "TIP_MISMATCH": "board tip time is not within 15 minutes of the slate tip",
+    "UPSTREAM_QUOTE_WITHHELD": "upstream quote is held, rejected, superseded or has unresolved reasons",
     "TOTALS_ORDER_UNVERIFIED": "over/under price order not verified for this board format",
     "ONE_SIDED_QUOTE": "only one side of the market was captured",
     "PRICE_INVALID": "price is not a valid American price",
