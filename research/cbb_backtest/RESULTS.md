@@ -210,18 +210,63 @@ produces against an efficient close.
    fail validation, so the path is forward DK captures.
 2. **The production native model can't be replayed** historically, because no point-in-time CBBD
    ratings exist. Results are for the native formula on reconstructed ratings.
-3. **Hosted CI doesn't run these tests yet.** Adding a workflow is outside this stream's file
-   ownership. The command is `PYTHONPATH=.:models/cbb python -m unittest research.cbb_backtest.test_cbb_backtest`.
+3. **Hosted CI.** `.github/workflows/cbb-backtest.yml` (added with PR #538's governance record) runs
+   the input verification and both test modules offline. The FG1 job is manual-only
+   (`workflow_dispatch` with a `fullgame_ref`).
 4. **FG1 has to be imported from its own branch** (`PYTHONPATH` includes a checkout of
    `models/cbb/fullgame`) until that branch merges. Without it the FG1 test skips.
 5. **Market quality.** 2023 spread and total are quarantined. Pre-2024 closes come from the
    `current` fallback. Coverage only reaches games ESPN lists, at about 91%.
 6. **Possessions** are box-score estimates. The **D1 proxy** is 15+ finals in the previous season.
 
+## Reproducibility (what can be replayed from a clean checkout)
+
+Everything the harness consumes is committed as text in `data/` and pinned by sha256 in
+`data/MANIFEST.json`:
+
+| Input | Committed as | Size |
+|---|---|---|
+| Admitted finals 2018-2026 (output of the repo's own `schedule_games`, with possessions and site class) | `data/games_{season}.csv` | about 0.46 MB per season |
+| One sportsbook close record per admitted game (provider recorded; fixed provider preference) | `data/odds_selected_{season}.csv` | about 0.3-0.4 MB per season |
+| Admission and odds census | `data/census.json` | 3 KB |
+| ESPN event ids the odds were fetched for | `data/espn_game_ids.txt` | 0.47 MB |
+| Result evidence (`results/run1_as_specified`, `results/run3_final` incl. the 8 `rows/` files) | pinned in the manifest | - |
+
+Steps:
+
+```
+python -m research.cbb_backtest.inputs verify           # offline; non-zero exit on any mismatch/missing/unpinned file
+python -m unittest -v research.cbb_backtest.test_cbb_backtest research.cbb_backtest.test_reproducibility
+python -m research.cbb_backtest.harness --data-dir research/cbb_backtest/data --out out/ \
+    --model FG1=research.cbb_backtest.fg1_adapter:build_fg1        # FG1 needs PR #534's branch on PYTHONPATH
+```
+
+`test_reproducibility` rebuilds a fixed slice (season 2019, origins through 2018-12-17) from the
+committed inputs and compares it with `results/run3_final/rows/identical_rows_2019.csv` string by
+string: every non-FG1 column always, and with FG1 importable every column and row (709 rows,
+byte-identical). Without FG1 the slice has 718 identical rows (nine more, because FG1's own SD
+requirement no longer filters them); the 709 committed rows are a subset and match.
+
+Still external (hash-pinned, not committed):
+
+* the 18 sportsdataverse parquet files (`python -m research.cbb_backtest.inputs fetch --out DIR`
+  downloads them and fails on a hash mismatch);
+* the raw ESPN odds cache `espn_odds_all.jsonl.gz` (8.5 MB, binary; sha256 in the manifest). It
+  can be re-fetched with `espn_odds_collect`, but ESPN may revise odds, so a fresh fetch is not
+  guaranteed to match: a mismatch is reported, never accepted;
+* FG1 (PR #534);
+* `python -m research.cbb_backtest.inputs rederive --external DIR --work TMP` rebuilds every
+  committed input from those external files and fails unless the bytes are identical.
+
+Nothing was re-selected or re-tuned. The committed numbers are the run-3 numbers. The native
+home-court repair was chosen on validation seasons after the run-1 test numbers had been seen, so
+its test results are still **not untouched evidence**. `open_*` ESPN fields are not carried into the
+derivative: they fail validation and were nulled in every result.
+
 ## Reproduce
 
 ```
-python -m research.cbb_backtest.espn_odds_collect --ids ids.txt --out espn_odds_all.jsonl.gz   # ids: completed game_ids from the schedules
+python -m research.cbb_backtest.espn_odds_collect --ids research/cbb_backtest/data/espn_game_ids.txt --out espn_odds_all.jsonl.gz
 PYTHONPATH=.:models/cbb:<fullgame checkout> python -m research.cbb_backtest.harness \
   --root <sdv parquet dir incl. 2018> --odds espn_odds_all.jsonl.gz --out out/ \
   --seasons 2019 2020 2021 2022 2023 2024 2025 2026 --reps 1000 \
