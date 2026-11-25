@@ -419,11 +419,11 @@ class NativeAdapterWiring(unittest.TestCase):
                                  probs=lambda *args:(0.6,0.0,0.4))
         with tempfile.TemporaryDirectory() as tmp:
             board=Path(tmp)/"board.csv"
-            board.write_text("home,away,period,market,line,price_a,price_b,dk_event_id,tip_utc,captured_utc,totals_order,player_id,player_team_id\\n"
-                             "Home U,Away U,1H,TOTAL,70.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,,\\n"
-                             "Home U,Away U,FG,PLAYER_PTS_OU,12.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,p,h\\n")
+            board.write_text("home,away,period,market,line,price_a,price_b,dk_event_id,tip_utc,captured_utc,totals_order,player_id,player_team_id\n"
+                             "Home U,Away U,1H,TOTAL,70.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,,\n"
+                             "Home U,Away U,FG,PLAYER_PTS_OU,12.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,p,h\n")
             match=lambda *args: ({"game_id":"g1","tipoff_utc":tip},None)
-            with patch("cbb_run_it._match",side_effect=match), patch.object(P,"load_halves",return_value=half), \\
+            with patch("cbb_run_it._match",side_effect=match), patch.object(P,"load_halves",return_value=half), \
                     patch("cbb_player_residual_pricing.PlayerBundle",return_value=bundle):
                 result=P.run_from_card(card,names,board,"2026-11-25T12:00:00Z",Path(tmp)/"out",
                                        adapters_requested=("halves","players"),player_bundle="fixture",n_sims=1000)
