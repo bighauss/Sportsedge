@@ -1,0 +1,6 @@
+shrunk_all 12948 bias 5.568 mae 10.561 bias Nov/Dec 5.61 Jan+ 5.55
+shrunk_q4 12947 bias 2.297 mae 9.658 bias Nov/Dec 1.05 Jan+ 2.77
+raw_all 12948 bias -0.812 mae 9.63 bias Nov/Dec -4.73 Jan+ 0.69
+raw_q4 12947 bias 0.467 mae 9.562 bias Nov/Dec -2.58 Jan+ 1.63
+raw_q8 11680 bias 0.994 mae 9.425 bias Nov/Dec -2.02 Jan+ 1.74
+none 12948 bias -4.009 mae 9.998 bias Nov/Dec -6.72 Jan+ -2.97
