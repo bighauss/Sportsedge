@@ -39,14 +39,15 @@ def split_label(s):
     return "CONFIRMATORY_REUSE"
 
 
-def venue_lookup_from_parquets(root):
+def venue_lookup_from_parquets(root, *, before_season):
     root = Path(root)
     lookup = {}
     try:
         import pyarrow.parquet as pq
     except ImportError:
         return lookup
-    for s in range(2019, 2028):
+    # Conservative season-lag proxy; no current/future season metadata.
+    for s in range(2019, before_season):
         p = root / f"mbb_schedule_{s}.parquet"
         if not p.exists():
             continue
@@ -70,25 +71,31 @@ def team_home_venue_map(games):
 
 
 def load_context(games_dir, sched_root):
-    lookup = venue_lookup_from_parquets(sched_root)
-    by_season = {}
-    all_games = []
-    for s in ALL:
-        p = Path(games_dir) / f"games_{s}.csv"
-        if not p.exists():
-            continue
-        all_games.extend(L.read_csv(p))
-    homes = team_home_venue_map(all_games)
+    by_season, coverage = {}, {}
+    prior = []
     for s in ALL:
         p = Path(games_dir) / f"games_{s}.csv"
         if not p.exists():
             continue
         rows = L.read_csv(p)
+        lookup = venue_lookup_from_parquets(sched_root, before_season=s)
+        homes = team_home_venue_map(prior)
         for g in rows:
+            # Do not let an undated source field override the prior-season map.
+            g["away_venue_id"] = None
             g["away_home_venue_id"] = homes.get(str(g["away"]))
+            if g.get("site") != "HOME_VERIFIED":
+                g["home_venue_id"] = homes.get(str(g["home"]))
+            g["travel_metadata_basis"] = "PRIOR_SEASON_PROXY_NOT_AUTHENTICATED_PIT"
+            g["away_home_known"] = bool(g["away_home_venue_id"])
         C.attach_context(rows, venue_lookup=lookup)
         by_season[s] = {g["game_id"]: g for g in rows}
-    return by_season, {"venues": len(lookup), "team_homes": len(homes)}
+        coverage[str(s)] = {"venues":len(lookup),"team_homes":len(homes)}
+        # Reload original rows so context overrides cannot seed later home maps.
+        prior.extend(L.read_csv(p))
+    last = list(coverage.values())[-1] if coverage else {"venues":0,"team_homes":0}
+    return by_season, {**last,"by_season":coverage,
+                       "basis":"PRIOR_SEASON_PROXY_NOT_AUTHENTICATED_PIT"}
 
 
 CTX_FIELDS = ("rest_diff", "home_rest", "away_rest", "home_b2b", "away_b2b", "home_opener",
