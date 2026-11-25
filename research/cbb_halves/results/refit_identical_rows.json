@@ -1,0 +1,85 @@
+{
+ "label": "PAPER_0U",
+ "counting": "NON_COUNTED",
+ "note": "Identical-row comparison on games that have an FG1C forecast. Coefficients for season S use only seasons < S. 2026 not used.",
+ "rows": [
+  {
+   "season": 2023,
+   "src": "PIT",
+   "n": 5177,
+   "H1_MARGIN_mae": 7.482344756715129,
+   "H1_MARGIN_bias": -0.6178271656948102,
+   "H1_TOTAL_mae": 7.8155249184906515,
+   "H1_TOTAL_bias": 0.07140711459348527,
+   "H2_MARGIN_mae": 7.122918681134626,
+   "H2_MARGIN_bias": -0.6574908096512646,
+   "H2_TOTAL_mae": 9.478205931884212,
+   "H2_TOTAL_bias": 0.21213797044889854
+  },
+  {
+   "season": 2023,
+   "src": "FG1C",
+   "n": 5177,
+   "H1_MARGIN_mae": 7.334206113732717,
+   "H1_MARGIN_bias": 0.37484638217628774,
+   "H1_TOTAL_mae": 7.7877839173224155,
+   "H1_TOTAL_bias": 0.4678372456933189,
+   "H2_MARGIN_mae": 6.97230484779067,
+   "H2_MARGIN_bias": 0.015087606828617381,
+   "H2_TOTAL_mae": 9.453303551617218,
+   "H2_TOTAL_bias": 0.6584861735836834
+  },
+  {
+   "season": 2024,
+   "src": "PIT",
+   "n": 5355,
+   "H1_MARGIN_mae": 7.3148554476292205,
+   "H1_MARGIN_bias": -0.8442845668292539,
+   "H1_TOTAL_mae": 7.905395129381578,
+   "H1_TOTAL_bias": 0.346617618882596,
+   "H2_MARGIN_mae": 7.249275450126641,
+   "H2_MARGIN_bias": -0.7249494190846069,
+   "H2_TOTAL_mae": 9.52535555792144,
+   "H2_TOTAL_bias": 0.8776814559621956
+  },
+  {
+   "season": 2024,
+   "src": "FG1C",
+   "n": 5355,
+   "H1_MARGIN_mae": 7.185368574654516,
+   "H1_MARGIN_bias": -0.18644668883000293,
+   "H1_TOTAL_mae": 7.834018759926731,
+   "H1_TOTAL_bias": 0.274499729540958,
+   "H2_MARGIN_mae": 7.166584272377897,
+   "H2_MARGIN_bias": -0.18240576967745917,
+   "H2_TOTAL_mae": 9.452495814082608,
+   "H2_TOTAL_bias": 0.623617749271776
+  },
+  {
+   "season": 2025,
+   "src": "PIT",
+   "n": 5421,
+   "H1_MARGIN_mae": 7.553851226460983,
+   "H1_MARGIN_bias": -0.5697287395807362,
+   "H1_TOTAL_mae": 8.029010778978543,
+   "H1_TOTAL_bias": 0.42416948643479724,
+   "H2_MARGIN_mae": 7.071684038910608,
+   "H2_MARGIN_bias": -0.5240995838059718,
+   "H2_TOTAL_mae": 9.370451806837663,
+   "H2_TOTAL_bias": 0.9747817381230459
+  },
+  {
+   "season": 2025,
+   "src": "FG1C",
+   "n": 5421,
+   "H1_MARGIN_mae": 7.379894754257744,
+   "H1_MARGIN_bias": 0.0787996062467077,
+   "H1_TOTAL_mae": 7.927896723413047,
+   "H1_TOTAL_bias": 0.10437053291733367,
+   "H2_MARGIN_mae": 6.956921679964693,
+   "H2_MARGIN_bias": 0.04792510496280961,
+   "H2_TOTAL_mae": 9.31540043519851,
+   "H2_TOTAL_bias": 0.3977563489783716
+  }
+ ]
+}

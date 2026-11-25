@@ -1,0 +1,31 @@
+{
+ "label": "PAPER_0U",
+ "counting": "NON_COUNTED",
+ "source": "walk-forward JSON produced by models/cbb/fullgame.backtest (PR 534, grok-cbb/fullgame-ev-20261125), engine FG1 then chronological FG1C de-bias with train_until=2025",
+ "files": {
+  "wf_fg1t_2020.json": {
+   "bytes": 2133043,
+   "sha256": "01c9d7bfebda586950f284b200423dab08342975f5d8313b0332779d267f6d18"
+  },
+  "wf_fg1t_2021.json": {
+   "bytes": 1544703,
+   "sha256": "1a628044a096c2bf3684a602a201aa2d3da9b8ba4b684cb71a3c1d6da7808ba6"
+  },
+  "wf_fg1t_2022.json": {
+   "bytes": 2193509,
+   "sha256": "d7e4d949c43ca077fbecd8788f4a6a99f2783aa0e4c19cbf4f24a3421204bf17"
+  },
+  "wf_fg1t_2023.json": {
+   "bytes": 2282198,
+   "sha256": "8de552f545649df25ff426acdab3e845a32dea54ec66f605579f51ae9b621b7c"
+  },
+  "wf_fg1t_2024.json": {
+   "bytes": 2288521,
+   "sha256": "e6f014f5a384c783dc6d865cb36797519dfaef02e32b95d612efcc286945c18c"
+  },
+  "wf_fg1t_2025.json": {
+   "bytes": 2302907,
+   "sha256": "c462f7350dafca87ffb6eb6423c3a30ff20cfaa768fb0393ba50651986398b83"
+  }
+ }
+}
