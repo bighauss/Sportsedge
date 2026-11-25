@@ -1,7 +1,7 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 521,
-  "base_commit": "8af8a6192865af85374473f478e26ec6841f77d1",
+  "base_commit": "202f7a93d91cc9afeaa399ff653d1df9f3bac4db",
   "protected_paths": [
     ".github/workflows/cbb-factorial-research.yml",
     "models/cbb/cbb_run_it.py"
@@ -48,7 +48,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "8af8a6192865af85374473f478e26ec6841f77d1",
+    "target_base_sha": "202f7a93d91cc9afeaa399ff653d1df9f3bac4db",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest -v research.cbb_hca.test_cbb_hca_backtest"
   },
