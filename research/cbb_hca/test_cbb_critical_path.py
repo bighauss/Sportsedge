@@ -1,4 +1,5 @@
 import unittest
+from research.cbb_hca.half_forward_calibration import Regression as FirstHalfRegression
 from research.cbb_hca.reconcile_outcomes import reconcile
 from research.cbb_hca.distribution_driver import evaluate, smooth
 
