@@ -55,6 +55,8 @@ DATED_BOARD_ALIASES = {
     "illinoischicago": "uic", "appalachianstate": "appstate",
     "mountsaintmarys": "mountstmarys", "semissouristate": "southeastmissouristate",
     "ulm": "ulmonroe", "alcorn": "alcornstate", "umkc": "kansascity",
+    # DK event 35083406, Nov 25 15:00Z; CBBD run 45607636169.
+    "saintbonaventure": "stbonaventure",
 }
 
 def cands(name, *, dated=False):
