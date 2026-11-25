@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
     # Both suites below are required on every run: runtime (stdlib, from models/cbb)
-    # and research (dataset hashes, no look-ahead, PMF parity, protocol). Do not drop either.
+    # and research (dataset hashes, no look-ahead, PMF parity, protocol). Do not drop either. Joint and refit coefficient files are covered by the same runtime suite.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
