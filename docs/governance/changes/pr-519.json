@@ -9,12 +9,13 @@
     ".github/workflows/cbb-public-player-backtest.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Evaluate exact-original conditional player forecasts against later source-bound final player appearances. Bind original serialized conditional-player report to training receipt; add separate retrospective public player comparison on 2023–25, without changing live means or prices.",
+  "change_summary": "Evaluate exact-original conditional player forecasts against later source-bound final player appearances. Bind original serialized conditional-player report to training receipt; add separate retrospective public player comparison on 2023–25, without changing live means or prices. Add eleven counting-stat retrospective distribution comparisons on identical prior-only player rows, fixed diagnostic half-lines, explicit NB Poisson limit, common smoothing and paired week-block diagnostics.",
   "assumptions": [
     "Missing participation remains withheld, never zero-filled or treated as DNP.",
     "Original training bytes and report must replay exactly; final identity and clock must match.",
     "No calibrated probabilities, scheduled grading integration, prop settlement or market release.",
-    "Historical player box data are appearance-conditional retrospective data, not pregame active rosters. Common sample requires >=5 same-team prior appearances with >=2 calendar-day lag; no season-specific Division I filter."
+    "Historical player box data are appearance-conditional retrospective data, not pregame active rosters. Common sample requires >=5 same-team prior appearances with >=2 calendar-day lag; no season-specific Division I filter.",
+    "Illustrative half-lines are not posted prop contracts. Probability models are participation-conditional only. Fixed per-player 5–8 prior appearances; common smoothing, no selected winning family, no pricing or promotion. Week-block confidence intervals are descriptive and do not account for all cross-week player dependence."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
@@ -38,7 +39,7 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v && PYTHONPATH=.:models/cbb python research/cbb_public_player_backtest.py --self-test",
+    "test_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v && PYTHONPATH=.:models/cbb python research/cbb_public_player_backtest.py --self-test && PYTHONPATH=.:models/cbb python -m unittest -v research.cbb_player_distribution",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
