@@ -1,0 +1,67 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 519,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "protected_paths": [
+    ".github/workflows/cbb-public-player-backtest.yml",
+    "models/cbb/cbbd_player_forward_quality.py",
+    "models/cbb/cbbd_player_history.py",
+    "models/cbb/test_cbb_run_it.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Evaluate exact-original conditional player forecasts against later source-bound final player appearances. Bind original serialized conditional-player report to training receipt; add separate retrospective public player comparison on 2023–25, without changing live means or prices. Add eleven counting-stat retrospective distribution comparisons on identical prior-only player rows, fixed diagnostic half-lines, explicit NB Poisson limit, common smoothing and paired week-block diagnostics.",
+  "assumptions": [
+    "Missing participation remains withheld, never zero-filled or treated as DNP.",
+    "Original training bytes and report must replay exactly; final identity and clock must match.",
+    "No calibrated probabilities, scheduled grading integration, prop settlement or market release.",
+    "Historical player box data are appearance-conditional retrospective data, not pregame active rosters. Common sample requires >=5 same-team prior appearances with >=2 calendar-day lag; no season-specific Division I filter.",
+    "Illustrative half-lines are not posted prop contracts. Probability models are participation-conditional only. Fixed per-player 5–8 prior appearances; common smoothing, no selected winning family, no pricing or promotion. Week-block confidence intervals are descriptive and do not account for all cross-week player dependence."
+  ],
+  "agent_identity": "ChatGPT",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "cbb-run-it-fixture-tests",
+    "before": null,
+    "unit": "tests",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v && PYTHONPATH=.:models/cbb python research/cbb_public_player_backtest.py --self-test && PYTHONPATH=.:models/cbb python -m unittest -v research.cbb_player_distribution",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

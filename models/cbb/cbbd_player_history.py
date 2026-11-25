@@ -172,7 +172,7 @@ def historical_baselines(records):
     return out
 
 
-def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
+def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc, include_records=False):
     """Preserve cross-batch duplicate census and expose missing final-game coverage.
 
     A batch is (original bytes, capture receipt). No player is inferred active.
@@ -232,13 +232,15 @@ def collect_batches(batches, finals_raw, finals_receipt, *, season, asof_utc):
     any_team = sum(bool(represented.get(gid, set()) & teams) for gid, teams in expected.items())
     return {"label": "PAPER_0U_CONDITIONAL_HISTORY_ONLY", "batches": batch_reports,
             "accepted_player_games": len(clean), "cross_batch_duplicate_rows": len(all_rows)-len(clean),
+            "training_finals_receipt": {k: finals_receipt[k] for k in ("source", "sha256", "bytes", "observed_utc")},
             "expected_final_games": len(expected), "represented_final_games": any_team,
             "both_teams_represented_final_games": both,
             "one_team_represented_final_games": any_team - both,
             "unrepresented_final_games": len(expected) - any_team,
             "duplicate_team_boxes_across_batches": sum(n > 1 for n in box_batch_counts.values()),
             "historical_players": len(models), "confirmed_activity": False,
-            "approved_stake_u": 0, "historical_baselines": models}
+            "approved_stake_u": 0, "historical_baselines": models,
+            **({"accepted_records": clean} if include_records else {})}
 
 
 def slate_history_coverage(card, history):
@@ -330,6 +332,7 @@ def conditional_player_means(card, history):
                 rejected[str(exc)] += 1
     return {"label": "PAPER_0U_CONDITIONAL_PLAYER_MEANS", "card_sha256": card["card_sha256"],
             "freeze_utc": card["freeze_utc"], "method": "LAST_4_TO_5_APPEARANCE_MEANS",
+            "training_finals_receipt": history.get("training_finals_receipt"),
             "source_batches": [{k: b[k] for k in ("source_sha256", "finals_sha256", "source_observed_utc")}
                                for b in history.get("batches", [])],
             "candidate_player_game_rows": sum(r["historical_candidates"] for r in coverage["rows"]),
