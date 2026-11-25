@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import math
+import os
+import tempfile
 from pathlib import Path
 from statistics import mean
 import unittest
@@ -94,9 +96,22 @@ def metrics(rows):
         models[m]={k:{"mae":mean(abs(x) for x in v),"rmse":math.sqrt(mean(x*x for x in v)),"bias_pred_minus_actual":mean(v)} for k,v in errors.items()}
     return {"attempted":len(rows),"paired_n":len(chosen),"neutral_evaluated":sum(r["neutral"] for r in chosen),"holds":dict(Counter(r["hold"] for r in rows if "hold" in r)),"models":models}
 
+def publish(path, report):
+    path=Path(path)
+    raw=(json.dumps(report,sort_keys=True,allow_nan=False)+"\n").encode()
+    fd,tmp=tempfile.mkstemp(prefix=".cfb-stage-",dir=path.parent)
+    try:
+        with os.fdopen(fd,"wb") as f:
+            f.write(raw);f.flush();os.fsync(f.fileno())
+        if Path(tmp).read_bytes()!=raw:raise OSError("STAGED_BYTES_MISMATCH")
+        os.link(tmp,path)
+        d=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY)
+        try:os.fsync(d)
+        finally:os.close(d)
+    finally:os.unlink(tmp)
+
 def run(args):
     import pyarrow.parquet as pq
-    from nfl_public_score_benchmark import publish
     all_rows=[];sources=[]
     for season in args.seasons:
         path=Path(args.root)/f"cfb_schedules_{season}.parquet"
