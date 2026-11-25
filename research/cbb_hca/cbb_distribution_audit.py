@@ -4,6 +4,7 @@ Use only full-game-including-OT non-tied finals. Not spread/total settlement.
 All families share centered deviations and the same optional prior-mean shift.
 """
 import math
+from bisect import bisect_left, bisect_right
 from statistics import mean,stdev
 
 
@@ -32,23 +33,40 @@ def t_cdf(z,df):
     return 1-.5*ib if z>0 else .5*ib
 
 
-def probabilities(residuals,projected_margin,*,use_mean_location=False):
+def fit_residual_distribution(residuals, *, use_mean_location=False):
+    """Fit once on an explicit training sample; repeated predictions use that same fit."""
     residuals=list(residuals)
     if type(use_mean_location) is not bool or len(residuals)<5:
         raise ValueError("INVALID_LOCATION_POLICY_OR_TRAINING_N")
-    if any(type(v) not in (int,float) or not math.isfinite(v) for v in (*residuals,projected_margin)):
+    if any(type(v) not in (int,float) or not math.isfinite(v) for v in residuals):
         raise ValueError("FINITE_VALUES_REQUIRED")
     mu=mean(residuals);sd=stdev(residuals)
     if sd<=1e-12:raise ValueError("DEGENERATE_RESIDUAL_VARIANCE")
-    deviations=[r-mu for r in residuals];shift=mu if use_mean_location else 0.
+    deviations=sorted(r-mu for r in residuals);shift=mu if use_mean_location else 0.
     var=mean(v*v for v in deviations);excess=mean(v**4 for v in deviations)/(var*var)-3
     df=100. if excess<=.0625 else min(100.,4+6/excess)
+    return dict(deviations=deviations,training_n=len(residuals),location=shift,
+                residual_mean=mu,residual_sd=sd,student_df=df)
+
+
+def predict_residual_distribution(fit, projected_margin):
+    """P(realized margin > 0), using the existing common-mid-distribution policy."""
+    if type(projected_margin) not in (int,float) or not math.isfinite(projected_margin):
+        raise ValueError("FINITE_VALUES_REQUIRED")
+    n=fit["training_n"];sd=fit["residual_sd"];df=fit["student_df"];shift=fit["location"]
+    deviations=fit["deviations"]
     scale=sd*math.sqrt((df-2)/df);threshold=-projected_margin-shift
-    empirical=(sum(v>threshold for v in deviations)+.5*sum(v==threshold for v in deviations))/len(deviations)
+    left,right=bisect_left(deviations,threshold),bisect_right(deviations,threshold)
+    empirical=(n-right+.5*(right-left))/n
     return dict(normal=.5*(1+math.erf((projected_margin+shift)/sd/math.sqrt(2))),
                 student_t=t_cdf((projected_margin+shift)/scale,df),empirical=empirical,
-                training_n=len(residuals),location=shift,residual_sd=sd,student_df=df,
+                training_n=n,location=shift,residual_sd=sd,student_df=df,
                 empirical_equality_policy="MID_DISTRIBUTION_NOT_OT_SIMULATION")
+
+
+def probabilities(residuals,projected_margin,*,use_mean_location=False):
+    return predict_residual_distribution(fit_residual_distribution(residuals,
+                       use_mean_location=use_mean_location),projected_margin)
 
 
 def reliability(ps,ys,*,bins=10):
