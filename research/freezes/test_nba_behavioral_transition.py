@@ -155,6 +155,40 @@ class Historical(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(h.analyze())), json.loads((HERE / 'nba_push_accounting_hist' / 'analysis.json').read_text()))
 
 
+class StandInLabels(unittest.TestCase):
+    """Owner ruling on the #536 review: historical projections are market-derived stand-ins and every
+    output must say so (not independent-model evidence). The limitation is preserved, not hidden."""
+    FLAG = 'MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE'
+
+    def test_analysis_output_carries_flag_everywhere(self):
+        a = json.loads((HERE / 'nba_push_accounting_hist' / 'analysis.json').read_text())
+        for node in (a, a['model_replay_on_market_implied_margin'], a['ev_shift_hypothetical_minus110']):
+            self.assertEqual(node['projection_basis'], 'MARKET_DERIVED_STAND_IN')
+            self.assertIs(node['independent_model_evidence'], False)
+            self.assertEqual(node['flag'], self.FLAG)
+
+    def test_regenerated_analysis_carries_flag(self):
+        out = mod_hist().analyze()
+        self.assertEqual(out['flag'], self.FLAG)
+        self.assertIs(out['independent_model_evidence'], False)
+
+    def test_record_and_markdown_label_the_limitation(self):
+        r = json.loads(RECORD.read_text())
+        self.assertEqual(r['evidence_labels']['flag'], self.FLAG)
+        self.assertIs(r['evidence_labels']['independent_model_evidence'], False)
+        self.assertEqual(r['historical_backtest']['projection_basis'], 'MARKET_DERIVED_STAND_IN')
+        self.assertIn('NOT independent-model evidence', r['historical_backtest']['projection_stand_in'])
+        md = (HERE / 'nba_push_accounting_transition_20261125.md').read_text()
+        self.assertIn(self.FLAG, md.split('**Status:')[0])
+        self.assertIn('MARKET_DERIVED_STAND_IN', md)
+
+    def test_governance_record_labels_the_limitation(self):
+        g = json.loads((ROOT / 'docs' / 'governance' / 'changes' / 'pr-536.json').read_text())
+        text = ' '.join(g['assumptions'])
+        self.assertIn('MARKET_DERIVED_STAND_IN', text)
+        self.assertIn('not independent-model evidence', text)
+
+
 class Consistency(unittest.TestCase):
     """Data-consistency checks for the record and the candidate entry. NOT a verifier: the owner chose
     one unified verifier (stock verify_versioned_transition.py extended in #535) to enforce these."""
