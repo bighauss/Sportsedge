@@ -494,6 +494,84 @@ def _best(m):
     ev = m["paper_ev_per_1u_at_price"]; side = max(ev, key=ev.get)
     return side, ev[side]
 
+def ev_report_rows(card, extra):
+    """Read-only presentation of existing estimates, never change the frozen card.
+    Every side is retained, including negative EV and guard-excluded spreads.
+    The market input here is the offered book's own two-sided no-vig price,
+    NOT independent external consensus.
+    """
+    from cbbd_native_score_model import ev_per_unit
+    import math
+    rows = []
+    def append(gid, market, line, side, price, pm, push, mk, ev, captured, book, excluded):
+        grid = [ev_per_unit(PR.blend(pm, mk, w, push=push), push, price)
+                for w in PR.CANDIDATE_BLEND_WEIGHTS]
+        if not math.isclose(grid[-1], ev, rel_tol=1e-10, abs_tol=1e-12):
+            raise ValueError("REPORT_INDEPENDENT_EV_PARITY_FAILED")
+        rows.append(dict(game_id=gid, market=market, line=line, side=side, price=price,
+                         captured_utc=captured, book=book, independent_ev=ev, grid=grid,
+                         state="ESTIMATED_POSITIVE_WITHHELD" if ev > 0 else "NO_POSITIVE_INDEPENDENT_EV",
+                         guard="BLOWOUT_EXCLUDED" if excluded else "UNVALIDATED",
+                         external_consensus="BLOCKED_NO_EXTERNAL_CONSENSUS", approved_stake_u=0))
+    for r in card["rows"]:
+        for m in r["markets"]:
+            if m["status"] != "PRICED_PAPER":
+                continue
+            q = m["quote"]
+            for i, side in enumerate(m["sides"]):
+                line = q["line"]
+                if line is not None and m["market"] == "spread" and side == "away":
+                    line = -line
+                append(r["game_id"], m["market"], line, side, q["price_a"] if i == 0 else q["price_b"],
+                       m["model_prob"][side], m["model_prob"]["push"], m["market_novig_prob"][side],
+                       m["paper_ev_per_1u_at_price"][side], q["captured_utc"], q["book"], m.get("blowout_excluded"))
+    for m in extra.get("ladders", []):
+        for i, side in enumerate(m["sides"]):
+            line = -m["line"] if m["kind"] == "alt_spread" and side == "away" else m["line"]
+            append(m["game_id"], m["kind"], line, side, m["price"][i], m["model_prob"][i],
+                   m["push"], m["market_novig"][i], m["paper_ev"][i], m["captured_utc"],
+                   "DraftKings (board)", m["blowout_excluded"])
+    return sorted(rows, key=lambda r: (-r["independent_ev"], r["game_id"], r["market"], r["side"]))
+
+
+def render_ev_report(card, names, extra):
+    rows = ev_report_rows(card, extra)
+    positive = sum(r["independent_ev"] > 0 for r in rows)
+    o = ["## Estimated EV delivery (PAPER / 0u)", "",
+         f"Priced sides: {len(rows)}; estimated positive independent EV: {positive}; "
+         f"nonpositive independent EV: {len(rows)-positive}; approved bets: 0.",
+         "Quotes are historical at their displayed capture times, not verified live prices. "
+         "Independent EV uses the existing unvalidated model; the nine weights below are "
+         "same-book diagnostics, NOT independent external Vegas consensus.",
+         "External-consensus hybrid EV: BLOCKED_NO_EXTERNAL_CONSENSUS. No stars or staking authorization.", ""]
+    def name(r):
+        a,h,tip=names.get(r["game_id"], ("?", "?", None))
+        return f"{a} @ {h}", parse_z(tip).astimezone(CT).strftime("%-I:%M %p") if tip else "—"
+    def line(r):
+        return "—" if r["line"] is None else f"{r['line']:g}"
+    def pct(v):
+        return f"{100*v:+.2f}%"
+    o += ["### Highest positive independent estimates (maximum 12; not recommendations)", "",
+          "| Game | Tip CT | Market | Side | Line | Book | Price | Captured UTC | Independent EV | Validation |",
+          "|---|---|---|---|---:|---|---:|---|---:|---|"]
+    for r in [x for x in rows if x["independent_ev"] > 0][:12]:
+        g,t=name(r)
+        o.append(f"| {g} | {t} | {r['market']} | {r['side']} | {line(r)} | {r['book']} | {r['price']:+d} | "
+                 f"{r['captured_utc']} | {pct(r['independent_ev'])} | {r['state']} / {r['guard']} |")
+    if not positive:
+        o.append("No positive independent EV among priced sides. Unpriced markets are not evaluated.")
+    o += ["", "### All priced sides — nine same-book model/market weights", "",
+          "| Game | Tip CT | Market | Side | Line | Book | Price | Captured UTC | Independent EV | "
+          + " | ".join(f"{round(100*w)}/{round(100*(1-w))}" for w in PR.CANDIDATE_BLEND_WEIGHTS) + " | Validation |",
+          "|---|---|---|---|---:|---|---:|---|---:|" + "---:|"*len(PR.CANDIDATE_BLEND_WEIGHTS) + "---|"]
+    for r in rows:
+        g,t=name(r)
+        o.append(f"| {g} | {t} | {r['market']} | {r['side']} | {line(r)} | {r['book']} | {r['price']:+d} | "
+                 f"{r['captured_utc']} | {pct(r['independent_ev'])} | "
+                 + " | ".join(pct(v) for v in r["grid"]) + f" | {r['state']} / {r['guard']} |")
+    return o + [""]
+
+
 def render(card, names, extra):
     o = ["# SportsEdge CBB RUN IT card", "",
          f"**PAPER / 0u — research only.** status {card['status']} · model {card['model_version']} "
@@ -505,6 +583,7 @@ def render(card, names, extra):
         report = extra["ledger"]
         o += [f"**Repeat diagnostic:** {report['already_frozen']} games retain their original ledger freeze; "
               f"{report['newly_frozen']} newly frozen. Current projections are not replacement records.", ""]
+    o += render_ev_report(card, names, extra)
     cx = card.get("context") or {}
     if cx:
         h, sd = cx.get("hca") or {}, cx.get("sd") or {}
