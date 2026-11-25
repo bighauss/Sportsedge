@@ -1,0 +1,61 @@
+{
+ "coefficients_sha256": "700af30eca3507eaa9fe6701d2d908c98ba4ce28562809d66d2ad5d0bd24efbf",
+ "counting": "NON_COUNTED",
+ "h1_h2_fitted": {
+  "H1_MARGIN:H2_MARGIN": -0.08254,
+  "H1_MARGIN:H2_TOTAL": 0.00936,
+  "H1_TOTAL:H2_MARGIN": 0.03357,
+  "H1_TOTAL:H2_TOTAL": 0.13368
+ },
+ "h1_h2_realized": {
+  "H1_MARGIN:H2_MARGIN": -0.09865,
+  "H1_MARGIN:H2_TOTAL": 0.01981,
+  "H1_TOTAL:H2_MARGIN": 0.03423,
+  "H1_TOTAL:H2_TOTAL": 0.1413
+ },
+ "label": "PAPER_0U",
+ "periods": {
+  "H1": {
+   "indep_log_score": 7.47506,
+   "joint_log_score": 7.4735,
+   "kind": "gaussian",
+   "n": 6259,
+   "realized_rho": 0.061,
+   "rho_train_applied": 0.07461
+  },
+  "H2": {
+   "indep_log_score": 7.6183,
+   "joint_log_score": 7.6183,
+   "kind": "independent",
+   "n": 6259,
+   "realized_rho": 0.01604,
+   "rho_train_applied": 0.0
+  },
+  "H2REG": {
+   "indep_log_score": 7.52129,
+   "joint_log_score": 7.52107,
+   "kind": "gaussian",
+   "n": 6259,
+   "realized_rho": 0.02587,
+   "rho_train_applied": 0.01415
+  },
+  "HT_H2": {
+   "indep_log_score": 7.59624,
+   "joint_log_score": 7.59636,
+   "kind": "gaussian",
+   "n": 6259,
+   "realized_rho": 0.00839,
+   "rho_train_applied": -0.01061
+  },
+  "HT_H2REG": {
+   "indep_log_score": 7.49432,
+   "joint_log_score": 7.49432,
+   "kind": "independent",
+   "n": 6259,
+   "realized_rho": 0.01538,
+   "rho_train_applied": 0.0
+  }
+ },
+ "stage": "secondary-2026",
+ "warning": "SECONDARY RE-USE of season 2026; not a first untouched test."
+}

@@ -1,0 +1,100 @@
+{
+ "approved_stake_u": 0,
+ "counting": "NON_COUNTED",
+ "dataset_sha256": "1fede6ccf259984be6c3d21c7368c049e8e37e4289b6c2fb07bd59fe2fffa41d",
+ "fit_note": "Copula kind chosen on rolling-origin folds 2021-2025; correlations and grids estimated on 2019-2025 only. Season 2026 was not used for selection or fit.",
+ "h1_h2": {
+  "corr": [
+   [
+    1.0,
+    0.07460506819633098,
+    -0.08253605011912701,
+    0.00935549876006967
+   ],
+   [
+    0.07460506819633098,
+    1.0,
+    0.033565473377771965,
+    0.13367904017706106
+   ],
+   [
+    -0.08253605011912701,
+    0.033565473377771965,
+    1.0,
+    -0.001252022553328884
+   ],
+   [
+    0.00935549876006967,
+    0.13367904017706106,
+    -0.001252022553328884,
+    1.0
+   ]
+  ],
+  "corr_names": {
+   "H1_MARGIN:H2_MARGIN": -0.08253605011912701,
+   "H1_MARGIN:H2_TOTAL": 0.00935549876006967,
+   "H1_TOTAL:H2_MARGIN": 0.033565473377771965,
+   "H1_TOTAL:H2_TOTAL": 0.13367904017706106
+  },
+  "kind": "gaussian",
+  "n_train": 37263,
+  "order": [
+   "H1_MARGIN",
+   "H1_TOTAL",
+   "H2_MARGIN",
+   "H2_TOTAL"
+  ]
+ },
+ "kind_choice": {
+  "H1": "gaussian",
+  "H2": "independent",
+  "H2REG": "gaussian",
+  "HT_H2": "gaussian",
+  "HT_H2REG": "independent"
+ },
+ "label": "PAPER_0U",
+ "model_version": "cbb-halves-joint-v1-research",
+ "periods": {
+  "H1": {
+   "kind": "gaussian",
+   "n_train": 37263,
+   "rho": 0.07460506819633098,
+   "rho_home_away_train": 0.04078641302340384
+  },
+  "H2": {
+   "kind": "independent",
+   "n_train": 37263,
+   "rho": 0.0,
+   "rho_home_away_train": 0.24225333716568165
+  },
+  "H2REG": {
+   "kind": "gaussian",
+   "n_train": 37263,
+   "rho": 0.014145910098796012,
+   "rho_home_away_train": 0.1574903690652023
+  },
+  "HT_H2": {
+   "kind": "gaussian",
+   "n_train": 37263,
+   "rho": -0.010605341805157912,
+   "rho_home_away_train": 0.2282402032901158
+  },
+  "HT_H2REG": {
+   "kind": "independent",
+   "n_train": 37263,
+   "rho": 0.0,
+   "rho_home_away_train": 0.1386763078000113
+  }
+ },
+ "secondary_reuse_note": "Any metric on season 2026 is a SECONDARY RE-USE of the already-scored halves test window, not a first untouched evaluation.",
+ "trained_seasons": [
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025
+ ],
+ "untouched_test_season": 2026
+}
