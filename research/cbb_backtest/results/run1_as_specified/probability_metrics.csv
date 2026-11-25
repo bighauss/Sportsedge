@@ -1,0 +1,217 @@
+group,family,model,basis,n,brier,log_loss,ece,mean_p,freq
+ALL,ml,native_frozen,identical rows,36659,0.214104,0.617785,0.098751,0.721027,0.622276
+ALL,ml,raw,identical rows,36659,0.205148,0.601248,0.042634,0.591936,0.622276
+ALL,ml,regularized,identical rows,36659,0.213264,0.614424,0.104549,0.726817,0.622276
+ALL,ml,sched_adj,identical rows,36659,0.213397,0.617987,0.108109,0.730361,0.622276
+ALL,ml,MARKET_NOVIG_CLOSE,market rows,35550,0.185509,0.547916,0.017045,0.605435,0.615331
+ALL,ml,native_frozen_ON_MARKET_ROWS,market rows,35550,0.218189,0.628735,0.101516,0.716833,0.615331
+ALL,ml,raw_ON_MARKET_ROWS,market rows,35550,0.208884,0.611307,0.043434,0.585346,0.615331
+ALL,ml,regularized_ON_MARKET_ROWS,market rows,35550,0.217367,0.62543,0.107251,0.722564,0.615331
+ALL,ml,sched_adj_ON_MARKET_ROWS,market rows,35550,0.217473,0.628909,0.11092,0.726214,0.615331
+ALL,spread,native_frozen,identical rows with close line,35853,0.283937,0.77715,0.161127,0.624915,0.494212
+ALL,spread,raw,identical rows with close line,35853,0.275496,0.763739,0.127616,0.489581,0.494212
+ALL,spread,regularized,identical rows with close line,35853,0.283235,0.773582,0.160846,0.630937,0.494212
+ALL,spread,sched_adj,identical rows with close line,35853,0.285397,0.780401,0.16677,0.638904,0.494212
+ALL,spread,MARKET_NOVIG_CLOSE,market rows,35830,0.249953,0.693053,0.005755,0.499887,0.49439
+ALL,spread,native_frozen_ON_MARKET_ROWS,market rows,35830,0.283979,0.777278,0.16108,0.625044,0.49439
+ALL,spread,raw_ON_MARKET_ROWS,market rows,35830,0.275547,0.76385,0.127648,0.489695,0.49439
+ALL,spread,regularized_ON_MARKET_ROWS,market rows,35830,0.283276,0.773709,0.160799,0.631069,0.49439
+ALL,spread,sched_adj_ON_MARKET_ROWS,market rows,35830,0.285435,0.78052,0.166722,0.639043,0.49439
+ALL,total,native_frozen,identical rows with close line,35946,0.260383,0.715002,0.089073,0.529276,0.506955
+ALL,total,raw,identical rows with close line,35946,0.267042,0.73169,0.109061,0.530243,0.506955
+ALL,total,regularized,identical rows with close line,35946,0.259012,0.711942,0.085261,0.529253,0.506955
+ALL,total,sched_adj,identical rows with close line,35946,0.259487,0.712959,0.085473,0.528046,0.506955
+ALL,total,MARKET_NOVIG_CLOSE,market rows,35939,0.249971,0.69309,0.00685,0.500164,0.506887
+ALL,total,native_frozen_ON_MARKET_ROWS,market rows,35939,0.260413,0.715076,0.089107,0.529234,0.506887
+ALL,total,raw_ON_MARKET_ROWS,market rows,35939,0.267069,0.731759,0.109072,0.530202,0.506887
+ALL,total,regularized_ON_MARKET_ROWS,market rows,35939,0.259042,0.712016,0.085269,0.52921,0.506887
+ALL,total,sched_adj_ON_MARKET_ROWS,market rows,35939,0.259517,0.713033,0.085481,0.528003,0.506887
+TRAIN,ml,native_frozen,identical rows,12064,0.210494,0.607959,0.085098,0.706531,0.621684
+TRAIN,ml,raw,identical rows,12064,0.206105,0.604205,0.042607,0.589796,0.621684
+TRAIN,ml,regularized,identical rows,12064,0.208681,0.602261,0.091387,0.712977,0.621684
+TRAIN,ml,sched_adj,identical rows,12064,0.207869,0.602273,0.095402,0.716983,0.621684
+TRAIN,ml,MARKET_NOVIG_CLOSE,market rows,11581,0.18739,0.552651,0.019571,0.603683,0.614455
+TRAIN,spread,native_frozen,identical rows with close line,11685,0.280811,0.768375,0.147054,0.614146,0.496705
+TRAIN,spread,raw,identical rows with close line,11685,0.277231,0.768422,0.126978,0.494046,0.496705
+TRAIN,spread,regularized,identical rows with close line,11685,0.279041,0.76245,0.143992,0.620488,0.496705
+TRAIN,spread,sched_adj,identical rows with close line,11685,0.280484,0.765952,0.148771,0.629196,0.496705
+TRAIN,spread,MARKET_NOVIG_CLOSE,market rows,11685,0.249925,0.692996,0.006309,0.499483,0.496705
+TRAIN,total,native_frozen,identical rows with close line,11654,0.262015,0.719215,0.089218,0.527962,0.497512
+TRAIN,total,raw,identical rows with close line,11654,0.269586,0.737584,0.10986,0.52731,0.497512
+TRAIN,total,regularized,identical rows with close line,11654,0.26052,0.715992,0.085466,0.52879,0.497512
+TRAIN,total,sched_adj,identical rows with close line,11654,0.261327,0.717704,0.085739,0.52809,0.497512
+TRAIN,total,MARKET_NOVIG_CLOSE,market rows,11652,0.250062,0.693271,0.008971,0.499983,0.497425
+VALIDATION,ml,native_frozen,identical rows,14540,0.215008,0.62104,0.103392,0.726707,0.623315
+VALIDATION,ml,raw,identical rows,14540,0.205409,0.602562,0.044156,0.591617,0.623315
+VALIDATION,ml,regularized,identical rows,14540,0.214539,0.618465,0.108986,0.732301,0.623315
+VALIDATION,ml,sched_adj,identical rows,14540,0.215145,0.623446,0.112671,0.735986,0.623315
+VALIDATION,ml,MARKET_NOVIG_CLOSE,market rows,14199,0.185248,0.548302,0.021076,0.604544,0.616804
+VALIDATION,ml,native_frozen_ON_MARKET_ROWS,market rows,14199,0.218702,0.630828,0.106199,0.723003,0.616804
+VALIDATION,ml,raw_ON_MARKET_ROWS,market rows,14199,0.208574,0.611111,0.044421,0.586025,0.616804
+VALIDATION,ml,regularized_ON_MARKET_ROWS,market rows,14199,0.218232,0.62814,0.111744,0.728548,0.616804
+VALIDATION,ml,sched_adj_ON_MARKET_ROWS,market rows,14199,0.218808,0.633127,0.115596,0.7324,0.616804
+VALIDATION,spread,native_frozen,identical rows with close line,14196,0.281987,0.772108,0.165457,0.625471,0.491195
+VALIDATION,spread,raw,identical rows with close line,14196,0.272417,0.754523,0.129218,0.484262,0.491195
+VALIDATION,spread,regularized,identical rows with close line,14196,0.281607,0.769578,0.165263,0.631742,0.491195
+VALIDATION,spread,sched_adj,identical rows with close line,14196,0.284017,0.777708,0.171331,0.640086,0.491195
+VALIDATION,spread,MARKET_NOVIG_CLOSE,market rows,14175,0.250045,0.693238,0.008473,0.500183,0.491711
+VALIDATION,spread,native_frozen_ON_MARKET_ROWS,market rows,14175,0.282077,0.772388,0.165357,0.625802,0.491711
+VALIDATION,spread,raw_ON_MARKET_ROWS,market rows,14175,0.272523,0.754748,0.129234,0.484565,0.491711
+VALIDATION,spread,regularized_ON_MARKET_ROWS,market rows,14175,0.281702,0.769872,0.165171,0.632077,0.491711
+VALIDATION,spread,sched_adj_ON_MARKET_ROWS,market rows,14175,0.284109,0.777995,0.171235,0.640429,0.491711
+VALIDATION,total,native_frozen,identical rows with close line,14295,0.256335,0.704578,0.083075,0.527476,0.52284
+VALIDATION,total,raw,identical rows with close line,14295,0.262571,0.719714,0.106202,0.528157,0.52284
+VALIDATION,total,regularized,identical rows with close line,14295,0.255154,0.701928,0.081095,0.527096,0.52284
+VALIDATION,total,sched_adj,identical rows with close line,14295,0.255793,0.703312,0.081896,0.526063,0.52284
+VALIDATION,total,MARKET_NOVIG_CLOSE,market rows,14294,0.249922,0.69299,0.022471,0.500336,0.522807
+VALIDATION,total,native_frozen_ON_MARKET_ROWS,market rows,14294,0.256329,0.704567,0.08304,0.527483,0.522807
+VALIDATION,total,raw_ON_MARKET_ROWS,market rows,14294,0.262564,0.7197,0.106168,0.528166,0.522807
+VALIDATION,total,regularized_ON_MARKET_ROWS,market rows,14294,0.255151,0.701923,0.081063,0.5271,0.522807
+VALIDATION,total,sched_adj_ON_MARKET_ROWS,market rows,14294,0.25579,0.703306,0.081864,0.526068,0.522807
+TEST,ml,native_frozen,identical rows,10055,0.217128,0.624866,0.108722,0.730204,0.621482
+TEST,ml,raw,identical rows,10055,0.203623,0.595802,0.042061,0.594963,0.621482
+TEST,ml,regularized,identical rows,10055,0.216918,0.623174,0.114206,0.735491,0.621482
+TEST,ml,sched_adj,identical rows,10055,0.217503,0.628945,0.11681,0.738278,0.621482
+TEST,ml,MARKET_NOVIG_CLOSE,market rows,9770,0.183659,0.541743,0.015297,0.608805,0.614227
+TEST,ml,native_frozen_ON_MARKET_ROWS,market rows,9770,0.221432,0.636729,0.111725,0.725952,0.614227
+TEST,ml,raw_ON_MARKET_ROWS,market rows,9770,0.207646,0.606597,0.04266,0.588271,0.614227
+TEST,ml,regularized_ON_MARKET_ROWS,market rows,9770,0.221242,0.635167,0.117162,0.731187,0.614227
+TEST,ml,sched_adj_ON_MARKET_ROWS,market rows,9770,0.221757,0.64074,0.11984,0.734053,0.614227
+TEST,spread,native_frozen,identical rows with close line,9972,0.290377,0.79461,0.171456,0.63674,0.495588
+TEST,spread,raw,identical rows with close line,9972,0.277847,0.771371,0.126084,0.49192,0.495588
+TEST,spread,regularized,identical rows with close line,9972,0.290467,0.792327,0.174307,0.642034,0.495588
+TEST,spread,sched_adj,identical rows with close line,9972,0.29312,0.801166,0.181366,0.648599,0.495588
+TEST,spread,MARKET_NOVIG_CLOSE,market rows,9970,0.249854,0.692856,0.004451,0.499938,0.495486
+TEST,spread,native_frozen_ON_MARKET_ROWS,market rows,9970,0.290398,0.794667,0.171437,0.636737,0.495486
+TEST,spread,raw_ON_MARKET_ROWS,market rows,9970,0.277874,0.771434,0.12618,0.491889,0.495486
+TEST,spread,regularized_ON_MARKET_ROWS,market rows,9970,0.290477,0.792362,0.174281,0.642038,0.495486
+TEST,spread,sched_adj_ON_MARKET_ROWS,market rows,9970,0.293125,0.801183,0.181345,0.648615,0.495486
+TEST,total,native_frozen,identical rows with close line,9997,0.264269,0.724997,0.09748,0.533382,0.495249
+TEST,total,raw,identical rows with close line,9997,0.270469,0.741944,0.112219,0.536648,0.495249
+TEST,total,regularized,identical rows with close line,9997,0.262771,0.721541,0.09098,0.532877,0.495249
+TEST,total,sched_adj,identical rows with close line,9997,0.262623,0.721223,0.090372,0.530832,0.495249
+TEST,total,MARKET_NOVIG_CLOSE,market rows,9993,0.249937,0.693021,0.004983,0.50013,0.495147
+TEST,total,native_frozen_ON_MARKET_ROWS,market rows,9993,0.264335,0.72514,0.097638,0.533317,0.495147
+TEST,total,raw_ON_MARKET_ROWS,market rows,9993,0.270524,0.742069,0.112285,0.536583,0.495147
+TEST,total,regularized_ON_MARKET_ROWS,market rows,9993,0.262832,0.721674,0.091038,0.532812,0.495147
+TEST,total,sched_adj_ON_MARKET_ROWS,market rows,9993,0.262683,0.721355,0.090429,0.530765,0.495147
+2019,ml,native_frozen,identical rows,4388,0.20858,0.602435,0.084428,0.711365,0.626937
+2019,ml,raw,identical rows,4388,0.200978,0.584231,0.03167,0.601148,0.626937
+2019,ml,regularized,identical rows,4388,0.206383,0.596024,0.09402,0.717294,0.626937
+2019,ml,sched_adj,identical rows,4388,0.203343,0.589409,0.091608,0.71632,0.626937
+2019,ml,MARKET_NOVIG_CLOSE,market rows,4177,0.185278,0.548538,0.028835,0.61051,0.618386
+2019,spread,native_frozen,identical rows with close line,4262,0.279083,0.761803,0.144001,0.611087,0.496246
+2019,spread,raw,identical rows with close line,4262,0.26939,0.738693,0.111733,0.498547,0.496246
+2019,spread,regularized,identical rows with close line,4262,0.277245,0.756583,0.141947,0.615974,0.496246
+2019,spread,sched_adj,identical rows with close line,4262,0.276858,0.754255,0.141923,0.620011,0.496246
+2019,spread,MARKET_NOVIG_CLOSE,market rows,4262,0.249972,0.693091,0.004643,0.499421,0.496246
+2019,total,native_frozen,identical rows with close line,4273,0.262575,0.719778,0.096953,0.535291,0.47765
+2019,total,raw,identical rows with close line,4273,0.268114,0.731951,0.114393,0.536327,0.47765
+2019,total,regularized,identical rows with close line,4273,0.261059,0.71646,0.093051,0.535751,0.47765
+2019,total,sched_adj,identical rows with close line,4273,0.261555,0.717403,0.091093,0.53509,0.47765
+2019,total,MARKET_NOVIG_CLOSE,market rows,4271,0.25019,0.693528,0.022932,0.500338,0.477406
+2020,ml,native_frozen,identical rows,4538,0.207666,0.602187,0.095126,0.727563,0.632437
+2020,ml,raw,identical rows,4538,0.201539,0.594339,0.0421,0.600596,0.632437
+2020,ml,regularized,identical rows,4538,0.206786,0.598832,0.100434,0.732871,0.632437
+2020,ml,sched_adj,identical rows,4538,0.207488,0.605004,0.103259,0.735696,0.632437
+2020,ml,MARKET_NOVIG_CLOSE,market rows,4417,0.184402,0.545084,0.022843,0.610133,0.62599
+2020,spread,native_frozen,identical rows with close line,4452,0.282579,0.773485,0.151829,0.633548,0.499326
+2020,spread,raw,identical rows with close line,4452,0.279223,0.773019,0.130353,0.499464,0.499326
+2020,spread,regularized,identical rows with close line,4452,0.281177,0.76829,0.152021,0.639173,0.499326
+2020,spread,sched_adj,identical rows with close line,4452,0.284034,0.776845,0.157983,0.64584,0.499326
+2020,spread,MARKET_NOVIG_CLOSE,market rows,4452,0.249854,0.692852,0.014194,0.499284,0.499326
+2020,total,native_frozen,identical rows with close line,4477,0.25792,0.710741,0.07334,0.517442,0.51329
+2020,total,raw,identical rows with close line,4477,0.264688,0.727621,0.092568,0.516374,0.51329
+2020,total,regularized,identical rows with close line,4477,0.256505,0.707688,0.066529,0.517998,0.51329
+2020,total,sched_adj,identical rows with close line,4477,0.257153,0.709042,0.065328,0.517708,0.51329
+2020,total,MARKET_NOVIG_CLOSE,market rows,4477,0.249992,0.693132,0.013315,0.499975,0.51329
+2021,ml,native_frozen,identical rows,3138,0.217259,0.624032,0.07325,0.669358,0.598789
+2021,ml,raw,identical rows,3138,0.219878,0.646402,0.077194,0.558304,0.598789
+2021,ml,regularized,identical rows,3138,0.214636,0.61594,0.080787,0.67817,0.598789
+2021,ml,sched_adj,identical rows,3138,0.214748,0.616313,0.092058,0.690847,0.598789
+2021,ml,MARKET_NOVIG_CLOSE,market rows,2987,0.194762,0.569591,0.017588,0.584599,0.591898
+2021,spread,native_frozen,identical rows with close line,2971,0.28064,0.770145,0.144276,0.589462,0.493437
+2021,spread,raw,identical rows with close line,2971,0.285493,0.80418,0.143789,0.479471,0.493437
+2021,spread,regularized,identical rows with close line,2971,0.278417,0.762114,0.134893,0.598965,0.493437
+2021,spread,sched_adj,identical rows with close line,2971,0.280365,0.766408,0.144957,0.617432,0.493437
+2021,spread,MARKET_NOVIG_CLOSE,market rows,2971,0.249965,0.693076,0.010206,0.499869,0.493437
+2021,total,native_frozen,identical rows with close line,2904,0.267506,0.73145,0.102697,0.533396,0.50241
+2021,total,raw,identical rows with close line,2904,0.279305,0.761233,0.129968,0.530899,0.50241
+2021,total,regularized,identical rows with close line,2904,0.265917,0.728102,0.103999,0.535187,0.50241
+2021,total,sched_adj,identical rows with close line,2904,0.267424,0.7315,0.10958,0.533796,0.50241
+2021,total,MARKET_NOVIG_CLOSE,market rows,2904,0.249981,0.693107,0.004237,0.499473,0.50241
+2022,ml,native_frozen,identical rows,4704,0.214705,0.620595,0.104765,0.718181,0.613733
+2022,ml,raw,identical rows,4704,0.203826,0.600396,0.044253,0.583667,0.613733
+2022,ml,regularized,identical rows,4704,0.21497,0.61993,0.112156,0.725889,0.613733
+2022,ml,sched_adj,identical rows,4704,0.216763,0.627508,0.118416,0.7319,0.613733
+2022,ml,MARKET_NOVIG_CLOSE,market rows,4609,0.18109,0.538135,0.032059,0.602462,0.60946
+2022,spread,native_frozen,identical rows with close line,4549,0.288444,0.788738,0.170387,0.63043,0.484722
+2022,spread,raw,identical rows with close line,4549,0.27801,0.767475,0.138231,0.491111,0.484722
+2022,spread,regularized,identical rows with close line,4549,0.289264,0.789268,0.176601,0.639582,0.484722
+2022,spread,sched_adj,identical rows with close line,4549,0.291998,0.798465,0.180536,0.650005,0.484722
+2022,spread,MARKET_NOVIG_CLOSE,market rows,4549,0.25016,0.693469,0.015269,0.499991,0.484722
+2022,total,native_frozen,identical rows with close line,4581,0.259148,0.713044,0.079955,0.518852,0.511242
+2022,total,raw,identical rows with close line,4581,0.266144,0.729527,0.10059,0.518736,0.511242
+2022,total,regularized,identical rows with close line,4581,0.257819,0.70999,0.082489,0.518494,0.511242
+2022,total,sched_adj,identical rows with close line,4581,0.258382,0.711185,0.079243,0.517471,0.511242
+2022,total,MARKET_NOVIG_CLOSE,market rows,4581,0.24985,0.692847,0.011067,0.500175,0.511242
+2023,ml,native_frozen,identical rows,4906,0.216255,0.625298,0.100395,0.729013,0.628618
+2023,ml,raw,identical rows,4906,0.205656,0.604071,0.044654,0.594423,0.628618
+2023,ml,regularized,identical rows,4906,0.214882,0.61992,0.104498,0.733116,0.628618
+2023,ml,sched_adj,identical rows,4906,0.215225,0.624652,0.107001,0.735619,0.628618
+2023,ml,MARKET_NOVIG_CLOSE,market rows,4814,0.186561,0.551823,0.024703,0.601256,0.622975
+2023,spread,native_frozen,identical rows with close line,4805,0.269471,0.740484,0.154078,0.610481,0.491155
+2023,spread,raw,identical rows with close line,4805,0.260921,0.723136,0.119039,0.472994,0.491155
+2023,spread,regularized,identical rows with close line,4805,0.268438,0.736147,0.146311,0.61532,0.491155
+2023,spread,sched_adj,identical rows with close line,4805,0.270999,0.744597,0.156845,0.622156,0.491155
+2023,spread,MARKET_NOVIG_CLOSE,market rows,4784,0.250022,0.693191,0.007366,0.50005,0.492684
+2023,total,native_frozen,identical rows with close line,4839,0.245808,0.676559,0.077791,0.54293,0.5497
+2023,total,raw,identical rows with close line,4839,0.252699,0.693074,0.103042,0.543403,0.5497
+2023,total,regularized,identical rows with close line,4839,0.244454,0.673547,0.073466,0.542623,0.5497
+2023,total,sched_adj,identical rows with close line,4839,0.245044,0.674916,0.072487,0.542115,0.5497
+2023,total,MARKET_NOVIG_CLOSE,market rows,4838,0.250088,0.693323,0.049478,0.500129,0.549607
+2024,ml,native_frozen,identical rows,4930,0.214054,0.617228,0.105367,0.732547,0.627181
+2024,ml,raw,identical rows,4930,0.206675,0.603126,0.047258,0.596409,0.627181
+2024,ml,regularized,identical rows,4930,0.213785,0.615619,0.110427,0.737608,0.627181
+2024,ml,sched_adj,identical rows,4930,0.213521,0.618371,0.113072,0.740252,0.627181
+2024,ml,MARKET_NOVIG_CLOSE,market rows,4776,0.187937,0.554564,0.016077,0.609869,0.617672
+2024,spread,native_frozen,identical rows with close line,4842,0.288339,0.787867,0.172117,0.635689,0.497315
+2024,spread,raw,identical rows with close line,4842,0.278572,0.773502,0.130852,0.48901,0.497315
+2024,spread,regularized,identical rows with close line,4842,0.287482,0.784254,0.173418,0.640673,0.497315
+2024,spread,sched_adj,identical rows with close line,4842,0.289437,0.791066,0.178167,0.64856,0.497315
+2024,spread,MARKET_NOVIG_CLOSE,market rows,4842,0.24996,0.693067,0.008648,0.500496,0.497315
+2024,total,native_frozen,identical rows with close line,4875,0.264139,0.724435,0.091318,0.520239,0.507077
+2024,total,raw,identical rows with close line,4875,0.269012,0.736936,0.114613,0.521875,0.507077
+2024,total,regularized,identical rows with close line,4875,0.26327,0.722523,0.087529,0.519767,0.507077
+2024,total,sched_adj,identical rows with close line,4875,0.26403,0.7241,0.093934,0.518203,0.507077
+2024,total,MARKET_NOVIG_CLOSE,market rows,4875,0.249824,0.692795,0.007971,0.500693,0.507077
+2025,ml,native_frozen,identical rows,5022,0.216654,0.623268,0.103719,0.72837,0.624652
+2025,ml,raw,identical rows,5022,0.204251,0.595401,0.041892,0.592546,0.624652
+2025,ml,regularized,identical rows,5022,0.216015,0.620503,0.108938,0.73351,0.624652
+2025,ml,sched_adj,identical rows,5022,0.216167,0.626008,0.111643,0.736294,0.624652
+2025,ml,MARKET_NOVIG_CLOSE,market rows,4930,0.181669,0.537307,0.019825,0.607991,0.617647
+2025,spread,native_frozen,identical rows with close line,5003,0.290072,0.794248,0.167582,0.634351,0.498901
+2025,spread,raw,identical rows with close line,5003,0.277852,0.770587,0.129591,0.490391,0.498901
+2025,spread,regularized,identical rows with close line,5003,0.290134,0.791562,0.172359,0.640028,0.498901
+2025,spread,sched_adj,identical rows with close line,5003,0.292899,0.800862,0.181069,0.646685,0.498901
+2025,spread,MARKET_NOVIG_CLOSE,market rows,5003,0.249764,0.692675,0.005761,0.499905,0.498901
+2025,total,native_frozen,identical rows with close line,5003,0.26363,0.723191,0.096048,0.525564,0.4999
+2025,total,raw,identical rows with close line,5003,0.268217,0.736276,0.106295,0.528112,0.4999
+2025,total,regularized,identical rows with close line,5003,0.262224,0.719856,0.093812,0.525497,0.4999
+2025,total,sched_adj,identical rows with close line,5003,0.261945,0.719303,0.091439,0.523814,0.4999
+2025,total,MARKET_NOVIG_CLOSE,market rows,5003,0.249893,0.692936,0.006949,0.500145,0.4999
+2026,ml,native_frozen,identical rows,5033,0.217602,0.62646,0.114607,0.732034,0.618319
+2026,ml,raw,identical rows,5033,0.202996,0.596203,0.042229,0.597376,0.618319
+2026,ml,regularized,identical rows,5033,0.217818,0.625839,0.119463,0.737469,0.618319
+2026,ml,sched_adj,identical rows,5033,0.218836,0.631875,0.122129,0.740256,0.618319
+2026,ml,MARKET_NOVIG_CLOSE,market rows,4840,0.185686,0.546261,0.012706,0.609634,0.610744
+2026,spread,native_frozen,identical rows with close line,4969,0.290685,0.794974,0.175357,0.639146,0.492252
+2026,spread,raw,identical rows with close line,4969,0.277842,0.772161,0.122553,0.49346,0.492252
+2026,spread,regularized,identical rows with close line,4969,0.290801,0.793096,0.176268,0.644053,0.492252
+2026,spread,sched_adj,identical rows with close line,4969,0.293343,0.801473,0.181666,0.650525,0.492252
+2026,spread,MARKET_NOVIG_CLOSE,market rows,4967,0.249946,0.693039,0.008689,0.499971,0.492048
+2026,total,native_frozen,identical rows with close line,4994,0.26491,0.726807,0.098914,0.541213,0.490589
+2026,total,raw,identical rows with close line,4994,0.272725,0.747622,0.118154,0.545199,0.490589
+2026,total,regularized,identical rows with close line,4994,0.263319,0.723229,0.088142,0.540269,0.490589
+2026,total,sched_adj,identical rows with close line,4994,0.263302,0.723146,0.089303,0.537862,0.490589
+2026,total,MARKET_NOVIG_CLOSE,market rows,4990,0.24998,0.693107,0.009734,0.500114,0.490381
