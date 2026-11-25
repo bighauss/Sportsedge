@@ -233,5 +233,55 @@ class T(unittest.TestCase):
         self.assertEqual((g["ev"], g["held"]), (0.3, ""))
 
 
+class FootballReporting(unittest.TestCase):
+    def fixture(self, sport="NFL", **changes):
+        import io
+        q=dict(sport=sport,home="HOM",away="AWY",market="SPREAD",line=-3.5,
+               price_a=-110,price_b=-110,captured_utc="2026-11-25T15:00:00Z",
+               tip_utc="2026-11-25T20:00:00Z",dk_event_id="event-1",book="DraftKings")
+        q.update(changes)
+        f=io.StringIO()
+        writer=csv.DictWriter(f,fieldnames=list(q))
+        writer.writeheader()
+        writer.writerow(q)
+        o=dict(sport=sport,game="AWY @ HOM",bet_type="SPREAD|0|",player="",
+               pick="HOM -3.5",price=-110,mode="PROJECTION",model_ev=.05,
+               row_id=0,quote_id="q1",held="guard")
+        return f.getvalue().encode(),o
+
+    def test_both_sports_and_local_capture_binding(self):
+        for sport in ("NFL","CFB"):
+            raw,o=self.fixture(sport)
+            before=dict(o)
+            result=run_nfl.football_reporting_rows([o],raw)[0]
+            self.assertEqual(result["captured_utc"],"2026-11-25T15:00:00Z")
+            self.assertEqual(result["provenance"],"LOCAL_EXACT_LABEL_MATCH_NOT_AUTHENTICATED")
+            self.assertEqual(result["model_ev"],.05)
+            self.assertEqual(result["state"],"MODEL_ESTIMATED_POSITIVE_WITHHELD")
+            self.assertEqual(result["nine_weight_status"],"BLOCKED_EXPLICIT_OUTCOME_MASS_MISSING")
+            self.assertEqual(result["approved_stake_u"],0)
+            self.assertEqual(o,before)
+
+    def test_duplicate_and_missing_or_late_capture(self):
+        raw,o=self.fixture()
+        duplicate=raw+raw.splitlines(keepends=True)[1]
+        self.assertIsNone(run_nfl.football_reporting_rows([o],duplicate)[0]["captured_utc"])
+        self.assertIsNone(run_nfl.football_reporting_rows([o,o],raw)[0]["captured_utc"])
+        for changes in (dict(captured_utc=""),dict(captured_utc="2026-11-25T20:00:00Z"),dict(book=""),dict(dk_event_id="")):
+            raw,o=self.fixture(**changes)
+            result=run_nfl.football_reporting_rows([o],raw)[0]
+            self.assertEqual(result["provenance"],"BLOCKED_QUOTE_METADATA")
+            self.assertIsNone(result["captured_utc"])
+
+    def test_market_anchor_and_board_change_not_independent(self):
+        raw,o=self.fixture("CFB")
+        o.update(mode="ANCHOR",model_ev=-.02)
+        result=run_nfl.football_reporting_rows([o],None)[0]
+        self.assertEqual(result["model_basis"],"MARKET_ANCHORED_NOT_INDEPENDENT")
+        self.assertEqual(result["state"],"NO_POSITIVE_MODEL_EV")
+        self.assertEqual(result["provenance"],"BLOCKED_BOARD_CHANGED")
+        self.assertIsNone(result["captured_utc"])
+
+
 if __name__ == "__main__":
     unittest.main()
