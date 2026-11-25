@@ -400,6 +400,37 @@ class ConditionalPlayerGrade(unittest.TestCase):
         self.assertFalse(cal)
 
 
+class PlayerBundleNamespace(unittest.TestCase):
+    def test_namespaces_are_not_interchangeable(self):
+        from unittest.mock import patch
+        freeze = "2026-11-25T15:00:00Z"
+        for expected in ("ESPN", "CBBD"):
+            for actual in ("ESPN", "CBBD", "UNSPECIFIED"):
+                with self.subTest(expected=expected, actual=actual):
+                    bundle = SimpleNamespace(identity_namespace=actual)
+                    with patch("cbb_player_residual_pricing.PlayerBundle", return_value=bundle):
+                        player, status = P.load_player_bundle("fixture", freeze, expected)
+                    if actual == expected:
+                        self.assertIs(player, bundle)
+                        self.assertIs(status, bundle)
+                    else:
+                        self.assertIsNone(player)
+                        self.assertIn(f"PLAYER_BUNDLE_{expected}_NAMESPACE_REQUIRED", status)
+                        flags, active = P.load_adapter_flags({"players"}, {"players": status})
+                        self.assertNotIn("players", active)
+                        self.assertTrue(flags["players"].startswith("LOAD_FAILED:"))
+
+    def test_invalid_optional_bundle_does_not_abort_other_markets(self):
+        from unittest.mock import patch
+        for exc in (FileNotFoundError("missing"), ValueError("bad JSON"), AttributeError("bad schema")):
+            with patch("cbb_player_residual_pricing.PlayerBundle", side_effect=exc):
+                player, status = P.load_player_bundle("fixture", "2026-11-25T15:00:00Z", "ESPN")
+            self.assertIsNone(player)
+            flags, active = P.load_adapter_flags({"players", "halves"}, {"players": status, "halves": object()})
+            self.assertEqual(active, {"halves"})
+            self.assertTrue(flags["players"].startswith("LOAD_FAILED:"))
+
+
 class NativeAdapterWiring(unittest.TestCase):
     def test_native_research_extensions_and_tampered_parent(self):
         from unittest.mock import patch
