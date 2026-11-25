@@ -46,6 +46,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cbb-public-player-benchmark
-          path: ${{ runner.temp }}/cbb-player-report/player_benchmark.json
+          path: ${{ runner.temp }}/cbb-player-report/player_benchmark_*.json
           retention-days: 14
           if-no-files-found: error
