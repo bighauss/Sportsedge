@@ -7,7 +7,7 @@ The card is not rewired; the runner workstream owns that integration.
 
 Every number below comes from `python -m fullgame.run_eval` / `fullgame.nov24_diagnosis` /
 `fullgame.make_report` (the reproduction steps are at the end). Full tables: `evidence/tables.md`; machine-readable: `evidence/summary.json`;
-Nov 24 row-level re-pricing: `evidence/nov24_rows.json`.
+Nov 24 row-level re-pricing: `evidence/nov24_rows.json`. Improvement ablations: `evidence/improve_tables.md` and `evidence/improve_summary.json`.
 
 ## Data and splits (fixed before evaluation)
 - Games: public sportsdataverse ESPN schedule plus team box, seasons 2019-2027 (2027 = Nov 1-25, 2026). Both teams
@@ -91,14 +91,65 @@ independent model shows no reliable information beyond the market at either the 
 independent projection is not a calibrated edge, and the calibrated research EV is about the market's negative vig.
 This is evidence for the P2 blend workstream, not a promotion.
 
+
+## Improvement pass (rest, travel, neutral, early, longshot, side bias)
+
+A second, protocol-preserving pass tried to close the gap to the market and the remaining side bias.
+Opponent-adjusted offensive and defensive efficiency was already the FG1/SA specification (`eff = mu + off_i + def_j + h*s`).
+This pass adds pre-game rest, a coarse travel/neutral-site adjustment, an early-season residual term, and
+outcome-only longshot / favourite maps. Coefficients were **frozen on 2020-22**. 2023-25 is validation.
+**2026-27 is a confirmatory reuse of an already-used window, not a fresh holdout.** Every named variant is
+scored on identical rows; failures are kept in the tables. Full grid: `evidence/improve_tables.md`.
+
+Tune-window residual fits on 14,393 FG1 rows (actual − FG1), ridge λ=1:
+
+- **Rest** (sensible, largest terms): home back-to-back −3.59 margin pts, away back-to-back +2.96 (home-team margin).
+- **Neutral site:** −1.88 pts on the total.
+- **Travel** (coarse city/state proxy): small (about 0.03–0.08 pts per 100 miles).
+- **Early season** (<5 games): +0.89 margin, −0.99 total.
+
+Validation 2023-25, identical rows (n=16,843):
+
+| engine | margin MAE | total MAE |
+|---|---:|---:|
+| FG1 | 9.044 | 13.142 |
+| FG1C | 9.043 | 13.094 |
+| FG2_rest | 9.040 | 13.127 |
+| FG2_travel | 9.043 | 13.131 |
+| FG2_neutral | 9.050 | 13.117 |
+| FG2_early | 9.043 | 13.128 |
+| FG2 (all context terms) | 9.036 | 13.120 |
+| FG2C (FG2 + chronological de-bias) | 9.036 | 13.083 |
+
+Confirmatory reuse 2026-27 (n=6,694): margin MAE FG1 9.425 → FG2C 9.414; total MAE FG1 13.824 → FG2C 13.748 (FG1C 13.766).
+The gains are real but small (hundredths of a point). **The market still has the better Brier on every market in every validation and reuse season.**
+Examples, auxiliary ESPN close quotes (model vs market Brier):
+
+- 2025 validation, FG2C: spread 0.2593 vs 0.2499, total 0.2572 vs 0.2499, ML 0.1831 vs 0.1784 (n=5,643 / 5,644 / 5,534).
+- 2026 reuse, FG2C: spread 0.2597 vs 0.2500, total 0.2596 vs 0.2500, ML 0.1873 vs 0.1802 (n=5,574 / 5,591 / 5,399).
+
+### Failures that are left in the open
+- **Longshot map did not transfer.** On 2020-22, FG2 model tails were *under*-confident (p≤0.05: model 0.030 vs rate 0.077, n=26, thin).
+  That is the opposite direction of the later +1000-dog finding (win rate 3.24% vs model 6.42%). Applying the frozen map
+  slightly *worsened* moneyline Brier on 2023-26. The tail defect is not stable enough to correct from the tune window.
+- **Favourite bump did not transfer.** The 2020-22 outcome-only bump was −0.74 pp (the model slightly over-predicted its
+  own favourites). In 2025 the market-line ML-favourite bias is still about −2.1 to −2.2 pp; applying the frozen bump
+  made it worse (−2.7 pp). The bias is not stationary between tune and validation.
+- **Over bias at market lines is unchanged** (about +2.4 to +2.7 pp in 2025-26, significant). A −1.6 pp shift fit at the
+  model's *own* total on 2020-22 was not applied as a market-line correction, because that would have used the market as
+  an input to the independent probability. The independent total residual is near zero after FG1C/FG2C; the over bias is
+  market-relative and is not fixed.
+- No variant, including the combined FG2C plus both maps, beats the market Brier on spread, total or moneyline.
+
 ## Remaining gaps
-- Roster availability: no point-in-time injury source admitted, so it isn't modeled. Rest and travel: not yet modeled.
-- 2027 is thin (435 identical rows, early season). Early-phase error is the largest (phase-0 margin SD 13.2).
-- Odds are an unadmitted ESPN/DK research source. The card's 6:30 AM captures aren't comparable to the closing lines.
-- The new tests (`fullgame/test_fullgame.py`, 27) are **not in any CI workflow** (workflows are outside this file ownership).
-  The runner/CI owner must add `cd models/cbb && python -m unittest -v fullgame.test_fullgame`.
+- Roster availability: no legitimate point-in-time public injury/availability source is shipped with this challenger, so it is not modeled. The production gate already blocks a missing injuries role.
+- Returning minutes / roster continuity: player box scores exist for some seasons, but there is no dated preseason roster or transfer snapshot that would let returning minutes be computed without using current-season appearances (leakage). Early-season ratings still use the previous-season carry prior only.
+- Travel miles are a coarse proxy (same-city 0, same-state 120, otherwise haversine of region centroids), not surveyed road distance.
+- 2027 is thin (1,050 FG1 rows / 435 identical market rows in the first report, early season). Early-phase error is the largest (phase-0 margin SD 13.2).
+- ESPN historical odds are an auxiliary comparator only, not execution prices or CLV evidence. The card's 6:30 AM captures aren't comparable to the closing lines.
+- Offline unit tests live in `fullgame/test_fullgame.py` (35 tests) and run in `.github/workflows/cbb-fullgame.yml` via `cd models/cbb && python -m unittest -v fullgame.test_fullgame`. They use committed fixtures and do not need the network.
 - Not wired into `cbb_run_it.py` (WS3). The integration contract is `pricing.line_probs` / `ml_probs` / `ev_audit`,
-  `cbb_pricing.logit_blend`, `ev_sanity_audit`, plus an FG1C forecast per game.
+  `cbb_pricing.logit_blend`, `ev_sanity_audit`, plus an FG1C (or FG2C) forecast per game.
 
 ## Reproduce
 ```
@@ -108,5 +159,6 @@ python3 -m fullgame.backtest --games DATA/games --out DATA/wf --engines RAW REG 
 python3 -m fullgame.backtest --games DATA/games --out DATA/wf --engines FG1 --tag fg1t --params '{"carry":0.85,"carry_pace":0.7,"lam":4,"lam_pace":4,"half_life":40,"hca_lam":400}'
 python3 -m fullgame.run_eval --wf DATA/wf --odds DATA/odds --out eval_report.json
 python3 -m fullgame.make_report --eval eval_report.json --nov24 nov24_rows.json --out fullgame/evidence
+python3 -m fullgame.improve_eval --games DATA/games --sched DATA --wf DATA/wf --odds DATA/odds --out fullgame/evidence
 ```
 (run from `models/cbb`; nov24_rows.json from `nov24_diagnosis.run` with the open-line selected weights.)
