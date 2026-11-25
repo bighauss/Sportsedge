@@ -77,7 +77,65 @@ def test_moneyline_and_team_total_exist():
     assert tt["market"] == "H1_TEAM_TOTAL"
     assert abs(ml["p_win"] + ml["p_loss"] + ml["p_push"] - 1.0) < 1e-6
 
+def test_blended_ev_matches_independent_at_100():
+    row = price_h1_spread(
+        game_id="g1", home_team="A", away_team="B",
+        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
+        line=0.0, american=-110, side="home", capture_utc="2026-11-25T12:00:00Z",
+        p_market=0.5,
+    )
+    # 100% model blend must equal independent EV
+    assert abs(row["nine_blends"][-1]["blended_ev"] - row["independent_ev"]) < 1e-9
+    # And must not equal the no-push approximation
+    naive = ev(row["p_win"], 1.0 - row["p_win"], -110)
+    assert abs(row["independent_ev"] - naive) > 1e-6
+
+def test_three_way_tie_is_loss():
+    row = price_h1_moneyline(
+        game_id="g1", home_team="A", away_team="B",
+        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
+        american=200, side="home", capture_utc="2026-11-25T12:00:00Z",
+        three_way=True,
+    )
+    assert row["p_push"] == 0.0
+    assert abs(row["p_win"] + row["p_loss"] - 1.0) < 1e-9
+    two = price_h1_moneyline(
+        game_id="g1", home_team="A", away_team="B",
+        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
+        american=200, side="home", capture_utc="2026-11-25T12:00:00Z",
+        three_way=False,
+    )
+    assert row["p_loss"] > two["p_loss"]
+
 def test_timestamp_validation():
+    try:
+        price_h1_spread(
+            game_id="g1", home_team="A", away_team="B",
+            expected_home=35.0, expected_away=32.0, sd_margin=8.0,
+            line=-3.5, american=-110, side="home", capture_utc="not-a-timestamp",
+        )
+        assert False
+    except Hold as e:
+        assert "TIMESTAMP" in str(e)
+
+if __name__ == "__main__":
+    row = price_h1_moneyline(
+        game_id="g1", home_team="A", away_team="B",
+        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
+        american=200, side="home", capture_utc="2026-11-25T12:00:00Z",
+        three_way=True,
+    )
+    # In three-way, p_loss must include the tie; p_push must be zero
+    assert row["p_push"] == 0.0
+    assert abs(row["p_win"] + row["p_loss"] - 1.0) < 1e-9
+    # p_loss must be larger than the two-way loss (which excludes the tie)
+    two = price_h1_moneyline(
+        game_id="g1", home_team="A", away_team="B",
+        expected_home=35.0, expected_away=35.0, sd_margin=8.0,
+        american=200, side="home", capture_utc="2026-11-25T12:00:00Z",
+        three_way=False,
+    )
+    assert row["p_loss"] > two["p_loss"]
     try:
         price_h1_spread(
             game_id="g1", home_team="A", away_team="B",
@@ -95,5 +153,7 @@ if __name__ == "__main__":
     test_nine_blends_include_ev()
     test_fair_odds_account_for_push()
     test_moneyline_and_team_total_exist()
+    test_blended_ev_matches_independent_at_100()
+    test_three_way_tie_is_loss()
     test_timestamp_validation()
     print("All repaired H1 pricing tests passed")

@@ -116,7 +116,8 @@ def fair_decimal(p_win: float, p_push: float) -> Optional[float]:
     p_cond = p_win / (p_win + (1.0 - p_win - p_push))
     return 1.0 / _clip(p_cond)
 
-def nine_blends(p_model: float, p_market: Optional[float], american: float) -> List[Dict[str, float]]:
+def nine_blends(p_model: float, p_push: float, p_market: Optional[float], american: float) -> List[Dict[str, float]]:
+    """Blended EV uses the same push probability as the independent model."""
     out = []
     for w in BLEND_WEIGHTS:
         if p_market is None:
@@ -125,13 +126,15 @@ def nine_blends(p_model: float, p_market: Optional[float], american: float) -> L
             bp = w * p_model + (1.0 - w) * p_market
         blended_ev = None
         if bp is not None:
-            # Assume no push in the blend for simplicity unless p_market already accounts for it
-            blended_ev = ev(bp, 1.0 - bp, american)
+            # Preserve independent push mass; remaining probability is loss
+            p_loss = max(0.0, 1.0 - bp - p_push)
+            blended_ev = ev(bp, p_loss, american)
         out.append({
             "model_weight": w,
             "market_weight": 1.0 - w,
             "blended_probability": bp,
             "blended_ev": blended_ev,
+            "blended_push": p_push,
         })
     return out
 
@@ -175,7 +178,7 @@ def price_h1_spread(
         fair_decimal=fair_decimal(p_win, p_push),
         break_even=break_even(american),
         independent_ev=ev(p_win, p_loss, american),
-        nine_blends=nine_blends(p_win, p_market, american),
+        nine_blends=nine_blends(p_win, p_push, p_market, american),
     )
 
 def price_h1_total(
@@ -207,7 +210,7 @@ def price_h1_total(
         fair_decimal=fair_decimal(p_win, p_push),
         break_even=break_even(american),
         independent_ev=ev(p_win, p_loss, american),
-        nine_blends=nine_blends(p_win, p_market, american),
+        nine_blends=nine_blends(p_win, p_push, p_market, american),
     )
 
 def price_h1_moneyline(
@@ -232,9 +235,15 @@ def price_h1_moneyline(
     # Treat moneyline as spread of 0
     probs = margin_cover_probs(mean_margin, sd_margin, 0.0)
     if three_way:
-        p_win = probs[side] if side != "draw" else probs["push"]
-        p_loss = 1.0 - p_win - (probs["push"] if side != "draw" else 0.0)
-        p_push = 0.0
+        if side == "draw":
+            p_win = probs["push"]
+            p_loss = 1.0 - p_win
+            p_push = 0.0
+        else:
+            # Home or away loses on a tie in a three-way market
+            p_win = probs[side]
+            p_loss = 1.0 - p_win  # includes the tie
+            p_push = 0.0
     else:
         if side == "draw":
             raise Hold("DRAW_NOT_AVAILABLE_ON_TWO_WAY")
@@ -252,7 +261,7 @@ def price_h1_moneyline(
         fair_decimal=fair_decimal(p_win, p_push),
         break_even=break_even(american),
         independent_ev=ev(p_win, p_loss, american),
-        nine_blends=nine_blends(p_win, p_market, american),
+        nine_blends=nine_blends(p_win, p_push, p_market, american),
     )
 
 def price_h1_team_total(
@@ -283,5 +292,5 @@ def price_h1_team_total(
         fair_decimal=fair_decimal(p_win, p_push),
         break_even=break_even(american),
         independent_ev=ev(p_win, p_loss, american),
-        nine_blends=nine_blends(p_win, p_market, american),
+        nine_blends=nine_blends(p_win, p_push, p_market, american),
     )
