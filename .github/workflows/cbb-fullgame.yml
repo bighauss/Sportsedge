@@ -1,0 +1,41 @@
+name: CBB full-game challenger unit tests (offline)
+
+on:
+  pull_request:
+    paths:
+      - "models/cbb/fullgame/**"
+      - "models/cbb/cbb_pricing.py"
+      - "outputs/cbb/card_2026-11-24_45452279760_1.md"
+      - ".github/workflows/cbb-fullgame.yml"
+  push:
+    branches: [main]
+    paths:
+      - "models/cbb/fullgame/**"
+      - "models/cbb/cbb_pricing.py"
+      - "outputs/cbb/card_2026-11-24_45452279760_1.md"
+      - ".github/workflows/cbb-fullgame.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fullgame-unittests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile challenger modules
+        run: python -m compileall -q models/cbb/fullgame models/cbb/cbb_pricing.py
+      - name: Run full-game unit tests (stdlib, no network, committed fixtures)
+        env:
+          http_proxy: http://127.0.0.1:1
+          https_proxy: http://127.0.0.1:1
+          HTTP_PROXY: http://127.0.0.1:1
+          HTTPS_PROXY: http://127.0.0.1:1
+        run: cd models/cbb && python -m unittest -v fullgame.test_fullgame
