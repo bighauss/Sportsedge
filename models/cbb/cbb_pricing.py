@@ -1,3 +1,4 @@
+import re
 """CBB RUN IT pricing config + adapters (PAPER / 0u). Does NOT edit the frozen native model.
 
 * SD constants: margin 12.5, total 17 (tighter fitted SDs overstated confidence). Applied by
@@ -30,6 +31,71 @@ DEFAULT_CONFIG = {
 LADDER_MARKETS = {"ALT_SPREAD": "alt_spread", "ALT_TOTAL": "alt_total",
                   "TT_HOME": "team_total_home", "TT_AWAY": "team_total_away"}
 
+
+
+# Canonical nine model/market weights (model share first). Additive from PR #534.
+OWNER_BLEND_WEIGHTS = (1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0)
+EV_AUDIT_THRESHOLD = 0.30   # AUDIT FLAG ONLY: never caps, clips or drops an EV
+
+_AMERICAN_TOKEN = re.compile(r"^[+-]?[1-9][0-9]*$")
+
+def parse_american(value, *, min_abs=100, max_abs=100000):
+    """Quote contract: return a Python int American price, or raise ValueError."""
+    if type(value) is int:
+        n = value
+    elif type(value) is str:
+        s = value.strip()
+        if _AMERICAN_TOKEN.fullmatch(s) is None:
+            raise ValueError("MALFORMED_AMERICAN_PRICE")
+        n = int(s)
+    else:
+        raise ValueError("NON_INTEGER_AMERICAN_PRICE")
+    if abs(n) < min_abs or abs(n) > max_abs:
+        raise ValueError("INVALID_AMERICAN_PRICE")
+    return n
+
+def logit_blend(p_model, p_market, w, *, push=0.0):
+    """Blend in log-odds space. Research only; not wired into the card."""
+    import math
+    for v in (p_model, p_market, w, push):
+        if type(v) not in (int, float) or not math.isfinite(v):
+            raise ValueError("BLEND_INPUT_INVALID")
+    if not 0 <= w <= 1 or not 0 <= push < 1 or not 0 <= p_model <= 1 or not 0 < p_market < 1:
+        raise ValueError("BLEND_INPUT_OUT_OF_RANGE")
+    eps = 1e-12
+    pm = min(1 - eps, max(eps, p_model / (1 - push)))
+    z = w * math.log(pm / (1 - pm)) + (1 - w) * math.log(p_market / (1 - p_market))
+    return (1 / (1 + math.exp(-z))) * (1 - push)
+
+def ev_sanity_audit(card, threshold=EV_AUDIT_THRESHOLD):
+    """Flag (never alter) priced sides whose paper EV exceeds threshold."""
+    import sys
+    from pathlib import Path
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    try:
+        from fullgame.pricing import ev_audit
+    except ImportError:
+        return []
+    out = []
+    for r in card.get("rows", ()):
+        for m in r.get("markets", ()):
+            if m.get("status") != "PRICED_PAPER":
+                continue
+            q = m.get("quote") or {}
+            for i, side in enumerate(m.get("sides", ())):
+                ev = (m.get("paper_ev_per_1u_at_price") or {}).get(side)
+                price = q.get("price_a" if i == 0 else "price_b")
+                pm = (m.get("model_prob") or {}).get(side)
+                pk = (m.get("market_novig_prob") or {}).get(side)
+                if None in (ev, price, pm):
+                    continue
+                codes = ev_audit({"ev": ev, "price": price, "p_model": pm, "p_novig": pk}, threshold=threshold)
+                if codes:
+                    out.append({"game_id": r.get("game_id"), "market": m.get("market"), "side": side,
+                                "price": price, "paper_ev": ev, "p_model": pm, "p_novig": pk, "codes": codes})
+    return out
 
 def make_config(**over):
     """Validate overrides before any probability or quote computation."""

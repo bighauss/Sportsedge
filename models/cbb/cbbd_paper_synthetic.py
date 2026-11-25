@@ -13,7 +13,7 @@ SEASON = 2027
 FREEZE = "2026-11-21T15:00:00Z"
 BUILT = "2026-11-21T15:05:00Z"
 TIP = "2026-11-21T23:00:00Z"
-RATINGS_OBSERVED = "2026-11-21T12:00:00+00:00"
+RATINGS_OBSERVED = "2026-11-21T12:00:00Z"
 HCA_TRUE = 3.0
 
 
@@ -36,7 +36,7 @@ def ratings_body(**kw):
 
 
 def receipt(body, observed=RATINGS_OBSERVED, season=SEASON):
-    # Accept either Z or +00:00; emit +00:00 so eligible_bytes fromisoformat succeeds.
+    # Accept either Z or +00:00 on input; emit canonical Z.
     raw = observed.strip()
     if raw.endswith("Z"):
         raw = raw[:-1] + "+00:00"
@@ -44,8 +44,8 @@ def receipt(body, observed=RATINGS_OBSERVED, season=SEASON):
     started = obs - timedelta(seconds=1)
     return {"source": "cbbd_ratings_adjusted", "url": cbbd_source(season)["url"],
             "season": season, "state": "CAPTURED",
-            "request_started_utc": started.strftime("%Y-%m-%dT%H:%M:%S+00:00"),
-            "observed_utc": obs.strftime("%Y-%m-%dT%H:%M:%S+00:00"),
+            "request_started_utc": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "observed_utc": obs.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "bytes": len(body), "sha256": "sha256:" + hashlib.sha256(body).hexdigest(),
             "row_count": len(json.loads(body))}
 
