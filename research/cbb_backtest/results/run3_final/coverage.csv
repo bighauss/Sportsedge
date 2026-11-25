@@ -1,0 +1,9 @@
+season,admitted_finals,with_possessions,rows,forecast_native_frozen,forecast_raw,forecast_regularized,forecast_sched_adj,forecast_native_hca_repaired,forecast_FG1,all_builtin_forecast,market_any,market_spread,market_total,market_ml,market_open_any,providers
+2019,6049,6047,6049,4790,4790,4790,4790,4790,5282,4790,5378,5375,5363,5133,0,"{""Unibet"": 5344, ""consensus"": 34}"
+2020,5767,5757,5767,4538,4538,4538,4538,4538,5032,4538,5313,5313,5312,5114,0,"{""DraftKings"": 5069, ""Unibet"": 231, ""consensus"": 13}"
+2021,4285,4280,4285,3138,3138,3138,3138,3138,3655,3138,3840,3839,3706,3736,0,"{""Caesars Sportsbook (New Jersey)"": 714, ""DraftKings"": 2958, ""Unibet"": 164, ""consensus"": 4}"
+2022,5966,5963,5966,4704,4703,4703,4703,4703,4714,4703,5419,5419,5419,5385,0,"{""Caesars Sportsbook (Colorado)"": 201, ""Caesars Sportsbook (New Jersey)"": 29, ""DraftKings"": 5142, ""Unibet"": 46, ""consensus"": 1}"
+2023,6222,6220,6222,4906,4906,4906,4906,4906,5252,4906,5828,0,0,5670,0,"{""DraftKings"": 5420, ""ESPN BET"": 406, ""SugarHouse"": 1, ""Unibet"": 1}"
+2024,6243,6240,6243,4930,4930,4930,4930,4930,5383,4930,5754,5754,5752,5496,0,"{""BetfairSportsbook"": 1, ""Caesars Sportsbook (Colorado)"": 21, ""Caesars Sportsbook (New Jersey)"": 11, ""DraftKings"": 5326, ""ESPN BET"": 368, ""SugarHouse"": 10, ""Unibet"": 17}"
+2025,6292,6285,6292,5022,5022,5022,5022,5022,5404,5022,5763,5763,5762,5647,0,"{""ESPN BET"": 5763}"
+2026,6300,6299,6300,5033,5033,5033,5033,5033,5416,5033,5749,5706,5734,5507,0,"{""Draft Kings"": 4805, ""ESPN BET"": 944}"
