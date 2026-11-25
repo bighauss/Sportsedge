@@ -350,5 +350,25 @@ class HalfGradeWiring(unittest.TestCase):
         self.assertEqual(grades[0].result, "NOT_GRADABLE")
 
 
+
+class ConditionalPlayerGrade(unittest.TestCase):
+    def test_conditional_stats_excluded_from_roi_and_all_calibration(self):
+        row = dict(game_id="g1", period="FG", market="PLAYER_PRA_OU", line=25.0,
+                   player_id="p", player_team_id="h", price=-110, side="over",
+                   prob_model=0.6, prob_push=0.1, prob_market_novig=0.5, ev_model=0.15)
+        card = {"priced": [row, dict(row, side="under", prob_model=0.3, ev_model=-0.5)]}
+        finals = {"g1": {"home": 80, "away": 70}}
+        stats = {"PTS": 16, "REB": 7, "AST": 3, "3PM": 2}
+        grades, cal = P.grade(card, finals, player_finals={("g1", "h", "p"): stats})
+        self.assertEqual([g.result for g in grades], ["CONDITIONAL_WIN", "CONDITIONAL_LOSS"])
+        self.assertTrue(all(g.return_1u is None for g in grades))
+        self.assertEqual(P.grade_summary(grades)["ALL"]["n"], 0)
+        self.assertNotIn("ALL", P.calibration_summary(cal))
+        self.assertIn("CONDITIONAL:PLAYER_PRA_OU", P.calibration_summary(cal))
+        grades, cal = P.grade(card, finals, player_finals={("g1", "a", "p"): stats})
+        self.assertTrue(all(g.result == "NOT_GRADABLE" for g in grades))
+        self.assertFalse(cal)
+
+
 if __name__ == "__main__":
     unittest.main()
