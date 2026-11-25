@@ -228,7 +228,7 @@ def normalize_quotes(cap, *, totals_order_verified):
         except ValueError:
             pass
         order = str(r.get("totals_order") or "").strip().lower()
-        if market in ("TOTAL", "ALT_TOTAL", "TT_HOME", "TT_AWAY") and order == "under_over" \
+        if (market in ("TOTAL", "ALT_TOTAL", "TT_HOME", "TT_AWAY") or market.endswith("_OU")) and order == "under_over" \
                 and isinstance(pa, int) and isinstance(pb, int):
             pa, pb = pb, pa
         q = C.MarketQuote(board_index=i, period=period, market=market, home=str(r.get("home") or ""),
@@ -240,7 +240,9 @@ def normalize_quotes(cap, *, totals_order_verified):
                           captured_utc=cap_utc, tip_utc=tip, live=live, provenance=prov,
                           player=str(r.get("player") or "").strip() or None,
                           source_sha256=cap["source_sha256"], source_label=label or None,
-                          row_key=str(r.get("row_key") or "").strip() or None)
+                          row_key=str(r.get("row_key") or "").strip() or None,
+                          player_id=str(r.get("player_id") or "").strip() or None,
+                          player_team_id=str(r.get("player_team_id") or "").strip() or None)
         quotes.append((q, {"line_bad": line == "BAD", "price_bad": "BAD" in (pa, pb),
                            "order": order, "raw": r}))
     return quotes, rejects
@@ -287,6 +289,13 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             note = str(meta["raw"].get("note") or meta["raw"].get("notes") or "")
             rej("PLAYER_MODEL_NOT_IMPLEMENTED", "player team not established" if "team not established" in note else "")
             continue
+        if q.market.startswith("PLAYER_"):
+            if not q.player_id or not q.player_team_id or not q.dk_event_id:
+                rej("PLAYER_ID_UNKNOWN"); continue
+            if q.market.endswith("_OU") and meta["order"] not in ("over_under", "under_over"):
+                rej("TOTALS_ORDER_UNVERIFIED"); continue
+            if q.market.endswith("_AT_LEAST") and meta["order"] != "yes_no":
+                rej("TOTALS_ORDER_UNVERIFIED", "explicit yes/no order required"); continue
         if meta["price_bad"]:
             rej("PRICE_INVALID"); continue
         if q.price_a is None or q.price_b is None:
@@ -344,7 +353,7 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         if q.dk_event_id and (len(ev_games[q.dk_event_id]) > 1 or len(game_evs[gid]) > 1):
             rejects.append(C.Rejection("validate", q.period, q.market, "DK_EVENT_ID_CONFLICT", "",
                                        q.board_index, f"{q.away} @ {q.home}", q.provenance)); continue
-        keyed[(gid, q.period, q.market, q.line)].append(q)
+        keyed[(gid, q.period, q.market, q.line, q.player_team_id, q.player_id)].append(q)
     for key, qs in keyed.items():
         if len({(q.price_a, q.price_b) for q in qs}) > 1:
             for q in qs:
@@ -823,16 +832,29 @@ def fair_american(p_win, p_push):
 
 
 # ====================================================================== price / rank
-def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, challenger_proj=None):
+def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, challenger_proj=None,
+          players=None, games=None):
     priced, rejects, parity, half_cache = [], [], [], {}
     challenger_proj = challenger_proj or {}
     for q, gid in accepted:
         pj = projections.get(gid)
-        if pj is None or pj.status != "PROJECTED":
+        is_player = q.market.startswith("PLAYER_")
+        if not is_player and (pj is None or pj.status != "PROJECTED"):
             rejects.append(C.Rejection("price", q.period, q.market, "GAME_NOT_PROJECTED",
                                        pj.reason_code if pj else "", q.board_index, gid, q.provenance)); continue
         src = "SIMULATION"
-        if q.period != "FG":
+        if is_player:
+            g = (games or {}).get(gid)
+            if not players or not g or q.period != "FG" or not q.player_id or not q.dk_event_id or q.player_team_id not in (g.home_team_id, g.away_team_id):
+                rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_ID_UNKNOWN",
+                                           "exact event/team/player required", q.board_index, gid, q.provenance)); continue
+            try:
+                pa_, pp, pb_ = players.probs(gid, q.player_team_id, q.player_id, g.tipoff_utc, q.market, q.line)
+            except (ValueError, KeyError, TypeError) as exc:
+                rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_FORECAST_MISSING",
+                                           str(exc), q.board_index, gid, q.provenance)); continue
+            src = "PLAYER_CONDITIONAL_PARTICIPATION_UNVALIDATED"
+        elif q.period != "FG":
             if not halves or q.period not in HALVES_PERIOD:
                 rejects.append(C.Rejection("price", q.period, q.market, "PERIOD_NOT_IMPLEMENTED", "",
                                            q.board_index, gid, q.provenance)); continue
@@ -863,7 +885,7 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
                            "abs_diff": abs(pa_ - ca)})
         ma, mb, _ = NM.no_vig(q.price_a, q.price_b)
         cprobs = None
-        if challenger and q.period == "FG" and gid in challenger_proj:
+        if not is_player and challenger and q.period == "FG" and gid in challenger_proj:
             cprobs = challenger.probs(challenger_proj[gid], q.market, q.line)
         for side, p, pm, price_ in ((q.side_a, pa_, ma, q.price_a), (q.side_b, pb_, mb, q.price_b)):
             pc = evc = None
@@ -881,6 +903,8 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
             else:
                 ph = PR.blend(p, pm, w, push=pp)
                 hmethod = f"LINEAR_BLEND_FROZEN_W{w:g}_UNVALIDATED"
+            if is_player:
+                flags = tuple(sorted(set(flags) | {"CONDITIONAL_PARTICIPATION_UNVALIDATED"}))
             ev_frozen = NM.ev_per_unit(p, pp, price_)
             if ev_frozen > 0.30:
                 flags = tuple(sorted(set(flags) | {"FROZEN_EV_GT_30_PCT"}))
@@ -892,7 +916,8 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
                                  ev_hybrid=NM.ev_per_unit(ph, cprobs[1] if cprobs is not None else pp, price_),
                                  prob_challenger=pc, ev_challenger=evc, hybrid_method=hmethod, audit_flags=flags,
                                  dk_event_id=q.dk_event_id, captured_utc=q.captured_utc, provenance=q.provenance,
-                                 prob_source=src)
+                                 prob_source=src, player_id=q.player_id, player_team_id=q.player_team_id,
+                                 player=q.player)
             C.check_paper(row)
             priced.append((row, q))
     return priced, rejects, parity
@@ -935,12 +960,18 @@ def grade(frozen, finals, close_quotes=None):
     Every side also feeds calibration (push outcomes excluded)."""
     groups = defaultdict(list)
     for r in frozen["priced"]:
-        groups[(r["game_id"], r["period"], r["market"], _home_line(r))].append(r)
+        groups[(r["game_id"], r["period"], r["market"], _home_line(r),
+                r.get("player_team_id"), r.get("player_id"))].append(r)
     grades, cal = [], []
     for key, sides in sorted(groups.items(), key=lambda kv: str(kv[0])):
-        gid, period, market, hl = key
+        gid, period, market, hl, player_team_id, player_id = key
         f = finals.get(gid)
         best = max(sides, key=lambda r: (r["ev_model"], r["side"]))
+        if market.startswith("PLAYER_"):
+            grades.extend(C.GradeRow(gid, period, market, r["line"], r["side"], r["price"],
+                          "NOT_GRADABLE", None, r["prob_model"], player_id=player_id,
+                          player_team_id=player_team_id) for r in sides)
+            continue
         if f is None:
             grades += [C.GradeRow(gid, period, market, r["line"], r["side"], r["price"], "PENDING_NO_FINAL", None,
                                   r["prob_model"]) for r in sides]
@@ -1125,7 +1156,8 @@ def audit(*, priced, projections, market_views, parity, sims, quotes, cap_reject
             dm.append(pj.margin - mv.margin); dt.append(pj.total - mv.total)
     best = {}
     for r in rows:
-        k = (r.game_id, r.period, r.market, abs(r.line) if r.line is not None and "SPREAD" in r.market else r.line)
+        k = (r.game_id, r.period, r.market, abs(r.line) if r.line is not None and "SPREAD" in r.market else r.line,
+             r.player_team_id, r.player_id)
         if r.ev_model > 0 and (k not in best or r.ev_model > best[k].ev_model):
             best[k] = r
     picks = list(best.values())
@@ -1244,7 +1276,8 @@ def render(meta, games, projections, market_views, hybrids, ranked, rejects, a, 
     for i, (r, q) in enumerate(ranked, 1):
         g = names[r.game_id]
         fl = ",".join(r.audit_flags) or ("FROZEN_EV_GT_30_PCT" if r.ev_model > 0.30 else "—")
-        o.append(f"| {i} | {g.tip_ct} | {g.away} @ {g.home} | {r.period} | {r.market} | {r.side} | "
+        market_label = f"{r.market} ({r.player or r.player_id}; ID {r.player_id})" if r.player_id else r.market
+        o.append(f"| {i} | {g.tip_ct} | {g.away} @ {g.home} | {r.period} | {market_label} | {r.side} | "
                  f"{_f(r.line, '{:g}')} | {r.price:+d} | {r.prob_model:.3f} | {r.prob_push:.3f} | "
                  f"{_f(r.prob_challenger, '{:.3f}')} | {r.prob_market_novig:.3f} | {r.prob_hybrid:.3f} | "
                  f"{_f(r.fair_american, '{:+d}')} | {100*r.ev_model:+.1f}% | "
@@ -1263,7 +1296,8 @@ def render(meta, games, projections, market_views, hybrids, ranked, rejects, a, 
         ev, r = max(eligible, key=lambda x: x[0])
         g = names[r.game_id]
         flags = ", ".join(r.audit_flags)
-        return (f"{g.away} @ {g.home}: {r.side} {_f(r.line, '{:g}')} ({r.price:+d}), "
+        who = f" [{r.player or r.player_id}]" if r.player_id else ""
+        return (f"{g.away} @ {g.home}{who}: {r.side} {_f(r.line, '{:g}')} ({r.price:+d}), "
                 f"{ev:+.1%}" + (f" [{flags}]" if flags else ""))
     for per, mkt in C.MARKET_CATALOG:
         items = [r for r, _ in ranked if (r.period, r.market) == (per, mkt)]
@@ -1327,7 +1361,8 @@ def _slate_rows_from_espn(games, ids, short=False):
 def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season, raw_dir, out_dir,
                       totals_order_verified, n_sims=20000, seed=20261125, grade_finals=True,
                       adapters_requested=(), provenance=None, fetch=True, refresh_finals=False, now=None,
-                      team_crosswalk=None, halves_path=None, fullgame_root=None, challenger_inputs=None):
+                      team_crosswalk=None, halves_path=None, fullgame_root=None, challenger_inputs=None,
+                      player_bundle=None):
     """Whole pipeline in one call on public ESPN inputs (research replay; never production)."""
     import cbb_run_it as R
     now = now or datetime.now(timezone.utc)
@@ -1336,7 +1371,11 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     w = cfg["blend_weight_model"]
     req = set(adapters_requested)
     freeze = parse_z(freeze_utc)
-    loaded, halves, challenger = {}, None, None
+    loaded, halves, challenger, players = {}, None, None, None
+    if "players" in req and player_bundle:
+        from cbb_player_residual_pricing import PlayerBundle
+        players = PlayerBundle(player_bundle, freeze_utc)
+        loaded["players"] = players
     if "halves" in req:
         halves = load_halves(halves_path)
         loaded["halves"] = halves or "ADAPTER_NOT_LANDED"
@@ -1410,7 +1449,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     sims = {gid: simulate(p, n_sims, seed) for gid, p in projections.items() if p.status == "PROJECTED"}
     # ---- price / rank
     priced, price_rejects, parity = price(accepted, projections, sims, w, cfg, halves=halves,
-                                          challenger=challenger, challenger_proj=ch_proj)
+                                          challenger=challenger, challenger_proj=ch_proj, players=players, games=gm)
     priced = [(replace(r, stars=stars_for(r, None)), q) for r, q in priced]
     ranked = rank(priced)
     rejects = cap_rejects + val_rejects + price_rejects
@@ -1434,9 +1473,11 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
               "halves": ({"version": halves["version"], "coefficients_sha256": halves["sha256"],
                           "ml_tie_rule": HALVES_ML_TIE_RULE, "caveat": HALVES_CAVEAT} if halves else None),
               "priced": [C.row_dict(r) for r, _ in ranked],
+              "player_bundle_sha256": players.sha256 if players else None,
               "nine_weight_grid": [[r.game_id, r.market, r.line, r.side] +
                                    [round(PR.blend(r.prob_model, r.prob_market_novig, wt, push=r.prob_push), 5)
                                     for wt in C.CANONICAL_BLEND_WEIGHTS] for r, _ in ranked],
+              "nine_weight_grid_player_identity": [[r.player_team_id, r.player_id] for r, _ in ranked],
               "rejections": [C.row_dict(r) for r in rejects], "adapters": adapter_status}
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
@@ -1511,7 +1552,10 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
         meta["warnings"].append(CHALLENGER_CAVEAT)
     if halves:
         meta["warnings"] = [x for x in meta["warnings"] if not x.startswith("First-half, second-half")]
-        meta["warnings"].append(HALVES_CAVEAT + " Player markets remain NOT_IMPLEMENTED (see coverage).")
+        meta["warnings"].append(HALVES_CAVEAT)
+    if players:
+        meta["warnings"] = [x for x in meta["warnings"] if not x.startswith("First-half, second-half")]
+        meta["warnings"].append("Player pricing is conditional on participation, unvalidated and not gradable without exact player finals; bundle hash " + players.sha256)
     (out / "pipeline_card.md").write_text(render(meta, list(gm.values()), projections, market_views, hybrids,
                                                  ranked, rejects, a, gsum))
     summary = {"date_ct": date_ct, "freeze_utc": utcz(freeze), "freeze_kind": kind, "slate_games": len(slate_ids),
@@ -1669,6 +1713,7 @@ def main(argv=None):
     ap.add_argument("--board-provenance", choices=C.PROVENANCE[1:])
     ap.add_argument("--n-sims", type=int, default=20000); ap.add_argument("--seed", type=int, default=20261125)
     ap.add_argument("--adapters", default="", help="comma list behind flags: fullgame,halves,players")
+    ap.add_argument("--player-bundle", help="Research JSON target forecasts and prior residual observations (exact IDs)")
     ap.add_argument("--no-fetch", action="store_true", help="cached raw files only (offline reproduction)")
     ap.add_argument("--refresh-finals", action="store_true", help="re-fetch the slate date's scoreboard for grading")
     ap.add_argument("--no-grade", action="store_true")
@@ -1699,7 +1744,7 @@ def main(argv=None):
                               seed=x.seed, grade_finals=not x.no_grade, provenance=x.board_provenance,
                               adapters_requested=[a for a in x.adapters.split(",") if a], fetch=not x.no_fetch,
                               refresh_finals=x.refresh_finals, team_crosswalk=x.team_crosswalk,
-                              halves_path=x.halves_path, fullgame_root=x.fullgame_root,
+                              halves_path=x.halves_path, fullgame_root=x.fullgame_root, player_bundle=x.player_bundle,
                               challenger_inputs={"games_csv": x.challenger_games, "finals_json": x.challenger_finals,
                                                  "summary_json": x.challenger_summary or (
                                                      str(Path(x.fullgame_root) / "fullgame/evidence/summary.json")
