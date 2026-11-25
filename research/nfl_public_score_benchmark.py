@@ -164,7 +164,8 @@ def run(args):
         season = int(path.name.removeprefix("play_by_play_").removesuffix(".csv.gz"))
         if not 1999 <= season <= 2024:
             raise ValueError("closed historical seasons only")
-        raw_hash = hashlib.file_digest(path.open("rb"), "sha256").hexdigest()
+        with path.open("rb") as stream:
+            raw_hash = hashlib.file_digest(stream, "sha256").hexdigest()
         gs, census = read_games(path, season)
         if not gs:
             raise ValueError("no terminal finals admitted")
@@ -209,6 +210,27 @@ class Regression(unittest.TestCase):
         result=metrics(forecast(self.fixture()))
         self.assertEqual(result["paired_n"],1)
         self.assertEqual(result["models"]["rolling_ppg"]["margin"]["mae"],0)
+    def test_terminal_marker_and_conflict(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/"play_by_play_2023.csv.gz"
+            base=dict(game_id="2023_01_B_A",season=2023,season_type="REG",
+                      week=1,game_date="2023-09-01",home_team="A",away_team="B",
+                      play_id=1,desc="play",total_home_score=0,total_away_score=0)
+            final=dict(base,play_id=2,desc="END GAME",total_home_score=20,total_away_score=10)
+            def write(rows):
+                with gzip.open(p,"wt",newline="") as stream:
+                    writer=csv.DictWriter(stream,fieldnames=FIELDS)
+                    writer.writeheader(); writer.writerows(rows)
+            write([base,final])
+            games,census=read_games(p,2023)
+            self.assertEqual((games[0]["home_score"],games[0]["away_score"]),(20,10))
+            write([base])
+            self.assertEqual(read_games(p,2023)[1]["no_terminal_end_game"],1)
+            write([base,final,dict(final,total_home_score=21)])
+            self.assertEqual(read_games(p,2023)[1]["invalid_events"],1)
+    def test_late_prior_week_excluded(self):
+        g=self.fixture(); g[0]["day"]=g[-1]["day"]
+        self.assertEqual(forecast(g)[0]["training_n"],7)
     def test_no_replace(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/"report.json";publish(p,{"a":1})
