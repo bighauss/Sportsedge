@@ -269,6 +269,14 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         def rej(code, detail=""):
             rejects.append(C.Rejection("validate", q.period, q.market, code, detail, q.board_index,
                                        f"{q.away} @ {q.home}", q.provenance))
+        raw = meta["raw"]
+        disposition = str(raw.get("disposition") or "").strip().upper()
+        if disposition and disposition != "ACCEPTED":
+            rej("UPSTREAM_QUOTE_WITHHELD", f"{disposition}: {raw.get('reason_codes') or ''}"); continue
+        if str(raw.get("reason_codes") or "").strip():
+            rej("UPSTREAM_QUOTE_WITHHELD", str(raw["reason_codes"])); continue
+        if str(raw.get("live") or "").strip().lower() in ("1", "true", "yes"):
+            rej("LIVE_GAME"); continue
         if q.live:
             rej("LIVE_GAME"); continue
         if q.period == "2H_HALFTIME_ADJUSTED":
@@ -285,7 +293,8 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             rej("ONE_SIDED_QUOTE"); continue
         if meta["line_bad"] or (q.market != "ML" and q.line is None):
             rej("LINE_INVALID"); continue
-        if q.market in OU_MARKETS and not (meta["order"] in ("over_under", "under_over") or totals_order_verified):
+        if q.market in OU_MARKETS and not (meta["order"] in ("over_under", "under_over") or
+                (totals_order_verified and not disposition and q.market not in ("TT_HOME", "TT_AWAY") and not meta["order"])):
             rej("TOTALS_ORDER_UNVERIFIED"); continue
         try:
             cap = parse_z(q.captured_utc)
@@ -293,6 +302,19 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             rej("STALE_QUOTE", "capture time missing"); continue
         if cap > freeze:
             rej("QUOTE_AFTER_FREEZE"); continue
+        for clock_field in ("quote_available_utc", "as_of_utc"):
+            if raw.get(clock_field):
+                try:
+                    clock = parse_z(raw[clock_field])
+                    if clock > freeze or clock < cap:
+                        raise ValueError("clock outside capture/freeze")
+                except (TypeError, ValueError):
+                    rej("QUOTE_AFTER_FREEZE", f"invalid or unavailable {clock_field}")
+                    break
+        else:
+            clock_field = None
+        if clock_field is not None:
+            continue
         if (freeze - cap).total_seconds() > max_quote_age_hours * 3600:
             rej("STALE_QUOTE"); continue
         g, why = match(slate_rows, q.home, q.away, meta["raw"])
@@ -852,7 +874,9 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
                 evc = NM.ev_per_unit(pc, cpush, price_)
                 wc = CHALLENGER_BLEND_W_OPEN.get(q.market, 0.0)
                 ph = challenger.logit_blend(pc, pm, wc, push=cpush)
-                hmethod = f"LOGIT_BLEND_CHALLENGER_W{wc:g}_VALIDATION_SELECTED_OPEN"
+                hmethod = (f"LOGIT_BLEND_CHALLENGER_W{wc:g}_UNVALIDATED_TEAM_TOTAL"
+                           if q.market in ("TT_HOME", "TT_AWAY") else
+                           f"LOGIT_BLEND_CHALLENGER_W{wc:g}_VALIDATION_SELECTED_OPEN")
                 flags = tuple(challenger.audit(evc, price_, pc, pm))
             else:
                 ph = PR.blend(p, pm, w, push=pp)
@@ -1226,6 +1250,25 @@ def render(meta, games, projections, market_views, hybrids, ranked, rejects, a, 
                  f"{_f(r.fair_american, '{:+d}')} | {100*r.ev_model:+.1f}% | "
                  f"{_f(None if r.ev_challenger is None else 100*r.ev_challenger, '{:+.1f}%')} | "
                  f"{100*r.ev_hybrid:+.1f}% | {fl} | {r.stars} | {r.status}/{r.counted} | {r.provenance} |")
+    o += ["", "## All-market research leaders by view (not recommendations)", "",
+          "Each family is displayed even when no positive diagnostic exists. Flagged leaders remain visible with their flags; "
+          "no stars, approved stakes, or validated edge implied.", "",
+          "| Period | Market | Independent leader | Challenger leader | Hybrid leader |",
+          "|---|---|---|---|---|"]
+    def leader(items, field):
+        eligible = [(getattr(r, field), r) for r in items
+                    if getattr(r, field) is not None and getattr(r, field) > 0]
+        if not eligible:
+            return "—"
+        ev, r = max(eligible, key=lambda x: x[0])
+        g = names[r.game_id]
+        flags = ", ".join(r.audit_flags)
+        return (f"{g.away} @ {g.home}: {r.side} {_f(r.line, '{:g}')} ({r.price:+d}), "
+                f"{ev:+.1%}" + (f" [{flags}]" if flags else ""))
+    for per, mkt in C.MARKET_CATALOG:
+        items = [r for r, _ in ranked if (r.period, r.market) == (per, mkt)]
+        o.append(f"| {per} | {mkt} | {leader(items, 'ev_model')} | "
+                 f"{leader(items, 'ev_challenger')} | {leader(items, 'ev_hybrid')} |")
     o += ["", "## Market coverage (every catalogued CBB family has a status or reason code)", "",
           "| Period | Market | Model | Board rows | Quotes priced | Status | Rejections by reason |",
           "|---|---|---|---:|---:|---|---|"]
