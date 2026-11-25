@@ -126,6 +126,7 @@ def test_market_conditional_conversion():
     assert abs(zero["blended_ev"]) < 0.02
 
 def test_blend_normalization_rejects_invalid():
+    raised = False
     try:
         price_h1_spread(
             game_id="g1", home_team="A", away_team="B",
@@ -133,8 +134,9 @@ def test_blend_normalization_rejects_invalid():
             line=0.0, american=-110, side="home", capture_utc="2026-11-25T12:00:00Z",
             p_market=1.5,
         )
-    except Hold as e:
-        assert "NORMALIZED" in str(e) or "INVALID" in str(e)
+    except Hold:
+        raised = True
+    assert raised, "invalid market probability must raise Hold"
 
 def test_timestamp_validation():
     try:
