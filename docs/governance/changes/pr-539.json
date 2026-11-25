@@ -1,0 +1,67 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 539,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "protected_paths": [
+    ".github/workflows/nba-market-contract.yml",
+    "models/nba/market_contract.py",
+    "models/nba/run_it.py",
+    "models/nba/test_market_contract.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Research-only NBA ingestion guard v2 at the board-loader boundary, isolated from #536. All source kinds pass one universal validation (event identity, strict integer odds, period, selection, line/complement, capture chronology) before pricing; invalid rows go to a persisted rejection ledger with reason codes; player props are validated too; each run uses a unique atomic workspace. models/nba/sportsedge_nba_model.py (blob b353de86) is not edited. PAPER/0u, NON_COUNTED.",
+  "assumptions": [
+    "Frozen run_card/price_games/price_game_market/price_props/__main__ remain for frozen-file regression tests only. The frozen __main__ cannot be guarded without editing blob b353de86, so it stays reachable as a script; the census test fails if any other module, workflow or script reaches frozen pricing.",
+    "Tie/Draw semantics follow DraftKings General Rules C.ii (a two-selection market with no Tie/Draw settles a tie as Push), cited with URLs, retrieval times and sha256 in pr-536.json. Tie selections never reach two-way pricing.",
+    "Quotes need capture_id plus tz-aware captured_at at or before tip-off and the run as-of time. Captures are never paired; the newest valid capture wins and older ones are ledgered. This is structural chronology, not source authentication.",
+    "Prices must be whole-number American quotes with abs value >= 100 and coherent two-sided hold. PDF and screenshot inputs fail closed unless structured rows are supplied; no parser is added. Roster checks verify structure, not player availability.",
+    "No promotion, no certification, no source authentication, official_counted=0, approved_stake_u=0, PAPER/0u, NON_COUNTED."
+  ],
+  "agent_identity": "SportsEdge Constructions bot (grok-cbb/*)",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "NBA market-contract ingestion guard rejection tests",
+    "before": null,
+    "unit": "source-authenticated pregame outcomes unavailable",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s models/nba -p test_market_contract.py -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s models/nba -p test_market_contract.py -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
