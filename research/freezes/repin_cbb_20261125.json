@@ -1,0 +1,89 @@
+{
+ "approved_stake_u": 0,
+ "candidate_blob": "8bbe83b7a17d184b3521094b40e00be66ba0f852",
+ "change_pr": 292,
+ "decision": "RETAIN_NOV18_TRANSITION_EQUIVALENCE_EVIDENCE_ONLY",
+ "diff_classification": {
+  "coefficients": 0,
+  "game_projection_path": 0,
+  "hunk_1": "insert resolve_prop_player() (+25): fail-closed name/optional-player_id/optional-team lookup restricted to the two event teams; reasons PROP_TEAM_NOT_IN_EVENT, PROP_SUBJECT_MISSING, AMBIGUOUS_PROP_PLAYER, PROP_PLAYER_NOT_ON_EVENT_ROSTER.",
+  "hunk_2": "run_card() prop loop (+7/-2): unknown game_id -> dropped PROP_EVENT_NOT_FOUND (was KeyError abort); first-global-name-match lookup replaced by resolve_prop_player(); failures are recorded in dropped with reason code (was silent continue).",
+  "hunks": 2,
+  "lines_added": 32,
+  "lines_removed": 2,
+  "other": 0,
+  "pricing_path": 0,
+  "prop_path": 2
+ },
+ "equivalence": {
+  "evidence": "research/freezes/repin_cbb_20261125_equivalence.json",
+  "evidence_git_blob_sha1": "dc4a2199adad09b820bc4edd065af045a54a053f",
+  "inputs": "6 committed CBB boards (real matchups/lines/prices; Torvik ratings and rosters are not committed in the repo so they are deterministic SYNTHETIC values from sha256(team name)) + 2500-game seeded random corpus",
+  "method": "research/freezes/cbb_repin_equivalence.py; pinned blob and candidate executed in isolated namespaces on byte-identical inputs; floats compared by float.hex (tolerance exactly 0); run_card outputs compared structurally and cbb_card.csv/cbb_card.md byte for byte",
+  "prop_path": "uniquely-resolvable props bit-identical (2082 prop rows on the corpora); the 11 adversarial prop-identity cases (9 intended differences, 2 identical controls) behave as expected (see evidence prop_cases)",
+  "result": "GAME_PATH_BIT_IDENTICAL",
+  "totals": {
+   "game_proj_mismatch": 0,
+   "games": 2794,
+   "market_mismatch": 0,
+   "market_rows": 44596,
+   "prop_rows": 2082
+  }
+ },
+ "first_introducing_commit": "45f44c08d5e735bad842e64f336328d078b0765b",
+ "governance_followup": "Draft PR #531; docs/governance/changes/pr-531.json is the required protected-path manifest for research/freezes/**. Independent exact-head review still required. Do not mark ready or merge from this change. MLB/NBA transitions are out of scope.",
+ "immutable_inputs": {
+  "legacy_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
+  "pinned_blob_copy": "research/freezes/pinned_blobs/f02dd29e_sportsedge_cbb_model.py.txt (byte-identical to git blob f02dd29e; checked by test)",
+  "transition_manifest_git_blob_sha1": "399a4df65036eb236f9f56699bc4090507786a3c",
+  "verify_code_freezes_git_blob_sha1": "27d2b51d27d4b7da6f22dad31d55257541af8f67",
+  "verify_versioned_transition_git_blob_sha1": "522ee86d6a2608568dc456145b6bde461799cf3a"
+ },
+ "intended_prop_changes": [
+  "same_name_two_teams_in_different_games",
+  "same_name_on_both_event_teams_no_team_hint",
+  "same_name_both_teams_with_team_hint",
+  "player_exists_only_in_other_game",
+  "player_unknown_everywhere",
+  "team_hint_not_in_event",
+  "blank_subject",
+  "optional_player_id_mismatch",
+  "unknown_game_id"
+ ],
+ "issue_57_authorization": "https://github.com/bighauss/Sportsedge/issues/57 body (Nov 25 'Current ownership correction') delegates CBB end-to-end engineering to the SportsEdge Constructions bot, identified by grok-cbb/* branches; branch-only; frozen coefficients unchanged; PAPER/0u.",
+ "model_release_certified": false,
+ "official_counted": 0,
+ "other_drift_not_repinned": {
+  "files": {
+   "MLB": {
+    "approved_candidate": "3f630532e9ff499912bc06041906d3b7c11d9887",
+    "commit": "b73874a",
+    "current": "30c6cb3355ac5f6b6cbb018729c4fdc41255e057",
+    "path": "models/mlb/sportsedge_mlb_model.py",
+    "pr_governance_record": "docs/governance/changes/pr-446.json",
+    "summary": "load_keyed refuses blank/duplicate keys (+13/-1); no model formula change"
+   },
+   "NBA": {
+    "approved_candidate": "da0c1503af5ed9ad548d1458588505f695b749e5",
+    "commit": "8537ae4",
+    "current": "b353de86445188288cab4050f6cae13eee76bff6",
+    "path": "models/nba/sportsedge_nba_model.py",
+    "pr_governance_record": "docs/governance/changes/pr-460.json",
+    "summary": "1H/1Q two-way moneyline now treats tied period as push mass (+6/-1); changes period-ML probabilities (behavioural, not input-hygiene)"
+   }
+  },
+  "note": "Reported only. Owner decision: do not re-pin NBA/MLB in this change.",
+  "repinned": false
+ },
+ "owner_decision_ct": "2026-11-25 (owner ruling on draft PR #531 at 37b1b1b4: retain the existing Nov 18 CBB pin transition and preserve the equivalence evidence; no new pin. Earlier same-day instruction: document after verification; do not revert PR #292.)",
+ "path": "models/cbb/sportsedge_cbb_model.py",
+ "pin_mechanism_note": "Retain the Nov 18 transition; equivalence evidence only. The CI step 'Seven code pin verification' (verify_versioned_transition.py) already accepts 8bbe83b7 for CBB via code_identity_transitions_20261118.json (merged Nov 18; provenance including first-introducing commit is checked). That step fails on MLB (current 30c6cb33 vs approved 3f630532) and NBA (current b353de86 vs approved da0c1503), not CBB. This record therefore edits no pin manifest or verifier: it preserves the Nov 18 candidate and adds the missing output-equivalence evidence. The owner's merge records acceptance of that evidence, not a new pin. The legacy verifier verify_code_freezes.py (used by whole-repo-release-audit) intentionally still checks the original Nov 15 blob f02dd29e. MLB and NBA are reported only and will be handled in separate transitions; the pin step stays red until then.",
+ "pinned_blob": "f02dd29ef444f49cdf4560a86d5b8a517519081d",
+ "recording_act": "OWNER_MERGE",
+ "release": "PAPER_0U",
+ "repo_base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+ "schema": "sportsedge-cbb-repin-record-v1",
+ "scope": "Retain the Nov 18 transition; equivalence evidence only. CODE IDENTITY ONLY. No coefficient, projection, probability or pricing line changed; no pin manifest or verifier edited; no promotion, no stake, no certification.",
+ "source_authenticated": false,
+ "status": "PENDING_OWNER_MERGE"
+}
