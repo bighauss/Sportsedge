@@ -60,8 +60,10 @@ early (<5 games) and later phases separately).
   (location = de-bias), **push-aware integer lines**, ML tie-mass split, fair odds, outcome-only ML tail recalibration,
   `ev_audit` (**flag only, never caps or alters EV**).
 - `fullgame/evaluate.py`, `run_eval.py`, `backtest.py`, `nov24_diagnosis.py`, `make_report.py`, `espn_odds.py`, `sdv_loader.py`.
-- `cbb_pricing.py` (additive only): `OWNER_BLEND_WEIGHTS` (the owner's nine), `logit_blend`, `ev_sanity_audit(card)`
-  (flags only), `EV_AUDIT_THRESHOLD`. `DEFAULT_CONFIG` and `CANDIDATE_BLEND_WEIGHTS` are untouched.
+- `cbb_pricing.py` (additive only): `OWNER_BLEND_WEIGHTS` (the owner's nine: 100/0, 87.5/12.5, 75/25, 62.5/37.5, 50/50, 37.5/62.5, 25/75, 12.5/87.5, 0/100), `logit_blend`, `ev_sanity_audit(card)`
+  (flags only), `EV_AUDIT_THRESHOLD`, and `parse_american` (exact quote contract: int or signed whole-number string; rejects floats including `110.0`, fractional strings, bools and malformed tokens; never truncates).
+  `DEFAULT_CONFIG` is untouched. The obsolete `CANDIDATE_BLEND_WEIGHTS` grid and the ledger's handwritten `(0, 25, 50, 60, 75, 80, 90, 95, 100)` copy were removed; every consumer uses `OWNER_BLEND_WEIGHTS` only (the ledger percent form is derived). A source test fails if another grid appears.
+  `fullgame.pricing.decimal_odds` and `_rung` go through the contract. `cbb_run_it.py` reports the 100/0 independent-EV slot by weight, not by last-cell position.
 
 ## Before / after headline (identical rows)
 - Nov 24 card, same 167 rows at the card's prices: EV>30% **48 -> 13** (FG1C independent) **-> 0** (validation-selected weights).
