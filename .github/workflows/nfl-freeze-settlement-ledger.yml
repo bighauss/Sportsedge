@@ -1,0 +1,34 @@
+name: NFL frozen ledger integrity (synthetic)
+
+on:
+  pull_request:
+    paths:
+      - 'ledger/nfl/**'
+      - '.github/workflows/nfl-freeze-settlement-ledger.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ledger/nfl/**'
+      - '.github/workflows/nfl-freeze-settlement-ledger.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-ledger:
+    name: Offline freeze, settlement and scorecard tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # PR jobs test the PR HEAD, not GitHub's synthetic merge ref.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile NFL ledger modules
+        run: python -m compileall -q ledger/nfl
+      - name: Run frozen-input and runner-format synthetic regressions
+        run: python -m unittest discover -s ledger/nfl/tests -v
