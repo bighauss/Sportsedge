@@ -292,5 +292,45 @@ class UpstreamAdmission(unittest.TestCase):
         self.assertTrue(all("UNVALIDATED_TEAM_TOTAL" in r.hybrid_method for r, _ in priced))
 
 
+
+class PlayerRunnerWiring(unittest.TestCase):
+    def test_two_players_same_line_do_not_collide(self):
+        from dataclasses import replace
+        q = replace(quote("PLAYER_PTS_OU", 12.5, -110, -110), player_id="p1", player_team_id="h")
+        q2 = replace(q, board_index=1, player_id="p2")
+        meta = {"raw": {}, "order": "over_under", "price_bad": False, "line_bad": False}
+        accepted, rejects = P.validate([(q, meta), (q2, meta)], [], "2026-11-25T15:00:00Z",
+            totals_order_verified=False, adapters={"players"},
+            match=lambda *args: ({"game_id": "g1", "tipoff_utc": q.tip_utc}, None))
+        self.assertFalse(rejects)
+        self.assertEqual(len(accepted), 2)
+        bundle = SimpleNamespace(probs=lambda *args: (0.6, 0.0, 0.4))
+        game = SimpleNamespace(home_team_id="h", away_team_id="a", tipoff_utc=q.tip_utc)
+        priced, rejected, parity = P.price(accepted, {}, {}, 0.25, CFG, players=bundle, games={"g1": game})
+        self.assertEqual(len(priced), 4)
+        self.assertFalse(rejected)
+        self.assertFalse(parity)
+        self.assertEqual({r.player_id for r, _ in priced}, {"p1", "p2"})
+        self.assertTrue(all("CONDITIONAL_PARTICIPATION_UNVALIDATED" in r.audit_flags for r, _ in priced))
+        grades, cal = P.grade({"priced": [C.row_dict(r) for r, _ in priced]}, {"g1": {"home": 70, "away": 65}})
+        self.assertEqual(len(grades), 4)
+        self.assertFalse(cal)
+        self.assertEqual({r.player_id for r in grades}, {"p1", "p2"})
+        self.assertTrue(all(r.result == "NOT_GRADABLE" for r in grades))
+
+    def test_missing_wrong_team_and_missing_forecast(self):
+        from dataclasses import replace
+        q = replace(quote("PLAYER_PTS_OU", 12.5, -110, -110), player_id="p1", player_team_id="wrong")
+        game = SimpleNamespace(home_team_id="h", away_team_id="a", tipoff_utc=q.tip_utc)
+        def refuse(*args):
+            raise ValueError("PLAYER_FORECAST_MISSING")
+        bundle = SimpleNamespace(probs=refuse)
+        for candidate, reason in ((q, "PLAYER_ID_UNKNOWN"), (replace(q, player_team_id="h"), "PLAYER_FORECAST_MISSING")):
+            priced, rejected, _ = P.price([(candidate, "g1")], {}, {}, 0.25, CFG,
+                players=bundle, games={"g1": game})
+            self.assertFalse(priced)
+            self.assertEqual(rejected[0].reason_code, reason)
+
+
 if __name__ == "__main__":
     unittest.main()
