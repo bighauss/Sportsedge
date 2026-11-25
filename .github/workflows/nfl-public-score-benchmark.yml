@@ -1,0 +1,61 @@
+name: NFL public retrospective score benchmark
+on:
+  push:
+    branches: [research/nfl-public-score-benchmark-20261124]
+    paths:
+      - research/nfl_public_score_benchmark.py
+      - research/nfl_public_epa_challenger.py
+      - .github/workflows/nfl-public-score-benchmark.yml
+  pull_request:
+    paths:
+      - research/nfl_public_score_benchmark.py
+      - research/nfl_public_epa_challenger.py
+      - .github/workflows/nfl-public-score-benchmark.yml
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python research/nfl_public_score_benchmark.py --self-test
+      - run: python research/nfl_public_epa_challenger.py --self-test
+  retrospective:
+    needs: offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download public nflverse PBP (no credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pbp" "$RUNNER_TEMP/report"
+          for season in 2015 2016 2017 2018 2019 2020 2021 2022 2023 2024; do
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 \
+              "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_${season}.csv.gz" \
+              -o "$RUNNER_TEMP/pbp/play_by_play_${season}.csv.gz"
+          done
+      - name: Download public schedule finals for coverage reconciliation
+        run: |
+          curl --fail --location --silent --show-error --retry 2 --max-time 120 \
+            "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv" \
+            -o "$RUNNER_TEMP/pbp/games.csv"
+      - name: Reconstructed score-only common-sample evaluation
+        run: |
+          python research/nfl_public_score_benchmark.py --input "$RUNNER_TEMP"/pbp/*.csv.gz --schedule "$RUNNER_TEMP/pbp/games.csv" --output "$RUNNER_TEMP/report/benchmark.json"
+      - name: Fitted EPA and success-rate held-out comparison
+        run: python research/nfl_public_epa_challenger.py --root "$RUNNER_TEMP/pbp" --schedule "$RUNNER_TEMP/pbp/games.csv" --benchmark "$RUNNER_TEMP/report/benchmark.json" --output "$RUNNER_TEMP/report/epa.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfl-retrospective-score-benchmark
+          path: ${{ runner.temp }}/report/*.json
+          retention-days: 14
+          if-no-files-found: error
