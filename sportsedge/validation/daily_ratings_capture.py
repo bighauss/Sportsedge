@@ -230,7 +230,12 @@ def eligible_bytes(body, receipt, *, source, season, decision, kickoff, max_age_
             or receipt.get("url") != expected["url"] or receipt.get("state") != "CAPTURED"):
         raise ValueError("RATINGS_RECEIPT_SCOPE_MISMATCH")
     try:
-        observed, started = (_utc(datetime.fromisoformat(receipt[k])) for k in
+        def _parse(s):
+            s = str(s).strip()
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            return datetime.fromisoformat(s)
+        observed, started = (_utc(_parse(receipt[k])) for k in
                              ("observed_utc", "request_started_utc"))
     except (KeyError, ValueError, TypeError):
         raise ValueError("RATINGS_RECEIPT_CLOCK_INVALID") from None

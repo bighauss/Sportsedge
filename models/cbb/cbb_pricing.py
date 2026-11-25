@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 """CBB RUN IT pricing config + adapters (PAPER / 0u). Does NOT edit the frozen native model.
 
@@ -11,7 +13,6 @@ import re
   Team-total SD = sd_total * team_total_sd_factor (default 1/sqrt(2): ASSUMES equal,
   uncorrelated team variances; configurable). Rows not posted are skipped, never invented.
 """
-from __future__ import annotations
 import math
 from contextlib import contextmanager
 
