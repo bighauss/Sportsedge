@@ -80,6 +80,41 @@ change_class
 
 Adding a hop is a reviewed change: append the object to this manifest **and** to `EXPECTED_ADDITIONAL_CANDIDATES` in `verify_versioned_transition.py`, then recompute `verify_versioned_transition_git_blob_sha1` in the manifest. Editing only one of the two is refused.
 
+Adding a hop also changes base-pinned files, so the independent gate (§4b) fails that PR until the owner merges it.
+
+### 4b. Independent, base-pinned integrity gate (owner review of #535 at `bfef2eb4`)
+Finding: the verifier's self-hash sits in a manifest the same PR can edit, so a coordinated edit to both passes. The self-hash stays as defense in depth, but it is **not** the trust anchor.
+
+The trust anchor is [`integrity_pins.json`](integrity_pins.json) **as committed on the base branch**. It holds expected git blobs for these files:
+- `verify_versioned_transition.py`
+- `verify_code_freezes.py`
+- the Nov 15 freeze
+- the Nov 18 and Nov 25 transition manifests
+- `integrity_gate.py`
+- `.github/workflows/freeze-integrity-trusted.yml`
+- `.github/workflows/risk-lock-research.yml`
+
+The workflow `freeze-integrity-trusted.yml` runs on `pull_request_target`:
+1. It checks out the **base** SHA and fetches the PR head as git objects only.
+2. It runs the **base** copy of `integrity_gate.py`.
+3. That copy compares each head blob, and the head pins file itself, with the base values. It never executes head code.
+
+The gate's outcomes (exit 2 means the job fails):
+- **No pinned file changed:** `PASS_INTEGRITY_PINS_UNCHANGED`.
+- **Pinned files changed, no exact declaration:** `BLOCK INTEGRITY_PIN_CHANGE_UNDECLARED`, exit 2. "Exact" means `docs/governance/integrity/pr-<N>.json` lists every change as a path with its base blob and head blob.
+- **Pinned files changed, with an exact declaration:** still `BLOCK INTEGRITY_PIN_CHANGE_DECLARED_REQUIRES_OWNER_MERGE`, exit 2. The owner merge is the only recording act. After the merge, the new base pins become the expected values.
+- **Base tree does not match the base pins:** `INTEGRITY_BASE_PINS_INCONSISTENT`, exit 2.
+- **Pins file missing or malformed:** fails closed, exit 2.
+
+On push to main and on PRs, `tree-matches-own-pins` checks that the committed tree matches its own pins. This is consistency evidence, not the anchor.
+
+The owner review also brought these hardenings to the verifier:
+- `verify_code_freezes.py` is hashed **before** it is imported. A tampered helper is refused (`CODE_FREEZE_VERIFIER_TAMPERED_PREIMPORT`) without running any of its code.
+- Governance records must use exact types and the exact zero-release claim set. For example, `False` is not accepted for `0`, `0.0` is not accepted, and a `true` claim is rejected.
+- Each governance record must be byte-identical to the record committed at its hop's introducing commit (`GOVERNANCE_RECORD_NOT_BOUND_TO_INTRODUCING_COMMIT`).
+
+**Bootstrap limit:** `pull_request_target` uses the base branch's workflows, and the base for #535 (`7fc5aaa9`) has neither the gate nor the pins. So the gate cannot independently check PR #535 itself. The owner's exact-head review of #535 bootstraps the anchor. From the merge on, every PR that touches a pinned file fails the trusted job until the owner merges it.
+
 The stock CI step `python research/freezes/verify_versioned_transition.py` is the single all-sport gate.
 
 ## 5. Governance

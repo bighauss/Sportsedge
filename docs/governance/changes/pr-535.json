@@ -3,10 +3,14 @@
   "pr_number": 535,
   "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
   "protected_paths": [
+    ".github/workflows/freeze-integrity-trusted.yml",
     "research/freezes/code_identity_transitions_20261125.json",
     "research/freezes/code_identity_transitions_20261125_mlb_candidate.json",
+    "research/freezes/integrity_gate.py",
+    "research/freezes/integrity_pins.json",
     "research/freezes/mlb_input_safety_equivalence.py",
     "research/freezes/pinned_blobs/3f630532_sportsedge_mlb_model.py.txt",
+    "research/freezes/test_integrity_gate.py",
     "research/freezes/test_mlb_input_safety_transition.py",
     "research/freezes/test_versioned_transition.py",
     "research/freezes/transition_mlb_input_safety_20261125.json",
@@ -15,11 +19,13 @@
     "research/freezes/verify_versioned_transition.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Option B: reviewed unified extension of verify_versioned_transition.py to a data-driven multi-hop gate. Nov 15 freeze and Nov 18 first-hop manifest stay byte-immutable. Registers the MLB input-safety hop (3f630532->30c6cb33, b73874a, pr-446) and the NBA behavioral hop (da0c1503->b353de86, 8537ae48, pr-460; evidence from grok-cbb/nba-push-accounting-transition-20261125@737dd2a3). Hash mismatch of the freeze, Nov 18 manifest, or either verifier exits non-zero. Retires the standalone MLB verifier. No model-formula change, no promotion, PAPER/0u.",
+  "change_summary": "Option B unified multi-hop verify_versioned_transition.py (MLB hop 3f630532->30c6cb33 b73874a pr-446; NBA hop da0c1503->b353de86 8537ae48 pr-460), Nov 15 freeze and Nov 18 manifest byte-immutable. Owner review fix: independent base-pinned integrity gate (research/freezes/integrity_gate.py + integrity_pins.json, pull_request_target workflow freeze-integrity-trusted.yml runs BASE code, reads head as git objects only); any change to the verifiers, freeze, manifests, gate or its workflows fails until owner merge, even when declared. Verifier hashes verify_code_freezes.py before import; governance records require exact types/zero-release claims and byte-binding to the introducing commit. No model change, PAPER/0u.",
   "assumptions": [
     "Equivalence evidence for the MLB hop remains synthetic (the repo commits no real MLB board).",
-    "NBA hop evidence stays on the NBA branch; only the hop entry is registered here.",
-    "The Nov 15 freeze file is not modified.",
+    "NBA hop evidence stays on the NBA branch; owner review of #536 evidence precedes approving the NBA hop.",
+    "The Nov 15 freeze and Nov 18 manifest are not modified.",
+    "Bootstrap: base 7fc5aaa9 has no integrity gate, so pull_request_target cannot independently check this PR; owner exact-head review is the bootstrap control.",
+    "The gate relies on GitHub pull_request_target running base-branch workflows and on branch protection preventing direct pushes to main.",
     "Owner merge of this PR is the recording act; status stays PENDING_OWNER_MERGE until then."
   ],
   "agent_identity": "SportsEdge Constructions bot",
