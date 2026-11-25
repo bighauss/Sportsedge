@@ -39,7 +39,7 @@ def freeze(ctx, game, path, *, parent_card_sha256, source_receipts, clock=None):
     start = native.utc(ctx["freeze_utc"], "freeze_utc")
     if now.tzinfo is None or not start <= now < tip:
         raise native.Pass("NOT_PRETIP_OR_CONTEXT_FROM_FUTURE")
-    if not _sha(parent_card_sha256) or not isinstance(source_receipts, dict) or set(source_receipts) < {"ratings", "prior_games"} or any(not _sha(v) for v in source_receipts.values()):
+    if not _sha(parent_card_sha256) or not isinstance(source_receipts, dict) or not {"ratings", "prior_games"}.issubset(source_receipts) or any(not _sha(v) for v in source_receipts.values()):
         raise native.Pass("SOURCE_OR_PARENT_BINDING_REQUIRED")
     gid = native.canonical_id(game["game_id"])
     h, a = game["home_team_id"], game["away_team_id"]
