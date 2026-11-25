@@ -455,12 +455,18 @@ class PlayerHistorySource(unittest.TestCase):
             fr, frec = pack([final], "cbbd_games_season", observed)
             box = dict(boxes[0], gameId=9001, startDate=g["tipoff_utc"])
             fb = [pack([box], "cbbd_games_players", observed)]
-            def check(rep=report, batches=fb):
-                return audit(card, rep, tb, tr, trec, batches, fr, frec,
-                             season=S.SEASON, evaluated_utc=evaluated)
+            original = json.dumps(report, sort_keys=True, allow_nan=False).encode()
+            def check(rep=report, batches=fb, receipt=trec, digest=None, raw=None):
+                blob = raw if raw is not None else json.dumps(rep, sort_keys=True, allow_nan=False).encode()
+                return audit(card, blob, tb, tr, receipt, batches, fr, frec,
+                             season=S.SEASON, evaluated_utc=evaluated,
+                             report_sha256=digest if digest is not None else sha256(blob).hexdigest())
             result = check()
             self.assertEqual(result["graded"], 1)
             self.assertEqual(result["metrics"]["POINTS"]["mae"], 2)
+            self.assertEqual(result["metrics"]["POINTS"]["rmse"], 2)
+            self.assertEqual(result["original_player_report_sha256"], sha256(original).hexdigest())
+            self.assertEqual(result["training_finals_receipt"], trec)
             self.assertEqual(result["metrics"]["PRA"]["mae"], 2)
             self.assertEqual(result["evaluated_utc"], "2026-11-22T05:00:00+00:00")
             self.assertEqual(result["finals_receipt"], frec)
@@ -476,6 +482,14 @@ class PlayerHistorySource(unittest.TestCase):
             self.assertEqual(missing["final_player_receipts"], [])
             with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH"):
                 check(rep=dict(report, conditional_mean_rows=999))
+            with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH"):
+                check(rep=dict(report, confirmed_active_players=False))
+            with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_DIGEST_MISMATCH"):
+                check(digest="0"*64)
+            with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH"):
+                check(raw=original+b" ")
+            with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH"):
+                check(receipt=dict(trec, observed_utc=OBS.replace("Z", "+00:00") if OBS.endswith("Z") else OBS.replace("+00:00", "Z")))
 
     def test_conditional_player_means_reject_inconsistent_pra(self):
         from cbbd_player_history import historical_baselines, conditional_player_means
