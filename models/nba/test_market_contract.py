@@ -272,6 +272,31 @@ class EntryPointCensus(unittest.TestCase):
             unguarded.append((rel, sorted(names)))
         self.assertEqual(unguarded, [], msg="NBA pricing callers must go through the guarded adapter: %r" % unguarded)
 
+    def test_no_workflow_or_script_runs_the_frozen_pricer_cli_directly(self):
+        """Existing CLIs/workflows may run frozen-file test fixtures only; none may run the frozen
+        module as a program or call its pricing functions on a real board."""
+        import re
+        offenders = []
+        direct = re.compile(r"python3?\s+(?:-\S+\s+)*(?:\S*/)?sportsedge_nba_model(?:\.py)?(?:\s|$)")
+        for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            for n, line in enumerate(wf.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                s = line.strip()
+                if not s.startswith("#") and direct.search(s):
+                    offenders.append((wf.name, n, s))
+        self.assertEqual(offenders, [], msg="workflows must not run the frozen pricer CLI directly: %r" % offenders)
+
+    def test_scripts_with_main_calling_frozen_pricer_are_only_the_frozen_file(self):
+        offenders = []
+        for path in ROOT.rglob("*.py"):
+            if any(part in {".git", "__pycache__", "node_modules", "venv", ".venv"} for part in path.parts):
+                continue
+            rel = str(path.relative_to(ROOT)).replace("\\", "/")
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if "__main__" in text and "sportsedge_nba_model" in text and "run_card" in text \
+                    and rel not in self.ALLOWED_UNGUARDED | {"models/nba/market_contract.py", "models/nba/run_it.py"}:
+                offenders.append(rel)
+        self.assertEqual(offenders, [])
+
     def test_guarded_entry_point_names_are_importable(self):
         self.assertTrue(callable(mc.load_board))
         self.assertTrue(callable(mc.filter_odds))
