@@ -23,14 +23,28 @@ Owner decision (Nov 25): the "four captures" are this board, reconciled row by r
 * **Market IDs: not recoverable from public pages.** The server-rendered event page has no markets or selections, and DK's sportscontent API returns HTTP 403 (Akamai) from this environment. `dk_market_id` stays blank. **Event-ID verification is not quote authentication;** zero rows on this board are authenticated quotes.
 
 ## 3. Reconciliation results (1,002 rows = 738 PDF + 264 transcript; plus 20 truncated originals in the ledger)
-| Disposition | Rows |
-|---|---|
-| ACCEPTED | 244 (all PDF) |
-| HELD | 135 |
-| SUPERSEDED | 93 (transcript rows replaced by the later PDF capture) |
-| REJECTED | 530 |
+Replay: as-of 2026-11-25T12:36:15Z (the last screenshot clock; no row is later, so 0 rows are dropped), `RETROSPECTIVE_LATER_IDENTITY` basis (see section 3a).
 
-The runner board has 367 rows. Top reason codes: ONE_SIDED_QUOTE 460 (all player milestones), PLAYER_TEAM_NOT_ESTABLISHED 310, ISSUE57_ORIENTATION_HOLD 310, SUPERSEDED_BY_LATER_CAPTURE 243, TOTALS_ORDER_UNVERIFIED 183, DK_EVENT_ID_MISSING 59, UNSUPPORTED_MARKET 21 (transcript BOTH_TEAM_TOTAL), TOTALS_ORDER_CONFLICT 4.
+| Disposition | Rows (before chronology repair) | Rows (now) |
+|---|---|---|
+| ACCEPTED | 244 | 244 (all PDF, unchanged) |
+| HELD | 135 | 221 |
+| SUPERSEDED | 93 | 7 |
+| REJECTED | 530 | 530 |
+
+The runner board still has the same 367 rows (same `row_key`s, same order). Reason codes: ONE_SIDED_QUOTE 460 (all player milestones), PLAYER_TEAM_NOT_ESTABLISHED 310, ISSUE57_ORIENTATION_HOLD 310, TOTALS_ORDER_UNVERIFIED 183, DK_EVENT_ID_MISSING 59, **SUPERSEDED_BY_LATER_CAPTURE 39 (was 243)**, UNSUPPORTED_MARKET 21 (transcript BOTH_TEAM_TOTAL), TOTALS_ORDER_CONFLICT 4.
+
+**Why the counts moved (owner review of PR #532, chronology repair).** The only rows whose disposition changed are 204 transcript rows, all from Saint Bonaventure @ Belmont: 46 SUPERSEDED to HELD, 40 SUPERSEDED to HELD (totals-order unverified), 118 REJECTED with one fewer reason code (one-sided quotes keep ONE_SIDED_QUOTE and the hold). The old supersession key was (game, period, market, player) with no line, so a single PDF "selected rung" row wrongly retired a whole transcript alternate-line, team-total or player ladder. The key now includes the line for every market except SPREAD/TOTAL/ML, where a new line is a genuine move. Nothing else changed: no line, price, event ID, totals order, identity check or disposition of any PDF row differs from the previous commit (checked row by row). All 244 ACCEPTED rows are the same rows.
+
+## 3a. Chronology contract (what an as-of replay may use)
+* **Quotes.** A replay at `as_of` uses only rows with `captured_utc <= as_of`. Later rows are dropped before supersession, duplicate detection, orientation/team-total/alt-ladder checks, the totals-order verdict and holds are computed, and leave no trace in the outputs (the regression tests prove full input and input truncated at `as_of` give identical outputs, for strict and retrospective bases, at six as-of times on the real board). The operator markdown's explicit O/U text counts only once the transcript TOTAL row is visible.
+* **Supersession and duplicates** (only among visible rows): newest capture wins; same-rung rows at the same instant that agree keep the first and mark the rest `DUPLICATE_QUOTE_ROW`; same-rung rows at the same instant that disagree are all `CONFLICTING_DUPLICATE_QUOTE` and rejected (fail closed). Every historical row is preserved in `derived_board.csv`. A row with a missing or unparsable capture clock is `CAPTURE_CLOCK_INVALID`, rejected, and never supersedes or informs anything.
+* **Holds.** The #57 hold and the Belmont pregame exclusion are explicit inputs, not derived from captures, so they cannot be moved by later rows. Check-derived holds (orientation, team-total, alt-ladder, totals-order conflicts) use visible rows only.
+* **Identity evidence is not a capture.** DK event pages (retrieved 10:59 to 11:03 AM CT), the ESPN extract (11:03 AM CT) and the PR #530 re-transcription (07:08:56 AM CT, 13:08:56Z) all post-date the 12:34 to 12:36Z quote clocks. Every derived row records `as_of_utc`, `replay_basis`, `quote_available_utc`, `identity_available_utc` and `identity_basis`.
+  * `--identity-basis strict`: identity, ESPN fields and the PR #530 corrections count only if available by `as_of`. At the 12:36:15Z replay this rejects every row (`DK_EVENT_ID_NOT_VERIFIED_AS_OF`; the 20 truncated first-half totals fall back to the truncated board row, `UNCORRECTED_TRUNCATED_ROW_AS_OF`): 0 ACCEPTED, 0 runner rows. Evidence: `derived/2026-11-25_strict_asof_1236/report.json`.
+  * `--identity-basis retrospective` (default, used for the committed outputs): later public identity corroboration may fill `dk_event_id`; each of the 943 rows with an ID is labelled `LATER_PUBLIC_PAGE_CORROBORATION` and the 59 without one `NONE`. This is a retrospective research replay, not a prospective one. A pregame run must use a capture whose event IDs were verified before use.
+* Crosswalk keys are unique or the run fails: duplicate (away, home, tip) event rows or duplicate team names raise `ValueError`.
+* Runner entry: `reconcile.admissible_for_runner` and the fail-closed loader `reconcile.read_runner_board` re-check disposition, reason codes and the Belmont exclusion on every row; `runner_board.csv` now carries `disposition`, `reason_codes`, `quote_available_utc`, `identity_basis`, `replay_basis` and `as_of_utc`. Rows HELD for `TOTALS_ORDER_UNVERIFIED` are still admitted only with a blank `totals_order`, so the runner withholds their totals itself.
 
 Both-side and market-identity checks (price_a = home/over):
 * Spread favourite vs moneyline favourite: **AGREE in all 71 FG/1H pairs checked (70 PDF, 1 transcript); 0 conflicts.**
