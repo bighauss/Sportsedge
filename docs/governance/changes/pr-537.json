@@ -1,0 +1,110 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 537,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "protected_paths": [
+    ".github/workflows/cbb-run-it.yml",
+    "models/cbb/cbb_player_final_box.py",
+    "models/cbb/cbb_player_matchup_forecast.py",
+    "models/cbb/cbb_player_residual_pricing.py",
+    "models/cbb/cbb_pricing.py",
+    "models/cbb/cbb_run_it.py",
+    "models/cbb/cbb_run_it_pipeline.py",
+    "models/cbb/cbbd_paper_ledger.py",
+    "models/cbb/contracts.py",
+    "models/cbb/coverage_census.py",
+    "models/cbb/dk/team_total_order_audit.py",
+    "models/cbb/dk/test_team_total_order_audit.py",
+    "models/cbb/fullgame/REPORT.md",
+    "models/cbb/fullgame/__init__.py",
+    "models/cbb/fullgame/adjustments.py",
+    "models/cbb/fullgame/backtest.py",
+    "models/cbb/fullgame/context.py",
+    "models/cbb/fullgame/espn_odds.py",
+    "models/cbb/fullgame/evaluate.py",
+    "models/cbb/fullgame/evidence/improve_summary.json",
+    "models/cbb/fullgame/evidence/improve_tables.md",
+    "models/cbb/fullgame/evidence/nov24_rows.json",
+    "models/cbb/fullgame/evidence/summary.json",
+    "models/cbb/fullgame/evidence/tables.md",
+    "models/cbb/fullgame/fetch_espn_odds.py",
+    "models/cbb/fullgame/improve_eval.py",
+    "models/cbb/fullgame/inflated_ev_diagnostic.py",
+    "models/cbb/fullgame/make_report.py",
+    "models/cbb/fullgame/nov24_diagnosis.py",
+    "models/cbb/fullgame/pricing.py",
+    "models/cbb/fullgame/public_ratings_adapter.py",
+    "models/cbb/fullgame/ratings.py",
+    "models/cbb/fullgame/research_adjusted_fit_smoke.py",
+    "models/cbb/fullgame/run_eval.py",
+    "models/cbb/fullgame/sdv_loader.py",
+    "models/cbb/fullgame/test_fullgame.py",
+    "models/cbb/fullgame/test_public_ratings_adapter.py",
+    "models/cbb/halves/__init__.py",
+    "models/cbb/halves/coefficients_halves_v1.json",
+    "models/cbb/halves/halves_model.py",
+    "models/cbb/halves/halves_pricing.py",
+    "models/cbb/test_cbb_player_final_box.py",
+    "models/cbb/test_cbb_player_matchup_forecast.py",
+    "models/cbb/test_cbb_player_residual_pricing.py",
+    "models/cbb/test_cbb_run_it_pipeline.py",
+    "models/cbb/test_cbbd_paper_ledger.py",
+    "sportsedge/validation/daily_ratings_capture.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Integrated CBB research runner, full-game challenger, public ratings adapter, half models, quote diagnostics and conditional player modules. Offline test integration; no release or production promotion.",
+  "assumptions": [
+    "Archived morning PDF odds are unauthenticated and superseded for overlapping research contracts by owner 15:48 capture on #542.",
+    "Public ratings reconstruction is not point-in-time CBBD; adjusted-ratings runtime wiring and player runtime integration remain pending.",
+    "Team totals with unknown order remain held; half moneyline settlement unverified; historic outcomes cannot authorize live bets.",
+    "Frozen production pins must be reconciled independently; no claim of a production-ready model or unchanged protected files.",
+    "Exact-head governance and regression execution required; no prospective performance claims."
+  ],
+  "agent_identity": "ChatGPT SportsEdge research engineering (coordinating PR #537)",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Validated actionable markets",
+    "before": 0,
+    "unit": "markets",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s models/cbb -p 'test_cbb_run_it_pipeline.py' -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s models/cbb -p 'test_cbb_run_it_pipeline.py' -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

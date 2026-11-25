@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import argparse, csv, hashlib, io, json, math, os, random, re, sys
 from collections import Counter, defaultdict
-from dataclasses import replace
+from dataclasses import replace, is_dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import NormalDist, mean
@@ -743,13 +743,21 @@ def public_ratings(prior, season, shrink_games=2.0, iters=25):
     """Opponent- and venue-adjusted efficiencies from prior finals only (public reconstruction,
     disclosed): additive opponent adjustment, a pooled home edge h (points per 100 possessions,
     re-estimated each iteration from non-neutral games) removed half from each side, then shrinkage
-    toward the league mean by ``shrink_games``."""
+    toward the league mean by ``shrink_games``.
+
+    Raises ValueError("RATINGS_INSUFFICIENT_SAMPLE") with a coverage diagnostic when the filtered
+    prior set is empty. Does not invent ratings or lower the min-games threshold.
+    """
+    if not prior:
+        raise ValueError("RATINGS_INSUFFICIENT_SAMPLE:no_prior_games_after_d1_filter")
     per = defaultdict(list)
     for g in prior:
         p = g["possessions"]
         v = 0 if g["neutral"] is not False else 1
         per[g["home_id"]].append((g["away_id"], 100 * g["home_score"] / p, 100 * g["away_score"] / p, v))
         per[g["away_id"]].append((g["home_id"], 100 * g["away_score"] / p, 100 * g["home_score"] / p, -v))
+    if not per:
+        raise ValueError("RATINGS_INSUFFICIENT_SAMPLE:no_teams_after_build")
     lg = mean(o for v in per.values() for _, o, _, _ in v)
     off = {t: lg for t in per}; de = {t: lg for t in per}; h = 0.0
     for _ in range(iters):
@@ -776,8 +784,26 @@ def public_replay_project(games, slate_ids, season, freeze_utc, cfg):
     prior = [g for g in games.values() if g["completed"] and g["possessions"] and 40 <= g["possessions"] <= 110
              and parse_z(g["tip_utc"]) + timedelta(hours=3) <= freeze and g["home_score"] != g["away_score"]]
     n_all = len(prior)
-    prior = d1_filter(prior)
-    body, lg = public_ratings(prior, season)
+    filtered = d1_filter(prior)
+    # Early-season path: if national filter empties, still rate teams that have >=2 prior games
+    # and project only matchups where both teams qualify. Does not lower the global min_games
+    # used by d1_filter; this is a separate eligibility for sparse samples.
+    if not filtered:
+        from collections import Counter
+        n = Counter(t for g in prior for t in (g["home_id"], g["away_id"]))
+        eligible_teams = {t for t, c in n.items() if c >= 2}
+        filtered = [g for g in prior if g["home_id"] in eligible_teams and g["away_id"] in eligible_teams]
+        early = True
+    else:
+        early = False
+    try:
+        body, lg = public_ratings(filtered, season)
+    except ValueError as e:
+        if "RATINGS_INSUFFICIENT_SAMPLE" in str(e):
+            return {}, {"reason": str(e), "prior_raw": n_all, "prior_after_filter": len(filtered), "early_season": early}, b""
+        raise
+    # Continue with the filtered prior for context fit
+    prior = filtered
     rows = [{"game_id": g["id"], "season": season, "tipoff_utc": g["tip_utc"],
              "final_captured_utc": utcz(parse_z(g["tip_utc"]) + timedelta(hours=3)),
              "home_team_id": g["home_id"], "away_team_id": g["away_id"], "neutral": g["neutral"],
@@ -1503,8 +1529,16 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
             gm[gid] = replace(gm[gid], dk_event_id=q.dk_event_id)
     # ---- project: independent first (reads no quotes), then market and hybrid views
     projections, leakage, ratings_body = public_replay_project(games, slate_ids, season, freeze_utc, cfg)
+    # Ensure every slate game has a Projection so later stages do not KeyError.
+    reason = (leakage or {}).get("reason", "RATINGS_INSUFFICIENT_SAMPLE") if isinstance(leakage, dict) else "NO_PROJECTION"
+    for gid in slate_ids:
+        if gid not in projections or projections[gid] is None:
+            projections[gid] = C.Projection(gid, "INDEPENDENT", None, None, None, None, None, None,
+                                            "", "PASS", reason_code=reason)
     market_views = {gid: market_view(gid, accepted, cfg) for gid in slate_ids}
-    hybrids = {gid: hybrid_view(projections[gid], market_views[gid], w) for gid in slate_ids}
+    hybrids = {}
+    for gid in slate_ids:
+        hybrids[gid] = hybrid_view(projections[gid], market_views[gid], w)
     ch_proj, ch_views, ch_hyb = (challenger_views(challenger, games, slate_ids, market_views) if challenger
                                  else ({}, {}, {}))
     # ---- simulate
@@ -1532,7 +1566,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
               "canonical_blend_weights": list(C.CANONICAL_BLEND_WEIGHTS), "sim": {"n": n_sims, "seed": seed},
               "games": [C.row_dict(g) for g in gm.values()],
               "projections": [C.row_dict(p) for d in (projections, ch_views, market_views, hybrids, ch_hyb)
-                              for p in d.values()],
+                              for p in d.values() if is_dataclass(p)],
               "challenger": ({"meta": challenger.meta, "module_paths": challenger.module_paths,
                               "blend_weights_open": CHALLENGER_BLEND_W_OPEN, "caveat": CHALLENGER_CAVEAT}
                              if challenger else None),

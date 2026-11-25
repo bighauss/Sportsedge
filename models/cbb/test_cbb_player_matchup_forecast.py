@@ -27,7 +27,7 @@ class MatchupForecast(unittest.TestCase):
         self.assertEqual(diag["appearances"], 10)
         self.assertGreater(diag["opponent_factors"]["PTS"], 1)
         self.assertGreater(f.means["PTS"], 15)
-        self.assertLessEqual(3*f.means["3PM"], f.means["PTS"])
+        self.assertLessEqual(3 * f.means["3PM"], f.means["PTS"])
         late = sample(24, opp_points=120)
         late["observed_final_utc"] = "2026-11-25T13:00:00Z"
         self.assertEqual(f, forecast(TARGET, admit(games + [late]))[0])
