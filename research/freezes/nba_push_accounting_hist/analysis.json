@@ -1,0 +1,297 @@
+{
+ "ev_shift_hypothetical_minus110": {
+  "by_hypothetical_price_same_price_both_sides": {
+   "1H": {
+    "-110": {
+     "max": 0.002337136670841178,
+     "mean_raw_ev_shift": 0.001865537866803741,
+     "min": 6.626856448110896e-05
+    },
+    "-150": {
+     "max": 0.007561148807583018,
+     "mean_raw_ev_shift": 0.006840305511613727,
+     "min": 0.0018617383597260284
+    },
+    "-300": {
+     "max": 0.014999540266078304,
+     "mean_raw_ev_shift": 0.013680611023227459,
+     "min": 0.004330509328188015
+    },
+    "100": {
+     "max": 0.000767570455132649,
+     "mean_raw_ev_shift": -3.657129553682172e-18,
+     "min": -0.000767570455132649
+    },
+    "150": {
+     "max": -0.002792607539589209,
+     "mean_raw_ev_shift": -0.010260458267420608,
+     "min": -0.011341723211374388
+    },
+    "300": {
+     "max": -0.012991527984564266,
+     "mean_raw_ev_shift": -0.04104183306968239,
+     "min": -0.04499862079823558
+    }
+   },
+   "1Q": {
+    "-110": {
+     "max": 0.003643793858554456,
+     "mean_raw_ev_shift": 0.002765632087353641,
+     "min": 0.00015504053740234003
+    },
+    "-150": {
+     "max": 0.01083382131183197,
+     "mean_raw_ev_shift": 0.010140650986963366,
+     "min": 0.004669659023386896
+    },
+    "-300": {
+     "max": 0.0213219939843991,
+     "mean_raw_ev_shift": 0.02028130197392672,
+     "min": 0.010877259441615661
+    },
+    "100": {
+     "max": 0.0015379413948418685,
+     "mean_raw_ev_shift": -4.279163319411104e-18,
+     "min": -0.0015379413948418685
+    },
+    "150": {
+     "max": -0.007004488535080289,
+     "mean_raw_ev_shift": -0.01521097648044505,
+     "min": -0.016250731967747956
+    },
+    "300": {
+     "max": -0.03263177832484698,
+     "mean_raw_ev_shift": -0.06084390592178017,
+     "min": -0.0639659819531968
+    }
+   }
+  },
+  "identity": "EV = p*dec - 1 + push, so raw_ev_new - raw_ev_old = (p_new - p_old)*dec + push exactly; old p = P(margin>0), new p = P(margin>=0.5), so p_new - p_old = -P(0<margin<0.5), about -push/2 for near-even matchups => shift about push*(1 - dec/2): positive below +100 (favorites), negative above +100 (underdogs), about zero at +100",
+  "note": "HYPOTHETICAL price -110 both sides; no 1H/1Q ML prices exist in the repo or ESPN odds, so real EV/ROI/CLV cannot be computed",
+  "segments": {
+   "1H": {
+    "max": 0.002337136670841178,
+    "mean_raw_ev_shift_at_-110": 0.001865537866803741,
+    "min": 6.626856448110896e-05,
+    "sides": 5176,
+    "sides_ev_sign_flipped_pos_to_nonpos": 0,
+    "sides_new_ev_gt0": 2535,
+    "sides_old_ev_gt0": 2535
+   },
+   "1Q": {
+    "max": 0.003643793858554456,
+    "mean_raw_ev_shift_at_-110": 0.002765632087353641,
+    "min": 0.00015504053740234003,
+    "sides": 5176,
+    "sides_ev_sign_flipped_pos_to_nonpos": 0,
+    "sides_new_ev_gt0": 2535,
+    "sides_old_ev_gt0": 2376
+   }
+  }
+ },
+ "excluded": {
+  "missing_odds_or_total": 0,
+  "short_or_missing_linescore": 3,
+  "spread_sign_vs_ml_inconsistent": 53
+ },
+ "games_csv_sha256": "89a59f4f0f39d6b5db8385f3db5f90936a6140ec403cd7f84d73ddd96f864914",
+ "games_fetched": 2644,
+ "games_used": 2588,
+ "model_replay_on_market_implied_margin": {
+  "method": "projection margin := -closing full-game spread, total := closing total (market-implied stand-in; NOT the SportsEdge projection); price_game_market of both blobs on 1H_ML/1Q_ML",
+  "segments": {
+   "1H": {
+    "abs_shift_p_max": 0.022472645843340522,
+    "brier3_new_incl_ties": 0.47826057205295197,
+    "brier3_old_pushless_incl_ties": 0.4801138365493855,
+    "brier_cond_home_new": 0.22063842922084181,
+    "brier_cond_home_old": 0.22067895585917718,
+    "games": 2588,
+    "logloss3_new_incl_ties": 0.7614816355797667,
+    "logloss3_old": "infinite on tie games (P(tie)=0): 91 tie games",
+    "logloss_cond_home_new": 0.6314482177495028,
+    "logloss_cond_home_old": 0.6315939630747317,
+    "mean_home_win_prob_shift_new_minus_old": -0.020580066352502344,
+    "mean_predicted_push_new": 0.04104183306968238,
+    "mean_predicted_push_old": 0.0,
+    "mean_resid_margin": 0.18558346213292118,
+    "nontie_games": 2497,
+    "sd_model_assumed": 8.875,
+    "sd_observed_resid_margin_vs_mf_x_market": 11.04561067891142,
+    "tie_calibration_by_predicted_push_tercile": [
+     {
+      "mean_pred_push": 0.03638069031555182,
+      "n": 862,
+      "obs_tie_rate": 0.02668213457076566
+     },
+     {
+      "mean_pred_push": 0.04237977960851411,
+      "n": 863,
+      "obs_tie_rate": 0.03244495944380069
+     },
+     {
+      "mean_pred_push": 0.044359628192566225,
+      "n": 863,
+      "obs_tie_rate": 0.046349942062572425
+     }
+    ],
+    "tie_rate": 0.03516228748068006,
+    "tie_rate_wilson95": [
+     0.028726708930682136,
+     0.04297582103874192
+    ],
+    "ties": 91
+   },
+   "1Q": {
+    "abs_shift_p_max": 0.03190686350090788,
+    "brier3_new_incl_ties": 0.518517422292006,
+    "brier3_old_pushless_incl_ties": 0.5219890416248845,
+    "brier_cond_home_new": 0.23483762427578364,
+    "brier_cond_home_old": 0.23481510712049924,
+    "games": 2588,
+    "logloss3_new_incl_ties": 0.8272011008820296,
+    "logloss3_old": "infinite on tie games (P(tie)=0): 128 tie games",
+    "logloss_cond_home_new": 0.6617670428877335,
+    "logloss_cond_home_old": 0.6617771734801395,
+    "mean_home_win_prob_shift_new_minus_old": -0.030515334671378177,
+    "mean_predicted_push_new": 0.06084390592178016,
+    "mean_predicted_push_old": 0.0,
+    "mean_resid_margin": 0.21180255023183928,
+    "nontie_games": 2460,
+    "sd_model_assumed": 6.25,
+    "sd_observed_resid_margin_vs_mf_x_market": 8.305712681849775,
+    "tie_calibration_by_predicted_push_tercile": [
+     {
+      "mean_pred_push": 0.05726023338630629,
+      "n": 862,
+      "obs_tie_rate": 0.048723897911832945
+     },
+     {
+      "mean_pred_push": 0.061912276160275545,
+      "n": 863,
+      "obs_tie_rate": 0.047508690614136734
+     },
+     {
+      "mean_pred_push": 0.06335505564339888,
+      "n": 863,
+      "obs_tie_rate": 0.05214368482039398
+     }
+    ],
+    "tie_rate": 0.04945904173106646,
+    "tie_rate_wilson95": [
+     0.041752589832811875,
+     0.05850106764378701
+    ],
+    "ties": 128
+   }
+  }
+ },
+ "source": "ESPN public scoreboard (linescores) + ESPN core odds (closing full-game spread/total/ML); NOT in repo; fetched 2026-11-25 via fetch_espn.py",
+ "tie_frequency_all_fetched_games": {
+  "1H": {
+   "by_season": {
+    "2023-24": {
+     "games": 1320,
+     "rate": 0.026515151515151516,
+     "ties": 35
+    },
+    "2024-25": {
+     "games": 1321,
+     "rate": 0.04239212717638153,
+     "ties": 56
+    }
+   },
+   "games": 2641,
+   "rate": 0.03445664521014767,
+   "ties": 91,
+   "wilson95": [
+    0.02814852918881725,
+    0.04211715326263846
+   ]
+  },
+  "Q1": {
+   "by_season": {
+    "2023-24": {
+     "games": 1320,
+     "rate": 0.04696969696969697,
+     "ties": 62
+    },
+    "2024-25": {
+     "games": 1321,
+     "rate": 0.050719152157456475,
+     "ties": 67
+    }
+   },
+   "games": 2641,
+   "rate": 0.048845134418780765,
+   "ties": 129,
+   "wilson95": [
+    0.04125962073711619,
+    0.057741241923241246
+   ]
+  },
+  "Q2": {
+   "by_season": {
+    "2023-24": {
+     "games": 1320,
+     "rate": 0.04318181818181818,
+     "ties": 57
+    },
+    "2024-25": {
+     "games": 1321,
+     "rate": 0.05980317940953823,
+     "ties": 79
+    }
+   },
+   "games": 2641,
+   "rate": 0.051495645588792126,
+   "ties": 136,
+   "wilson95": [
+    0.04369904744645796,
+    0.060595137883960336
+   ]
+  },
+  "Q3": {
+   "by_season": {
+    "2023-24": {
+     "games": 1320,
+     "rate": 0.048484848484848485,
+     "ties": 64
+    },
+    "2024-25": {
+     "games": 1321,
+     "rate": 0.04466313398940197,
+     "ties": 59
+    }
+   },
+   "games": 2641,
+   "rate": 0.046573267701628174,
+   "ties": 123,
+   "wilson95": [
+    0.039173930271707284,
+    0.055289798671455156
+   ]
+  },
+  "Q4": {
+   "by_season": {
+    "2023-24": {
+     "games": 1320,
+     "rate": 0.05909090909090909,
+     "ties": 78
+    },
+    "2024-25": {
+     "games": 1321,
+     "rate": 0.052233156699470096,
+     "ties": 69
+    }
+   },
+   "games": 2641,
+   "rate": 0.05566073457023855,
+   "ties": 147,
+   "wilson95": [
+    0.047544676843177244,
+    0.06506758696876523
+   ]
+  }
+ }
+}
