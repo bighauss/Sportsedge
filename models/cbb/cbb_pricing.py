@@ -2,8 +2,8 @@
 
 * SD constants: margin 12.5, total 17 (tighter fitted SDs overstated confidence). Applied by
   wrapping ``project`` for the duration of a build; the fitted SDs stay in the card context.
-* Blend: p_blend = w * p_model + (1 - w) * (1 - p_push) * p_market_no_vig. w default 0.25 is EXPERIMENTAL;
-  candidate weights below await a chronological test. Nothing here is validated.
+* Blend: p_blend = w * p_model + (1 - w) * (1 - p_push) * p_market_no_vig. w default 0.25 is EXPERIMENTAL.
+  The only blend grid is OWNER_BLEND_WEIGHTS, the owner's nine model/market weights. Nothing here is validated.
 * Blowout guard: early-season ratings compress blowout margins (large-underdog spread bias),
   so spreads with |market line| > 15 are excluded from best plays (priced, but flagged).
 * Ladders (alt spread / alt total / team totals): same projected mean and SD, normal model.
@@ -12,16 +12,42 @@
 """
 from __future__ import annotations
 import math
+import re
 from contextlib import contextmanager
 
 import cbbd_paper_card as PC
 import cbbd_native_score_model as NM
 
-CANDIDATE_BLEND_WEIGHTS = (0.0, 0.25, 0.5, 0.6, 0.75, 0.8, 0.9, 0.95, 1.0)  # model weight; test pending
-# Owner's canonical nine model/market weights (model share first). Selection must be chronological
-# (validation window, then an untouched test window); see models/cbb/fullgame/REPORT.md.
+# Canonical nine model/market weights (model share first). This is the only blend grid.
+# Selection must be chronological (validation window, then an untouched test window).
 OWNER_BLEND_WEIGHTS = (1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0)
 EV_AUDIT_THRESHOLD = 0.30   # AUDIT FLAG ONLY: never caps, clips or drops an EV
+
+# Exact American-odds token: optional sign, no leading zeros, no decimal or exponent.
+_AMERICAN_TOKEN = re.compile(r"^[+-]?[1-9][0-9]*$")
+
+
+def parse_american(value, *, min_abs=100, max_abs=100000):
+    """Quote contract: return a Python ``int`` American price, or raise ValueError.
+
+    Accepts an ``int`` (not ``bool``) or a whole-number string with an optional leading
+    ``+`` or ``-`` (``+110``, ``-110``, ``110``). Rejects floats, including integer-valued
+    floats such as ``110.0``, fractional strings (``110.5``, ``110.0``), booleans, and
+    empty or padded numeric forms (``0100``). Never truncates.
+    """
+    if type(value) is int:
+        n = value
+    elif type(value) is str:
+        s = value.strip()
+        if _AMERICAN_TOKEN.fullmatch(s) is None:
+            raise ValueError("MALFORMED_AMERICAN_PRICE")
+        n = int(s)
+    else:
+        raise ValueError("NON_INTEGER_AMERICAN_PRICE")
+    if abs(n) < min_abs or abs(n) > max_abs:
+        raise ValueError("INVALID_AMERICAN_PRICE")
+    return n
+
 DEFAULT_CONFIG = {
     "sd_margin": 12.5,
     "sd_total": 17.0,
@@ -145,10 +171,12 @@ def _rung(b, kind):
     if any(v is None or str(v).strip() == "" for v in raw):
         return None, "NOT_POSTED_TWO_SIDED: rung not posted two-sided (missing line or price)"
     try:
-        line = float(raw[0]); pa, pb = int(str(raw[1]).strip()), int(str(raw[2]).strip())
+        line = float(raw[0])
+        pa, pb = parse_american(raw[1]), parse_american(raw[2])
         NM.decimal_odds(pa); NM.decimal_odds(pb)
-    except (TypeError, ValueError, NM.Pass):
-        return None, "INVALID_PRICE_OR_LINE: rung price or line not valid American/numeric"
+    except (TypeError, ValueError, NM.Pass) as exc:
+        code = str(exc).split(":", 1)[0] if isinstance(exc, ValueError) and "AMERICAN" in str(exc) else "INVALID_PRICE_OR_LINE"
+        return None, f"{code}: rung price or line not valid American/numeric"
     lo, hi = LINE_BOUNDS[kind]
     if not math.isfinite(line) or not lo <= line <= hi or (line * 2) % 1:
         return None, "LINE_OUT_OF_RANGE_OR_OFF_GRID: rung line outside plausible range or off the half-point grid"

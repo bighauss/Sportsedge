@@ -16,6 +16,8 @@ from __future__ import annotations
 import math
 from statistics import mean
 
+import cbb_pricing as _PR
+
 PHASES = ((0, 0), (1, 1), (2, 4), (5, 9), (10, 19), (20, 10 ** 6))
 MIN_PHASE_N = 200
 
@@ -137,10 +139,13 @@ def ml_probs(dist, mu):
     return p, 1 - p
 
 
+def parse_american(value, *, min_abs=100, max_abs=100000):
+    """Delegate to the canonical quote contract in ``cbb_pricing.parse_american``."""
+    return _PR.parse_american(value, min_abs=min_abs, max_abs=max_abs)
+
+
 def decimal_odds(american):
-    a = int(american)
-    if abs(a) < 100:
-        raise ValueError("INVALID_AMERICAN_PRICE")
+    a = parse_american(american)
     return 1 + (a / 100 if a > 0 else 100 / -a)
 
 
