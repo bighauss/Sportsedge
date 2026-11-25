@@ -78,11 +78,11 @@ def prior_games(n=200, teams=40, start="2026-11-04T00:00:00Z"):
     return out
 
 
-SLATE = [  # game_id, home, away, neutral
+SLATE = [
     ("9001", "1", "2", "0"),
     ("9002", "3", "4", "1"),
-    ("9003", "5", "999", "0"),   # 999 is a valid-looking ID with no CBBD rating
-    ("9004", "6", "300", "0"),   # 300 is rated but has no pace history
+    ("9003", "5", "999", "0"),
+    ("9004", "6", "300", "0"),
 ]
 
 
@@ -121,7 +121,6 @@ def full_quotes(game_id, captured="2026-11-21T14:30:00Z", book="bookA"):
 
 
 def provider_games(results, season=SEASON, tip=TIP):
-    """results: list of (game_id, home_id, away_id, home_pts, away_pts)."""
     return [{"id": int(g), "season": season, "homeTeamId": int(h), "awayTeamId": int(a),
              "homePoints": hp, "awayPoints": ap, "startDate": tip,
              "startTimeTbd": False, "status": "final"} for g, h, a, hp, ap in results]
