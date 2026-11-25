@@ -1,0 +1,33 @@
+name: CBB DraftKings integration (offline)
+on:
+  pull_request:
+    paths:
+      - 'models/cbb/dk/**'
+      - 'models/cbb/lines/dk_*.csv'
+      - 'docs/cbb/dk_*.md'
+      - 'docs/governance/changes/pr-532.json'
+      - '.github/workflows/cbb-dk.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'models/cbb/dk/**'
+      - 'models/cbb/lines/dk_*.csv'
+      - 'docs/cbb/dk_*.md'
+      - 'docs/governance/changes/pr-532.json'
+      - '.github/workflows/cbb-dk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dk-reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: DK event-ID, reconciliation and ledger tests (offline)
+        run: python -m unittest -v models.cbb.dk.test_dk_reconcile
