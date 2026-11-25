@@ -33,13 +33,14 @@ class DeliveryAudit(unittest.TestCase):
 
     def test_stale_at_delivery_not_at_freeze(self):
         result = delivery_audit(card(), "2026-11-25T23:00:00Z")
-        self.assertIn("STALE_AT_DELIVERY", result["rows"][0]["reasons"])
+        self.assertIn("QUOTE_AGE_EXCEEDS_RESEARCH_TARGET", result["rows"][0]["advisories"])
+        self.assertEqual(result["rows"][0]["status"], "RESEARCH_ONLY")
 
     def test_evening_half_quote_and_ev_floor(self):
         result = delivery_audit(card(period="1H", ev_hybrid=0.005,
                                     captured_utc="2026-11-25T12:35:00Z",
                                     provenance="UNAUTHENTICATED_PDF"), "2026-11-25T22:49:00Z")
-        self.assertTrue({"STALE_AT_DELIVERY", "ODDS_UNAUTHENTICATED", "BELOW_EV_FLOOR",
+        self.assertTrue({"ODDS_UNAUTHENTICATED", "BELOW_EV_FLOOR",
                          "HALF_BLEND_UNVALIDATED", "HALF_ML_SETTLEMENT_UNVERIFIED"}
                         <= set(result["rows"][0]["reasons"]))
 
