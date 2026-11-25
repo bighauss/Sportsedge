@@ -394,11 +394,22 @@ def reconcile(rows, truncated, event_xw, espn_by_game, team_xw, *, as_of_utc=Non
     return derived, ledger, info
 
 
+# Dated games that must never enter a pregame runner board, even if a later
+# research ruling accepts their orientation. Owner, Nov 25: St Bonaventure -4.5 /
+# Belmont +4.5 is accepted for retrospective research only; ISSUE57 hold is kept
+# and this matchup is excluded from any pregame card.
+PREGAME_EXCLUSIONS = frozenset({
+    ("Saint Bonaventure", "Belmont", "2026-11-25T15:00:00Z"),
+})
+
+
 def runner_board(derived):
     """Rows the runner may ingest: ACCEPTED or HELD-only-for-totals-order (runner keeps its own totals gate).
     Same leading columns as the original boards plus totals_order and provenance."""
     keep = []
     for d in derived:
+        if (d.away, d.home, d.tip_utc) in PREGAME_EXCLUSIONS:
+            continue
         codes = set(filter(None, d.reason_codes.split(";")))
         if d.disposition == S.ACCEPTED or (d.disposition == S.HELD and codes == {"TOTALS_ORDER_UNVERIFIED"}):
             keep.append(d.as_dict())

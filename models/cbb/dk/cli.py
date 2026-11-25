@@ -157,6 +157,29 @@ def cmd_reconcile(a):
         "espn_current_feed_orientation": R.espn_orientation_check(derived, espn_by),
         "cross_capture_saint_bonaventure_belmont": R.cross_capture_diff(rows, ("Saint Bonaventure", "Belmont")),
         "authenticated_rows": sum(d.authenticated for d in derived),
+        "authenticated_quote_rows": 0,
+        "event_id_verification_is_not_quote_authentication": True,
+        "espn_odds_role": "AUXILIARY_RESEARCH_COMPARATOR_ONLY",
+        "owner_rulings": {
+            "st_bonaventure_belmont_orientation": (
+                "ACCEPTED_FOR_RETROSPECTIVE_RESEARCH: board line and price_a are HOME, "
+                "so SPREAD +4.5 / ML +170-205 means Saint Bonaventure -4.5 / -205 and Belmont +4.5 / +170."
+            ),
+            "st_bonaventure_belmont_hold": (
+                "ISSUE57_ORIENTATION_HOLD is retained on every row of this game. "
+                "The game is excluded from runner_board and must never enter a pregame card."
+            ),
+            "event_verification_vs_quotes": (
+                "A verified DK event ID confirms public event identity (league, participants, tip). "
+                "It does not authenticate quote prices, market IDs or capture provenance. "
+                "Authenticated quote rows on this board: 0."
+            ),
+            "espn_odds": (
+                "ESPN scoreboard odds (provider label as given by ESPN) are an auxiliary "
+                "research comparator only: never an admitted odds source, never used for pricing, "
+                "never treated as quote authentication."
+            ),
+        },
         "label": "PAPER_0U", "official_counted": 0, "approved_stake_u": 0,
     }
     (out / "report.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=dict) + "\n", encoding="utf-8")

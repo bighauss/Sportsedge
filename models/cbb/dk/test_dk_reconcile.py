@@ -131,6 +131,20 @@ class Reconcile(unittest.TestCase):
         self.assertEqual(by["pdf_0636CT"].disposition, S.HELD)
         self.assertIn("ISSUE57_ORIENTATION_HOLD", by["pdf_0636CT"].reason_codes)
 
+
+    def test_pregame_exclusion_even_without_hold(self):
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110")],
+                                 hold=frozenset())
+        # dated exclusion is only for the Nov 25 SBU@Belmont tip, not this synthetic game
+        self.assertEqual(R.runner_board(d)[0]["away"], "A")
+        held = []
+        for x in d:
+            x.away, x.home, x.tip_utc = "Saint Bonaventure", "Belmont", "2026-11-25T15:00:00Z"
+            x.disposition = S.ACCEPTED
+            x.reason_codes = ""
+            held.append(x)
+        self.assertEqual(R.runner_board(held), [])
+
     def test_truncated_original_logged_and_corrected_used(self):
         d, ledger, _ = self.run_board([self.L("TOTAL", "6", "-12", "-11", period="1H")],
                                       corrected=[self.L("TOTAL", "63.5", "-120", "-110", period="1H")])
@@ -184,8 +198,19 @@ class CommittedNov25(unittest.TestCase):
         self.assertEqual(rep["event_ids"]["games"], 53)
         self.assertEqual(rep["event_ids"]["verified"], 48)
         self.assertEqual(rep["authenticated_rows"], 0)
+        self.assertEqual(rep["authenticated_quote_rows"], 0)
+        self.assertTrue(rep["event_id_verification_is_not_quote_authentication"])
+        self.assertEqual(rep["espn_odds_role"], "AUXILIARY_RESEARCH_COMPARATOR_ONLY")
+        self.assertIn("ACCEPTED_FOR_RETROSPECTIVE_RESEARCH",
+                      rep["owner_rulings"]["st_bonaventure_belmont_orientation"])
+        self.assertIn("must never enter a pregame card",
+                      rep["owner_rulings"]["st_bonaventure_belmont_hold"])
         self.assertTrue(rep["transcript_totals_order_verified_from_markdown"])
         self.assertEqual(sum(rep["dispositions"].values()), 1002)
+        import csv
+        with (committed / "runner_board.csv").open() as fh:
+            rb = list(csv.DictReader(fh))
+        self.assertFalse(any((r["away"], r["home"]) == ("Saint Bonaventure", "Belmont") for r in rb))
 
     def test_crosswalk_ids_unique_and_evidenced(self):
         xw = R.read_csv(LINES / "dk_event_crosswalk_2026-11-25.csv")

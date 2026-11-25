@@ -1,6 +1,7 @@
 {
  "approved_stake_u": 0,
  "as_of_utc": "2026-11-25T12:36:15Z",
+ "authenticated_quote_rows": 0,
  "authenticated_rows": 0,
  "by_capture": {
   "pdf_0636CT": {
@@ -1114,6 +1115,8 @@
   }
  ],
  "espn_matched_games": 53,
+ "espn_odds_role": "AUXILIARY_RESEARCH_COMPARATOR_ONLY",
+ "event_id_verification_is_not_quote_authentication": true,
  "event_ids": {
   "games": 53,
   "missing": [
@@ -1148,7 +1151,7 @@
   "rows_with_verified_id": 943,
   "verified": 48
  },
- "generated_utc": "2026-11-25T17:10:37Z",
+ "generated_utc": "2026-11-25T17:27:02Z",
  "identity_checks": {
   "alt_spread": {
    "pdf_0636CT | Abilene Christian | South Dakota State | FG": "AGREE",
@@ -1638,7 +1641,7 @@
  "inputs": {
   "espn": {
    "path": "models/cbb/dk/evidence/2026-11-25/espn_scoreboard_extract.json",
-   "sha256": "663d977a3514b4579b6b0515d72d888ce2495f9c14923ecb28278a56d652be45"
+   "sha256": "95cd269d99411278f4d1d52609b3e77e99739b31d86da8f709e057dcc366da66"
   },
   "event_xw": {
    "path": "models/cbb/lines/dk_event_crosswalk_2026-11-25.csv",
@@ -1704,6 +1707,12 @@
  ],
  "official_counted": 0,
  "original_truncated_rows": 20,
+ "owner_rulings": {
+  "espn_odds": "ESPN scoreboard odds (provider label as given by ESPN) are an auxiliary research comparator only: never an admitted odds source, never used for pricing, never treated as quote authentication.",
+  "event_verification_vs_quotes": "A verified DK event ID confirms public event identity (league, participants, tip). It does not authenticate quote prices, market IDs or capture provenance. Authenticated quote rows on this board: 0.",
+  "st_bonaventure_belmont_hold": "ISSUE57_ORIENTATION_HOLD is retained on every row of this game. The game is excluded from runner_board and must never enter a pregame card.",
+  "st_bonaventure_belmont_orientation": "ACCEPTED_FOR_RETROSPECTIVE_RESEARCH: board line and price_a are HOME, so SPREAD +4.5 / ML +170-205 means Saint Bonaventure -4.5 / -205 and Belmont +4.5 / +170."
+ },
  "reason_code_counts": {
   "DK_EVENT_ID_MISSING": 59,
   "ISSUE57_ORIENTATION_HOLD": 310,
