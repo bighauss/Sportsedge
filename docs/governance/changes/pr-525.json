@@ -3,9 +3,9 @@
   "pr_number": 525,
   "base_commit": "d7d608ca387cbcea04225d5253bb6331b10f145c",
   "protected_paths": [
+    ".github/workflows/cbb-run-it.yml",
     "models/cbb/cbb_run_it.py",
-    "models/cbb/test_cbb_run_it.py",
-    ".github/workflows/cbb-run-it.yml"
+    "models/cbb/test_cbb_run_it.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
   "change_summary": "Expose independent estimated EV, nine same-book diagnostic weights, historical capture times, both sides, and explicit validation state in rendered CBB report only. Bound Actions summary/log preview while retaining the complete artifact.",
@@ -13,7 +13,8 @@
     "No change to model probabilities, pricing policy, frozen card or ledger.",
     "Same-book diagnostics are not independent external consensus; external hybrid remains blocked.",
     "No live quote, validated positive EV, or staking claim.",
-    "The existing complete sanitized card artifact is authoritative; preview truncation is explicitly labeled."
+    "The existing complete sanitized card artifact is authoritative; preview truncation is explicitly labeled.",
+    "Run test and rollback commands with PYTHONPATH=.:models/cbb from repository root, as in the fixture workflow."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
@@ -37,14 +38,14 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "PYTHONPATH=.:models/cbb python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v",
+    "test_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
   "rollback": {
     "target_base_sha": "d7d608ca387cbcea04225d5253bb6331b10f145c",
     "strategy": "REVIEWED_REVERT_PR",
-    "verification_command": "PYTHONPATH=.:models/cbb python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v"
+    "verification_command": "python -m unittest discover -s models/cbb -p test_cbb_run_it.py -v"
   },
   "cost": {
     "currency": "USD",
