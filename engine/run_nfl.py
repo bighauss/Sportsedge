@@ -167,8 +167,112 @@ def best_per_group(rows):
     return sorted(picks, key=lambda x: -x["ev"])
 
 
+def football_reporting_rows(rows, board_raw):
+    """Presentation-only projection estimates for NFL and CFB.
+    Exact local board-label reconciliation is not provider authentication.
+    The frozen v5 emitter does not expose W/L/push; never invent a nine-weight EV.
+    """
+    from collections import Counter, defaultdict
+    from datetime import datetime
+    import math
+    import re
+
+    def utc(value):
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z", value):
+            raise ValueError("UTC_Z_REQUIRED")
+        return datetime.fromisoformat(value[:-1] + "+00:00")
+
+    def key(o):
+        return tuple(o.get(k) for k in ("sport", "game", "bet_type", "player", "pick", "price"))
+
+    quotes = defaultdict(list)
+    if board_raw is not None:
+        for raw in csv.DictReader(io.StringIO(board_raw.decode("utf-8-sig"))):
+            r = {k.strip().lower(): (v or "").strip() for k, v in raw.items() if k}
+            sport, market = r.get("sport", "").upper(), r.get("market", "").upper()
+            if sport not in ("NFL", "CFB") or not market or market == "SGP":
+                continue
+            if not r.get("home") or not r.get("away") or v5.num(r.get("remaining")) is not None:
+                continue
+            r["sport"], r["market"], r["line"] = sport, market, v5.num(r.get("line")) or 0.0
+            player = r.get("player", "")
+            try:
+                if player and market in v5.TD_NAMES:
+                    labels = (f"{player} {v5.TD_NAMES[market]}", f"{player} No {v5.TD_NAMES[market]}")
+                elif player:
+                    name = market.replace("_", " ").title()
+                    labels = (f"{player} Over {r['line']:g} {name}", f"{player} Under {r['line']:g} {name}")
+                else:
+                    labels = v5.game_labels(sport, r)
+                for i, col in enumerate(("price_a", "price_b")):
+                    price = v5.num(r.get(col))
+                    if price is None or not math.isfinite(price) or price != int(price) or abs(price) < 100:
+                        continue
+                    k = (sport, f"{r['away']} @ {r['home']}", f"{market}|{i}|{r.get('sgp', '')}", player, labels[i], int(price))
+                    quotes[k].append(r)
+            except (KeyError, TypeError, ValueError, OverflowError):
+                continue
+    football = [o for o in rows if o.get("sport") in ("NFL", "CFB")]
+    counts = Counter(key(o) for o in football)
+    report = []
+    for o in football:
+        candidates = quotes.get(key(o), [])
+        cap = None
+        event = None
+        book = None
+        provenance = "BLOCKED_BOARD_CHANGED" if board_raw is None else "BLOCKED_QUOTE_UNMATCHED_OR_AMBIGUOUS"
+        if len(candidates) == 1 and counts[key(o)] == 1:
+            q = candidates[0]
+            try:
+                capture = q.get("captured_utc")
+                tip = q.get("tip_utc") or q.get("start_utc")
+                if utc(capture) >= utc(tip):
+                    raise ValueError("NOT_PREGAME")
+                event = q.get("dk_event_id") or q.get("event_id")
+                book = q.get("book")
+                if not event or not book:
+                    raise ValueError("EVENT_OR_BOOK_MISSING")
+                cap = capture
+                provenance = "LOCAL_EXACT_LABEL_MATCH_NOT_AUTHENTICATED"
+            except (TypeError, ValueError):
+                event = book = None
+                provenance = "BLOCKED_QUOTE_METADATA"
+        ev = o.get("model_ev")
+        if type(ev) not in (int, float) or not math.isfinite(ev):
+            ev = None
+        mode = o.get("mode")
+        state = ("BLOCKED_MODEL_EV_MISSING" if ev is None else
+                 "MODEL_ESTIMATED_POSITIVE_WITHHELD" if ev > 0 else "NO_POSITIVE_MODEL_EV")
+        report.append(dict(sport=o["sport"], game=o["game"], pick=o["pick"], price=o["price"],
+                           row_id=o["row_id"], quote_id=o["quote_id"],
+                           model_basis="SUPPLIED_PROJECTION_UNVERIFIED" if mode == "PROJECTION" else
+                           "MARKET_ANCHORED_NOT_INDEPENDENT" if mode == "ANCHOR" else "UNKNOWN_MODEL_BASIS",
+                           model_ev=ev, captured_utc=cap, event_id=event, book=book,
+                           provenance=provenance, state=state, held=o.get("held", ""),
+                           nine_weight_status="BLOCKED_EXPLICIT_OUTCOME_MASS_MISSING",
+                           external_consensus="BLOCKED_NO_EXTERNAL_CONSENSUS", approved_stake_u=0))
+    return report
+
+
+def print_football_reporting(rows):
+    print("\nALL EMITTED NFL/CFB SIDES — model estimates, PAPER / 0u, not validated EV")
+    print("Market-anchored estimates are not independent. Exact local quote matches are not provider authentication.")
+    print("Nine-weight EV blocked until explicit outcome masses are available. External consensus blocked.")
+    print("| Sport | Game | Pick | Price | Model EV | Capture UTC | Basis | Quote provenance | Validation | Guard |")
+    print("|---|---|---|---:|---:|---|---|---|---|---|")
+    def clean(x):
+        return str(x if x is not None else "UNKNOWN").replace("|", "/").replace("\n", " ").replace("\r", " ")
+    for o in rows:
+        ev = "UNKNOWN" if o["model_ev"] is None else f"{100*o['model_ev']:+.2f}%"
+        cells = [o["sport"], o["game"], o["pick"], o["price"], ev, o["captured_utc"],
+                 o["model_basis"], o["provenance"], o["state"], o["held"] or "UNVALIDATED"]
+        print("| " + " | ".join(clean(x) for x in cells) + " |")
+
+
 def build(path):
     path = os.path.abspath(path)
+    with open(path, 'rb') as f:
+        board_raw = f.read()
     old = v5.N_FIT
     v5.N_FIT = N_FIT
     try:
@@ -202,8 +306,12 @@ def build(path):
             if c["quote_id"] != origin["quote_id"]:
                 raise ValueError("card row identity differs from exported priced side")
             c["selected_for_card"] = origin["selected_for_card"]
+    with open(path, 'rb') as f:
+        if f.read() != board_raw:
+            board_raw = None
+    report = football_reporting_rows(out, board_raw)
     return dict(notes=notes, gaps=gaps, out=out, card=card, doubted=doubted,
-                model_only=model_only, held=held)
+                model_only=model_only, held=held, football_report=report)
 
 
 def table(rows, held=False):
@@ -221,6 +329,7 @@ def table(rows, held=False):
 def main(path):
     r = build(path)
     print(r["notes"], "\n")
+    print_football_reporting(r["football_report"])
     seen = set()
     for (g, mk, ln, _side, _price), gap in sorted(r["gaps"].items(), key=lambda kv: kv[0][:4]):
         if (g, mk, ln) in seen:
