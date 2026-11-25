@@ -1,0 +1,26 @@
+{
+ "coefficients_sha256": "700af30eca3507eaa9fe6701d2d908c98ba4ce28562809d66d2ad5d0bd24efbf",
+ "counting": "NON_COUNTED",
+ "h1_h2": {
+  "H1_MARGIN:H2_MARGIN": -0.08254,
+  "H1_MARGIN:H2_TOTAL": 0.00936,
+  "H1_TOTAL:H2_MARGIN": 0.03357,
+  "H1_TOTAL:H2_TOTAL": 0.13368
+ },
+ "kind_choice": {
+  "H1": "gaussian",
+  "H2": "independent",
+  "H2REG": "gaussian",
+  "HT_H2": "gaussian",
+  "HT_H2REG": "independent"
+ },
+ "label": "PAPER_0U",
+ "period_rho": {
+  "H1": 0.07461,
+  "H2": 0.0,
+  "H2REG": 0.01415,
+  "HT_H2": -0.01061,
+  "HT_H2REG": 0.0
+ },
+ "stage": "final"
+}
