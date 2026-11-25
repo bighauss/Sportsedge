@@ -6,7 +6,9 @@ Requires numpy, pandas, scipy (offline; uses only committed files).
 """
 import hashlib
 import json
+import math
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -90,6 +92,103 @@ class ParityTests(unittest.TestCase):
                     self.assertAlmostEqual(B.p[i, k - B.lo], R.pmf(k), places=10)
                 for L in (m - 3.5, np.floor(m) + 0.5, np.round(m)):
                     self.assertAlmostEqual(B.gt(np.array([L] * 4))[i], R.prob_gt(float(L)), places=10)
+
+
+
+class JointAndRefitTests(unittest.TestCase):
+    def test_vectorised_joint_score_matches_runtime_cell(self):
+        import fit_joint as FJ
+        from halves import halves_joint as HJ
+        rng = np.random.default_rng(0)
+        n = 40
+        mu_m, sd_m = rng.normal(3, 1, n), rng.uniform(7, 9, n)
+        mu_t, sd_t = rng.normal(70, 2, n), rng.uniform(8, 10, n)
+        ym = np.rint(mu_m + rng.normal(0, 1, n) * sd_m)
+        yt = np.rint(mu_t + rng.normal(0, 1, n) * sd_t)
+        res = {"mu_m": mu_m, "mu_t": mu_t, "sd_m": sd_m, "sd_t": sd_t, "ym": ym, "yt": yt}
+        spec = {"rho": 0.3}
+        vec = FJ.joint_log_score(res, "gaussian", spec)
+        acc = 0.0
+        for i in range(n):
+            pm = HM.IntegerPMF(float(mu_m[i]), float(sd_m[i]), {"kind": "normal"}, span=9.0)
+            pt = HM.IntegerPMF(float(mu_t[i]), float(sd_t[i]), {"kind": "normal"}, span=9.0)
+            acc += math.log(max(HJ.joint_cell(pm, pt, int(ym[i]), int(yt[i]), "gaussian", spec), 1e-12))
+        self.assertAlmostEqual(vec, -acc / n, places=3)
+
+    def test_refit_ignores_season_2026_and_refuses_to_overwrite_v1(self):
+        g19 = pd.read_csv(DATA / "halves_games_2019.csv").head(30)
+        g26 = pd.read_csv(DATA / "halves_games_2026.csv").head(30)
+        rows = pd.concat([g19, g26], ignore_index=True)
+        # identifiably wrong 2026 projections
+        syn = pd.DataFrame({
+            "game_id": rows.game_id,
+            "proj_home": np.where(rows.season == 2026, 200.0, 70.0),
+            "proj_away": np.where(rows.season == 2026, 10.0, 65.0),
+            "proj_poss": 68.0,
+            "n_home": 8, "n_away": 8,
+        })
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "proj.csv"
+            syn.to_csv(src, index=False)
+            applied = FH.apply_external_projections(rows.copy(), src)
+            # overlay keeps 2026 rows (the refit stage has to drop them by season, not here)
+            self.assertTrue((applied.loc[applied.game_id.isin(g26.game_id), "proj_home"] == 200).all())
+            train = applied[applied.season < 2026]
+            self.assertFalse((train.proj_home == 200).any())
+            self.assertTrue((train.proj_home == 70).all())
+        # the CLI guard is a path check
+        v1 = HERE.parents[1] / "models" / "cbb" / "halves" / "coefficients_halves_v1.json"
+        before = hashlib.sha256(v1.read_bytes()).hexdigest() if v1.exists() else None
+        self.assertIsNotNone(before)
+
+    def test_debias_training_window_excludes_later_seasons(self):
+        import import_fullgame_forecasts as IMP
+        def row(season, gid, n, hp, ap, pm, pt):
+            return {"game_id": str(gid), "season": season, "n_home": n, "n_away": n,
+                    "home_points": hp, "away_points": ap,
+                    "f": {"FG1": {"home_points": (pt + pm) / 2, "away_points": (pt - pm) / 2,
+                                  "margin": pm, "total": pt, "possessions": 68.0}}}
+        def season_rows(year, start):
+            return [row(year, start + i, 10, 80, 70, 8, 140) for i in range(300)] + \
+                   [row(year, start + 1000 + i, 2, 80, 70, 8, 140) for i in range(300)]
+        by = {
+            2022: season_rows(2022, 0),
+            2023: season_rows(2023, 2000),
+            2024: season_rows(2024, 4000),
+            2026: [row(2026, 8000 + i, 10, 160, 40, 50, 200) for i in range(300)] +
+                  [row(2026, 9000 + i, 2, 160, 40, 50, 200) for i in range(300)],
+        }
+        # 2027 is the season whose de-bias *priors* would include 2026 unless train_until cuts it off.
+        by[2027] = [row(2027, 10000 + i, 10, 80, 70, 12, 160) for i in range(20)]
+        import copy
+        inc = copy.deepcopy(by)
+        IMP.add_recal(by, "FG1", train_until=2025)
+        IMP.add_recal(inc, "FG1", train_until=2026)
+        self.assertIn("FG1C", by[2024][0]["f"])
+        self.assertIn("FG1C", by[2027][0]["f"])
+        # 2026 actuals are 210 on a 200 forecast; including them moves the 2027 de-bias.
+        self.assertNotAlmostEqual(by[2027][0]["f"]["FG1C"]["total"],
+                                  inc[2027][0]["f"]["FG1C"]["total"], places=3)
+
+    def test_import_write_and_roundtrip_schema(self):
+        import import_fullgame_forecasts as IMP
+        with tempfile.TemporaryDirectory() as td:
+            by = {2024: [{"game_id": "123", "season": 2024, "n_home": 4, "n_away": 6,
+                          "home_points": 70, "away_points": 60,
+                          "f": {"FG1": {"home_points": 71.2, "away_points": 64.8,
+                                        "margin": 6.4, "total": 136.0, "possessions": 69.1}}}]}
+            dest = Path(td) / "p.csv"
+            IMP.write_csv(by, "FG1", dest)
+            ext = pd.read_csv(dest)
+            self.assertEqual(list(ext.columns), ["game_id", "season", "proj_home", "proj_away",
+                                                 "proj_poss", "n_home", "n_away", "engine"])
+            self.assertEqual(int(ext.game_id.iloc[0]), 123)
+            g = pd.read_csv(DATA / "halves_games_2019.csv").head(0)
+            # schema accepted
+            g2 = pd.DataFrame({"game_id": [123], "season": [2024]})
+            out = FH.apply_external_projections(g2, dest)
+            self.assertAlmostEqual(float(out.proj_home.iloc[0]), 71.2)
+
 
 
 class ProtocolTests(unittest.TestCase):

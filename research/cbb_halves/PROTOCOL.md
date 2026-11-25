@@ -45,3 +45,20 @@ and 0.53 × FG for H2.
 ## Not measurable here
 There are no historical H1/H2 sportsbook lines in these sources, so ROI, CLV and
 market-relative calibration can't be computed. Every output stays PAPER/0u, NON_COUNTED.
+
+## Addenda (same splits; no change to the untouched 2026 window)
+
+### Joint margin/total and H1–H2 dependence
+Copula kind and correlations are chosen on the same 2021–2025 rolling-origin
+folds, then frozen on 2019–2025, in `fit_joint.py`. They live in
+`coefficients_halves_joint_v1.json` and do not alter v1 means or SDs. Season
+2026 is not used for selection or fit. Any 2026 joint metric is a **secondary
+re-use** of the already-scored test window.
+
+### Production-compatible means
+`fit_halves.py --stage refit --projections <csv> --out-coefficients <path>
+--train-until 2025` refits half means and SDs on an external pregame full-game
+projector (the FG1/FG1C walk-forward from `models/cbb/fullgame`, PR #534, after
+`import_fullgame_forecasts.py`). The refit refuses to overwrite
+`coefficients_halves_v1.json` and refuses a training window that includes 2026.
+`TOTALS_BIAS.md` forbids using 2026 to correct the known totals intercept drift.
