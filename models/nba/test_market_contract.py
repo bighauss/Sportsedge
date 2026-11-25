@@ -332,6 +332,98 @@ class MarketCoverage(unittest.TestCase):
                                      {"UNSUPPORTED_PERIOD_MARKET"}, name)
 
 
+class FractionalAndMalformedOdds(unittest.TestCase):
+    """Fractional or malformed American odds must be rejected before pricing, on every source kind."""
+
+    BAD_PRICES = ["-110.5", "150.5", "1.91", "2.5", "5/2", "EVEN", "", "abc", "nan", "inf", "-inf",
+                  "99", "-99", "0", "-0", "1e2.5", "+-110", "--110", "1,50"]
+
+    def _pair(self, price, market="1H_ML"):
+        return [row("G1", market, "DEN", price), row("G1", market, "LAL", 115)]
+
+    def test_parse_american_price(self):
+        for ok, want in (("-110", -110), ("+150", 150), ("150", 150), (-110, -110), (150.0, 150),
+                         ("-110.0", -110), (100, 100), ("-100", -100), ("1e3", 1000)):
+            self.assertEqual(mc.parse_american_price(ok), want, ok)
+        for bad in self.BAD_PRICES + [None, True, False, float("nan"), float("inf"), -110.5, 1.91, 99]:
+            self.assertIsNone(mc.parse_american_price(bad), repr(bad))
+
+    def test_each_bad_price_rejects_the_whole_contract(self):
+        for bad in self.BAD_PRICES:
+            if bad == "":
+                continue  # blank is a MISSING_REQUIRED_FIELD, covered below
+            for market in ("ML", "1H_ML", "1Q_ML"):
+                out = mc.filter_odds(self._pair(bad, market))
+                self.assertEqual(out["accepted"], [], (bad, market))
+                codes = {r["reason_code"] for r in out["rejected"]}
+                self.assertEqual(codes, {"ODDS_MALFORMED_OR_FRACTIONAL", "AMBIGUOUS_MARKET_CONTRACT"}, (bad, market))
+                self.assertEqual(len(out["rejected"]), 2)
+
+    def test_blank_price_is_missing_field_and_poisons_pair(self):
+        out = mc.filter_odds(self._pair(""))
+        self.assertEqual(out["accepted"], [])
+        self.assertIn("MISSING_REQUIRED_FIELD", {r["reason_code"] for r in out["rejected"]})
+
+    def test_fractional_price_rejected_for_totals_spreads_team_totals(self):
+        cases = [
+            [row("G1", "TOTAL", "OVER", "-110.5", "220.5"), row("G1", "TOTAL", "UNDER", -110, "220.5")],
+            [row("G1", "SPREAD", "DEN", -110, "-3.5"), row("G1", "SPREAD", "LAL", "-104.5", "3.5")],
+            [row("G1", "1H_TT_DEN", "OVER", "1.91", "55.5"), row("G1", "1H_TT_DEN", "UNDER", -110, "55.5")],
+            [row("G1", "TT_DEN", "OVER", "5/2", "112.5"), row("G1", "TT_DEN", "UNDER", -110, "112.5")],
+        ]
+        for rows in cases:
+            out = mc.filter_odds(rows)
+            self.assertEqual(out["accepted"], [], rows[0]["market"])
+            self.assertTrue(any(r["reason_code"] == "ODDS_MALFORMED_OR_FRACTIONAL" for r in out["rejected"]))
+
+    def test_invalid_lines_rejected(self):
+        for rows, code in (
+            ([row("G1", "TOTAL", "OVER", -110, "abc"), row("G1", "TOTAL", "UNDER", -110, "abc")], "INVALID_LINE"),
+            ([row("G1", "TOTAL", "OVER", -110, "nan"), row("G1", "TOTAL", "UNDER", -110, "nan")], "INVALID_LINE"),
+            ([row("G1", "SPREAD", "DEN", -110, ""), row("G1", "SPREAD", "LAL", -110, "")], "INVALID_LINE"),
+            ([row("G1", "1H_ML", "DEN", -110, "1.5"), row("G1", "1H_ML", "LAL", 110, "1.5")], "INVALID_LINE"),
+        ):
+            out = mc.filter_odds(rows)
+            self.assertEqual(out["accepted"], [], rows[0]["market"])
+            self.assertIn(code, {r["reason_code"] for r in out["rejected"]})
+
+    def test_whole_number_prices_still_accepted(self):
+        for price in ("-110", "+115", 115, "115.0", "-100", "100"):
+            out = mc.filter_odds([row("G1", "1H_ML", "DEN", -135), row("G1", "1H_ML", "LAL", price)])
+            self.assertEqual(len(out["accepted"]), 2, price)
+
+    def test_fractional_odds_never_reach_pricing_on_any_source_kind(self):
+        seen = []
+        orig = frozen.price_game_market
+        def spy(r, proj):
+            seen.append(dict(r)); return orig(r, proj)
+        for kind in sorted(mc.SOURCE_KINDS):
+            for bad in ("-110.5", "1.91", "5/2", "EVEN"):
+                with patch.object(frozen, "price_game_market", side_effect=spy):
+                    out = run_it.run_from_inputs({"odds_rows": self._pair(bad) + two_way_ml(market="ML")},
+                                                 tempfile.mkdtemp(), source_kind=kind)
+                self.assertEqual([r for r in out["accepted"] if r["market"] == "1H_ML"], [], (kind, bad))
+                self.assertEqual([r for r in seen if r["market"] == "1H_ML"], [], (kind, bad))
+                self.assertEqual({r["reason_code"] for r in out["rejected"]},
+                                 {"ODDS_MALFORMED_OR_FRACTIONAL", "AMBIGUOUS_MARKET_CONTRACT"})
+
+    def test_fractional_price_from_csv_file_and_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "odds.csv"
+            with open(path, "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["game_id", "market", "selection", "line", "price"])
+                w.writeheader(); w.writerows(self._pair("-110.5"))
+            for kind in ("csv", "manual", "replay", "dk_capture", "pdf", "screenshot"):
+                out = mc.load_board({"odds": str(path), "capture_path": "/tmp/x"}, source_kind=kind)
+                self.assertEqual(out["accepted"], [], kind)
+                self.assertEqual({r["reason_code"] for r in out["rejected"]},
+                                 {"ODDS_MALFORMED_OR_FRACTIONAL", "AMBIGUOUS_MARKET_CONTRACT"}, kind)
+            rc = run_it.main(["--source-kind", "csv", "--inputs", str(Path(tmp) / "none"),
+                              "--odds", str(path), "--out", str(Path(tmp) / "out")])
+            self.assertEqual(rc, 0)
+            self.assertFalse((Path(tmp) / "out" / "_accepted_odds.csv").exists())
+
+
 class FrozenBehaviorUnchanged(unittest.TestCase):
     def test_unguarded_frozen_run_still_prices_home_plus_tie(self):
         """Documents the defect that the guard exists to isolate. Do not 'fix' this here."""

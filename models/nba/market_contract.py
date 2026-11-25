@@ -41,6 +41,8 @@ REASON = {
     "UNSUPPORTED_PERIOD_MARKET": "Period is not priceable by the frozen model (no silent fallback to full-game)",
     "UNKNOWN_MARKET": "Market name is not a recognized NBA game market",
     "MISSING_REQUIRED_FIELD": "Required board field is missing",
+    "ODDS_MALFORMED_OR_FRACTIONAL": "Price is not a whole-number American quote with |price| >= 100 (fractional, decimal, non-numeric, NaN/inf or bool)",
+    "INVALID_LINE": "Line is malformed or inconsistent with the market type",
     "SOURCE_KIND_INVALID": "Source kind is not a supported ingestion path",
     "SOURCE_ROWS_MISSING": "PDF/screenshot/other capture has no extracted structured odds rows",
 }
@@ -90,6 +92,43 @@ def _reject(row, code, extra=None):
     return rec
 
 
+def parse_american_price(value):
+    """Return the whole-number American price, or None when it is malformed or fractional.
+
+    Accepts ints and numeric strings such as '-110', '+150', '150' and integer-valued
+    floats ('150.0'). Rejects bool, NaN/inf, fractional ('-110.5'), decimal odds ('1.91'),
+    fractions ('5/2'), words ('EVEN'), blanks and |price| < 100.
+    """
+    import math
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        num = float(str(value).strip().replace("\u2212", "-")) if not isinstance(value, (int, float)) else float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(num) or num != int(num) or abs(num) < 100:
+        return None
+    return int(num)
+
+
+def _line_ok(row: dict) -> bool:
+    """ML must have no line; spread/total/TT need a finite numeric line."""
+    import math
+    base = _base(row.get("market", ""))
+    line = row.get("line", "")
+    has = line not in (None, "")
+    if base not in {"ML", "SPREAD", "TOTAL", "TT"} or "/" in str(row.get("market", "")):
+        return True  # unknown / mixed markets get their own reason code in inspect_group
+    if base == "ML":
+        return not has
+    if not has:
+        return False
+    try:
+        return math.isfinite(float(line))
+    except (TypeError, ValueError):
+        return False
+
+
 def _missing_fields(row: dict) -> list[str]:
     needed = ("game_id", "market", "selection", "price")
     return [k for k in needed if str(row.get(k) or "").strip() == ""]
@@ -104,10 +143,17 @@ def inspect_group(key, rows: list[dict], *, home: str = "", away: str = "") -> t
         miss = _missing_fields(r)
         if miss:
             rejected.append(_reject(r, "MISSING_REQUIRED_FIELD", ",".join(miss)))
+        elif parse_american_price(r.get("price")) is None:
+            rejected.append(_reject(r, "ODDS_MALFORMED_OR_FRACTIONAL", str(r.get("price"))))
+        elif not _line_ok(r):
+            rejected.append(_reject(r, "INVALID_LINE", str(r.get("line"))))
         else:
             usable.append(r)
     if not usable:
         return [], rejected
+    if rejected:
+        # One bad quote poisons the contract: never price a surviving half of a pair.
+        return [], rejected + [_reject(r, "AMBIGUOUS_MARKET_CONTRACT", "sibling_quote_rejected") for r in usable]
 
     market = _norm(usable[0]["market"])
     period = _period(market)
