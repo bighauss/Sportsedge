@@ -1,0 +1,31 @@
+name: CBB halves model (research, PAPER/0u)
+on:
+  push:
+    paths:
+      - 'models/cbb/halves/**'
+      - 'research/cbb_halves/**'
+      - '.github/workflows/cbb-halves.yml'
+  pull_request:
+    paths:
+      - 'models/cbb/halves/**'
+      - 'research/cbb_halves/**'
+      - '.github/workflows/cbb-halves.yml'
+  workflow_dispatch:
+jobs:
+  halves:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Runtime pricing tests (stdlib only)
+        working-directory: models/cbb
+        run: python -m unittest -v halves.test_halves
+      - name: Research tests (dataset hashes, no look-ahead, PMF parity, protocol)
+        run: |
+          pip install --quiet numpy pandas scipy
+          python -m unittest -v research.cbb_halves.test_halves_research
