@@ -20,15 +20,27 @@ jobs:
           mkdir -p "$RUNNER_TEMP/mlb-source"
           cd "$RUNNER_TEMP/mlb-source"
           for season in 2019 2021 2022 2023 2024 2025; do
-            url="https://raw.githubusercontent.com/chadwickbureau/retrosheet/master/seasons/${season}/GL${season}.TXT"
-            curl --fail --location --silent --show-error --retry 2 --max-time 120 "$url" -o "GL${season}.TXT"
-            printf '%s\t%s\n' "GL${season}.TXT" "$url" >> sources.tsv
+            name="GL${season}.TXT"
+            url="https://www.retrosheet.org/gamelogs/gl${season}.zip"
+            if curl --fail --location --silent --show-error --retry 1 --max-time 45 "$url" -o "gl${season}.zip" && unzip -p "gl${season}.zip" "$name" > "$name" && test -s "$name"; then
+              printf '%s\t%s\n' "$name" "$url" >> sources.tsv
+              continue
+            fi
+            rm -f "$name" "gl${season}.zip"
+            for candidate in "https://raw.githubusercontent.com/chadwickbureau/retrosheet/master/seasons/${season}/$name" "https://raw.githubusercontent.com/chadwickbureau/retrosheet/master/gamelog/$name"; do
+              if curl --fail --location --silent --show-error --retry 1 --max-time 45 "$candidate" -o "$name" && test -s "$name"; then
+                printf '%s\t%s\n' "$name" "$candidate" >> sources.tsv
+                break
+              fi
+              rm -f "$name"
+            done
+            if ! test -s "$name"; then printf '%s\n' "$season" >> missing_seasons.txt; fi
           done
+          test -s sources.tsv
           cat > ATTRIBUTION.txt <<'EOF'
           The information used here was obtained free of
           charge from and is copyrighted by Retrosheet. Interested
-          parties may contact Retrosheet at 20 Sunset Rd.,
-          Newark, DE 19711.
+          parties may contact Retrosheet at www.retrosheet.org.
           Source mirror: Chadwick Baseball Bureau, https://github.com/chadwickbureau/retrosheet
           EOF
           python - <<'PY'
@@ -43,7 +55,7 @@ jobs:
               if not 2000<=len(rows)<=2500 or any(len(r)!=161 or not r[0].startswith(season) or not r[9].isdigit() or not r[10].isdigit() for r in rows):
                   raise ValueError('UNEXPECTED_GAME_LOG_SCHEMA_OR_COUNT:'+name)
               files.append(dict(file=name,url=url,sha256=hashlib.sha256(raw).hexdigest(),bytes=len(raw),rows=len(rows)))
-          report=dict(source='Chadwick mirror of Retrosheet',observed_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),files=files,limits='Historical reconstructed game logs, not contemporaneous pregame evidence.')
+          report=dict(source='Retrosheet or Chadwick mirror',observed_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),files=files,missing_seasons=pathlib.Path('missing_seasons.txt').read_text().splitlines() if pathlib.Path('missing_seasons.txt').exists() else [],limits='Historical reconstructed game logs, not contemporaneous pregame evidence.')
           pathlib.Path('manifest.json').write_text(json.dumps(report,indent=2))
           print(json.dumps(report))
           PY
