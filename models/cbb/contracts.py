@@ -73,6 +73,8 @@ REASON_CODES = {
     "GAME_NOT_PROJECTED": "projection stage passed on this game",
     "PERIOD_NOT_IMPLEMENTED": "no period model wired into the runner",
     "PLAYER_MODEL_NOT_IMPLEMENTED": "no player projection wired into the runner",
+    "PLAYER_FORECAST_MISSING": "player research distribution missing or refused",
+    "PLAYER_ID_UNKNOWN": "stable player and event scoped team identity missing",
     "PLAYER_TEAM_UNKNOWN": "player team not established on the board row",
     "HALFTIME_ADJUSTED_IS_LIVE": "halftime-adjusted 2H markets are in-game; excluded pregame",
     "UNSUPPORTED_MARKET": "market string not in the CBB catalog",
@@ -163,6 +165,8 @@ class MarketQuote:
     source_sha256: Optional[str] = None
     source_label: Optional[str] = None   # upstream label verbatim, e.g. dk/ OWNER_PDF_SCREENSHOT_UNAUTHENTICATED
     row_key: Optional[str] = None        # upstream stable row key, e.g. dk/ runner_board row_key
+    player_id: Optional[str] = None
+    player_team_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +215,9 @@ class PricedMarket:
     ev_challenger: Optional[float] = None
     hybrid_method: Optional[str] = None       # e.g. LOGIT_BLEND_W0.125_VALIDATION_SELECTED_OPEN
     audit_flags: Tuple[str, ...] = ()         # EV sanity flags (never caps)
+    player_id: Optional[str] = None
+    player_team_id: Optional[str] = None
+    player: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -239,6 +246,8 @@ class GradeRow:
     clv_cents: Optional[float] = None   # None = no closing quote captured
     label: str = PAPER_0U
     counted: str = NON_COUNTED
+    player_id: Optional[str] = None
+    player_team_id: Optional[str] = None
 
 
 def row_dict(row) -> dict:
