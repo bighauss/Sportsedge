@@ -1,0 +1,48 @@
+name: CFB public retrospective score benchmark
+on:
+  push:
+    branches: [research/cfb-public-score-benchmark-20261124]
+    paths: ['research/cfb_public_score_benchmark.py', '.github/workflows/cfb-public-score-benchmark.yml', 'docs/governance/changes/**']
+  pull_request:
+    paths: ['research/cfb_public_score_benchmark.py', '.github/workflows/cfb-public-score-benchmark.yml']
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python research/cfb_public_score_benchmark.py --self-test
+  retrospective:
+    needs: offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pyarrow==19.0.1
+      - name: Download closed-season schedules
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cfb-data"
+          mkdir -m 700 "$RUNNER_TEMP/cfb-report"
+          for season in {2015..2025}; do
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/cfb_schedules/cfb_schedules_${season}.parquet" -o "$RUNNER_TEMP/cfb-data/cfb_schedules_${season}.parquet"
+          done
+      - run: python research/cfb_public_score_benchmark.py --root "$RUNNER_TEMP/cfb-data" --output "$RUNNER_TEMP/cfb-report/benchmark.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cfb-public-score-benchmark
+          path: ${{ runner.temp }}/cfb-report/benchmark.json
+          retention-days: 14
+          if-no-files-found: error
