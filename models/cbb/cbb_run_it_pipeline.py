@@ -956,7 +956,7 @@ def _home_line(r):
     return r["line"]
 
 
-def grade(frozen, finals, close_quotes=None):
+def grade(frozen, finals, close_quotes=None, player_finals=None):
     """Grade a FROZEN pipeline card. Selection = best positive-EV side per (game, period, market, line).
     Every side also feeds calibration (push outcomes excluded)."""
     groups = defaultdict(list)
@@ -969,9 +969,26 @@ def grade(frozen, finals, close_quotes=None):
         f = finals.get(gid)
         best = max(sides, key=lambda r: (r["ev_model"], r["side"]))
         if market.startswith("PLAYER_"):
-            grades.extend(C.GradeRow(gid, period, market, r["line"], r["side"], r["price"],
-                          "NOT_GRADABLE", None, r["prob_model"], player_id=player_id,
-                          player_team_id=player_team_id) for r in sides)
+            # Conditional statistical scoring only. No DK settlement or ROI without verified terms.
+            stats = (player_finals or {}).get((gid, player_team_id, player_id))
+            oc = None
+            if f is not None and stats is not None:
+                from cbb_player_final_box import outcome as player_outcome
+                try:
+                    oc = player_outcome(market, hl, stats)
+                except (ValueError, TypeError, KeyError):
+                    pass
+            for r in sides:
+                result = ("PENDING_NO_FINAL" if f is None else "NOT_GRADABLE") if oc is None else (
+                    "CONDITIONAL_PUSH" if oc == "push" else
+                    "CONDITIONAL_WIN" if oc == r["side"] else "CONDITIONAL_LOSS")
+                grades.append(C.GradeRow(gid, period, market, r["line"], r["side"], r["price"],
+                              result, None, r["prob_model"], player_id=player_id,
+                              player_team_id=player_team_id))
+                if oc is not None and oc != "push" and r["prob_push"] < 1:
+                    cal.append({"market": "CONDITIONAL:" + market,
+                                "p_model": r["prob_model"] / (1 - r["prob_push"]),
+                                "p_market": r["prob_market_novig"], "y": int(oc == r["side"])})
             continue
         if f is None:
             grades += [C.GradeRow(gid, period, market, r["line"], r["side"], r["price"], "PENDING_NO_FINAL", None,
@@ -1014,7 +1031,7 @@ def calibration_summary(cal):
         p = min(1 - 1e-9, max(1e-9, p)); return -math.log(p if y else 1 - p)
     out = {}
     for fam in sorted({c["market"] for c in cal}) + ["ALL"]:
-        xs = [c for c in cal if fam == "ALL" or c["market"] == fam]
+        xs = [c for c in cal if (fam == "ALL" and not c["market"].startswith("CONDITIONAL:")) or c["market"] == fam]
         if not xs:
             continue
         bins = defaultdict(list)
@@ -1503,12 +1520,15 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
             raise ValueError("FROZEN_CARD_DIGEST_MISMATCH")
         finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"], "h1": games[gid].get("h1")}
                   for gid in slate_ids if games[gid]["completed"] and games[gid]["home_score"] is not None}
-        grades, cal = grade(reread, finals)
+        player_finals, player_hashes, player_rejections = public_player_finals(reread, games, raw_dir)
+        grades, cal = grade(reread, finals, player_finals=player_finals)
         gsum = grade_summary(grades)
         (out / "grades.json").write_text(json.dumps(
             {"label": C.PAPER_0U, "counted": C.NON_COUNTED, "finals_source": "ESPN public scoreboard (unauthenticated)",
              "finals_observed_utc": utcz(now), "finals_available": len(finals), "slate_games": len(slate_ids),
              "graded_card_sha256": reread["card_sha256"], "summary": gsum,
+             "player_final_box_sha256": player_hashes, "player_final_rejections": player_rejections,
+             "player_grade_policy": "CONDITIONAL_STAT_DIAGNOSTIC_ONLY_NO_BOOK_SETTLEMENT",
              "rows": [C.row_dict(g) for g in grades]}, indent=1, sort_keys=True))
     calib = calibration_summary(cal) if cal else None
     # ---- audit
@@ -1655,6 +1675,34 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
     return {"pipeline_card_sha256": frozen["card_sha256"], "priced_sides": len(ranked), "rejections": len(rejects)}
 
 
+def public_player_finals(card, games, raw_dir):
+    """Read only final boxes for frozen player contracts; return hashes and rejection census."""
+    from cbb_player_final_box import extract
+    ids = {r["game_id"] for r in card["priced"] if r["market"].startswith("PLAYER_")}
+    result, evidence, rejected = {}, {}, {}
+    frozen_games = {g["game_id"]: g for g in card["games"]}
+    if card.get("projection_adapter") != "native_formula_public_replay":
+        return result, evidence, {"namespace": "PLAYER_FINAL_NAMESPACE_UNSUPPORTED"}
+    for gid in sorted(ids):
+        g = games.get(gid)
+        expected = frozen_games.get(gid)
+        if not g or not g["completed"]:
+            rejected[gid] = "FINAL_PENDING"; continue
+        if (not expected or str(expected["home_team_id"]) != g["home_id"] or
+                str(expected["away_team_id"]) != g["away_id"] or
+                parse_z(expected["tipoff_utc"]) != parse_z(g["tip_utc"])):
+            rejected[gid] = "FROZEN_GAME_IDENTITY_MISMATCH"; continue
+        try:
+            raw = (Path(raw_dir) / "sum" / f"{gid}.json").read_bytes()
+            evidence[gid] = sha_bytes(raw)
+            records = extract(json.loads(raw), gid, g["home_id"], g["away_id"],
+                              g["home_score"], g["away_score"])
+            result.update({(gid, tid, pid): stats for (tid, pid), stats in records.items()})
+        except (OSError, ValueError, KeyError, TypeError, IndexError) as exc:
+            rejected[gid] = f"{type(exc).__name__}:{exc}"
+    return result, evidence, rejected
+
+
 def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, now=None):
     """Grade stage on a PRIOR frozen pipeline card: verify its digest, (re)capture that date's public
     finals, grade W/L/P + ROI + calibration, and write grades.json / grade_report.md next to out_dir."""
@@ -1672,7 +1720,8 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
     ids = {g["game_id"] for g in card["games"]}
     finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"], "h1": games[gid].get("h1")}
               for gid in ids if gid in games and games[gid]["completed"] and games[gid]["home_score"] is not None}
-    grades, cal = grade(card, finals)
+    player_finals, player_hashes, player_rejections = public_player_finals(card, games, raw_dir)
+    grades, cal = grade(card, finals, player_finals=player_finals)
     gsum = grade_summary(grades)
     calib = calibration_summary(cal) if cal else {"state": "NO_GRADED_SIDES"}
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
@@ -1680,6 +1729,8 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
            "date_ct": card["date_ct"], "finals_source": "ESPN public scoreboard (unauthenticated)",
            "finals_observed_utc": utcz(now), "finals_available": len(finals), "card_games": len(ids),
            "summary": gsum, "calibration": calib, "clv": "UNAVAILABLE: no later pre-tip close board captured",
+           "player_final_box_sha256": player_hashes, "player_final_rejections": player_rejections,
+           "player_grade_policy": "CONDITIONAL_STAT_DIAGNOSTIC_ONLY_NO_BOOK_SETTLEMENT",
            "rows": [C.row_dict(g) for g in grades]}
     (out / "grades.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
     g = gsum["ALL"]
@@ -1700,6 +1751,8 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
         for fam, c2 in calib.items():
             if fam != "ALL":
                 md.append(f"- {fam}: n {c2['n_sides']}, Brier model {c2['brier_model']:.4f} vs market {c2['brier_market']:.4f}")
+    md += ["", "Player results are conditional stat diagnostics only; DNP or missing stats withheld; no player settlement ROI.",
+           f"Player final box evidence: {len(player_hashes)} files; rejected/pending games: {len(player_rejections)}."]
     (out / "grade_report.md").write_text("\n".join(md) + "\n")
     return {"card_sha256": card["card_sha256"], "finals_available": len(finals), "card_games": len(ids),
             "graded": g, "results": gsum["results"]}
