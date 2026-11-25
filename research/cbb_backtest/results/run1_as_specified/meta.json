@@ -1,0 +1,89 @@
+{
+ "approved_stake_u": 0,
+ "blend_weights": [
+  1.0,
+  0.875,
+  0.75,
+  0.625,
+  0.5,
+  0.375,
+  0.25,
+  0.125,
+  0.0
+ ],
+ "blend_weights_source": "Owner spec Nov 25 2026 (t26u item 6): 100/0, 87.5/12.5, 75/25, 62.5/37.5, 50/50, 37.5/62.5, 25/75, 12.5/87.5, 0/100",
+ "bootstrap": {
+  "cluster": "game date",
+  "reps": 1000
+ },
+ "code_sha256": {
+  "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "data.py": "c5d90a5d587f56a128e01ae5219a9be64149b1972fe5e6ee9dc4e878063a2155",
+  "espn_odds_collect.py": "95c9e1ab34d26dc66e7a4ccffc0a3f27d4926c02504bbc26b0ecb960cf76e01b",
+  "harness.py": "327fba6a210172479bdbfa4621907adfaf108f6d428bb404ae70472056f4c8cd",
+  "models.py": "f7294e4ebeddbbcadd139f1b90328f6e111e09988bb327de4f6cd16a7203b324",
+  "test_cbb_backtest.py": "f0c412dd5ea4dee8f079f2cf304073f27fae036e6f372711ad82977368ad4d70"
+ },
+ "generated_utc": "2026-11-25T17:08:35.361923+00:00",
+ "identical_rows": 36659,
+ "label": "NON_COUNTED",
+ "leakage": {
+  "origins_checked": 175,
+  "selection_seasons": [
+   2022,
+   2023,
+   2024
+  ],
+  "test_seasons": [
+   2025,
+   2026
+  ],
+  "violation_count": 0,
+  "violations": []
+ },
+ "models": [
+  "native_frozen",
+  "raw",
+  "regularized",
+  "sched_adj"
+ ],
+ "native_model_sha256": "fbc54b3d8b96bdc202a208561b3c79ef91b64bec280f657a1dc466fdb5ede5f6",
+ "odds_census": {
+  "fetch_failed": 0,
+  "games": 47140,
+  "http_404": 0,
+  "no_book": 549,
+  "no_items": 3544,
+  "selected": 43047
+ },
+ "official_counted": 0,
+ "schema": "CBB_ROLLING_ORIGIN_BACKTEST_V1",
+ "seasons": [
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ],
+ "splits": {
+  "test": [
+   2025,
+   2026
+  ],
+  "train": [
+   2019,
+   2020,
+   2021
+  ],
+  "validation": [
+   2022,
+   2023,
+   2024
+  ]
+ },
+ "status": "RESEARCH_PAPER_0U",
+ "total_rows": 47124
+}

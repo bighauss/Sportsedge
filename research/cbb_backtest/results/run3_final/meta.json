@@ -1,0 +1,99 @@
+{
+ "approved_stake_u": 0,
+ "blend_weights": [
+  1.0,
+  0.875,
+  0.75,
+  0.625,
+  0.5,
+  0.375,
+  0.25,
+  0.125,
+  0.0
+ ],
+ "blend_weights_source": "Owner spec Nov 25 2026 (t26u item 6): 100/0, 87.5/12.5, 75/25, 62.5/37.5, 50/50, 37.5/62.5, 25/75, 12.5/87.5, 0/100",
+ "bootstrap": {
+  "cluster": "game date",
+  "reps": 1000
+ },
+ "clv_status": "BLOCKED_OPEN_LINES_FAIL_VALIDATION",
+ "code_sha256": {
+  "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "data.py": "af1bd3f0a652823875373079750debc0d1d432b8dec2f4bb684b619a856e18e7",
+  "espn_odds_collect.py": "95c9e1ab34d26dc66e7a4ccffc0a3f27d4926c02504bbc26b0ecb960cf76e01b",
+  "fg1_adapter.py": "4f316e99c327fcc8ceb9e6794e125a50ebc8261de82173d97337ad8cc247edef",
+  "harness.py": "e843f5d505ed4c37fd92ff8d37819570f78295d70a6beb09e026dead7e5e77a1",
+  "models.py": "45ab37962c5712f8cb1bc53034739826c5af559956754eeaf6b4d00edd5b55a9",
+  "test_cbb_backtest.py": "9ab9d08f20511d23e58f2c774e64e316ec814f38c8a8615ac2585d011c6a4818"
+ },
+ "generated_utc": "2026-11-25T17:29:46.737660+00:00",
+ "identical_rows": 35791,
+ "label": "NON_COUNTED",
+ "leakage": {
+  "origins_checked": 175,
+  "selection_seasons": [
+   2022,
+   2023,
+   2024
+  ],
+  "test_seasons": [
+   2025,
+   2026
+  ],
+  "violation_count": 0,
+  "violations": []
+ },
+ "market_quarantine": {
+  "2023": [
+   "spread",
+   "total"
+  ]
+ },
+ "models": [
+  "native_frozen",
+  "raw",
+  "regularized",
+  "sched_adj",
+  "native_hca_repaired",
+  "FG1"
+ ],
+ "native_model_sha256": "fbc54b3d8b96bdc202a208561b3c79ef91b64bec280f657a1dc466fdb5ede5f6",
+ "odds_census": {
+  "fetch_failed": 0,
+  "games": 47140,
+  "http_404": 0,
+  "no_book": 549,
+  "no_items": 3544,
+  "selected": 43047
+ },
+ "official_counted": 0,
+ "schema": "CBB_ROLLING_ORIGIN_BACKTEST_V1",
+ "seasons": [
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ],
+ "splits": {
+  "test": [
+   2025,
+   2026
+  ],
+  "train": [
+   2019,
+   2020,
+   2021
+  ],
+  "validation": [
+   2022,
+   2023,
+   2024
+  ]
+ },
+ "status": "RESEARCH_PAPER_0U",
+ "total_rows": 47124
+}

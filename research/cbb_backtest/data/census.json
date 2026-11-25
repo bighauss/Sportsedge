@@ -1,0 +1,122 @@
+{
+ "games": {
+  "2018": {
+   "BOX_COUNT_NOT_TWO": 1,
+   "admitted_schedule_finals": 6003,
+   "box_rows": 12004,
+   "complete_box_finals": 6002,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 6003
+  },
+  "2019": {
+   "BOX_COUNT_NOT_TWO": 2,
+   "admitted_schedule_finals": 6049,
+   "box_rows": 12094,
+   "complete_box_finals": 6047,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 6049
+  },
+  "2020": {
+   "BOX_COUNT_NOT_TWO": 10,
+   "admitted_schedule_finals": 5767,
+   "box_rows": 11514,
+   "complete_box_finals": 5757,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 5767
+  },
+  "2021": {
+   "BOX_COUNT_NOT_TWO": 2,
+   "BOX_POSSESSIONS_OUT_OF_RANGE": 3,
+   "admitted_schedule_finals": 4285,
+   "box_rows": 8566,
+   "complete_box_finals": 4280,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 4285
+  },
+  "2022": {
+   "BOX_COUNT_NOT_TWO": 1,
+   "BOX_POSSESSIONS_OUT_OF_RANGE": 2,
+   "NOT_VERIFIED_FINAL": 10,
+   "admitted_schedule_finals": 5966,
+   "box_rows": 11930,
+   "complete_box_finals": 5963,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 5976
+  },
+  "2023": {
+   "BOX_COUNT_NOT_TWO": 2,
+   "NOT_VERIFIED_FINAL": 39,
+   "admitted_schedule_finals": 6222,
+   "box_rows": 12440,
+   "complete_box_finals": 6220,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 6261
+  },
+  "2024": {
+   "BOX_COUNT_NOT_TWO": 3,
+   "NOT_VERIFIED_FINAL": 6,
+   "admitted_schedule_finals": 6243,
+   "box_rows": 12480,
+   "complete_box_finals": 6240,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 6249
+  },
+  "2025": {
+   "BOX_COUNT_NOT_TWO": 7,
+   "NOT_VERIFIED_FINAL": 7,
+   "admitted_schedule_finals": 6292,
+   "box_rows": 12572,
+   "complete_box_finals": 6285,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 6299
+  },
+  "2026": {
+   "BOX_COUNT_NOT_TWO": 1,
+   "NOT_VERIFIED_FINAL": 18,
+   "admitted_schedule_finals": 6300,
+   "box_rows": 12598,
+   "complete_box_finals": 6299,
+   "invalid_box_id_rows": 0,
+   "invalid_schedule_id_rows": 0,
+   "orphan_box_events": 0,
+   "schedule_rows": 6318
+  }
+ },
+ "odds": {
+  "raw_cache_census": {
+   "fetch_failed": 0,
+   "games": 47140,
+   "http_404": 0,
+   "no_book": 549,
+   "no_items": 3544,
+   "selected": 43047
+  },
+  "selected_admitted_by_season": {
+   "2019": 5378,
+   "2020": 5313,
+   "2021": 3840,
+   "2022": 5419,
+   "2023": 5828,
+   "2024": 5754,
+   "2025": 5763,
+   "2026": 5749
+  },
+  "selected_not_admitted_final_dropped": 3
+ }
+}
