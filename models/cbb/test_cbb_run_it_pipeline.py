@@ -242,5 +242,237 @@ class RealChallenger(unittest.TestCase):
         self.assertEqual(self.ch.audit(0.1, -110, 0.55, 0.5), [])
 
 
+
+class UpstreamAdmission(unittest.TestCase):
+    def check(self, market="TOTAL", order="over_under", **raw):
+        q = quote(market, 145.5, -110, -110)
+        metadata = {"raw": raw, "order": order, "price_bad": False, "line_bad": False}
+        return P.validate([(q, metadata)], [], "2026-11-25T15:00:00Z",
+                          totals_order_verified=True, adapters=set(),
+                          match=lambda *args: ({"game_id": "g1", "tipoff_utc": q.tip_utc}, None))
+
+    def test_upstream_hold_cannot_be_overridden(self):
+        for disposition in ("HELD", "REJECTED", "SUPERSEDED", "UNKNOWN"):
+            a, r = self.check(disposition=disposition, reason_codes="TOTALS_ORDER_UNVERIFIED")
+            self.assertFalse(a)
+            self.assertEqual(r[0].reason_code, "UPSTREAM_QUOTE_WITHHELD")
+
+    def test_team_totals_require_explicit_order(self):
+        a, r = self.check(market="TT_HOME", order="", disposition="ACCEPTED")
+        self.assertFalse(a)
+        self.assertEqual(r[0].reason_code, "TOTALS_ORDER_UNVERIFIED")
+        a, r = self.check(market="TT_AWAY", disposition="ACCEPTED")
+        self.assertEqual(len(a), 1)
+        self.assertFalse(r)
+
+    def test_evidence_clocks_must_be_available(self):
+        for field in ("quote_available_utc", "as_of_utc"):
+            for bad in ("2026-11-25T15:01:00Z", "2026-11-25T11:59:00Z", "not a clock"):
+                a, r = self.check(disposition="ACCEPTED", **{field: bad})
+                self.assertFalse(a)
+                self.assertEqual(r[0].reason_code, "QUOTE_AFTER_FREEZE")
+        a, r = self.check(disposition="ACCEPTED", quote_available_utc="2026-11-25T12:00:00Z")
+        self.assertEqual(len(a), 1)
+        self.assertFalse(r)
+
+    def test_accepted_reason_and_explicit_live_rejected(self):
+        for raw, reason in (({"disposition": "ACCEPTED", "reason_codes": "CONFLICT"},
+                             "UPSTREAM_QUOTE_WITHHELD"), ({"live": "true"}, "LIVE_GAME")):
+            a, r = self.check(**raw)
+            self.assertFalse(a)
+            self.assertEqual(r[0].reason_code, reason)
+
+    def test_later_identity_requires_explicit_replay_basis(self):
+        from dataclasses import replace
+        q = replace(quote("TOTAL",145.5,-110,-110), identity_available_utc="2026-11-25T16:00:00Z",
+                    identity_basis="LATER_PUBLIC_PAGE_CORROBORATION")
+        meta = {"raw": {}, "order": "over_under", "price_bad": False, "line_bad": False}
+        def run(qs):
+            return P.validate(qs, [], "2026-11-25T15:00:00Z", totals_order_verified=True,
+                adapters=set(), match=lambda *args: ({"game_id":"g1","tipoff_utc":q.tip_utc},None))
+        a,r = run([(q,meta)])
+        self.assertFalse(a)
+        self.assertEqual(r[0].reason_code,"QUOTE_AFTER_FREEZE")
+        q = replace(q, replay_basis="RETROSPECTIVE_LATER_IDENTITY", row_key="pdf:7",
+                    source_sha256="a"*64)
+        a,r = run([(q,meta)])
+        self.assertFalse(r)
+        priced,_,_ = P.price(a,{"g1":proj()},{"g1":P.simulate(proj(),2000,3)},0.25,CFG)
+        self.assertTrue(all(x.row_key=="pdf:7" and x.replay_basis==q.replay_basis for x,_ in priced))
+
+    def test_conflicting_main_lines_do_not_select_first(self):
+        q1 = quote("TOTAL",145.5,-110,-110,i=0)
+        q2 = quote("TOTAL",146.5,-110,-110,i=1)
+        q3 = quote("ALT_TOTAL",150.5,-110,-110,i=2)
+        meta = {"raw": {}, "order": "over_under", "price_bad": False, "line_bad": False}
+        a,r = P.validate([(q,meta) for q in (q1,q2,q3)], [], "2026-11-25T15:00:00Z",
+                         totals_order_verified=True, adapters=set(),
+                         match=lambda *args: ({"game_id":"g1","tipoff_utc":q1.tip_utc},None))
+        self.assertEqual([q.market for q,_ in a],["ALT_TOTAL"])
+        self.assertEqual(len(r),2)
+        self.assertTrue(all(x.reason_code=="DUPLICATE_QUOTE" for x in r))
+
+    def test_team_total_hybrid_label_not_validated(self):
+        q = quote("TT_HOME", 74.5, -110, -110)
+        priced, rejects, _ = P.price([(q, "g1")], {"g1": proj()},
+            {"g1": P.simulate(proj(), 2000, 3)}, 0.25, CFG,
+            challenger=StubChallenger(), challenger_proj={"g1": {}})
+        self.assertFalse(rejects)
+        self.assertEqual(len(priced), 2)
+        self.assertTrue(all("UNVALIDATED_TEAM_TOTAL" in r.hybrid_method for r, _ in priced))
+
+
+
+class PlayerRunnerWiring(unittest.TestCase):
+    def test_two_players_same_line_do_not_collide(self):
+        from dataclasses import replace
+        q = replace(quote("PLAYER_PTS_OU", 12.5, -110, -110), player_id="p1", player_team_id="h")
+        q2 = replace(q, board_index=1, player_id="p2")
+        meta = {"raw": {}, "order": "over_under", "price_bad": False, "line_bad": False}
+        accepted, rejects = P.validate([(q, meta), (q2, meta)], [], "2026-11-25T15:00:00Z",
+            totals_order_verified=False, adapters={"players"},
+            match=lambda *args: ({"game_id": "g1", "tipoff_utc": q.tip_utc}, None))
+        self.assertFalse(rejects)
+        self.assertEqual(len(accepted), 2)
+        bundle = SimpleNamespace(probs=lambda *args: (0.6, 0.0, 0.4))
+        game = SimpleNamespace(home_team_id="h", away_team_id="a", tipoff_utc=q.tip_utc)
+        priced, rejected, parity = P.price(accepted, {}, {}, 0.25, CFG, players=bundle, games={"g1": game})
+        self.assertEqual(len(priced), 4)
+        self.assertFalse(rejected)
+        self.assertFalse(parity)
+        self.assertEqual({r.player_id for r, _ in priced}, {"p1", "p2"})
+        self.assertTrue(all("CONDITIONAL_PARTICIPATION_UNVALIDATED" in r.audit_flags for r, _ in priced))
+        grades, cal = P.grade({"priced": [C.row_dict(r) for r, _ in priced]}, {"g1": {"home": 70, "away": 65}})
+        self.assertEqual(len(grades), 4)
+        self.assertFalse(cal)
+        self.assertEqual({r.player_id for r in grades}, {"p1", "p2"})
+        self.assertTrue(all(r.result == "NOT_GRADABLE" for r in grades))
+
+    def test_missing_wrong_team_and_missing_forecast(self):
+        from dataclasses import replace
+        q = replace(quote("PLAYER_PTS_OU", 12.5, -110, -110), player_id="p1", player_team_id="wrong")
+        game = SimpleNamespace(home_team_id="h", away_team_id="a", tipoff_utc=q.tip_utc)
+        def refuse(*args):
+            raise ValueError("PLAYER_FORECAST_MISSING")
+        bundle = SimpleNamespace(probs=refuse)
+        for candidate, reason in ((q, "PLAYER_ID_UNKNOWN"), (replace(q, player_team_id="h"), "PLAYER_FORECAST_MISSING")):
+            priced, rejected, _ = P.price([(candidate, "g1")], {}, {}, 0.25, CFG,
+                players=bundle, games={"g1": game})
+            self.assertFalse(priced)
+            self.assertEqual(rejected[0].reason_code, reason)
+
+
+
+class HalfGradeWiring(unittest.TestCase):
+    def test_half_grade_uses_halftime_not_full_score(self):
+        base = dict(game_id="g1", period="1H", market="TOTAL", line=70.0,
+                    price=-110, prob_model=0.60, prob_push=0.05, prob_market_novig=0.5,
+                    ev_model=0.15, side="under")
+        other = dict(base, side="over", prob_model=0.35, ev_model=-0.2)
+        card = {"priced": [base, other]}
+        for h1, expected in (([32, 32], "W"), ([35, 35], "P"), ([40, 35], "L"),
+                             (None, "NOT_GRADABLE"), ([100, 32], "NOT_GRADABLE")):
+            grades, _ = P.grade(card, {"g1": {"home": 80, "away": 75, "h1": h1}})
+            self.assertEqual(grades[0].result, expected)
+            self.assertEqual(grades[0].period, "1H")
+        tied_ml = dict(base, market="ML", line=None, side="home")
+        grades, _ = P.grade({"priced": [tied_ml]}, {"g1": {"home": 80, "away": 75, "h1": [32, 32]}})
+        self.assertEqual(grades[0].result, "NOT_GRADABLE")
+
+
+
+class ConditionalPlayerGrade(unittest.TestCase):
+    def test_conditional_stats_excluded_from_roi_and_all_calibration(self):
+        row = dict(game_id="g1", period="FG", market="PLAYER_PRA_OU", line=25.0,
+                   player_id="p", player_team_id="h", price=-110, side="over",
+                   prob_model=0.6, prob_push=0.1, prob_market_novig=0.5, ev_model=0.15)
+        card = {"priced": [row, dict(row, side="under", prob_model=0.3, ev_model=-0.5)]}
+        finals = {"g1": {"home": 80, "away": 70}}
+        stats = {"PTS": 16, "REB": 7, "AST": 3, "3PM": 2}
+        grades, cal = P.grade(card, finals, player_finals={("g1", "h", "p"): stats})
+        self.assertEqual([g.result for g in grades], ["CONDITIONAL_WIN", "CONDITIONAL_LOSS"])
+        self.assertTrue(all(g.return_1u is None for g in grades))
+        self.assertEqual(P.grade_summary(grades)["ALL"]["n"], 0)
+        self.assertNotIn("ALL", P.calibration_summary(cal))
+        self.assertIn("CONDITIONAL:PLAYER_PRA_OU", P.calibration_summary(cal))
+        grades, cal = P.grade(card, finals, player_finals={("g1", "a", "p"): stats})
+        self.assertTrue(all(g.result == "NOT_GRADABLE" for g in grades))
+        self.assertFalse(cal)
+
+
+class PlayerBundleNamespace(unittest.TestCase):
+    def test_namespaces_are_not_interchangeable(self):
+        from unittest.mock import patch
+        freeze = "2026-11-25T15:00:00Z"
+        for expected in ("ESPN", "CBBD"):
+            for actual in ("ESPN", "CBBD", "UNSPECIFIED"):
+                with self.subTest(expected=expected, actual=actual):
+                    bundle = SimpleNamespace(identity_namespace=actual)
+                    with patch("cbb_player_residual_pricing.PlayerBundle", return_value=bundle):
+                        player, status = P.load_player_bundle("fixture", freeze, expected)
+                    if actual == expected:
+                        self.assertIs(player, bundle)
+                        self.assertIs(status, bundle)
+                    else:
+                        self.assertIsNone(player)
+                        self.assertIn(f"PLAYER_BUNDLE_{expected}_NAMESPACE_REQUIRED", status)
+                        flags, active = P.load_adapter_flags({"players"}, {"players": status})
+                        self.assertNotIn("players", active)
+                        self.assertTrue(flags["players"].startswith("LOAD_FAILED:"))
+
+    def test_invalid_optional_bundle_does_not_abort_other_markets(self):
+        from unittest.mock import patch
+        for exc in (FileNotFoundError("missing"), ValueError("bad JSON"), AttributeError("bad schema")):
+            with patch("cbb_player_residual_pricing.PlayerBundle", side_effect=exc):
+                player, status = P.load_player_bundle("fixture", "2026-11-25T15:00:00Z", "ESPN")
+            self.assertIsNone(player)
+            flags, active = P.load_adapter_flags({"players", "halves"}, {"players": status, "halves": object()})
+            self.assertEqual(active, {"halves"})
+            self.assertTrue(flags["players"].startswith("LOAD_FAILED:"))
+
+
+class NativeAdapterWiring(unittest.TestCase):
+    def test_native_research_extensions_and_tampered_parent(self):
+        from unittest.mock import patch
+        from cbbd_paper_card import CARD_STATUS, card_digest
+        tip, freeze = "2026-11-25T20:00:00Z", "2026-11-25T15:00:00Z"
+        card = {"status":CARD_STATUS,"season":2027,"freeze_utc":freeze,
+                "approved_stake_u":0,"official_counted":0,
+                "rows":[{"game_id":"g1","status":"PROJECTED","home_team_id":"h","away_team_id":"a",
+                         "neutral":False,"projection":{"home_points":75,"away_points":70,"margin":5,"total":145}}]}
+        card["card_sha256"] = card_digest(card)
+        names = {"g1":("Away U","Home U",tip)}
+        def hp(*args,**kwargs):
+            return {"p_win":0.5,"p_push":0.0}
+        half = {"HM":SimpleNamespace(project_period=lambda *a,**k:{}),
+                "HP":SimpleNamespace(price_half_market=hp),"coef":{},"sha256":"halfhash","version":"test"}
+        bundle = SimpleNamespace(identity_namespace="CBBD",evidence_class="TEST",sha256="bundlehash",
+                                 probs=lambda *args:(0.6,0.0,0.4))
+        with tempfile.TemporaryDirectory() as tmp:
+            board=Path(tmp)/"board.csv"
+            board.write_text("home,away,period,market,line,price_a,price_b,dk_event_id,tip_utc,captured_utc,totals_order,player_id,player_team_id\n"
+                             "Home U,Away U,1H,TOTAL,70.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,,\n"
+                             "Home U,Away U,FG,PLAYER_PTS_OU,12.5,-110,-110,123,"+tip+",2026-11-25T12:00:00Z,over_under,p,h\n")
+            match=lambda *args: ({"game_id":"g1","tipoff_utc":tip},None)
+            with patch("cbb_run_it._match",side_effect=match), patch.object(P,"load_halves",return_value=half), \
+                    patch("cbb_player_residual_pricing.PlayerBundle",return_value=bundle):
+                result=P.run_from_card(card,names,board,"2026-11-25T12:00:00Z",Path(tmp)/"out",
+                                       adapters_requested=("halves","players"),player_bundle="fixture",n_sims=1000)
+                self.assertEqual(result["priced_sides"],4)
+                frozen=json.loads((Path(tmp)/"out/pipeline_card.json").read_text())
+                self.assertEqual(frozen["adapters"]["players"],"ACTIVE")
+                self.assertEqual(frozen["adapters"]["halves"],"ACTIVE")
+                self.assertEqual(frozen["player_bundle_identity_namespace"],"CBBD")
+                self.assertEqual(frozen["freeze_kind"],"NATIVE_PARENT_RESEARCH_OVERLAY_NOT_PROSPECTIVE")
+                self.assertEqual(len(frozen["nine_weight_grid"]),4)
+                self.assertEqual(frozen["approved_stake_u"],0)
+                bundle.identity_namespace="ESPN"
+                result=P.run_from_card(card,names,board,"2026-11-25T12:00:00Z",Path(tmp)/"wrong",
+                                       adapters_requested=("players",),player_bundle="fixture",n_sims=1000)
+                self.assertEqual(result["priced_sides"],0)
+                with self.assertRaisesRegex(ValueError,"NATIVE_PARENT_CARD_INVALID"):
+                    P.run_from_card(dict(card,approved_stake_u=1),names,board,freeze,Path(tmp)/"bad")
+
+
 if __name__ == "__main__":
     unittest.main()

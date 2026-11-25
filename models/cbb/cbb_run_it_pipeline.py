@@ -229,7 +229,7 @@ def normalize_quotes(cap, *, totals_order_verified):
         except ValueError:
             pass
         order = str(r.get("totals_order") or "").strip().lower()
-        if market in ("TOTAL", "ALT_TOTAL", "TT_HOME", "TT_AWAY") and order == "under_over" \
+        if (market in ("TOTAL", "ALT_TOTAL", "TT_HOME", "TT_AWAY") or market.endswith("_OU")) and order == "under_over" \
                 and isinstance(pa, int) and isinstance(pb, int):
             pa, pb = pb, pa
         q = C.MarketQuote(board_index=i, period=period, market=market, home=str(r.get("home") or ""),
@@ -241,7 +241,13 @@ def normalize_quotes(cap, *, totals_order_verified):
                           captured_utc=cap_utc, tip_utc=tip, live=live, provenance=prov,
                           player=str(r.get("player") or "").strip() or None,
                           source_sha256=cap["source_sha256"], source_label=label or None,
-                          row_key=str(r.get("row_key") or "").strip() or None)
+                          row_key=str(r.get("row_key") or "").strip() or None,
+                          player_id=str(r.get("player_id") or "").strip() or None,
+                          player_team_id=str(r.get("player_team_id") or "").strip() or None,
+                          quote_available_utc=str(r.get("quote_available_utc") or "").strip() or None,
+                          identity_available_utc=str(r.get("identity_available_utc") or "").strip() or None,
+                          identity_basis=str(r.get("identity_basis") or "").strip() or None,
+                          replay_basis=str(r.get("replay_basis") or "").strip() or None)
         quotes.append((q, {"line_bad": line == "BAD", "price_bad": "BAD" in (pa, pb),
                            "order": order, "raw": r}))
     return quotes, rejects
@@ -270,6 +276,14 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         def rej(code, detail=""):
             rejects.append(C.Rejection("validate", q.period, q.market, code, detail, q.board_index,
                                        f"{q.away} @ {q.home}", q.provenance))
+        raw = meta["raw"]
+        disposition = str(raw.get("disposition") or "").strip().upper()
+        if disposition and disposition != "ACCEPTED":
+            rej("UPSTREAM_QUOTE_WITHHELD", f"{disposition}: {raw.get('reason_codes') or ''}"); continue
+        if str(raw.get("reason_codes") or "").strip():
+            rej("UPSTREAM_QUOTE_WITHHELD", str(raw["reason_codes"])); continue
+        if str(raw.get("live") or "").strip().lower() in ("1", "true", "yes"):
+            rej("LIVE_GAME"); continue
         if q.live:
             rej("LIVE_GAME"); continue
         if q.period == "2H_HALFTIME_ADJUSTED":
@@ -280,13 +294,21 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             note = str(meta["raw"].get("note") or meta["raw"].get("notes") or "")
             rej("PLAYER_MODEL_NOT_IMPLEMENTED", "player team not established" if "team not established" in note else "")
             continue
+        if q.market.startswith("PLAYER_"):
+            if not q.player_id or not q.player_team_id or not q.dk_event_id:
+                rej("PLAYER_ID_UNKNOWN"); continue
+            if q.market.endswith("_OU") and meta["order"] not in ("over_under", "under_over"):
+                rej("TOTALS_ORDER_UNVERIFIED"); continue
+            if q.market.endswith("_AT_LEAST") and meta["order"] != "yes_no":
+                rej("TOTALS_ORDER_UNVERIFIED", "explicit yes/no order required"); continue
         if meta["price_bad"]:
             rej("PRICE_INVALID"); continue
         if q.price_a is None or q.price_b is None:
             rej("ONE_SIDED_QUOTE"); continue
         if meta["line_bad"] or (q.market != "ML" and q.line is None):
             rej("LINE_INVALID"); continue
-        if q.market in OU_MARKETS and not (meta["order"] in ("over_under", "under_over") or totals_order_verified):
+        if q.market in OU_MARKETS and not (meta["order"] in ("over_under", "under_over") or
+                (totals_order_verified and not disposition and q.market not in ("TT_HOME", "TT_AWAY") and not meta["order"])):
             rej("TOTALS_ORDER_UNVERIFIED"); continue
         try:
             cap = parse_z(q.captured_utc)
@@ -294,6 +316,27 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             rej("STALE_QUOTE", "capture time missing"); continue
         if cap > freeze:
             rej("QUOTE_AFTER_FREEZE"); continue
+        for clock_field in ("quote_available_utc", "as_of_utc"):
+            if raw.get(clock_field):
+                try:
+                    clock = parse_z(raw[clock_field])
+                    if clock > freeze or clock < cap:
+                        raise ValueError("clock outside capture/freeze")
+                except (TypeError, ValueError):
+                    rej("QUOTE_AFTER_FREEZE", f"invalid or unavailable {clock_field}")
+                    break
+        else:
+            clock_field = None
+        if clock_field is not None:
+            continue
+        if q.identity_available_utc and q.replay_basis != "RETROSPECTIVE_LATER_IDENTITY":
+            try:
+                if parse_z(q.identity_available_utc) > freeze:
+                    raise ValueError("identity evidence after freeze")
+            except (ValueError, TypeError):
+                rej("QUOTE_AFTER_FREEZE", "identity evidence unavailable at freeze"); continue
+        if q.identity_basis == "LATER_PUBLIC_PAGE_CORROBORATION" and q.replay_basis != "RETROSPECTIVE_LATER_IDENTITY":
+            rej("QUOTE_AFTER_FREEZE", "later identity evidence requires explicit retrospective basis"); continue
         if (freeze - cap).total_seconds() > max_quote_age_hours * 3600:
             rej("STALE_QUOTE"); continue
         g, why = match(slate_rows, q.home, q.away, meta["raw"])
@@ -323,7 +366,7 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         if q.dk_event_id and (len(ev_games[q.dk_event_id]) > 1 or len(game_evs[gid]) > 1):
             rejects.append(C.Rejection("validate", q.period, q.market, "DK_EVENT_ID_CONFLICT", "",
                                        q.board_index, f"{q.away} @ {q.home}", q.provenance)); continue
-        keyed[(gid, q.period, q.market, q.line)].append(q)
+        keyed[(gid, q.period, q.market, q.line, q.player_team_id, q.player_id)].append(q)
     for key, qs in keyed.items():
         if len({(q.price_a, q.price_b) for q in qs}) > 1:
             for q in qs:
@@ -336,6 +379,18 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
                                        "identical duplicate; first kept", dup.board_index,
                                        f"{dup.away} @ {dup.home}", dup.provenance))
         accepted.append((qs[0], key[0]))
+    # Reject ambiguous main lines rather than letting market_view select the first.
+    main_counts = Counter((gid, q.period, q.market) for q, gid in accepted
+                          if q.market in ("SPREAD", "TOTAL", "ML"))
+    kept = []
+    for q, gid in accepted:
+        if main_counts[(gid, q.period, q.market)] > 1:
+            rejects.append(C.Rejection("validate", q.period, q.market, "DUPLICATE_QUOTE",
+                                       "multiple main lines; no verified supersession", q.board_index,
+                                       f"{q.away} @ {q.home}", q.provenance))
+        else:
+            kept.append((q, gid))
+    accepted = kept
     # orientation: main spread sign must agree with the moneyline favourite (home perspective)
     by_game = defaultdict(dict)
     for q, gid in accepted:
@@ -548,6 +603,18 @@ class Challenger:
         return self.FP.ev_audit({"ev": ev, "price": price, "p_model": p_model, "p_novig": p_novig})
 
 
+def load_player_bundle(path, freeze_utc, namespace):
+    """Fail closed on foreign/unspecified IDs or malformed optional player inputs."""
+    try:
+        from cbb_player_residual_pricing import PlayerBundle
+        candidate = PlayerBundle(path, freeze_utc)
+        if candidate.identity_namespace != namespace:
+            raise ValueError(f"PLAYER_BUNDLE_{namespace}_NAMESPACE_REQUIRED")
+        return candidate, candidate
+    except (ValueError, OSError, KeyError, TypeError, ImportError, AttributeError) as exc:
+        return None, f"LOAD_FAILED:{type(exc).__name__}:{exc}"
+
+
 def load_adapter_flags(requested, loaded=None):
     """Adapter status by flag. ``loaded`` maps a stream name to an object the caller already built from
     that stream's checkout (halves: load_halves(); fullgame: Challenger) -> ACTIVE. Missing or failed
@@ -635,7 +702,8 @@ def espn_games(raw_dir, days):
                     row["home_score"], row["away_score"] = int(comp["home"]["score"]), int(comp["away"]["score"])
                     ls = [[int(float(x.get("value", x.get("displayValue")))) for x in comp[s].get("linescores", [])]
                           for s in ("home", "away")]
-                    if all(len(l) >= 2 for l in ls):
+                    if all(len(l) >= 2 and all(v >= 0 for v in l) for l in ls) and \
+                            sum(ls[0]) == row["home_score"] and sum(ls[1]) == row["away_score"]:
                         row["h1"] = [ls[0][0], ls[1][0]]
                 except (TypeError, ValueError, KeyError):
                     row["completed"] = False
@@ -828,16 +896,29 @@ def fair_american(p_win, p_push):
 
 
 # ====================================================================== price / rank
-def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, challenger_proj=None):
+def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, challenger_proj=None,
+          players=None, games=None):
     priced, rejects, parity, half_cache = [], [], [], {}
     challenger_proj = challenger_proj or {}
     for q, gid in accepted:
         pj = projections.get(gid)
-        if pj is None or pj.status != "PROJECTED":
+        is_player = q.market.startswith("PLAYER_")
+        if not is_player and (pj is None or pj.status != "PROJECTED"):
             rejects.append(C.Rejection("price", q.period, q.market, "GAME_NOT_PROJECTED",
                                        pj.reason_code if pj else "", q.board_index, gid, q.provenance)); continue
         src = "SIMULATION"
-        if q.period != "FG":
+        if is_player:
+            g = (games or {}).get(gid)
+            if not players or not g or q.period != "FG" or not q.player_id or not q.dk_event_id or q.player_team_id not in (g.home_team_id, g.away_team_id):
+                rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_ID_UNKNOWN",
+                                           "exact event/team/player required", q.board_index, gid, q.provenance)); continue
+            try:
+                pa_, pp, pb_ = players.probs(gid, q.player_team_id, q.player_id, g.tipoff_utc, q.market, q.line)
+            except (ValueError, KeyError, TypeError) as exc:
+                rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_FORECAST_MISSING",
+                                           str(exc), q.board_index, gid, q.provenance)); continue
+            src = "PLAYER_CONDITIONAL_PARTICIPATION_UNVALIDATED"
+        elif q.period != "FG":
             if not halves or q.period not in HALVES_PERIOD:
                 rejects.append(C.Rejection("price", q.period, q.market, "PERIOD_NOT_IMPLEMENTED", "",
                                            q.board_index, gid, q.provenance)); continue
@@ -868,7 +949,7 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
                            "abs_diff": abs(pa_ - ca)})
         ma, mb, _ = NM.no_vig(q.price_a, q.price_b)
         cprobs = None
-        if challenger and q.period == "FG" and gid in challenger_proj:
+        if not is_player and challenger and q.period == "FG" and gid in challenger_proj:
             cprobs = challenger.probs(challenger_proj[gid], q.market, q.line)
         for side, p, pm, price_ in ((q.side_a, pa_, ma, q.price_a), (q.side_b, pb_, mb, q.price_b)):
             pc = evc = None
@@ -879,11 +960,15 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
                 evc = NM.ev_per_unit(pc, cpush, price_)
                 wc = CHALLENGER_BLEND_W_OPEN.get(q.market, 0.0)
                 ph = challenger.logit_blend(pc, pm, wc, push=cpush)
-                hmethod = f"LOGIT_BLEND_CHALLENGER_W{wc:g}_VALIDATION_SELECTED_OPEN"
+                hmethod = (f"LOGIT_BLEND_CHALLENGER_W{wc:g}_UNVALIDATED_TEAM_TOTAL"
+                           if q.market in ("TT_HOME", "TT_AWAY") else
+                           f"LOGIT_BLEND_CHALLENGER_W{wc:g}_VALIDATION_SELECTED_OPEN")
                 flags = tuple(challenger.audit(evc, price_, pc, pm))
             else:
                 ph = PR.blend(p, pm, w, push=pp)
                 hmethod = f"LINEAR_BLEND_FROZEN_W{w:g}_UNVALIDATED"
+            if is_player:
+                flags = tuple(sorted(set(flags) | {"CONDITIONAL_PARTICIPATION_UNVALIDATED"}))
             ev_frozen = NM.ev_per_unit(p, pp, price_)
             if ev_frozen > 0.30:
                 flags = tuple(sorted(set(flags) | {"FROZEN_EV_GT_30_PCT"}))
@@ -895,7 +980,11 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
                                  ev_hybrid=NM.ev_per_unit(ph, cprobs[1] if cprobs is not None else pp, price_),
                                  prob_challenger=pc, ev_challenger=evc, hybrid_method=hmethod, audit_flags=flags,
                                  dk_event_id=q.dk_event_id, captured_utc=q.captured_utc, provenance=q.provenance,
-                                 prob_source=src)
+                                 prob_source=src, player_id=q.player_id, player_team_id=q.player_team_id,
+                                 player=q.player, board_index=q.board_index, source_sha256=q.source_sha256,
+                                 row_key=q.row_key, quote_available_utc=q.quote_available_utc,
+                                 identity_available_utc=q.identity_available_utc, identity_basis=q.identity_basis,
+                                 replay_basis=q.replay_basis)
             C.check_paper(row)
             priced.append((row, q))
     return priced, rejects, parity
@@ -933,42 +1022,72 @@ def _home_line(r):
     return r["line"]
 
 
-def grade(frozen, finals, close_quotes=None):
+def grade(frozen, finals, close_quotes=None, player_finals=None):
     """Grade a FROZEN pipeline card. Selection = best positive-EV side per (game, period, market, line).
     Every side also feeds calibration (push outcomes excluded)."""
     groups = defaultdict(list)
     for r in frozen["priced"]:
-        groups[(r["game_id"], r["period"], r["market"], _home_line(r))].append(r)
+        groups[(r["game_id"], r["period"], r["market"], _home_line(r),
+                r.get("player_team_id"), r.get("player_id"))].append(r)
     grades, cal = [], []
     for key, sides in sorted(groups.items(), key=lambda kv: str(kv[0])):
-        gid, period, market, hl = key
+        gid, period, market, hl, player_team_id, player_id = key
         f = finals.get(gid)
         best = max(sides, key=lambda r: (r["ev_model"], r["side"]))
+        if market.startswith("PLAYER_"):
+            # Conditional statistical scoring only. No DK settlement or ROI without verified terms.
+            stats = (player_finals or {}).get((gid, player_team_id, player_id))
+            oc = None
+            if f is not None and stats is not None:
+                from cbb_player_final_box import outcome as player_outcome
+                try:
+                    oc = player_outcome(market, hl, stats)
+                except (ValueError, TypeError, KeyError):
+                    pass
+            for r in sides:
+                result = ("PENDING_NO_FINAL" if f is None else "NOT_GRADABLE") if oc is None else (
+                    "CONDITIONAL_PUSH" if oc == "push" else
+                    "CONDITIONAL_WIN" if oc == r["side"] else "CONDITIONAL_LOSS")
+                grades.append(C.GradeRow(gid, period, market, r["line"], r["side"], r["price"],
+                              result, None, r["prob_model"], player_id=player_id,
+                              player_team_id=player_team_id))
+                if oc is not None and oc != "push" and r["prob_push"] < 1:
+                    cal.append({"market": "CONDITIONAL:" + market,
+                                "p_model": r["prob_model"] / (1 - r["prob_push"]),
+                                "p_market": r["prob_market_novig"], "y": int(oc == r["side"])})
+            continue
         if f is None:
             grades += [C.GradeRow(gid, period, market, r["line"], r["side"], r["price"], "PENDING_NO_FINAL", None,
                                   r["prob_model"]) for r in sides]
             continue
-        if period != "FG":
+        scores = (f["home"], f["away"]) if period == "FG" else f.get("h1") if period == "1H" else None
+        if (not isinstance(scores, (list, tuple)) or len(scores) != 2 or
+                any(type(v) is not int or v < 0 for v in scores) or
+                (period == "1H" and (scores[0] > f["home"] or scores[1] > f["away"])) or
+                (market == "ML" and scores[0] == scores[1])):
+            # Half ML tie and all H2 settlement terms are not verified.
             grades.append(C.GradeRow(gid, period, market, best["line"], best["side"], best["price"], "NOT_GRADABLE",
                                      None, best["prob_model"]))
             continue
-        oc = outcome(market, hl, f["home"], f["away"])
+        oc = outcome(market, hl, *scores)
         if oc != "push":
             for r in sides:
-                cal.append({"market": market, "p_model": r["prob_model"] / (1 - r["prob_push"]),
+                if r["prob_push"] >= 1:
+                    continue
+                cal.append({"market": market if period == "FG" else f"{period}:{market}", "p_model": r["prob_model"] / (1 - r["prob_push"]),
                             "p_market": r["prob_market_novig"], "y": int(oc == r["side"])})
         if best["ev_model"] <= 0:
-            grades.append(C.GradeRow(gid, "FG", market, best["line"], best["side"], best["price"], "NO_SELECTION",
+            grades.append(C.GradeRow(gid, period, market, best["line"], best["side"], best["price"], "NO_SELECTION",
                                      None, best["prob_model"]))
             continue
         dec = NM.decimal_odds(best["price"])
         res, ret = ("P", 0.0) if oc == "push" else (("W", dec - 1) if oc == best["side"] else ("L", -1.0))
         clv = None
-        cq = (close_quotes or {}).get((gid, "FG", market, hl))
+        cq = (close_quotes or {}).get((gid, period, market, hl)) if period == "FG" else None
         if cq:
             ca, cb, _ = NM.no_vig(cq.price_a, cq.price_b)
             clv = round(100 * ((ca if best["side"] in ("home", "over") else cb) - best["prob_market_novig"]), 3)
-        grades.append(C.GradeRow(gid, "FG", market, best["line"], best["side"], best["price"], res, ret,
+        grades.append(C.GradeRow(gid, period, market, best["line"], best["side"], best["price"], res, ret,
                                  best["prob_model"], clv))
     return grades, cal
 
@@ -978,7 +1097,7 @@ def calibration_summary(cal):
         p = min(1 - 1e-9, max(1e-9, p)); return -math.log(p if y else 1 - p)
     out = {}
     for fam in sorted({c["market"] for c in cal}) + ["ALL"]:
-        xs = [c for c in cal if fam == "ALL" or c["market"] == fam]
+        xs = [c for c in cal if (fam == "ALL" and not c["market"].startswith("CONDITIONAL:")) or c["market"] == fam]
         if not xs:
             continue
         bins = defaultdict(list)
@@ -1001,7 +1120,7 @@ def grade_summary(grades):
     sel = [g for g in grades if g.result in ("W", "L", "P")]
     by = defaultdict(list)
     for g in sel:
-        by[g.market].append(g)
+        by[g.market if g.period == "FG" else f"{g.period}:{g.market}"].append(g)
 
     def s(xs):
         n = len(xs); ret = sum(g.return_1u for g in xs)
@@ -1128,7 +1247,8 @@ def audit(*, priced, projections, market_views, parity, sims, quotes, cap_reject
             dm.append(pj.margin - mv.margin); dt.append(pj.total - mv.total)
     best = {}
     for r in rows:
-        k = (r.game_id, r.period, r.market, abs(r.line) if r.line is not None and "SPREAD" in r.market else r.line)
+        k = (r.game_id, r.period, r.market, abs(r.line) if r.line is not None and "SPREAD" in r.market else r.line,
+             r.player_team_id, r.player_id)
         if r.ev_model > 0 and (k not in best or r.ev_model > best[k].ev_model):
             best[k] = r
     picks = list(best.values())
@@ -1248,12 +1368,33 @@ def render(meta, games, projections, market_views, hybrids, ranked, rejects, a, 
     for i, (r, q) in enumerate(ranked, 1):
         g = names[r.game_id]
         fl = ",".join(r.audit_flags) or ("FROZEN_EV_GT_30_PCT" if r.ev_model > 0.30 else "—")
-        o.append(f"| {i} | {g.tip_ct} | {g.away} @ {g.home} | {r.period} | {r.market} | {r.side} | "
+        market_label = f"{r.market} ({r.player or r.player_id}; ID {r.player_id})" if r.player_id else r.market
+        o.append(f"| {i} | {g.tip_ct} | {g.away} @ {g.home} | {r.period} | {market_label} | {r.side} | "
                  f"{_f(r.line, '{:g}')} | {r.price:+d} | {r.prob_model:.3f} | {r.prob_push:.3f} | "
                  f"{_f(r.prob_challenger, '{:.3f}')} | {r.prob_market_novig:.3f} | {r.prob_hybrid:.3f} | "
                  f"{_f(r.fair_american, '{:+d}')} | {100*r.ev_model:+.1f}% | "
                  f"{_f(None if r.ev_challenger is None else 100*r.ev_challenger, '{:+.1f}%')} | "
                  f"{100*r.ev_hybrid:+.1f}% | {fl} | {r.stars} | {r.status}/{r.counted} | {r.provenance} |")
+    o += ["", "## All-market research leaders by view (not recommendations)", "",
+          "Each family is displayed even when no positive diagnostic exists. Flagged leaders remain visible with their flags; "
+          "no stars, approved stakes, or validated edge implied.", "",
+          "| Period | Market | Independent leader | Challenger leader | Hybrid leader |",
+          "|---|---|---|---|---|"]
+    def leader(items, field):
+        eligible = [(getattr(r, field), r) for r in items
+                    if getattr(r, field) is not None and getattr(r, field) > 0]
+        if not eligible:
+            return "—"
+        ev, r = max(eligible, key=lambda x: x[0])
+        g = names[r.game_id]
+        flags = ", ".join(r.audit_flags)
+        who = f" [{r.player or r.player_id}]" if r.player_id else ""
+        return (f"{g.away} @ {g.home}{who}: {r.side} {_f(r.line, '{:g}')} ({r.price:+d}), "
+                f"{ev:+.1%}" + (f" [{flags}]" if flags else ""))
+    for per, mkt in C.MARKET_CATALOG:
+        items = [r for r, _ in ranked if (r.period, r.market) == (per, mkt)]
+        o.append(f"| {per} | {mkt} | {leader(items, 'ev_model')} | "
+                 f"{leader(items, 'ev_challenger')} | {leader(items, 'ev_hybrid')} |")
     o += ["", "## Market coverage (every catalogued CBB family has a status or reason code)", "",
           "| Period | Market | Model | Board rows | Quotes priced | Status | Rejections by reason |",
           "|---|---|---|---:|---:|---|---|"]
@@ -1312,7 +1453,8 @@ def _slate_rows_from_espn(games, ids, short=False):
 def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season, raw_dir, out_dir,
                       totals_order_verified, n_sims=20000, seed=20261125, grade_finals=True,
                       adapters_requested=(), provenance=None, fetch=True, refresh_finals=False, now=None,
-                      team_crosswalk=None, halves_path=None, fullgame_root=None, challenger_inputs=None):
+                      team_crosswalk=None, halves_path=None, fullgame_root=None, challenger_inputs=None,
+                      player_bundle=None):
     """Whole pipeline in one call on public ESPN inputs (research replay; never production)."""
     import cbb_run_it as R
     now = now or datetime.now(timezone.utc)
@@ -1321,7 +1463,9 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     w = cfg["blend_weight_model"]
     req = set(adapters_requested)
     freeze = parse_z(freeze_utc)
-    loaded, halves, challenger = {}, None, None
+    loaded, halves, challenger, players = {}, None, None, None
+    if "players" in req and player_bundle:
+        players, loaded["players"] = load_player_bundle(player_bundle, freeze_utc, "ESPN")
     if "halves" in req:
         halves = load_halves(halves_path)
         loaded["halves"] = halves or "ADAPTER_NOT_LANDED"
@@ -1403,12 +1547,16 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     sims = {gid: simulate(p, n_sims, seed) for gid, p in projections.items() if p.status == "PROJECTED"}
     # ---- price / rank
     priced, price_rejects, parity = price(accepted, projections, sims, w, cfg, halves=halves,
-                                          challenger=challenger, challenger_proj=ch_proj)
+                                          challenger=challenger, challenger_proj=ch_proj, players=players, games=gm)
     priced = [(replace(r, stars=stars_for(r, None)), q) for r, q in priced]
     ranked = rank(priced)
     rejects = cap_rejects + val_rejects + price_rejects
     # ---- freeze
-    kind = "PROSPECTIVE" if now <= freeze + timedelta(minutes=10) else "REPLAY_RECORD_NOT_PROSPECTIVE"
+    # This path reconstructs public inputs and assumes prior final availability.
+    # A wall-clock-near freeze is not sufficient to establish prospective evidence.
+    kind = "PUBLIC_RECONSTRUCTION_NOT_PROSPECTIVE"
+    if any(q.replay_basis == "RETROSPECTIVE_LATER_IDENTITY" for q, _ in accepted):
+        kind = "RETROSPECTIVE_LATER_IDENTITY_NOT_PROSPECTIVE"
     frozen = {"schema": C.SCHEMA_VERSION, "pipeline": PIPELINE_VERSION, "label": C.PAPER_0U, "counted": C.NON_COUNTED,
               "approved_stake_u": 0, "freeze_utc": utcz(freeze), "date_ct": date_ct, "freeze_kind": kind,
               "projection_adapter": "native_formula_public_replay",
@@ -1427,9 +1575,12 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
               "halves": ({"version": halves["version"], "coefficients_sha256": halves["sha256"],
                           "ml_tie_rule": HALVES_ML_TIE_RULE, "caveat": HALVES_CAVEAT} if halves else None),
               "priced": [C.row_dict(r) for r, _ in ranked],
+              "player_bundle_sha256": players.sha256 if players else None,
+              "player_bundle_evidence_class": players.evidence_class if players else None,
               "nine_weight_grid": [[r.game_id, r.market, r.line, r.side] +
                                    [round(PR.blend(r.prob_model, r.prob_market_novig, wt, push=r.prob_push), 5)
                                     for wt in C.CANONICAL_BLEND_WEIGHTS] for r, _ in ranked],
+              "nine_weight_grid_player_identity": [[r.player_team_id, r.player_id] for r, _ in ranked],
               "rejections": [C.row_dict(r) for r in rejects], "adapters": adapter_status}
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
@@ -1449,14 +1600,17 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
         reread = json.loads((out / "pipeline_card.json").read_text())
         if digest({k: v for k, v in reread.items() if k != "card_sha256"}) != reread["card_sha256"]:
             raise ValueError("FROZEN_CARD_DIGEST_MISMATCH")
-        finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"]}
+        finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"], "h1": games[gid].get("h1")}
                   for gid in slate_ids if games[gid]["completed"] and games[gid]["home_score"] is not None}
-        grades, cal = grade(reread, finals)
+        player_finals, player_hashes, player_rejections = public_player_finals(reread, games, raw_dir)
+        grades, cal = grade(reread, finals, player_finals=player_finals)
         gsum = grade_summary(grades)
         (out / "grades.json").write_text(json.dumps(
             {"label": C.PAPER_0U, "counted": C.NON_COUNTED, "finals_source": "ESPN public scoreboard (unauthenticated)",
              "finals_observed_utc": utcz(now), "finals_available": len(finals), "slate_games": len(slate_ids),
              "graded_card_sha256": reread["card_sha256"], "summary": gsum,
+             "player_final_box_sha256": player_hashes, "player_final_rejections": player_rejections,
+             "player_grade_policy": "CONDITIONAL_STAT_DIAGNOSTIC_ONLY_NO_BOOK_SETTLEMENT",
              "rows": [C.row_dict(g) for g in grades]}, indent=1, sort_keys=True))
     calib = calibration_summary(cal) if cal else None
     # ---- audit
@@ -1508,7 +1662,12 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
         meta["warnings"].append(CHALLENGER_CAVEAT)
     if halves:
         meta["warnings"] = [x for x in meta["warnings"] if not x.startswith("First-half, second-half")]
-        meta["warnings"].append(HALVES_CAVEAT + " Player markets remain NOT_IMPLEMENTED (see coverage).")
+        meta["warnings"].append(HALVES_CAVEAT)
+    if players:
+        meta["warnings"] = [x for x in meta["warnings"] if not x.startswith("First-half, second-half")]
+        meta["warnings"].append("Player pricing conditional on participation and unvalidated; evidence class " +
+                                players.evidence_class + "; bundle hash " + players.sha256 +
+                                ". No prospective validation or sportsbook settlement implied.")
     (out / "pipeline_card.md").write_text(render(meta, list(gm.values()), projections, market_views, hybrids,
                                                  ranked, rejects, a, gsum))
     summary = {"date_ct": date_ct, "freeze_utc": utcz(freeze), "freeze_kind": kind, "slate_games": len(slate_ids),
@@ -1525,7 +1684,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
 
 
 def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, totals_order_verified=False,
-                  n_sims=20000, seed=20261125, adapters_requested=()):
+                  n_sims=20000, seed=20261125, adapters_requested=(), halves_path=None, player_bundle=None):
     """Production path (frozen_native_cbbd, the DEFAULT adapter): stages after the unchanged
     cbb_run_it.build card. Projections are read from the frozen card (never recomputed); the CBBD
     ledger freeze already happened inside build(). Adds validate (contract reason codes), market +
@@ -1534,8 +1693,21 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
     cfg = PR.make_config()
     w = cfg["blend_weight_model"]
-    adapter_status, active = load_adapter_flags(set(adapters_requested))
+    from cbbd_paper_card import card_digest
+    if card.get("card_sha256") != card_digest(card) or card.get("approved_stake_u") != 0 or card.get("official_counted") != 0:
+        raise ValueError("NATIVE_PARENT_CARD_INVALID")
     freeze = parse_z(card["freeze_utc"])
+    req = set(adapters_requested)
+    loaded, halves, players = {}, None, None
+    if "halves" in req:
+        try:
+            halves = load_halves(halves_path)
+            loaded["halves"] = halves or "ADAPTER_NOT_LANDED"
+        except (ValueError, OSError, KeyError, TypeError, ImportError) as exc:
+            loaded["halves"] = f"LOAD_FAILED:{type(exc).__name__}"
+    if "players" in req and player_bundle:
+        players, loaded["players"] = load_player_bundle(player_bundle, card["freeze_utc"], "CBBD")
+    adapter_status, active = load_adapter_flags(req, loaded)
     cap = BoardFileCapture(board_path, board_captured_utc).capture()
     quotes, cap_rejects = normalize_quotes(cap, totals_order_verified=totals_order_verified)
     rows = {r["game_id"]: r for r in card["rows"]}
@@ -1543,6 +1715,16 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
               "neutral": "1" if rows.get(gid, {}).get("neutral") else "0"} for gid, (a, h, tip) in names.items()]
     accepted, val_rejects = validate(quotes, slate, card["freeze_utc"], totals_order_verified=totals_order_verified,
                                      match=R._match, adapters=active, as_of_utc=card["freeze_utc"])
+    # A prospective CBBD parent cannot confer prospective status on later quote identity.
+    strict_accepted = []
+    for q, gid in accepted:
+        if q.replay_basis == "RETROSPECTIVE_LATER_IDENTITY":
+            val_rejects.append(C.Rejection("validate", q.period, q.market, "QUOTE_AFTER_FREEZE",
+                                           "retrospective identity incompatible with native prospective path",
+                                           q.board_index, gid, q.provenance))
+        else:
+            strict_accepted.append((q,gid))
+    accepted = strict_accepted
     projections = projections_from_card(card, cfg)
     gm = {}
     for gid, (a, h, tip) in names.items():
@@ -1555,12 +1737,12 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
     market_views = {gid: market_view(gid, accepted, cfg) for gid in gm}
     hybrids = {gid: hybrid_view(projections[gid], market_views[gid], w) for gid in gm}
     sims = {gid: simulate(p, n_sims, seed) for gid, p in projections.items() if p.status == "PROJECTED"}
-    priced, price_rejects, parity = price(accepted, projections, sims, w, cfg)
+    priced, price_rejects, parity = price(accepted, projections, sims, w, cfg, halves=halves, players=players, games=gm)
     ranked = rank(priced)
     rejects = cap_rejects + val_rejects + price_rejects
     frozen = {"schema": C.SCHEMA_VERSION, "pipeline": PIPELINE_VERSION, "label": C.PAPER_0U, "counted": C.NON_COUNTED,
               "approved_stake_u": 0, "freeze_utc": card["freeze_utc"], "date_ct": freeze.astimezone(CT).date().isoformat(),
-              "freeze_kind": "PROSPECTIVE_WITH_CBBD_LEDGER", "projection_adapter": "frozen_native_cbbd",
+              "freeze_kind": "NATIVE_PARENT_RESEARCH_OVERLAY_NOT_PROSPECTIVE", "projection_adapter": "frozen_native_cbbd",
               "parent_card_sha256": card["card_sha256"],
               "board": {"path": cap["path"], "sha256": cap["source_sha256"], "provenance": cap["provenance"],
                         "rows": len(cap["rows"])},
@@ -1569,6 +1751,15 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
               "games": [C.row_dict(g) for g in gm.values()],
               "projections": [C.row_dict(p) for d in (projections, market_views, hybrids) for p in d.values()],
               "priced": [C.row_dict(r) for r, _ in ranked], "rejections": [C.row_dict(r) for r in rejects],
+              "player_bundle_sha256": players.sha256 if players else None,
+              "player_bundle_evidence_class": players.evidence_class if players else None,
+              "player_bundle_identity_namespace": players.identity_namespace if players else None,
+              "halves": ({"version": halves["version"], "coefficients_sha256": halves["sha256"],
+                          "ml_tie_rule": HALVES_ML_TIE_RULE, "caveat": HALVES_CAVEAT} if halves else None),
+              "nine_weight_grid": [[r.game_id, r.market, r.line, r.side] +
+                                   [round(PR.blend(r.prob_model, r.prob_market_novig, wt, push=r.prob_push), 5)
+                                    for wt in C.CANONICAL_BLEND_WEIGHTS] for r, _ in ranked],
+              "nine_weight_grid_player_identity": [[r.player_team_id, r.player_id] for r, _ in ranked],
               "adapters": adapter_status}
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
@@ -1587,7 +1778,7 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
         cm = next((m for m in rows.get(r.game_id, {}).get("markets", []) if m.get("status") == "PRICED_PAPER"
                    and {"SPREAD": "spread", "TOTAL": "total", "ML": "moneyline"}.get(q.market) == m["market"]
                    and (m["quote"]["line"] == q.line or q.market == "ML")), None)
-        if cm and r.side in cm["model_prob"]:
+        if q.period == "FG" and cm and r.side in cm["model_prob"]:
             par.append(abs(cm["model_prob"][r.side] - r.prob_model))
     a["card_parity_max_abs"] = round(max(par), 4) if par else None
     a["adapter_status"] = adapter_status
@@ -1596,11 +1787,45 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
             "freeze_ct": freeze.astimezone(CT).strftime("%Y-%m-%d %-I:%M %p CT"), "card_sha256": frozen["card_sha256"],
             "board_path": str(board_path), "board_sha256": cap["source_sha256"], "provenance": cap["provenance"],
             "blend_weight_model": w,
-            "warnings": ["Projections are the frozen production card's (CBBD ratings, frozen native model).",
-                         "First-half, second-half and player markets are NOT_IMPLEMENTED in this runner (see coverage)."]}
+            "warnings": ["Independent game projections are from the frozen CBBD parent card.",
+                         "Native overlay is research only; no prospective quote or adapter certification.",
+                         "Half and player adapter coverage: " + str(adapter_status)]}
+    if halves:
+        meta["warnings"].append(HALVES_CAVEAT)
+    if players:
+        meta["warnings"].append("Player pricing conditional on participation; unvalidated bundle " +
+                                players.sha256 + "; evidence class " + players.evidence_class)
     (out / "pipeline_card.md").write_text(render(meta, list(gm.values()), projections, market_views, hybrids, ranked,
                                                  rejects, a, None))
     return {"pipeline_card_sha256": frozen["card_sha256"], "priced_sides": len(ranked), "rejections": len(rejects)}
+
+
+def public_player_finals(card, games, raw_dir):
+    """Read only final boxes for frozen player contracts; return hashes and rejection census."""
+    from cbb_player_final_box import extract
+    ids = {r["game_id"] for r in card["priced"] if r["market"].startswith("PLAYER_")}
+    result, evidence, rejected = {}, {}, {}
+    frozen_games = {g["game_id"]: g for g in card["games"]}
+    if card.get("projection_adapter") != "native_formula_public_replay":
+        return result, evidence, {"namespace": "PLAYER_FINAL_NAMESPACE_UNSUPPORTED"}
+    for gid in sorted(ids):
+        g = games.get(gid)
+        expected = frozen_games.get(gid)
+        if not g or not g["completed"]:
+            rejected[gid] = "FINAL_PENDING"; continue
+        if (not expected or str(expected["home_team_id"]) != g["home_id"] or
+                str(expected["away_team_id"]) != g["away_id"] or
+                parse_z(expected["tipoff_utc"]) != parse_z(g["tip_utc"])):
+            rejected[gid] = "FROZEN_GAME_IDENTITY_MISMATCH"; continue
+        try:
+            raw = (Path(raw_dir) / "sum" / f"{gid}.json").read_bytes()
+            evidence[gid] = sha_bytes(raw)
+            records = extract(json.loads(raw), gid, g["home_id"], g["away_id"],
+                              g["home_score"], g["away_score"])
+            result.update({(gid, tid, pid): stats for (tid, pid), stats in records.items()})
+        except (OSError, ValueError, KeyError, TypeError, IndexError) as exc:
+            rejected[gid] = f"{type(exc).__name__}:{exc}"
+    return result, evidence, rejected
 
 
 def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, now=None):
@@ -1618,9 +1843,10 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
         espn_capture(day, day, raw_dir, fetch=True, refresh_days={k})
     games, _ = espn_games(raw_dir, [k])
     ids = {g["game_id"] for g in card["games"]}
-    finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"]}
+    finals = {gid: {"home": games[gid]["home_score"], "away": games[gid]["away_score"], "h1": games[gid].get("h1")}
               for gid in ids if gid in games and games[gid]["completed"] and games[gid]["home_score"] is not None}
-    grades, cal = grade(card, finals)
+    player_finals, player_hashes, player_rejections = public_player_finals(card, games, raw_dir)
+    grades, cal = grade(card, finals, player_finals=player_finals)
     gsum = grade_summary(grades)
     calib = calibration_summary(cal) if cal else {"state": "NO_GRADED_SIDES"}
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
@@ -1628,6 +1854,8 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
            "date_ct": card["date_ct"], "finals_source": "ESPN public scoreboard (unauthenticated)",
            "finals_observed_utc": utcz(now), "finals_available": len(finals), "card_games": len(ids),
            "summary": gsum, "calibration": calib, "clv": "UNAVAILABLE: no later pre-tip close board captured",
+           "player_final_box_sha256": player_hashes, "player_final_rejections": player_rejections,
+           "player_grade_policy": "CONDITIONAL_STAT_DIAGNOSTIC_ONLY_NO_BOOK_SETTLEMENT",
            "rows": [C.row_dict(g) for g in grades]}
     (out / "grades.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
     g = gsum["ALL"]
@@ -1646,8 +1874,14 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
                f"n {c['n_sides']}.", "", "| p model bin | n | mean p | hit rate |", "|---|---:|---:|---:|"]
         md += [f"| {b} | {v['n']} | {v['mean_p']:.3f} | {v['hit']:.3f} |" for b, v in c["reliability"].items()]
         for fam, c2 in calib.items():
-            if fam != "ALL":
+            if fam != "ALL" and not fam.startswith("CONDITIONAL:"):
                 md.append(f"- {fam}: n {c2['n_sides']}, Brier model {c2['brier_model']:.4f} vs market {c2['brier_market']:.4f}")
+    for fam, metrics in sorted(calib.items()):
+        if fam.startswith("CONDITIONAL:"):
+            md.append(f"- {fam}: n {metrics['n_sides']}, conditional Brier model {metrics['brier_model']:.4f} "
+                      f"vs market {metrics['brier_market']:.4f}; excluded from overall calibration.")
+    md += ["", "Player results are conditional stat diagnostics only; DNP or missing stats withheld; no player settlement ROI.",
+           f"Player final box evidence: {len(player_hashes)} files; rejected/pending games: {len(player_rejections)}."]
     (out / "grade_report.md").write_text("\n".join(md) + "\n")
     return {"card_sha256": card["card_sha256"], "finals_available": len(finals), "card_games": len(ids),
             "graded": g, "results": gsum["results"]}
@@ -1669,6 +1903,7 @@ def main(argv=None):
     ap.add_argument("--board-provenance", choices=C.PROVENANCE[1:])
     ap.add_argument("--n-sims", type=int, default=20000); ap.add_argument("--seed", type=int, default=20261125)
     ap.add_argument("--adapters", default="", help="comma list behind flags: fullgame,halves,players")
+    ap.add_argument("--player-bundle", help="Research JSON target forecasts and prior residual observations (exact IDs)")
     ap.add_argument("--no-fetch", action="store_true", help="cached raw files only (offline reproduction)")
     ap.add_argument("--refresh-finals", action="store_true", help="re-fetch the slate date's scoreboard for grading")
     ap.add_argument("--no-grade", action="store_true")
@@ -1699,7 +1934,7 @@ def main(argv=None):
                               seed=x.seed, grade_finals=not x.no_grade, provenance=x.board_provenance,
                               adapters_requested=[a for a in x.adapters.split(",") if a], fetch=not x.no_fetch,
                               refresh_finals=x.refresh_finals, team_crosswalk=x.team_crosswalk,
-                              halves_path=x.halves_path, fullgame_root=x.fullgame_root,
+                              halves_path=x.halves_path, fullgame_root=x.fullgame_root, player_bundle=x.player_bundle,
                               challenger_inputs={"games_csv": x.challenger_games, "finals_json": x.challenger_finals,
                                                  "summary_json": x.challenger_summary or (
                                                      str(Path(x.fullgame_root) / "fullgame/evidence/summary.json")

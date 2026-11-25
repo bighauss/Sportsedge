@@ -62,6 +62,7 @@ REASON_CODES = {
     "ORIENTATION_MISMATCH": "home/away designation disagrees with the slate",
     "ORIENTATION_INCONSISTENT": "spread sign / moneyline favourite / ladder monotonicity disagree",
     "TIP_MISMATCH": "board tip time is not within 15 minutes of the slate tip",
+    "UPSTREAM_QUOTE_WITHHELD": "upstream quote is held, rejected, superseded or has unresolved reasons",
     "TOTALS_ORDER_UNVERIFIED": "over/under price order not verified for this board format",
     "ONE_SIDED_QUOTE": "only one side of the market was captured",
     "PRICE_INVALID": "price is not a valid American price",
@@ -72,6 +73,8 @@ REASON_CODES = {
     "GAME_NOT_PROJECTED": "projection stage passed on this game",
     "PERIOD_NOT_IMPLEMENTED": "no period model wired into the runner",
     "PLAYER_MODEL_NOT_IMPLEMENTED": "no player projection wired into the runner",
+    "PLAYER_FORECAST_MISSING": "player research distribution missing or refused",
+    "PLAYER_ID_UNKNOWN": "stable player and event scoped team identity missing",
     "PLAYER_TEAM_UNKNOWN": "player team not established on the board row",
     "HALFTIME_ADJUSTED_IS_LIVE": "halftime-adjusted 2H markets are in-game; excluded pregame",
     "UNSUPPORTED_MARKET": "market string not in the CBB catalog",
@@ -162,6 +165,12 @@ class MarketQuote:
     source_sha256: Optional[str] = None
     source_label: Optional[str] = None   # upstream label verbatim, e.g. dk/ OWNER_PDF_SCREENSHOT_UNAUTHENTICATED
     row_key: Optional[str] = None        # upstream stable row key, e.g. dk/ runner_board row_key
+    player_id: Optional[str] = None
+    player_team_id: Optional[str] = None
+    quote_available_utc: Optional[str] = None
+    identity_available_utc: Optional[str] = None
+    identity_basis: Optional[str] = None
+    replay_basis: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +219,16 @@ class PricedMarket:
     ev_challenger: Optional[float] = None
     hybrid_method: Optional[str] = None       # e.g. LOGIT_BLEND_W0.125_VALIDATION_SELECTED_OPEN
     audit_flags: Tuple[str, ...] = ()         # EV sanity flags (never caps)
+    player_id: Optional[str] = None
+    player_team_id: Optional[str] = None
+    player: Optional[str] = None
+    board_index: Optional[int] = None
+    source_sha256: Optional[str] = None
+    row_key: Optional[str] = None
+    quote_available_utc: Optional[str] = None
+    identity_available_utc: Optional[str] = None
+    identity_basis: Optional[str] = None
+    replay_basis: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -238,6 +257,8 @@ class GradeRow:
     clv_cents: Optional[float] = None   # None = no closing quote captured
     label: str = PAPER_0U
     counted: str = NON_COUNTED
+    player_id: Optional[str] = None
+    player_team_id: Optional[str] = None
 
 
 def row_dict(row) -> dict:

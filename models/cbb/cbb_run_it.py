@@ -843,6 +843,9 @@ def main(argv=None):
     a.add_argument("--run-id", default=os.environ.get("GITHUB_RUN_ID", "local"))
     a.add_argument("--pipeline-out", help="also run simulate/price/rank/audit/full card on the frozen card "
                                          "(cbb_run_it_pipeline.run_from_card); PAPER/0u")
+    a.add_argument("--pipeline-adapters", default="", help="explicit research extensions: halves,players")
+    a.add_argument("--pipeline-halves-path", help="half adapter checkout models/cbb directory")
+    a.add_argument("--pipeline-player-bundle", help="CBBD namespace player bundle; conditional research only")
     x = a.parse_args(argv)
     if x.replay_evidence:
         if x.ledger: print("BLOCKED Hold: REPLAY_NEVER_WRITES_LEDGER", file=sys.stderr); return 2
@@ -1029,7 +1032,9 @@ def main(argv=None):
         import cbb_run_it_pipeline as PIPE
         try:
             res = PIPE.run_from_card(card, names, x.board, x.board_captured_utc, x.pipeline_out,
-                                     totals_order_verified=x.totals_order_verified)
+                                     totals_order_verified=x.totals_order_verified,
+                                     adapters_requested=[v for v in x.pipeline_adapters.split(",") if v],
+                                     halves_path=x.pipeline_halves_path, player_bundle=x.pipeline_player_bundle)
             print("PIPELINE", json.dumps(res, sort_keys=True))
         except (ValueError, KeyError, TypeError, OSError) as exc:
             print(f"PIPELINE BLOCKED {type(exc).__name__}", file=sys.stderr)
