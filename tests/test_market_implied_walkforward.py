@@ -52,3 +52,9 @@ def test_seven_sport_probability_schema(sport):
     base=rows()
     for r in base:r["sport"]=sport
     assert len(walk_forward(base,min_events=2)["metrics"])==13
+
+
+def test_exact_independent_weight_grid():
+    from research.market_implied.walkforward import INDEPENDENT_WEIGHTS
+    assert INDEPENDENT_WEIGHTS == (0., .25, .50, .60, .75, .80, .90, .95, 1.)
+    assert MARKET_WEIGHTS == (0., .05, .10, .20, .25, .40, .50, .75, 1.)
