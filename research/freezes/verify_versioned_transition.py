@@ -31,14 +31,32 @@ import copy
 import json
 import subprocess
 import sys
+import hashlib
 from pathlib import Path
-from verify_code_freezes import FreezeViolation, git_blob_digest, verify, unique_pairs, reject_constant
+
+CODE_FREEZES_VERIFIER_BLOB = '27d2b51d27d4b7da6f22dad31d55257541af8f67'
+
+
+def _preimport_blob(path: Path) -> str:
+    data = path.read_bytes()
+    return hashlib.sha1(b'blob %d\x00' % len(data) + data).hexdigest()
+
+
+# Verify the freeze helper's bytes BEFORE importing (executing) it. A tampered
+# helper is refused without running a single line of it.
+if _preimport_blob(Path(__file__).with_name('verify_code_freezes.py')) != CODE_FREEZES_VERIFIER_BLOB:
+    if __name__ == '__main__':
+        print(json.dumps({'status': 'REFUSED', 'reason': 'CODE_FREEZE_VERIFIER_TAMPERED_PREIMPORT'},
+                         sort_keys=True))
+        sys.exit(1)
+    raise ImportError('CODE_FREEZE_VERIFIER_TAMPERED_PREIMPORT')
+
+from verify_code_freezes import FreezeViolation, git_blob_digest, verify, unique_pairs, reject_constant  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = '29c85365e27665f16ba378cf2c7fc9c81f5754c1'
 LEGACY_MANIFEST_BLOB = 'fd90e7d493739584bf59bd9d81a69f4174f119e8'
 NOV18_MANIFEST_BLOB = '399a4df65036eb236f9f56699bc4090507786a3c'
-CODE_FREEZES_VERIFIER_BLOB = '27d2b51d27d4b7da6f22dad31d55257541af8f67'
 # First hops (Nov 18). Tuple shape is part of the public test surface; do not drop fields.
 TRANSITIONS = (
     ('CBB', 'models/cbb/sportsedge_cbb_model.py',
@@ -200,18 +218,54 @@ def check_provenance(repo: Path) -> None:
                 raise FreezeViolation('NOT_FIRST_INTRODUCING_COMMIT:' + sport)
 
 
-def check_governance_record(repo: Path, relative: str, pr: int, model_path: str) -> None:
-    """Fail closed if the hop's governance record is missing, linked, or not zero-release."""
-    if (not isinstance(relative, str) or not relative or Path(relative).is_absolute()
-            or '..' in Path(relative).parts):
+GOVERNANCE_SCHEMA = 'sportsedge-high-risk-agent-change-v1'
+ZERO_RELEASE_CLAIMS = {
+    'policy_id': 'SPORTSEDGE_STRICT_V21_V22_20261115_R1',
+    'production_ready': False,
+    'external_owner_approval_verified': False,
+    'source_authenticated': False,
+    'model_release_certified': False,
+    'official_counted': 0,
+    'approved_stake_u': 0,
+}
+
+
+def _strict_zero_release(claims) -> bool:
+    """Exact keys AND exact types: False is not 0, 0.0 is not 0, "false" is not False."""
+    if type(claims) is not dict or set(claims) != set(ZERO_RELEASE_CLAIMS):
+        return False
+    for key, want in ZERO_RELEASE_CLAIMS.items():
+        got = claims[key]
+        if type(got) is not type(want) or got != want:
+            return False
+    return True
+
+
+def check_governance_record(repo: Path, relative: str, pr: int, model_path: str,
+                            introducing_commit: str) -> None:
+    """Fail closed if the hop's governance record is missing, malformed, not zero-release,
+    or not byte-identical to the record committed by the introducing commit."""
+    if (type(relative) is not str or not relative or Path(relative).is_absolute()
+            or '..' in Path(relative).parts or relative != 'docs/governance/changes/pr-%d.json' % pr):
         raise FreezeViolation('GOVERNANCE_RECORD_INVALID_PATH')
     record = repo / relative
     if not record.is_file() or record.is_symlink() or repo.resolve() not in record.resolve().parents:
         raise FreezeViolation('GOVERNANCE_RECORD_MISSING:' + relative)
-    gov = json.loads(record.read_bytes(), object_pairs_hook=unique_pairs, parse_constant=reject_constant)
-    claims = gov.get('release_claims') if isinstance(gov.get('release_claims'), dict) else {}
-    if (gov.get('pr_number') != pr or model_path not in tuple(gov.get('protected_paths') or ())
-            or claims.get('official_counted') != 0 or claims.get('approved_stake_u') != 0):
+    raw = record.read_bytes()
+    # Bind the record to the reviewed history: the bytes on disk must equal the
+    # record as committed at the hop's introducing commit (no later rewrite).
+    if git_blob_digest(raw) != git_blob_digest(_git(repo, 'show', introducing_commit + ':' + relative)):
+        raise FreezeViolation('GOVERNANCE_RECORD_NOT_BOUND_TO_INTRODUCING_COMMIT:' + relative)
+    try:
+        gov = json.loads(raw, object_pairs_hook=unique_pairs, parse_constant=reject_constant)
+    except (ValueError, UnicodeError) as e:
+        raise FreezeViolation('GOVERNANCE_RECORD_INVALID:' + relative) from e
+    paths = gov.get('protected_paths') if type(gov) is dict else None
+    if (type(gov) is not dict or gov.get('schema') != GOVERNANCE_SCHEMA
+            or type(gov.get('pr_number')) is not int or gov.get('pr_number') != pr
+            or type(paths) is not list or any(type(x) is not str for x in paths)
+            or model_path not in paths
+            or not _strict_zero_release(gov.get('release_claims'))):
         raise FreezeViolation('GOVERNANCE_RECORD_INVALID:' + relative)
 
 
@@ -234,7 +288,7 @@ def check_hop_provenance(repo: Path, hop: dict) -> None:
         raise FreezeViolation('INTRODUCING_COMMIT_NO_SOURCE_CHANGE:' + sport)
     if git_blob_digest(_git(repo, 'show', parents[1] + ':' + path)) != prior:
         raise FreezeViolation('NOT_FIRST_INTRODUCING_COMMIT:' + sport)
-    check_governance_record(repo, hop['governance_record'], hop['change_pr'], path)
+    check_governance_record(repo, hop['governance_record'], hop['change_pr'], path, commit)
 
 
 def apply_additional_hops(candidate: dict, hops: list) -> dict:
@@ -280,7 +334,7 @@ def run(repo: Path = ROOT, legacy_path: Path = LEGACY, transition_path: Path = T
     candidate = checked_manifest(legacy, transition, raw)
     check_provenance(repo)
     for sport, path, old, new, commit, pr in TRANSITIONS:
-        check_governance_record(repo, 'docs/governance/changes/pr-%d.json' % pr, pr, path)
+        check_governance_record(repo, 'docs/governance/changes/pr-%d.json' % pr, pr, path, commit)
     hops = checked_hops(json.loads(hops_path.read_bytes(), object_pairs_hook=unique_pairs,
                                    parse_constant=reject_constant))
     for hop in hops:

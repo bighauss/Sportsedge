@@ -54,7 +54,7 @@
   "nov18_transition_manifest_git_blob_sha1": "399a4df65036eb236f9f56699bc4090507786a3c",
   "verify_code_freezes_git_blob_sha1": "27d2b51d27d4b7da6f22dad31d55257541af8f67",
   "verify_versioned_transition_change": "OPTION_B_REVIEWED_UNIFIED_MULTI_HOP_EXTENSION",
-  "verify_versioned_transition_git_blob_sha1": "62e5a091d1bcca671193a4e47f6d941f06c8e047"
+  "verify_versioned_transition_git_blob_sha1": "b342a626681c63fdf2449e97c8814663b40a8015"
  },
  "model_release_certified": false,
  "negative_cases": {

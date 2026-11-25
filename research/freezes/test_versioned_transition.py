@@ -97,6 +97,103 @@ class TransitionTests(unittest.TestCase):
                     with self.assertRaisesRegex(FreezeViolation, 'PARENTS_UNVERIFIABLE'):
                         check_provenance(Path('.'))
 
+class GovernanceRecordStrictnessAndPreimportTests(unittest.TestCase):
+    """Owner review of #535: strict types for release claims, records bound to the
+    introducing commit, and the freeze helper verified before it is imported."""
+
+    REL = 'docs/governance/changes/pr-446.json'
+    MODEL = 'models/mlb/sportsedge_mlb_model.py'
+    COMMIT = 'b73874a2ecf8d558780bacf6b636b70e409f2cb4'
+
+    def _check(self, mutate=None, committed=None):
+        import json, tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import verify_versioned_transition as v
+        original = (v.ROOT / self.REL).read_bytes()
+        doc = json.loads(original)
+        if mutate:
+            mutate(doc)
+        raw = json.dumps(doc, indent=2).encode() + b'\n' if mutate else original
+        with tempfile.TemporaryDirectory() as td:
+            rec = Path(td) / self.REL
+            rec.parent.mkdir(parents=True)
+            rec.write_bytes(raw)
+            # The introducing commit "holds" the same bytes unless told otherwise, so
+            # these cases isolate the type/content checks from the binding check.
+            with patch('verify_versioned_transition._git',
+                       return_value=raw if committed is None else committed):
+                v.check_governance_record(Path(td), self.REL, 446, self.MODEL, self.COMMIT)
+
+    def test_real_records_pass_and_are_bound_to_introducing_commits(self):
+        import verify_versioned_transition as v
+        for sport, path, old, new, commit, pr in v.TRANSITIONS:
+            v.check_governance_record(v.ROOT, 'docs/governance/changes/pr-%d.json' % pr, pr, path, commit)
+        for hop in v.EXPECTED_ADDITIONAL_CANDIDATES:
+            v.check_governance_record(v.ROOT, hop['governance_record'], hop['change_pr'],
+                                      hop['path'], hop['first_introducing_commit'])
+
+    def test_malformed_types_and_false_release_claims_rejected(self):
+        from verify_code_freezes import FreezeViolation
+        def claim(k, val):
+            return lambda d: d['release_claims'].__setitem__(k, val)
+        cases = {
+            'official_counted_false_not_int': claim('official_counted', False),
+            'approved_stake_float': claim('approved_stake_u', 0.0),
+            'approved_stake_string': claim('approved_stake_u', '0'),
+            'production_ready_true': claim('production_ready', True),
+            'model_release_certified_zero': claim('model_release_certified', 0),
+            'source_authenticated_string': claim('source_authenticated', 'false'),
+            'owner_approval_true': claim('external_owner_approval_verified', True),
+            'policy_changed': claim('policy_id', 'LAX'),
+            'extra_claim': claim('extra', 0),
+            'missing_claim': lambda d: d['release_claims'].pop('production_ready'),
+            'claims_not_dict': lambda d: d.__setitem__('release_claims', []),
+            'pr_number_string': lambda d: d.__setitem__('pr_number', '446'),
+            'pr_number_bool': lambda d: d.__setitem__('pr_number', True),
+            'protected_paths_string': lambda d: d.__setitem__('protected_paths', self.MODEL),
+            'schema_changed': lambda d: d.__setitem__('schema', 'other'),
+        }
+        for name, mutate in cases.items():
+            with self.subTest(name), self.assertRaisesRegex(FreezeViolation, 'GOVERNANCE_RECORD_INVALID'):
+                self._check(mutate)
+
+    def test_record_rewritten_after_introducing_commit_rejected(self):
+        from verify_code_freezes import FreezeViolation
+        with self.assertRaisesRegex(FreezeViolation, 'GOVERNANCE_RECORD_NOT_BOUND_TO_INTRODUCING_COMMIT'):
+            self._check(committed=b'{"different": "bytes"}\n')
+
+    def test_record_path_must_match_change_pr(self):
+        from pathlib import Path
+        from verify_code_freezes import FreezeViolation
+        import verify_versioned_transition as v
+        with self.assertRaisesRegex(FreezeViolation, 'GOVERNANCE_RECORD_INVALID_PATH'):
+            v.check_governance_record(v.ROOT, 'docs/governance/changes/pr-293.json', 446,
+                                      self.MODEL, self.COMMIT)
+
+    def test_tampered_freeze_helper_is_refused_before_import(self):
+        import subprocess, sys, tempfile
+        from pathlib import Path
+        here = Path(__file__).resolve().parent
+        src = here / 'verify_code_freezes.py'
+        bak = src.read_bytes()
+        with tempfile.TemporaryDirectory() as td:
+            sentinel = Path(td) / 'HELPER_EXECUTED'
+            try:
+                src.write_bytes(bak + ('\nopen(%r, "w").write("x")\n' % str(sentinel)).encode())
+                r = subprocess.run([sys.executable, str(here / 'verify_versioned_transition.py')],
+                                   capture_output=True, text=True)
+                imp = subprocess.run([sys.executable, '-c', 'import verify_versioned_transition'],
+                                     cwd=str(here), capture_output=True, text=True)
+            finally:
+                src.write_bytes(bak)
+            self.assertFalse(sentinel.exists(), 'tampered helper code must never run')
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('CODE_FREEZE_VERIFIER_TAMPERED_PREIMPORT', r.stdout)
+        self.assertNotEqual(imp.returncode, 0)
+        self.assertIn('CODE_FREEZE_VERIFIER_TAMPERED_PREIMPORT', imp.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()
 

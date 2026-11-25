@@ -14,7 +14,7 @@
   "original_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
   "nov18_transition_manifest_git_blob_sha1": "399a4df65036eb236f9f56699bc4090507786a3c",
   "verify_code_freezes_git_blob_sha1": "27d2b51d27d4b7da6f22dad31d55257541af8f67",
-  "verify_versioned_transition_git_blob_sha1": "62e5a091d1bcca671193a4e47f6d941f06c8e047",
+  "verify_versioned_transition_git_blob_sha1": "b342a626681c63fdf2449e97c8814663b40a8015",
   "frozen_engine_v5_unchanged": true,
   "official_counted": 0,
   "approved_stake_u": 0,
