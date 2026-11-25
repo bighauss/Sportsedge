@@ -2,7 +2,7 @@
 
 Public reconstructed boxes have no original observed-final timestamps. Use only
 games at least two calendar days earlier, evaluate on appearance-conditional
-common rows, and compare fixed matchup heuristic to last-five and last-eight.
+common rows, and compare fixed matchup heuristic to matched-window ablations.
 """
 import argparse, csv, json, math, hashlib
 from collections import defaultdict, Counter, deque
@@ -46,6 +46,8 @@ def evaluate(records, pace_rows):
     recent, team_pace = defaultdict(lambda:deque(maxlen=10)), defaultdict(lambda:deque(maxlen=10))
     defense, league = defaultdict(lambda:[0,[0.]*4]), [0,[0.]*4]
     errors = defaultdict(lambda:[0,0.,0.,0.])
+    blocks = defaultdict(lambda:[0,0.,0.])
+    windows = Counter()
     paired_games, paired = set(), 0
     cursor = 0
     for day,gid,h,a,poss,players,totals in eligible:
@@ -75,20 +77,42 @@ def evaluate(records, pace_rows):
             adj = (mean(team_pace[t])+mean(team_pace[o]))/2/mean(p for _,p in past)
             native = [mean(x["stats"][s] for x,_ in past[-5:]) for s in STATS]
             roll = [mean(x["stats"][s] for x,_ in past[-8:]) for s in STATS]
-            match = [mean(x["stats"][s] for x,_ in past)*adj*factors[i] for i,s in enumerate(STATS)]
-            match[3] = min(match[3],match[0]/3)
+            plain = [mean(x["stats"][s] for x,_ in past) for s in STATS]
+            pace_only = [v*adj for v in plain]
+            defense_only = [v*factors[i] for i,v in enumerate(plain)]
+            match = [v*adj*factors[i] for i,v in enumerate(plain)]
+            for candidate in (pace_only, defense_only, match):
+                candidate[3] = min(candidate[3],candidate[0]/3)
+            windows[len(past)] += 1
             actual = [r["stats"][s] for s in STATS]
             paired+=1;paired_games.add(gid)
             for fam,ix in FAMILIES.items():
-                for name,pred in (("last5",native),("last8",roll),("matchup10",match)):
+                baseline_error = sum(plain[i]-actual[i] for i in ix)
+                week = day.isocalendar()[:2]
+                for name,pred in (("last5",native),("last8",roll),("plain10",plain),
+                                  ("pace_only10",pace_only),("defense_only10",defense_only),
+                                  ("matchup10",match)):
                     e = sum(pred[i]-actual[i] for i in ix)
                     v = errors[(fam,name)]
                     v[0]+=1;v[1]+=abs(e);v[2]+=e*e;v[3]+=e
+                    b = blocks[(fam,name,week)]
+                    b[0]+=1;b[1]+=abs(e)-abs(baseline_error);b[2]+=e*e-baseline_error*baseline_error
     metrics={}
     for (fam,name),(n,ae,se,bias) in errors.items():
         metrics.setdefault(fam,{})[name]={"n":n,"mae":ae/n,"rmse":math.sqrt(se/n),"bias":bias/n}
+    paired_deltas = {}
+    for fam, variants in metrics.items():
+        paired_deltas[fam] = {}
+        for name in variants:
+            data = [v for (f,m,w),v in sorted(blocks.items()) if f==fam and m==name]
+            n = sum(v[0] for v in data)
+            paired_deltas[fam][name] = {"delta_mae_vs_plain10":sum(v[1] for v in data)/n,
+                                        "delta_mse_vs_plain10":sum(v[2] for v in data)/n,
+                                        "week_blocks":len(data),
+                                        "weeks_better_mae":sum(v[1]<0 for v in data)}
     return {"eligible_games":len(eligible),"paired_games":len(paired_games),"paired_appearances":paired,
-            "rejections":dict(rejects),"metrics":metrics}
+            "window_counts":dict(windows),"rejections":dict(rejects),"metrics":metrics,
+            "paired_ablation_deltas":paired_deltas}
 
 
 def main():
@@ -104,7 +128,9 @@ def main():
     result={"label":"PAPER_0U_NON_COUNTED_DATE_LAG_REPLAY","limitations":[
         "Two-calendar-day lag proxy, not original observation times; appearance-conditional only.",
         "Team opponent rates sum admitted player stats; points must reconcile, rebounds exclude team-only rebounds.",
-        "Common rows require eight appearances; no confirmed availability, odds, ROI or promotion.",
+        "Common rows require eight appearances; plain10, pace-only, defense-only and combined use the identical up-to-ten window.",
+        "Reused 2023–2025 seasons are development evidence, not untouched holdout; week counts are descriptive, not significance tests.",
+        "No confirmed availability, odds, ROI or promotion.",
         "Public-date benchmark of the heuristic, not exact prospective player bundle."],"seasons":{}}
     for season in args.seasons:
         sched=args.root/f"mbb_schedule_{season}.parquet"
