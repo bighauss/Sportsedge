@@ -1,0 +1,24 @@
+name: CBB factorial research native integration
+on:
+  push:
+    branches: [research/cbb-factorial-distributions-20261124]
+    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', '.github/workflows/cbb-factorial-research.yml']
+  pull_request:
+    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', '.github/workflows/cbb-factorial-research.yml']
+permissions:
+  contents: read
+jobs:
+  offline-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Actual native module, paired scoring and distribution regressions
+        run: python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest
