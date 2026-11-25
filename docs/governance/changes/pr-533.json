@@ -6,19 +6,22 @@
     ".github/workflows/cbb-halves.yml",
     "models/cbb/halves/README.md",
     "models/cbb/halves/__init__.py",
+    "models/cbb/halves/coefficients_halves_fg1c_v1.json",
+    "models/cbb/halves/coefficients_halves_joint_v1.json",
     "models/cbb/halves/coefficients_halves_v1.json",
+    "models/cbb/halves/halves_joint.py",
     "models/cbb/halves/halves_model.py",
     "models/cbb/halves/halves_pricing.py",
     "models/cbb/halves/test_halves.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Add a research-only CBB first-half and second-half model: a rebuilt public sportsdataverse ESPN PBP dataset (2019-2026; the reported 6,297-game set was not found and is not claimed), chronological residual fits, integer-PMF distributions, and push-aware pricing for spread, total, moneyline and both team totals. Pregame H2 and halftime-adjusted H2 are separately labelled. Dedicated workflow cbb-halves.yml runs both test suites. PAPER/0u, NON_COUNTED, approved_stake_u=0. No frozen coefficients, pins or production promotion.",
+  "change_summary": "Research-only CBB first- and second-half model: rebuilt public sportsdataverse ESPN PBP dataset (2019-2026; the reported 6,297-game set was not found and is not claimed), chronological residual fits, integer-PMF distributions, and push-aware pricing for spread, total, moneyline and both team totals, with pregame H2 and halftime-adjusted H2 labelled separately. Adds a margin/total copula and H1-H2 Gaussian copula (kind chosen on 2021-2025 folds, fit on 2019-2025; 2026 is a secondary re-use only), a refit path onto FG1C full-game projections that refuses to train on 2026 or overwrite v1, and a totals-bias plan that forbids a post-test intercept fix. Dedicated workflow cbb-halves.yml runs both test suites. PAPER/0u, NON_COUNTED, approved_stake_u=0.",
   "assumptions": [
-    "The 6,297-game H1 dataset reported in issue #57 was not located in the repo, branches, issues, PRs or workflow artifacts; this PR rebuilds from public sportsdataverse files and does not claim to be that dataset.",
-    "Season 2026 was held out and scored once in this research run. That evaluation is self-reported, not independently verified; unseen_data_verified remains false.",
-    "Fitted means are scaled to the research point-in-time projector, not the production or challenger full-game model, and need a separate refit before any use beside those projections.",
-    "Totals bias on 2026 (H1 +1.10, H2 +1.38) is disclosed and is not corrected on the test window. There are no historical half-market prices, so ROI and CLV are not computed. Margin/total and H1-H2 dependence are not jointly modelled in this commit.",
-    "Hosted workflow .github/workflows/cbb-halves.yml runs both suites: python -m unittest -v halves.test_halves (from models/cbb) and python -m unittest -v research.cbb_halves.test_halves_research. A green check is not validation or a staking authorization."
+    "The 6,297-game H1 dataset reported in issue #57 was not located; this PR rebuilds from public sportsdataverse files and does not claim to be that dataset.",
+    "Season 2026 was scored once for the univariate v1 model. Joint metrics on 2026 are a secondary re-use of that window, not a first untouched test. unseen_data_verified remains false.",
+    "Joint copulas do not change v1 means or SDs. Margin-total residual correlation is small; the useful fitted structure is H1-H2 total residual correlation of about +0.13. The empirical copula candidate lost on every dev fold and is not used.",
+    "The FG1C mean refit is a separate coefficient file. It is trained only through 2025 and the CLI refuses to overwrite coefficients_halves_v1.json. Walk-forward JSON used for the refit lives outside the repo; source sha256s are in results/fg1c_projections_source_manifest.json.",
+    "Known totals bias is disclosed in research/cbb_halves/TOTALS_BIAS.md and is not corrected on the 2026 test window. Hosted workflow cbb-halves.yml runs both halves.test_halves (from models/cbb) and research.cbb_halves.test_halves_research. A green check is not validation or a staking authorization."
   ],
   "agent_identity": "SportsEdge Constructions bot (grok-cbb/*)",
   "permissions": {
