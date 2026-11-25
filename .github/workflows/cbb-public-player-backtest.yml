@@ -1,0 +1,50 @@
+name: CBB public player historical evaluation
+on:
+  push:
+    branches: [research/cbb-player-forward-quality-20261124]
+    paths: ['research/cbb_public_player_backtest.py', '.github/workflows/cbb-public-player-backtest.yml', 'docs/governance/changes/pr-519.json']
+  pull_request:
+    paths: ['research/cbb_public_player_backtest.py', '.github/workflows/cbb-public-player-backtest.yml']
+permissions:
+  contents: read
+env:
+  PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python research/cbb_public_player_backtest.py --self-test
+  retrospective:
+    needs: offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pyarrow==19.0.1
+      - name: Acquire public schedule and player history
+        run: |
+          set -euo pipefail
+          mkdir -m 700 "$RUNNER_TEMP/cbb-player-data" "$RUNNER_TEMP/cbb-player-report"
+          for season in 2023 2024 2025; do
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_${season}.parquet" -o "$RUNNER_TEMP/cbb-player-data/mbb_schedule_${season}.parquet"
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_player_boxscores/player_box_${season}.csv" -o "$RUNNER_TEMP/cbb-player-data/player_box_${season}.csv"
+          done
+      - run: python research/cbb_public_player_backtest.py --root "$RUNNER_TEMP/cbb-player-data" --output "$RUNNER_TEMP/cbb-player-report/player_benchmark.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cbb-public-player-benchmark
+          path: ${{ runner.temp }}/cbb-player-report/player_benchmark.json
+          retention-days: 14
+          if-no-files-found: error
