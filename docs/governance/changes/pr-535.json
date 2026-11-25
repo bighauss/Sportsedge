@@ -1,0 +1,78 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 535,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "protected_paths": [
+    ".github/workflows/freeze-integrity-trusted.yml",
+    "research/freezes/code_identity_transitions_20261125.json",
+    "research/freezes/code_identity_transitions_20261125_mlb_candidate.json",
+    "research/freezes/integrity_gate.py",
+    "research/freezes/integrity_pins.json",
+    "research/freezes/mlb_input_safety_equivalence.py",
+    "research/freezes/pinned_blobs/3f630532_sportsedge_mlb_model.py.txt",
+    "research/freezes/test_integrity_gate.py",
+    "research/freezes/test_mlb_input_safety_transition.py",
+    "research/freezes/test_versioned_transition.py",
+    "research/freezes/transition_mlb_input_safety_20261125.json",
+    "research/freezes/transition_mlb_input_safety_20261125.md",
+    "research/freezes/transition_mlb_input_safety_20261125_equivalence.json",
+    "research/freezes/verify_versioned_transition.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Option B unified multi-hop verify_versioned_transition.py (MLB hop 3f630532->30c6cb33 b73874a pr-446; NBA hop da0c1503->b353de86 8537ae48 pr-460), Nov 15 freeze and Nov 18 manifest byte-immutable. Owner review fix: independent base-pinned integrity gate (research/freezes/integrity_gate.py + integrity_pins.json, pull_request_target workflow freeze-integrity-trusted.yml runs BASE code, reads head as git objects only); any change to the verifiers, freeze, manifests, gate or its workflows fails until owner merge, even when declared. Verifier hashes verify_code_freezes.py before import; governance records require exact types/zero-release claims and byte-binding to the introducing commit. No model change, PAPER/0u.",
+  "assumptions": [
+    "Equivalence evidence for the MLB hop remains synthetic (the repo commits no real MLB board).",
+    "NBA hop evidence stays on the NBA branch; owner review of #536 evidence precedes approving the NBA hop.",
+    "The Nov 15 freeze and Nov 18 manifest are not modified.",
+    "Bootstrap: base 7fc5aaa9 has no integrity gate, so pull_request_target cannot independently check this PR; owner exact-head review is the bootstrap control.",
+    "The gate relies on GitHub pull_request_target running base-branch workflows and on branch protection preventing direct pushes to main.",
+    "Owner merge of this PR is the recording act; status stays PENDING_OWNER_MERGE until then."
+  ],
+  "agent_identity": "SportsEdge Constructions bot",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Seven code pin verification (verify_versioned_transition.py)",
+    "before": null,
+    "unit": "gate",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest discover -s research/freezes -p 'test_*.py' -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest discover -s research/freezes -p 'test_*.py' -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

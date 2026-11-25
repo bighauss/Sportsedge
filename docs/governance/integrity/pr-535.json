@@ -1,0 +1,34 @@
+{
+  "schema": "sportsedge-freeze-integrity-change-v1",
+  "pr_number": 535,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "recording_act": "OWNER_MERGE",
+  "reason": "BOOTSTRAP of the base-pinned integrity gate (owner review of #535 at bfef2eb4). Base 7fc5aaa9 has no integrity_pins.json, so base_git_blob_sha1 here is the blob at the base commit (null if absent), not a prior pin. Not independently checkable by CI on this PR; owner exact-head review is the bootstrap control.",
+  "changes": [
+    {
+      "path": ".github/workflows/freeze-integrity-trusted.yml",
+      "base_git_blob_sha1": null,
+      "head_git_blob_sha1": "6519e0a9b04a96032ef2f7243f7c32486a3540ef"
+    },
+    {
+      "path": "research/freezes/code_identity_transitions_20261125.json",
+      "base_git_blob_sha1": null,
+      "head_git_blob_sha1": "e22ad861c87a99e043d97f470b71522bc63ed386"
+    },
+    {
+      "path": "research/freezes/integrity_gate.py",
+      "base_git_blob_sha1": null,
+      "head_git_blob_sha1": "021a47b2f54ad3eeeaf02ee782ee3c4bb0362078"
+    },
+    {
+      "path": "research/freezes/integrity_pins.json",
+      "base_git_blob_sha1": null,
+      "head_git_blob_sha1": "c15c9b4c36ae3e639465dbbb867804129553259e"
+    },
+    {
+      "path": "research/freezes/verify_versioned_transition.py",
+      "base_git_blob_sha1": "522ee86d6a2608568dc456145b6bde461799cf3a",
+      "head_git_blob_sha1": "b342a626681c63fdf2449e97c8814663b40a8015"
+    }
+  ]
+}
