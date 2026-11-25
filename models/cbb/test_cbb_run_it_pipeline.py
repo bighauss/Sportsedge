@@ -332,5 +332,23 @@ class PlayerRunnerWiring(unittest.TestCase):
             self.assertEqual(rejected[0].reason_code, reason)
 
 
+
+class HalfGradeWiring(unittest.TestCase):
+    def test_half_grade_uses_halftime_not_full_score(self):
+        base = dict(game_id="g1", period="1H", market="TOTAL", line=70.0,
+                    price=-110, prob_model=0.60, prob_push=0.05, prob_market_novig=0.5,
+                    ev_model=0.15, side="under")
+        other = dict(base, side="over", prob_model=0.35, ev_model=-0.2)
+        card = {"priced": [base, other]}
+        for h1, expected in (([32, 32], "W"), ([35, 35], "P"), ([40, 35], "L"),
+                             (None, "NOT_GRADABLE"), ([100, 32], "NOT_GRADABLE")):
+            grades, _ = P.grade(card, {"g1": {"home": 80, "away": 75, "h1": h1}})
+            self.assertEqual(grades[0].result, expected)
+            self.assertEqual(grades[0].period, "1H")
+        tied_ml = dict(base, market="ML", line=None, side="home")
+        grades, _ = P.grade({"priced": [tied_ml]}, {"g1": {"home": 80, "away": 75, "h1": [32, 32]}})
+        self.assertEqual(grades[0].result, "NOT_GRADABLE")
+
+
 if __name__ == "__main__":
     unittest.main()
