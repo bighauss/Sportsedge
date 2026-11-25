@@ -311,7 +311,7 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
                 "independent_model": mp,
             }
             if include_nine_weights:
-                probs.update({f"model_{w:03d}_market_{100-w:03d}": (w * mp + (100-w)*kp)/100 for w in MODEL_WEIGHT_GRID})
+                probs.update({f"model_{w:03d}_market_{100-w:03d}": (kp if w == 0 else mp if w == 100 else (w * mp + (100-w)*kp)/100) for w in MODEL_WEIGHT_GRID})
             for cname, pval in probs.items():
                 obs[cname].append({
                     "sport": sport, "event_id": f"{sport}:{m['event_id']}",
