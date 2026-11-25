@@ -22,8 +22,14 @@ def estimate_possessions(row) -> float | None:
             + row["turnovers"]
             + 0.475 * row["free_throws_attempted"])
 
-def build_team_season_summary(box: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate per-team offensive and defensive efficiency and pace."""
+def build_team_season_summary(box: pd.DataFrame, cutoff: str | None = None) -> pd.DataFrame:
+    """Aggregate per-team offensive and defensive efficiency and pace.
+
+    If cutoff is supplied (YYYY-MM-DD), only games strictly before that date
+    are used. This prevents using same-day or future results.
+    """
+    if cutoff is not None:
+        box = box[box["game_date"].astype(str) < cutoff]
     rows = []
     for team, g in box.groupby("team_display_name"):
         poss = g.apply(estimate_possessions, axis=1)
