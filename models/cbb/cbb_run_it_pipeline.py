@@ -42,6 +42,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT))
 import contracts as C                         # noqa: E402
+from cbb_delivery_audit import delivery_audit  # noqa: E402
 import cbb_pricing as PR                      # noqa: E402
 import cbbd_native_score_model as NM          # noqa: E402
 
@@ -1431,6 +1432,9 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
               "rejections": [C.row_dict(r) for r in rejects], "adapters": adapter_status}
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
+    # Separate delivery evidence, never edit the original frozen research card.
+    if now >= freeze:
+        (out / "delivery_audit.json").write_text(json.dumps(delivery_audit(frozen, utcz(now)), indent=1, sort_keys=True))
     log = out / "freeze_log.jsonl"
     prev = log.read_text().strip().splitlines()[-1] if log.exists() and log.read_text().strip() else None
     with log.open("a") as f:
@@ -1566,6 +1570,9 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
               "adapters": adapter_status}
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
+    delivery_now = datetime.now(timezone.utc)
+    if delivery_now >= freeze:
+        (out / "delivery_audit.json").write_text(json.dumps(delivery_audit(frozen, utcz(delivery_now)), indent=1, sort_keys=True))
     leakage = {"prior_finals_used": (card.get("context") or {}).get("prior_games_used"), "max_prior_tip_utc": None,
                "freeze_utc": card["freeze_utc"], "prior_rule": "cbbd_native_score_model.eligible_prior_games (captured < freeze)"}
     a = audit(priced=priced, projections=projections, market_views=market_views, parity=parity, sims=sims,
