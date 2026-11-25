@@ -123,7 +123,7 @@ def price(distribution, stat, kind, line):
     n = len(draws)
     wins = sum(v >= line if kind == "AT_LEAST" else v > line for v in draws)
     pushes = 0 if kind == "AT_LEAST" else sum(v == line for v in draws)
-    return {"p_a": wins / n, "p_push": pushes / n, "p_b": (n-wins-pushes) / n,
+    return {"p_a": wins / n, "p_push": pushes / n, "p_b": (n - wins - pushes) / n,
             "mean": mean(draws), "samples": n, "status": "PAPER_0U", "counted": "NON_COUNTED",
             "approved_stake_u": 0}
 
