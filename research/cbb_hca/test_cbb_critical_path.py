@@ -14,6 +14,19 @@ class CriticalPath(unittest.TestCase):
     def test_missing_binding_quarantined(self):
         f=forecast(2); del f["source_receipts"]
         self.assertEqual(reconcile([f],[final(2)])["holds"][0]["reason"],"SOURCE_OR_PARENT_BINDING_MISSING")
+    def test_receipt_subset_and_nonfinite_possessions(self):
+        for missing in ("ratings","prior_games"):
+            f=forecast(2);del f["source_receipts"][missing];f["source_receipts"]["extra"]="e"*64
+            self.assertEqual(reconcile([f],[final(2)])["holds"][0]["reason"],"SOURCE_OR_PARENT_BINDING_MISSING")
+        f=forecast(2);f["source_receipts"]["extra"]="e"*64
+        self.assertEqual(len(reconcile([f],[final(2)])["eligible"]),1)
+        for p in (float("inf"),float("nan"),True,201):
+            y=final(2);y["possessions"]=p
+            self.assertEqual(reconcile([forecast(2)],[y])["holds"][0]["reason"],"POSSESSIONS_INVALID")
+    def test_incoherent_forecast_quarantined(self):
+        for key,val in (("margin",999),("total",float("nan")),("possessions",float("inf")),("home_points",True)):
+            f=forecast(2);f["forecasts"]["additive_product"][key]=val
+            self.assertEqual(reconcile([f],[final(2)])["holds"][0]["reason"],"INCOHERENT_FORECAST")
     def test_tie_identity_and_clock_quarantined(self):
         self.assertEqual(reconcile([forecast(2)],[final(2,80)])["holds"][0]["reason"],"FINAL_SCORE_INVALID_OR_TIED")
         y=final(2); y["away_team_id"]="9"
