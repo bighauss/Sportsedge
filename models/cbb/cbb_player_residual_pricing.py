@@ -144,6 +144,7 @@ class PlayerBundle:
         if doc.get("schema") != "CBB_PLAYER_RESIDUAL_BUNDLE_V1":
             raise ValueError("PLAYER_BUNDLE_SCHEMA")
         self.as_of_utc = as_of_utc
+        self.evidence_class = doc.get("evidence_class", "UNVERIFIED_EXTERNAL_BUNDLE")
         self.targets = {}
         for item in doc["targets"]:
             f = Forecast(**item)
