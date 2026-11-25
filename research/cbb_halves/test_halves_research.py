@@ -101,5 +101,15 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(dev["dataset_sha256"], FH.dataset_sha256())
 
 
+    def test_shipped_coefficients_are_the_tested_ones(self):
+        rep = json.loads((HERE / "results" / "test_report.json").read_text())
+        raw = (HERE.parents[1] / "models" / "cbb" / "halves" / "coefficients_halves_v1.json").read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), rep["coefficients_sha256"])
+        coef = json.loads(raw)
+        self.assertEqual(coef["untouched_test_season"], FH.TEST_SEASON)
+        self.assertEqual(coef["trained_seasons"], list(range(2019, FH.TEST_SEASON)))
+        self.assertEqual(rep["dataset_sha256"], FH.dataset_sha256())
+
+
 if __name__ == "__main__":
     unittest.main()
