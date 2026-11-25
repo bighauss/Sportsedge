@@ -106,6 +106,23 @@ def source_context(card_path, capture_dir):
     for k in t.keys()&h.keys():
         if any(t[k].get(f)!=h[k].get(f) for f in ("season","homeTeamId","awayTeamId","startDate","neutralSite")):
             raise ValueError("OVERLAPPING_GAME_IDENTITY_CONFLICT")
+    # A matching score is not evidence of matching event identity. Bind each
+    # projected parent row to the original today's provider schedule.
+    for row in card["rows"]:
+        if row.get("status")!="PROJECTED":
+            continue
+        gid=row.get("game_id")
+        if native.canonical_id(gid)!=gid:
+            raise ValueError("PARENT_PROJECTED_GAME_ID_INVALID")
+        g=t.get(int(gid))
+        if (g is None or type(g.get("season")) is not int or g["season"]!=season
+            or g.get("startTimeTbd") is not False or g.get("status")=="final"
+            or type(g.get("neutralSite")) is not bool or type(row.get("neutral")) is not bool
+            or g["neutralSite"]!=row["neutral"]
+            or native.canonical_id(g.get("homeTeamId"))!=row.get("home_team_id")
+            or native.canonical_id(g.get("awayTeamId"))!=row.get("away_team_id")
+            or runner.parse_z(g["startDate"])!=native.utc(row.get("tipoff_utc"),"parent_tip")):
+            raise ValueError("PARENT_PROJECTED_SCHEDULE_IDENTITY_MISMATCH_"+gid)
     merged=list({**h,**t}.values())
     # Replay the parent's admission cutoff; never label evidence as captured
     # before the latest of its actual source observations.
