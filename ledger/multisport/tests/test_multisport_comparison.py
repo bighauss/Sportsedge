@@ -239,6 +239,17 @@ class CBBStarTests(unittest.TestCase):
             dict(quote_id="q3",market="total",pick="under",player=None,line=150.5,price=-110,model_p=.6,market_p=.5,blend_p=.55,on_card=True),
             dict(quote_id="q4",market="total",pick="over",player=None,line=140.5,price=-110,model_p=.6,market_p=.5,blend_p=.55,on_card=False,stars=5)]
         return _make_run("cbb","CBB","DUKE@UNC","2026-11-23T20:00:00Z","2026-11-24T00:00:00Z",rows,dict(away="DUKE",home="UNC",away_score=70,home_score=75))
+    def test_nine_weights_common_sample_and_endpoints(self):
+        run=self.make()
+        report=evaluate_multisport([run],"baseline",include_nine_weights=True,n_boot=100)
+        self.assertEqual(report["weight_grid"]["model_percent"],[0,25,50,60,75,80,90,95,100])
+        self.assertEqual(len(report["candidates"]),13)
+        cs=report["candidates"]
+        self.assertEqual(cs["model_000_market_100"]["overall"]["brier"],cs["market_only"]["overall"]["brier"])
+        self.assertEqual(cs["model_100_market_000"]["overall"]["brier"],cs["independent_model"]["overall"]["brier"])
+        self.assertEqual({x["overall"]["n"] for x in cs.values()},{3})
+        self.assertEqual(report["weight_grid"]["roi_scope"],"SAME_FROZEN_SELECTIONS_NOT_WEIGHT_SPECIFIC")
+        self.assertEqual(cs["model_050_market_050"]["overall"]["n_settled_quotes"],4)
     def test_original_labels_and_push(self):
         report=audit_stars([self.make()],"baseline")
         five=report["stars"]["5"]
