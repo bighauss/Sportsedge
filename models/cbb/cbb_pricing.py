@@ -32,13 +32,40 @@ LADDER_MARKETS = {"ALT_SPREAD": "alt_spread", "ALT_TOTAL": "alt_total",
 
 
 def make_config(**over):
+    """Validate overrides before any probability or quote computation."""
+    if over.keys() - DEFAULT_CONFIG.keys():
+        raise ValueError("UNKNOWN_CONFIG_KEY")
     cfg = {**DEFAULT_CONFIG, **{k: v for k, v in over.items() if v is not None}}
-    if not (cfg["sd_margin"] > 0 and cfg["sd_total"] > 0 and cfg["team_total_sd_factor"] > 0):
-        raise ValueError("SD_CONFIG_INVALID")
-    if not cfg["max_quote_age_hours"] > 0:
+
+    def finite(key, code):
+        value = cfg[key]
+        if type(value) not in (int, float):
+            raise ValueError(code)
+        try:
+            ok = math.isfinite(value)
+        except OverflowError:
+            ok = False
+        if not ok:
+            raise ValueError(code)
+        return value
+
+    for key in ("sd_margin", "sd_total", "team_total_sd_factor"):
+        if finite(key, "SD_CONFIG_INVALID") <= 0:
+            raise ValueError("SD_CONFIG_INVALID")
+    if finite("max_quote_age_hours", "MAX_QUOTE_AGE_INVALID") <= 0:
         raise ValueError("MAX_QUOTE_AGE_INVALID")
-    if not 0.0 <= cfg["blend_weight_model"] <= 1.0:
+    if not 0 <= finite("blend_weight_model", "BLEND_WEIGHT_OUT_OF_RANGE") <= 1:
         raise ValueError("BLEND_WEIGHT_OUT_OF_RANGE")
+    if finite("blowout_spread_abs", "BLOWOUT_SPREAD_CONFIG_INVALID") < 0:
+        raise ValueError("BLOWOUT_SPREAD_CONFIG_INVALID")
+    if type(cfg["require_event_and_tip"]) is not bool:
+        raise ValueError("REQUIRE_EVENT_AND_TIP_INVALID")
+    # Derived SD and age conversion must remain finite too.
+    team_sd = float(cfg["sd_total"]) * float(cfg["team_total_sd_factor"])
+    if not math.isfinite(team_sd) or team_sd <= 0:
+        raise ValueError("SD_CONFIG_INVALID")
+    if not math.isfinite(cfg["max_quote_age_hours"] * 3600.0):
+        raise ValueError("MAX_QUOTE_AGE_INVALID")
     return cfg
 
 

@@ -603,5 +603,48 @@ class EVReporting(unittest.TestCase):
         self.assertIn("approved bets: 0",md)
 
 
+class PricingConfigValidation(unittest.TestCase):
+    def test_default_and_valid_overrides(self):
+        from cbb_pricing import DEFAULT_CONFIG, make_config
+        self.assertEqual(make_config(), DEFAULT_CONFIG)
+        self.assertEqual(make_config(sd_margin=None), DEFAULT_CONFIG)
+        self.assertEqual(make_config(blend_weight_model=0)["blend_weight_model"], 0)
+        self.assertEqual(make_config(blend_weight_model=1)["blend_weight_model"], 1)
+        self.assertIs(make_config(require_event_and_tip=False)["require_event_and_tip"], False)
+
+    def test_nonfinite_and_nonnumeric_values(self):
+        from cbb_pricing import make_config
+        fields = {"sd_margin": "SD_CONFIG_INVALID", "sd_total": "SD_CONFIG_INVALID",
+                  "team_total_sd_factor": "SD_CONFIG_INVALID",
+                  "max_quote_age_hours": "MAX_QUOTE_AGE_INVALID",
+                  "blend_weight_model": "BLEND_WEIGHT_OUT_OF_RANGE",
+                  "blowout_spread_abs": "BLOWOUT_SPREAD_CONFIG_INVALID"}
+        for field, code in fields.items():
+            for value in (float("nan"), float("inf"), -float("inf"), True, "1", 10**400):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(ValueError, code):
+                        make_config(**{field: value})
+
+    def test_ranges_and_boolean_contract(self):
+        from cbb_pricing import make_config
+        for field in ("sd_margin", "sd_total", "team_total_sd_factor", "max_quote_age_hours"):
+            for value in (0, -1):
+                with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                    make_config(**{field: value})
+        for field, value in (("blend_weight_model", -0.01), ("blend_weight_model", 1.01),
+                             ("blowout_spread_abs", -1), ("require_event_and_tip", "false"),
+                             ("require_event_and_tip", 1), ("unknown_setting", None)):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                make_config(**{field: value})
+
+    def test_derived_values_remain_finite_and_positive(self):
+        from cbb_pricing import make_config
+        for sd, factor in ((1e308, 1e308), (1e-300, 1e-300), (10**300, 10**300)):
+            with self.subTest(sd=sd, factor=factor), self.assertRaisesRegex(ValueError, "SD_CONFIG_INVALID"):
+                make_config(sd_total=sd, team_total_sd_factor=factor)
+        with self.assertRaisesRegex(ValueError, "MAX_QUOTE_AGE_INVALID"):
+            make_config(max_quote_age_hours=1e308)
+
+
 if __name__ == "__main__":
     unittest.main()
