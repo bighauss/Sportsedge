@@ -242,5 +242,55 @@ class RealChallenger(unittest.TestCase):
         self.assertEqual(self.ch.audit(0.1, -110, 0.55, 0.5), [])
 
 
+
+class UpstreamAdmission(unittest.TestCase):
+    def check(self, market="TOTAL", order="over_under", **raw):
+        q = quote(market, 145.5, -110, -110)
+        metadata = {"raw": raw, "order": order, "price_bad": False, "line_bad": False}
+        return P.validate([(q, metadata)], [], "2026-11-25T15:00:00Z",
+                          totals_order_verified=True, adapters=set(),
+                          match=lambda *args: ({"game_id": "g1", "tipoff_utc": q.tip_utc}, None))
+
+    def test_upstream_hold_cannot_be_overridden(self):
+        for disposition in ("HELD", "REJECTED", "SUPERSEDED", "UNKNOWN"):
+            a, r = self.check(disposition=disposition, reason_codes="TOTALS_ORDER_UNVERIFIED")
+            self.assertFalse(a)
+            self.assertEqual(r[0].reason_code, "UPSTREAM_QUOTE_WITHHELD")
+
+    def test_team_totals_require_explicit_order(self):
+        a, r = self.check(market="TT_HOME", order="", disposition="ACCEPTED")
+        self.assertFalse(a)
+        self.assertEqual(r[0].reason_code, "TOTALS_ORDER_UNVERIFIED")
+        a, r = self.check(market="TT_AWAY", disposition="ACCEPTED")
+        self.assertEqual(len(a), 1)
+        self.assertFalse(r)
+
+    def test_evidence_clocks_must_be_available(self):
+        for field in ("quote_available_utc", "as_of_utc"):
+            for bad in ("2026-11-25T15:01:00Z", "2026-11-25T11:59:00Z", "not a clock"):
+                a, r = self.check(disposition="ACCEPTED", **{field: bad})
+                self.assertFalse(a)
+                self.assertEqual(r[0].reason_code, "QUOTE_AFTER_FREEZE")
+        a, r = self.check(disposition="ACCEPTED", quote_available_utc="2026-11-25T12:00:00Z")
+        self.assertEqual(len(a), 1)
+        self.assertFalse(r)
+
+    def test_accepted_reason_and_explicit_live_rejected(self):
+        for raw, reason in (({"disposition": "ACCEPTED", "reason_codes": "CONFLICT"},
+                             "UPSTREAM_QUOTE_WITHHELD"), ({"live": "true"}, "LIVE_GAME")):
+            a, r = self.check(**raw)
+            self.assertFalse(a)
+            self.assertEqual(r[0].reason_code, reason)
+
+    def test_team_total_hybrid_label_not_validated(self):
+        q = quote("TT_HOME", 74.5, -110, -110)
+        priced, rejects, _ = P.price([(q, "g1")], {"g1": proj()},
+            {"g1": P.simulate(proj(), 2000, 3)}, 0.25, CFG,
+            challenger=StubChallenger(), challenger_proj={"g1": {}})
+        self.assertFalse(rejects)
+        self.assertEqual(len(priced), 2)
+        self.assertTrue(all("UNVALIDATED_TEAM_TOTAL" in r.hybrid_method for r, _ in priced))
+
+
 if __name__ == "__main__":
     unittest.main()
