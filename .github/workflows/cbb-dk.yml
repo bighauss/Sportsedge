@@ -30,4 +30,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: DK event-ID, reconciliation and ledger tests (offline)
-        run: python -m unittest -v models.cbb.dk.test_dk_reconcile
+        run: python -m unittest -v models.cbb.dk.test_dk_reconcile models.cbb.dk.test_team_total_order_audit
+      - name: Audit actual held team-total board
+        run: python -m models.cbb.dk.team_total_order_audit --board models/cbb/dk/derived/2026-11-25/runner_board.csv --out "$RUNNER_TEMP/team-total-order-audit.json"
