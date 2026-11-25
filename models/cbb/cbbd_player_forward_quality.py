@@ -5,13 +5,16 @@ with independently captured later final player boxes. Missing participation
 is withheld, not interpreted as zero, DNP, or a settlement result.
 """
 from collections import Counter
+from hashlib import sha256
+import json
+import math
 from statistics import mean, stdev
 from cbbd_prospective_capture import Hold, utc, decoded
 from cbbd_player_history import collect_batches, conditional_player_means
 
 
-def audit(card, report, training_batches, training_finals_raw, training_finals_receipt,
-          final_batches, finals_raw, finals_receipt, *, season, evaluated_utc):
+def audit(card, report_raw, training_batches, training_finals_raw, training_finals_receipt,
+          final_batches, finals_raw, finals_receipt, *, season, evaluated_utc, report_sha256):
     freeze = utc(card["freeze_utc"], "freeze")
     final_batches = tuple(final_batches)
     if utc(finals_receipt["observed_utc"], "final_observed") <= freeze:
@@ -22,7 +25,10 @@ def audit(card, report, training_batches, training_finals_raw, training_finals_r
     training = collect_batches(training_batches, training_finals_raw, training_finals_receipt,
                                season=season, asof_utc=card["freeze_utc"])
     expected = conditional_player_means(card, training)
-    if expected != report:
+    if type(report_raw) is not bytes or sha256(report_raw).hexdigest() != report_sha256:
+        raise Hold("PLAYER_ORIGINAL_REPORT_DIGEST_MISMATCH")
+    canonical = json.dumps(expected, sort_keys=True, allow_nan=False).encode("utf-8")
+    if canonical != report_raw:
         raise Hold("PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH")
     actual = collect_batches(final_batches, finals_raw, finals_receipt,
                              season=season, asof_utc=evaluated_utc, include_records=True)
@@ -63,10 +69,12 @@ def audit(card, report, training_batches, training_finals_raw, training_finals_r
     for k in ("MINUTES", "POINTS", "REBOUNDS", "ASSISTS", "THREES", "PRA"):
         errors = [r["errors"][k] for r in graded]
         metrics[k] = {"n": len(errors), "mae": mean(abs(v) for v in errors) if errors else None,
+                      "rmse": math.sqrt(mean(v*v for v in errors)) if errors else None,
                       "bias_actual_minus_forecast": mean(errors) if errors else None,
                       "sample_residual_sd": stdev(errors) if len(errors) > 1 else None}
     return {"label": "PAPER_0U_CONDITIONAL_PLAYER_FORWARD_DIAGNOSTIC",
-            "card_sha256": card["card_sha256"], "input_rows": len(rows), "graded": len(graded),
+            "card_sha256": card["card_sha256"], "original_player_report_sha256": report_sha256,
+            "training_finals_receipt": expected["training_finals_receipt"], "input_rows": len(rows), "graded": len(graded),
             "withheld": dict(Counter(r["reason"] for r in rows if r["state"] == "PASS")),
             "evaluated_utc": utc(evaluated_utc, "evaluated").isoformat(),
             "finals_receipt": {k: finals_receipt[k] for k in ("source", "sha256", "bytes", "observed_utc")},
