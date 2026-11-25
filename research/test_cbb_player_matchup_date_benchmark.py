@@ -26,6 +26,13 @@ class DateBenchmark(unittest.TestCase):
         self.assertEqual(result["metrics"]["PRA"]["last8"]["mae"],0)
         self.assertGreater(result["metrics"]["POINTS"]["matchup10"]["mae"],0)
         self.assertEqual(len(result["metrics"]),8)
+        self.assertEqual(result["window_counts"], {8:2,9:2,10:6})
+        self.assertEqual(set(result["metrics"]["PTS"] if "PTS" in result["metrics"] else result["metrics"]["POINTS"]),
+                         {"last5","last8","plain10","pace_only10","defense_only10","matchup10"})
+        self.assertEqual(result["metrics"]["POINTS"]["plain10"]["mae"],0)
+        self.assertEqual(result["metrics"]["POINTS"]["pace_only10"]["mae"],0)
+        self.assertAlmostEqual(result["paired_ablation_deltas"]["POINTS"]["defense_only10"]["delta_mae_vs_plain10"],
+                               result["metrics"]["POINTS"]["matchup10"]["mae"])
 
     def test_no_target_or_same_day_training(self):
         r,p=fixture(9)
