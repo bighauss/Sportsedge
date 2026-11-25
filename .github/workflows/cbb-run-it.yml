@@ -49,7 +49,7 @@ jobs:
           python-version: '3.12'
       - name: CBB RUN IT fixture gate (synthetic, no provider access)
         working-directory: models/cbb
-        run: python -m unittest -v test_cbb_run_it test_cbb_run_it_pipeline fullgame.test_public_ratings_adapter models.cbb.dk.test_team_total_order_audit test_cbb_player_residual_pricing test_cbb_player_final_box test_cbb_player_matchup_forecast test_cbb_run_it_neutral_unknown test_cbb_run_it_parity test_cbb_run_it_replay test_cbb_end_to_end_fixes test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
+        run: python -m unittest -v test_cbb_run_it test_cbb_run_it_pipeline test_cbb_delivery_audit fullgame.test_public_ratings_adapter models.cbb.dk.test_team_total_order_audit test_cbb_player_residual_pricing test_cbb_player_final_box test_cbb_player_matchup_forecast test_cbb_run_it_neutral_unknown test_cbb_run_it_parity test_cbb_run_it_replay test_cbb_end_to_end_fixes test_cbbd_paper_card test_cbbd_paper_ledger test_cbbd_native_score_model
       - name: Validate dated run-request contract (offline)
         run: python -m unittest -v tools.test_cbb_run_request
   run-it:
