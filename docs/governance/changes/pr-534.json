@@ -7,13 +7,18 @@
     "models/cbb/cbb_pricing.py",
     "models/cbb/fullgame/REPORT.md",
     "models/cbb/fullgame/__init__.py",
+    "models/cbb/fullgame/adjustments.py",
     "models/cbb/fullgame/backtest.py",
+    "models/cbb/fullgame/context.py",
     "models/cbb/fullgame/espn_odds.py",
     "models/cbb/fullgame/evaluate.py",
+    "models/cbb/fullgame/evidence/improve_summary.json",
+    "models/cbb/fullgame/evidence/improve_tables.md",
     "models/cbb/fullgame/evidence/nov24_rows.json",
     "models/cbb/fullgame/evidence/summary.json",
     "models/cbb/fullgame/evidence/tables.md",
     "models/cbb/fullgame/fetch_espn_odds.py",
+    "models/cbb/fullgame/improve_eval.py",
     "models/cbb/fullgame/make_report.py",
     "models/cbb/fullgame/nov24_diagnosis.py",
     "models/cbb/fullgame/pricing.py",
@@ -23,14 +28,14 @@
     "models/cbb/fullgame/test_fullgame.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Add a PAPER/0u NON_COUNTED CBB full-game research challenger (FG1/FG1C) that diagnoses and reduces Nov 24 paper-EV inflation, additive cbb_pricing helpers, a dedicated offline unittest workflow, and this review-only governance manifest. Frozen production coefficients and cbb_run_it.py are unchanged. Not a market promotion.",
+  "change_summary": "Add a PAPER/0u NON_COUNTED CBB full-game research challenger (FG1/FG1C/FG2/FG2C) that diagnoses Nov 24 paper-EV inflation, adds frozen-from-2020-22 rest/travel/neutral/early residual adjustments and outcome-only tail maps, additive cbb_pricing helpers, a dedicated offline unittest workflow, and this review-only governance manifest. Frozen production coefficients and cbb_run_it.py are unchanged. Not a market promotion.",
   "assumptions": [
     "This change is a research challenger only. PAPER/0u, official_counted=0, NON_COUNTED. No production coefficient, pin, runner rewire or market promotion follows from this PR.",
     "Frozen model files (sportsedge_cbb_model.py, cbbd_native_score_model.py) and cbb_pricing.DEFAULT_CONFIG are not edited. Added cbb_pricing helpers are additive.",
     "Historical ESPN core-API odds (DraftKings / ESPN BET) are an unadmitted auxiliary comparator, not execution prices or CLV evidence. Close-line CLV is zero by construction.",
     "Unit tests are deterministic and offline. They use in-test synthetic games and the already-committed Nov 24 card fixture at outputs/cbb/card_2026-11-24_45452279760_1.md. They do not fetch the network.",
-    "The 2026-27 backtest window was already used for the first confirmatory read; later reads of that window are labeled as reuse and are not a fresh holdout.",
-    "Bias is not fully removed (moneyline favorite and over-side residuals remain). Independent-model Brier remains worse than the market. Validation-selected blend weights do not establish an edge."
+    "The 2026-27 backtest window was already used for the first confirmatory read; the improvement-pass numbers on that window are labeled confirmatory reuse and are not a fresh holdout.",
+    "The independent model still has worse Brier than the market after the improvement pass. Tune-window longshot and favourite maps did not transfer to 2023-27. ML-favourite and market-line over bias remain. Player availability and returning minutes are documented gaps, not filled with leaky proxies."
   ],
   "agent_identity": "SportsEdge Constructions bot (grok-cbb/*)",
   "permissions": {
