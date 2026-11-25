@@ -1,0 +1,46 @@
+name: CBB public evidence capture (read-only, research)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cbb-evidence-capture.yml'
+      - 'tools/cbb_fetch_evidence.py'
+      - 'tools/test_cbb_fetch_evidence.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline unit tests
+        run: python -m unittest -v tools.test_cbb_fetch_evidence
+      - name: Capture public ESPN evidence (network; failure is recorded, not hidden)
+        id: capture
+        continue-on-error: true
+        run: python tools/cbb_fetch_evidence.py --out "$RUNNER_TEMP/evidence"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## CBB public evidence capture (PAPER / 0u, NON_COUNTED)'
+            echo "capture step outcome: ${{ steps.capture.outcome }}"
+            echo '```json'
+            cat "$RUNNER_TEMP/evidence/status.json" 2>/dev/null || echo '{"status": "NO_STATUS_FILE"}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cbb-public-evidence
+          path: ${{ runner.temp }}/evidence
+          retention-days: 14
+          if-no-files-found: warn

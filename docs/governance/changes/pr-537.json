@@ -3,6 +3,7 @@
   "pr_number": 537,
   "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
   "protected_paths": [
+    ".github/workflows/cbb-evidence-capture.yml",
     ".github/workflows/cbb-run-it.yml",
     "models/cbb/cbb_player_final_box.py",
     "models/cbb/cbb_player_matchup_forecast.py",
@@ -51,7 +52,9 @@
     "models/cbb/test_cbb_run_it_pipeline.py",
     "models/cbb/test_cbbd_paper_ledger.py",
     "models/cbb/test_public_replay_adapted.py",
-    "sportsedge/validation/daily_ratings_capture.py"
+    "sportsedge/validation/daily_ratings_capture.py",
+    "tools/cbb_fetch_evidence.py",
+    "tools/test_cbb_fetch_evidence.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
   "change_summary": "Integrated CBB research runner, full-game challenger, public ratings adapter, half models, quote diagnostics and conditional player modules. Offline test integration; no release or production promotion.",
@@ -61,7 +64,8 @@
     "Team totals with unknown order remain held; half moneyline settlement unverified; historic outcomes cannot authorize live bets.",
     "Frozen production pins must be reconciled independently; no claim of a production-ready model or unchanged protected files.",
     "Exact-head governance and regression execution required; no prospective performance claims.",
-    "The AdjustedFit public-replay bridge is opt-in via its own entry point; it requires explicit Division I and verified-venue evidence files and leaves the legacy replay unchanged."
+    "The AdjustedFit public-replay bridge is opt-in via its own entry point; it requires explicit Division I and verified-venue evidence files and leaves the legacy replay unchanged.",
+    "The evidence capture workflow is read-only (contents: read), fetches public ESPN endpoints only, and publishes results as an artifact; ESPN's team list is a public mirror, not an NCAA registry."
   ],
   "agent_identity": "ChatGPT SportsEdge research engineering (coordinating PR #537)",
   "permissions": {
