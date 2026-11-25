@@ -1,0 +1,78 @@
+{
+ "approved_stake_u": 0,
+ "boards": {
+  "board_2026-11-25_0636CT_pdf_capture.csv": {
+   "player_rows": 310,
+   "priced": 284,
+   "reason_codes": {
+    "INSUFFICIENT_PRIOR_APPEARANCES": 23,
+    "PROP_PLAYER_NOT_ON_EVENT_ROSTER": 3
+   },
+   "rejected": 26
+  },
+  "board_2026-11-25_0900CT_operator_transcript.csv": {
+   "player_rows": 150,
+   "priced": 150,
+   "reason_codes": {},
+   "rejected": 0
+  }
+ },
+ "inputs": {
+  "mbb_schedule_2026.parquet": "480896940f9502e537513386efa1ece6ed9cac0bcd8bd30f3493aa6254912aec",
+  "mbb_schedule_2027.parquet": "d01639738bb2f5afd896058003124920cdefd361f48574a55bc1c97d472aae44",
+  "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture.csv": "4560829559fc449bbb01670bbf79ed1811249f54a995c18062292d01a2db671f",
+  "models/cbb/lines/board_2026-11-25_0900CT_operator_transcript.csv": "b6d9f42056bc6b1f32030a3c3f413ab261c10f7f7cf850d2eeea49e207d08938",
+  "player_box_2026.csv": "b2f4ebb9a4567744a4112c580d79d05aac4b79066c440881d02f7d4a6828fbb9",
+  "player_box_2027.csv": "8444b1684f00aaf5caf20e692d4681cbadbffee9ef221e99d34a8a96d21b0825"
+ },
+ "label": "PAPER_0U",
+ "model_validation": "RESEARCH_UNVALIDATED_FOR_STAKING",
+ "official_counted": 0,
+ "param_train_last_days": [
+  "2026-11-23"
+ ],
+ "params": {
+  "2026-11-23": {
+   "n_train": 96261,
+   "rho": {
+    "POINTS|ASSISTS": 0.19598052428624246,
+    "POINTS|REBOUNDS": 0.374836098200796,
+    "REBOUNDS|ASSISTS": 0.19424674226953276
+   },
+   "stats": {
+    "ASSISTS": {
+     "alpha": 0.14699635922273688,
+     "b_opp": 1.0,
+     "b_pace": 1.0,
+     "calibration": 0.9915733999095628,
+     "train_deviance": 1.2979266106984577
+    },
+    "POINTS": {
+     "alpha": 0.23623304799879885,
+     "b_opp": 1.0,
+     "b_pace": 1.0,
+     "calibration": 0.9894775896413764,
+     "train_deviance": 3.8003971041338307
+    },
+    "REBOUNDS": {
+     "alpha": 0.13242636096715824,
+     "b_opp": 1.0,
+     "b_pace": 1.0,
+     "calibration": 1.0030449943368496,
+     "train_deviance": 1.651854735579299
+    },
+    "THREES": {
+     "alpha": 0.21641535539382084,
+     "b_opp": 0.75,
+     "b_pace": 1.0,
+     "calibration": 0.9819987563917587,
+     "train_deviance": 1.0992342354573579
+    }
+   },
+   "train_first_day": "2025-11-24",
+   "train_last_day": "2026-11-23"
+  }
+ },
+ "stars": null,
+ "status": "NON_COUNTED"
+}

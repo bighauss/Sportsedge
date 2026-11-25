@@ -1,0 +1,37 @@
+name: CBB player props (research, PAPER/0u)
+on:
+  push:
+    branches: ['grok-cbb/player-props-*']
+    paths: ['models/cbb/players/**', 'research/cbb_players/**', 'research/cbb_player_distribution.py', 'research/cbb_public_player_backtest.py', '.github/workflows/cbb-player-props.yml']
+  pull_request:
+    paths: ['models/cbb/players/**', 'research/cbb_players/**', '.github/workflows/cbb-player-props.yml']
+permissions:
+  contents: read
+env:
+  PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy==2.2.3 pyarrow==19.0.1
+      - run: python -m unittest -v players.test_players
+      - run: python -m unittest -v research.cbb_player_distribution
+      - run: python research/cbb_public_player_backtest.py --self-test
+      - name: Priced output carries PAPER/0u labels on every row
+        run: |
+          python - <<'PY'
+          import csv
+          rows = list(csv.DictReader(open("research/cbb_players/outputs/2026-11-25/player_props_priced.csv")))
+          assert rows, "no rows"
+          for r in rows:
+              assert (r["label"], r["status"], r["approved_stake_u"], r["official_counted"]) == ("PAPER_0U", "NON_COUNTED", "0", "0"), r
+              assert r["priced"] == "True" or r["reason_code"], r
+          print(len(rows), "rows OK")
+          PY
