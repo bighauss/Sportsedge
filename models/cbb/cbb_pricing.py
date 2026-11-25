@@ -18,6 +18,10 @@ import cbbd_paper_card as PC
 import cbbd_native_score_model as NM
 
 CANDIDATE_BLEND_WEIGHTS = (0.0, 0.25, 0.5, 0.6, 0.75, 0.8, 0.9, 0.95, 1.0)  # model weight; test pending
+# Owner's canonical nine model/market weights (model share first). Selection must be chronological
+# (validation window, then an untouched test window); see models/cbb/fullgame/REPORT.md.
+OWNER_BLEND_WEIGHTS = (1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0)
+EV_AUDIT_THRESHOLD = 0.30   # AUDIT FLAG ONLY: never caps, clips or drops an EV
 DEFAULT_CONFIG = {
     "sd_margin": 12.5,
     "sd_total": 17.0,
@@ -297,3 +301,52 @@ def price_ladders(board_rows, match, slate_rows, card, cfg, captured_utc, *,
                         "captured_utc": str(v[0].get("captured_utc") or captured_utc),
                         "dk_event_id": event_id(v[0])})
     return out, skipped
+
+
+def logit_blend(p_model, p_market, w, *, push=0.0):
+    """Blend in log-odds space: logit(q) = w*logit(p_model|no push) + (1-w)*logit(p_market).
+
+    Unlike the linear probability blend, a longshot's model probability cannot dominate the tail
+    (e.g. +3500: p_model 0.122 vs no-vig 0.027 at w=0.125 gives 0.032, not 0.051). Returns the
+    unconditional win mass (times 1 - push). CHALLENGER research only; not wired into the card.
+    """
+    for v in (p_model, p_market, w, push):
+        if type(v) not in (int, float) or not math.isfinite(v):
+            raise ValueError("BLEND_INPUT_INVALID")
+    if not 0 <= w <= 1 or not 0 <= push < 1 or not 0 <= p_model <= 1 or not 0 < p_market < 1:
+        raise ValueError("BLEND_INPUT_OUT_OF_RANGE")
+    eps = 1e-12
+    pm = min(1 - eps, max(eps, p_model / (1 - push)))
+    z = w * math.log(pm / (1 - pm)) + (1 - w) * math.log(p_market / (1 - p_market))
+    return (1 / (1 + math.exp(-z))) * (1 - push)
+
+
+def ev_sanity_audit(card, threshold=EV_AUDIT_THRESHOLD):
+    """Flag (never alter) priced main-market sides whose paper EV exceeds ``threshold``.
+
+    Returns a list of {game_id, market, side, price, paper_ev, p_model, p_novig, codes}. The card,
+    its probabilities and its EVs are untouched: the >30% flag is an audit, not a cap.
+    """
+    import sys
+    from pathlib import Path
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    from fullgame.pricing import ev_audit
+    out = []
+    for r in card.get("rows", ()):
+        for m in r.get("markets", ()):
+            if m.get("status") != "PRICED_PAPER":
+                continue
+            q = m.get("quote") or {}
+            for i, side in enumerate(m.get("sides", ())):
+                ev = (m.get("paper_ev_per_1u_at_price") or {}).get(side)
+                price = q.get("price_a" if i == 0 else "price_b")
+                pm, pk = (m.get("model_prob") or {}).get(side), (m.get("market_novig_prob") or {}).get(side)
+                if None in (ev, price, pm):
+                    continue
+                codes = ev_audit({"ev": ev, "price": price, "p_model": pm, "p_novig": pk}, threshold=threshold)
+                if codes:
+                    out.append({"game_id": r.get("game_id"), "market": m.get("market"), "side": side,
+                                "price": price, "paper_ev": ev, "p_model": pm, "p_novig": pk, "codes": codes})
+    return out
