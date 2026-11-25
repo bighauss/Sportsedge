@@ -44,11 +44,13 @@
     "models/cbb/halves/coefficients_halves_v1.json",
     "models/cbb/halves/halves_model.py",
     "models/cbb/halves/halves_pricing.py",
+    "models/cbb/public_replay_adapted.py",
     "models/cbb/test_cbb_player_final_box.py",
     "models/cbb/test_cbb_player_matchup_forecast.py",
     "models/cbb/test_cbb_player_residual_pricing.py",
     "models/cbb/test_cbb_run_it_pipeline.py",
     "models/cbb/test_cbbd_paper_ledger.py",
+    "models/cbb/test_public_replay_adapted.py",
     "sportsedge/validation/daily_ratings_capture.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
@@ -58,7 +60,8 @@
     "Public ratings reconstruction is not point-in-time CBBD; adjusted-ratings runtime wiring and player runtime integration remain pending.",
     "Team totals with unknown order remain held; half moneyline settlement unverified; historic outcomes cannot authorize live bets.",
     "Frozen production pins must be reconciled independently; no claim of a production-ready model or unchanged protected files.",
-    "Exact-head governance and regression execution required; no prospective performance claims."
+    "Exact-head governance and regression execution required; no prospective performance claims.",
+    "The AdjustedFit public-replay bridge is opt-in via its own entry point; it requires explicit Division I and verified-venue evidence files and leaves the legacy replay unchanged."
   ],
   "agent_identity": "ChatGPT SportsEdge research engineering (coordinating PR #537)",
   "permissions": {
