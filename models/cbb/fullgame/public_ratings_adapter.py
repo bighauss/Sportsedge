@@ -8,8 +8,12 @@ anchored to a prior-season carryover.
 HCA is estimated by the fit from verified-venue evidence (never hardcoded). The returned
 diagnostics state this so integrators do not add a home-court term a second time.
 Fail-closed rules: unknown Division I membership is dropped (never assumed true), games
-missing required fields are dropped, games on or after the as-of date are excluded, and
+missing required fields are dropped, games after the admission cutoff are excluded, and
 output efficiencies outside the native parser contract (60-160) raise.
+
+Admission vs recency: ``as_of_date`` is the recency-weighting reference date. Timestamp
+eligibility is separate: pass ``admit_through`` (inclusive date) when the caller has already
+enforced an exact timestamp cutoff; otherwise games on or after ``as_of_date`` are excluded.
 """
 from __future__ import annotations
 
@@ -31,11 +35,16 @@ REQUIRED_FIELDS = ("game_id", "date", "home", "away", "site")
 EFFICIENCY_MIN, EFFICIENCY_MAX = 60.0, 160.0
 
 
-def filter_d1_single_pass(games, d1_set=None, as_of=None):
+def _as_date(value):
+    return date.fromisoformat(value[:10]) if isinstance(value, str) else value
+
+
+def filter_d1_single_pass(games, d1_set=None, as_of=None, admit_through=None):
     """Single-pass admission. No iterative k-core pruning; every drop is counted by reason."""
     usable = []
     census = {"dropped_non_d1": 0, "dropped_unknown_d1": 0, "dropped_missing_poss": 0,
               "dropped_missing_fields": 0, "dropped_bad_date": 0, "dropped_future": 0}
+    through = _as_date(admit_through) if admit_through is not None else None
     for g in games:
         if any(g.get(k) in (None, "") for k in REQUIRED_FIELDS):
             census["dropped_missing_fields"] += 1
@@ -43,13 +52,17 @@ def filter_d1_single_pass(games, d1_set=None, as_of=None):
         if g.get("possessions") is None or g.get("home") == g.get("away"):
             census["dropped_missing_poss"] += 1
             continue
-        if as_of is not None:
+        if as_of is not None or through is not None:
             try:
                 day = date.fromisoformat(str(g["date"])[:10])
             except ValueError:
                 census["dropped_bad_date"] += 1
                 continue
-            if day >= as_of:
+            if through is not None:
+                if day > through:
+                    census["dropped_future"] += 1
+                    continue
+            elif day >= as_of:
                 census["dropped_future"] += 1
                 continue
         if d1_set is not None:
@@ -69,7 +82,7 @@ def filter_d1_single_pass(games, d1_set=None, as_of=None):
 
 
 def fit_public_adjusted_ratings(games, *, season, as_of_date, d1_set=None, prev_final=None,
-                                hca_prior=0.0, params=None):
+                                hca_prior=0.0, params=None, admit_through=None):
     """Fit ridge-regularized schedule-adjusted ratings without iterative k-core collapse.
 
     Returns (json_bytes, diagnostics). Teams in `d1_set` or `prev_final` with zero current-season
@@ -77,8 +90,10 @@ def fit_public_adjusted_ratings(games, *, season, as_of_date, d1_set=None, prev_
     supply prev_final built only from seasons that ended before as_of_date.
     """
     cfg = {**DEFAULT_PARAMS, **(params or {})}
-    cutoff = date.fromisoformat(as_of_date[:10]) if isinstance(as_of_date, str) else as_of_date
-    usable, census = filter_d1_single_pass(games, d1_set=d1_set, as_of=cutoff)
+    cutoff = _as_date(as_of_date)
+    usable, census = filter_d1_single_pass(
+        games, d1_set=d1_set, as_of=None if admit_through is not None else cutoff,
+        admit_through=admit_through)
     prior, new_team = ({}, (0.0, 0.0, 0.0))
     mu0, pi0 = 103.0, 68.0
     if prev_final is not None:

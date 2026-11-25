@@ -71,6 +71,15 @@ class PublicRatingsAdapterTest(unittest.TestCase):
         self.assertEqual([g["game_id"] for g in usable], ["1"])
         self.assertEqual(census["dropped_future"], 2)
 
+    def test_admit_through_keeps_same_day_but_not_later_days(self):
+        from datetime import date
+        games = [_g(1, "2026-11-24", "10", "20", 78, 70),
+                 _g(2, "2026-11-25", "20", "30", 72, 68),
+                 _g(3, "2026-11-26", "10", "30", 70, 60)]
+        usable, census = PRA.filter_d1_single_pass(games, admit_through=date(2026, 11, 25))
+        self.assertEqual([g["game_id"] for g in usable], ["1", "2"])
+        self.assertEqual(census["dropped_future"], 1)
+
     def test_out_of_contract_efficiency_raises(self):
         bad_prev = ({"10": (100.0, 0.0, 0.0)}, 105.0, 69.0, 3.8)
         with self.assertRaisesRegex(ValueError, "RATINGS_OUT_OF_CONTRACT"):
