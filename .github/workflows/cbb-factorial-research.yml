@@ -1,0 +1,67 @@
+name: CBB factorial research native integration
+on:
+  push:
+    branches: [research/cbb-factorial-distributions-20261124]
+    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', 'models/cbb/cbb_run_it.py', '.github/workflows/cbb-factorial-research.yml']
+  pull_request:
+    paths: ['research/cbb_hca/**', 'models/cbb/cbbd_native_score_model.py', 'models/cbb/cbb_run_it.py', '.github/workflows/cbb-factorial-research.yml']
+permissions:
+  contents: read
+jobs:
+  offline-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native, chronology, distribution and publication regressions
+        run: python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io research.cbb_hca.test_cbb_critical_path research.cbb_hca.test_cbb_sidecar_contract
+      - name: Public reconstruction regression tests
+        run: python -m research.cbb_hca.public_factorial_backtest --self-test
+      - name: Public residual calibration regression tests
+        run: python -m research.cbb_hca.public_residual_calibration --self-test
+      - name: Pace and market calibration regressions
+        run: python -m research.cbb_hca.public_market_calibration --self-test
+  retrospective:
+    needs: offline-native
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pyarrow==19.0.1
+      - name: Acquire public historical inputs
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cbb-data"
+          mkdir -m 700 "$RUNNER_TEMP/cbb-report"
+          for season in 2019 2020 2021 2022 2023 2024 2025; do
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_${season}.parquet" -o "$RUNNER_TEMP/cbb-data/mbb_schedule_${season}.parquet"
+            curl --fail --location --silent --show-error --retry 2 --max-time 120 "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_team_boxscores/team_box_${season}.parquet" -o "$RUNNER_TEMP/cbb-data/team_box_${season}.parquet"
+          done
+      - name: Reconstructed native-formula factorial evaluation
+        run: python -m research.cbb_hca.public_factorial_backtest --root "$RUNNER_TEMP/cbb-data" --output "$RUNNER_TEMP/cbb-report/benchmark.json"
+      - name: Fixed later-season calibration from actual reconstruction
+        run: python -m research.cbb_hca.public_residual_calibration --input "$RUNNER_TEMP/cbb-report/benchmark.json" --output "$RUNNER_TEMP/cbb-report/calibration.json"
+      - name: Fixed-season pace and market calibration comparison
+        run: |
+          python -m research.cbb_hca.public_pace_efficiency_challenger "$RUNNER_TEMP/cbb-report/benchmark.json" > "$RUNNER_TEMP/cbb-report/pace_efficiency.json"
+          python -m research.cbb_hca.public_market_calibration --input "$RUNNER_TEMP/cbb-report/benchmark.json" > "$RUNNER_TEMP/cbb-report/market_calibration.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cbb-public-factorial-retrospective
+          path: ${{ runner.temp }}/cbb-report/*.json
+          retention-days: 14
+          if-no-files-found: error
