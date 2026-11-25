@@ -1,0 +1,555 @@
+{
+ "approved_blob": "3f630532e9ff499912bc06041906d3b7c11d9887",
+ "corpora": {
+  "RANDOM(seed 20261125, 100 slates x 15 games)": {
+   "card_rows": 14164,
+   "games": 1500,
+   "games_priced": 1325,
+   "prop_rows": 5765,
+   "slates": 100
+  },
+  "SAMPLE(make_samples.py seed 20261115, synthetic)": {
+   "games": 2,
+   "games_priced": 2,
+   "games_unpriced": 0,
+   "inputs_identical": true,
+   "keyed_files_identical": true,
+   "market_eval_mismatches": 0,
+   "market_evals": 32,
+   "preflight_identical": true,
+   "price_tables_identical": true,
+   "projection_mismatches": 0,
+   "run_card": {
+    "files": {
+     "mlb_card.csv": {
+      "identical": true,
+      "sha256": "f634e25d468f7aa4d9534c5a6a7f4e756e6fcaf47e6e8d4597cbc84575647dcb"
+     },
+     "mlb_card.md": {
+      "identical": true,
+      "sha256": "6ad3b686cf246e7ee26d022352e5fd13efe8ef62561ac596c3bbb5e0a56806d2"
+     }
+    },
+    "markdown_identical": true,
+    "prop_rows": 15,
+    "rows": 26,
+    "rows_identical": true
+   }
+  }
+ },
+ "current_blob": "30c6cb3355ac5f6b6cbb018729c4fdc41255e057",
+ "mode": "full",
+ "negative_cases": [
+  {
+   "actual": [
+    "ok",
+    "ok"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "ok"
+   ],
+   "identical_when_ok": true,
+   "name": "valid_unique_keys",
+   "new": {
+    "keys": [
+     "'a'",
+     "'b'"
+    ],
+    "status": "ok",
+    "value": null
+   },
+   "old": {
+    "keys": [
+     "'a'",
+     "'b'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "ok"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "ok"
+   ],
+   "identical_when_ok": true,
+   "name": "valid_case_distinct_keys_a_vs_A",
+   "new": {
+    "keys": [
+     "'A'",
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   },
+   "old": {
+    "keys": [
+     "'A'",
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "ok"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "ok"
+   ],
+   "identical_when_ok": true,
+   "name": "valid_header_only",
+   "new": {
+    "keys": [],
+    "status": "ok",
+    "value": null
+   },
+   "old": {
+    "keys": [],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "ok"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "ok"
+   ],
+   "identical_when_ok": true,
+   "name": "valid_utf8_bom_header",
+   "new": {
+    "keys": [
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   },
+   "old": {
+    "keys": [
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "ok"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "ok"
+   ],
+   "identical_when_ok": true,
+   "name": "valid_whitespace_padded_unique",
+   "new": {
+    "keys": [
+     "'a'",
+     "'b'"
+    ],
+    "status": "ok",
+    "value": null
+   },
+   "old": {
+    "keys": [
+     "'a'",
+     "'b'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "ok"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "ok"
+   ],
+   "identical_when_ok": true,
+   "name": "missing_file_still_empty",
+   "new": {
+    "keys": [],
+    "status": "ok",
+    "value": null
+   },
+   "old": {
+    "keys": [],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "duplicate_key_adjacent",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 3: duplicate player_id=a",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "duplicate_key_nonadjacent",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 5: duplicate player_id=a",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "'a'",
+     "'b'",
+     "'c'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "duplicate_key_after_strip",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 3: duplicate player_id=a",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "duplicate_key_identical_rows",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 3: duplicate player_id=a",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "blank_key_first_row",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 2: missing player_id",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "''"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "blank_key_after_good_row",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 3: missing player_id",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "''",
+     "'a'"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "whitespace_only_key",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 2: missing player_id",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "''"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "two_blank_keys",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 2: missing player_id",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "''"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "ok",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "short_row_key_cell_absent",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 2: missing player_id",
+    "status": "raises"
+   },
+   "old": {
+    "keys": [
+     "None"
+    ],
+    "status": "ok",
+    "value": null
+   }
+  },
+  {
+   "actual": [
+    "KeyError",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "KeyError",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "key_column_absent_from_header",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 2: missing player_id",
+    "status": "raises"
+   },
+   "old": {
+    "exc": "KeyError",
+    "msg": "'player_id'",
+    "status": "raises"
+   }
+  },
+  {
+   "actual": [
+    "KeyError",
+    "DuplicateInputKey"
+   ],
+   "as_intended": true,
+   "expected": [
+    "KeyError",
+    "DuplicateInputKey"
+   ],
+   "identical_when_ok": null,
+   "name": "header_key_misspelled_case",
+   "new": {
+    "exc": "DuplicateInputKey",
+    "msg": "pitchers.csv line 2: missing player_id",
+    "status": "raises"
+   },
+   "old": {
+    "exc": "KeyError",
+    "msg": "'player_id'",
+    "status": "raises"
+   }
+  },
+  {
+   "actual": [
+    "AttributeError",
+    "AttributeError"
+   ],
+   "as_intended": true,
+   "expected": [
+    "AttributeError",
+    "AttributeError"
+   ],
+   "identical_when_ok": null,
+   "name": "ragged_extra_cells_malformed",
+   "new": {
+    "exc": "AttributeError",
+    "msg": "'NoneType' object has no attribute 'strip'",
+    "status": "raises"
+   },
+   "old": {
+    "exc": "AttributeError",
+    "msg": "'NoneType' object has no attribute 'strip'",
+    "status": "raises"
+   }
+  },
+  {
+   "actual": [
+    "UnicodeDecodeError",
+    "UnicodeDecodeError"
+   ],
+   "as_intended": true,
+   "expected": [
+    "UnicodeDecodeError",
+    "UnicodeDecodeError"
+   ],
+   "identical_when_ok": null,
+   "name": "invalid_utf8_malformed",
+   "new": {
+    "exc": "UnicodeDecodeError",
+    "msg": "'utf-8' codec can't decode byte 0xff in position 16: invalid start byte",
+    "status": "raises"
+   },
+   "old": {
+    "exc": "UnicodeDecodeError",
+    "msg": "'utf-8' codec can't decode byte 0xff in position 16: invalid start byte",
+    "status": "raises"
+   }
+  }
+ ],
+ "negative_cases_as_intended": true,
+ "new_blob_computed": "30c6cb3355ac5f6b6cbb018729c4fdc41255e057",
+ "old_blob_computed": "3f630532e9ff499912bc06041906d3b7c11d9887",
+ "run_card_duplicate_demo": {
+  "as_intended": true,
+  "new": {
+   "exc": "DuplicateInputKey",
+   "msg": "pitchers.csv line 6: duplicate player_id=PAAA",
+   "status": "raises"
+  },
+  "old": {
+   "card_differs_from_clean": true,
+   "card_rows": 28,
+   "status": "priced_silently"
+  }
+ },
+ "schema": "sportsedge-mlb-input-safety-equivalence-v1",
+ "seed": 20261125,
+ "totals": {
+  "card_rows": 14190,
+  "folders": 101,
+  "folders_not_identical": 0,
+  "games": 1502,
+  "games_priced": 1327,
+  "games_unpriced": 175,
+  "market_eval_mismatches": 0,
+  "market_evals": 20703,
+  "projection_mismatches": 0,
+  "prop_rows": 5780
+ },
+ "valid_input_bit_identical": true
+}
