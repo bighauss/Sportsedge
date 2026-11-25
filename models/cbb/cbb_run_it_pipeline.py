@@ -1634,7 +1634,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
 
 
 def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, totals_order_verified=False,
-                  n_sims=20000, seed=20261125, adapters_requested=()):
+                  n_sims=20000, seed=20261125, adapters_requested=(), halves_path=None, player_bundle=None):
     """Production path (frozen_native_cbbd, the DEFAULT adapter): stages after the unchanged
     cbb_run_it.build card. Projections are read from the frozen card (never recomputed); the CBBD
     ledger freeze already happened inside build(). Adds validate (contract reason codes), market +
@@ -1643,8 +1643,29 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
     out = Path(out_dir); out.mkdir(parents=True, exist_ok=True)
     cfg = PR.make_config()
     w = cfg["blend_weight_model"]
-    adapter_status, active = load_adapter_flags(set(adapters_requested))
+    from cbbd_paper_card import card_digest
+    if card.get("card_sha256") != card_digest(card) or card.get("approved_stake_u") != 0 or card.get("official_counted") != 0:
+        raise ValueError("NATIVE_PARENT_CARD_INVALID")
     freeze = parse_z(card["freeze_utc"])
+    req = set(adapters_requested)
+    loaded, halves, players = {}, None, None
+    if "halves" in req:
+        try:
+            halves = load_halves(halves_path)
+            loaded["halves"] = halves or "ADAPTER_NOT_LANDED"
+        except (ValueError, OSError, KeyError, TypeError, ImportError) as exc:
+            loaded["halves"] = f"LOAD_FAILED:{type(exc).__name__}"
+    if "players" in req and player_bundle:
+        from cbb_player_residual_pricing import PlayerBundle
+        try:
+            candidate = PlayerBundle(player_bundle, card["freeze_utc"])
+            if candidate.identity_namespace != "CBBD":
+                raise ValueError("PLAYER_BUNDLE_CBBD_NAMESPACE_REQUIRED")
+            players = candidate
+            loaded["players"] = players
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            loaded["players"] = f"LOAD_FAILED:{type(exc).__name__}:{exc}"
+    adapter_status, active = load_adapter_flags(req, loaded)
     cap = BoardFileCapture(board_path, board_captured_utc).capture()
     quotes, cap_rejects = normalize_quotes(cap, totals_order_verified=totals_order_verified)
     rows = {r["game_id"]: r for r in card["rows"]}
@@ -1674,12 +1695,12 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
     market_views = {gid: market_view(gid, accepted, cfg) for gid in gm}
     hybrids = {gid: hybrid_view(projections[gid], market_views[gid], w) for gid in gm}
     sims = {gid: simulate(p, n_sims, seed) for gid, p in projections.items() if p.status == "PROJECTED"}
-    priced, price_rejects, parity = price(accepted, projections, sims, w, cfg)
+    priced, price_rejects, parity = price(accepted, projections, sims, w, cfg, halves=halves, players=players, games=gm)
     ranked = rank(priced)
     rejects = cap_rejects + val_rejects + price_rejects
     frozen = {"schema": C.SCHEMA_VERSION, "pipeline": PIPELINE_VERSION, "label": C.PAPER_0U, "counted": C.NON_COUNTED,
               "approved_stake_u": 0, "freeze_utc": card["freeze_utc"], "date_ct": freeze.astimezone(CT).date().isoformat(),
-              "freeze_kind": "PROSPECTIVE_WITH_CBBD_LEDGER", "projection_adapter": "frozen_native_cbbd",
+              "freeze_kind": "NATIVE_PARENT_RESEARCH_OVERLAY_NOT_PROSPECTIVE", "projection_adapter": "frozen_native_cbbd",
               "parent_card_sha256": card["card_sha256"],
               "board": {"path": cap["path"], "sha256": cap["source_sha256"], "provenance": cap["provenance"],
                         "rows": len(cap["rows"])},
@@ -1688,6 +1709,15 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
               "games": [C.row_dict(g) for g in gm.values()],
               "projections": [C.row_dict(p) for d in (projections, market_views, hybrids) for p in d.values()],
               "priced": [C.row_dict(r) for r, _ in ranked], "rejections": [C.row_dict(r) for r in rejects],
+              "player_bundle_sha256": players.sha256 if players else None,
+              "player_bundle_evidence_class": players.evidence_class if players else None,
+              "player_bundle_identity_namespace": players.identity_namespace if players else None,
+              "halves": ({"version": halves["version"], "coefficients_sha256": halves["sha256"],
+                          "ml_tie_rule": HALVES_ML_TIE_RULE, "caveat": HALVES_CAVEAT} if halves else None),
+              "nine_weight_grid": [[r.game_id, r.market, r.line, r.side] +
+                                   [round(PR.blend(r.prob_model, r.prob_market_novig, wt, push=r.prob_push), 5)
+                                    for wt in C.CANONICAL_BLEND_WEIGHTS] for r, _ in ranked],
+              "nine_weight_grid_player_identity": [[r.player_team_id, r.player_id] for r, _ in ranked],
               "adapters": adapter_status}
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
@@ -1703,7 +1733,7 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
         cm = next((m for m in rows.get(r.game_id, {}).get("markets", []) if m.get("status") == "PRICED_PAPER"
                    and {"SPREAD": "spread", "TOTAL": "total", "ML": "moneyline"}.get(q.market) == m["market"]
                    and (m["quote"]["line"] == q.line or q.market == "ML")), None)
-        if cm and r.side in cm["model_prob"]:
+        if q.period == "FG" and cm and r.side in cm["model_prob"]:
             par.append(abs(cm["model_prob"][r.side] - r.prob_model))
     a["card_parity_max_abs"] = round(max(par), 4) if par else None
     a["adapter_status"] = adapter_status
@@ -1712,8 +1742,14 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
             "freeze_ct": freeze.astimezone(CT).strftime("%Y-%m-%d %-I:%M %p CT"), "card_sha256": frozen["card_sha256"],
             "board_path": str(board_path), "board_sha256": cap["source_sha256"], "provenance": cap["provenance"],
             "blend_weight_model": w,
-            "warnings": ["Projections are the frozen production card's (CBBD ratings, frozen native model).",
-                         "First-half, second-half and player markets are NOT_IMPLEMENTED in this runner (see coverage)."]}
+            "warnings": ["Independent game projections are from the frozen CBBD parent card.",
+                         "Native overlay is research only; no prospective quote or adapter certification.",
+                         "Half and player adapter coverage: " + str(adapter_status)]}
+    if halves:
+        meta["warnings"].append(HALVES_CAVEAT)
+    if players:
+        meta["warnings"].append("Player pricing conditional on participation; unvalidated bundle " +
+                                players.sha256 + "; evidence class " + players.evidence_class)
     (out / "pipeline_card.md").write_text(render(meta, list(gm.values()), projections, market_views, hybrids, ranked,
                                                  rejects, a, None))
     return {"pipeline_card_sha256": frozen["card_sha256"], "priced_sides": len(ranked), "rejections": len(rejects)}
