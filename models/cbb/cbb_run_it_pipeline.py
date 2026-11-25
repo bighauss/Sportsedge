@@ -1749,8 +1749,12 @@ def grade_frozen_card(card_path, raw_dir, out_dir, *, fetch=True, refresh=True, 
                f"n {c['n_sides']}.", "", "| p model bin | n | mean p | hit rate |", "|---|---:|---:|---:|"]
         md += [f"| {b} | {v['n']} | {v['mean_p']:.3f} | {v['hit']:.3f} |" for b, v in c["reliability"].items()]
         for fam, c2 in calib.items():
-            if fam != "ALL":
+            if fam != "ALL" and not fam.startswith("CONDITIONAL:"):
                 md.append(f"- {fam}: n {c2['n_sides']}, Brier model {c2['brier_model']:.4f} vs market {c2['brier_market']:.4f}")
+    for fam, metrics in sorted(calib.items()):
+        if fam.startswith("CONDITIONAL:"):
+            md.append(f"- {fam}: n {metrics['n_sides']}, conditional Brier model {metrics['brier_model']:.4f} "
+                      f"vs market {metrics['brier_market']:.4f}; excluded from overall calibration.")
     md += ["", "Player results are conditional stat diagnostics only; DNP or missing stats withheld; no player settlement ROI.",
            f"Player final box evidence: {len(player_hashes)} files; rejected/pending games: {len(player_rejections)}."]
     (out / "grade_report.md").write_text("\n".join(md) + "\n")
