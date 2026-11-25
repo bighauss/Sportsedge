@@ -1,10 +1,10 @@
 {
   "schema": "cbb-paper-run-request-v1",
-  "date_ct": "2026-11-24",
-  "board_path": "models/cbb/lines/board_2026-11-24_operator_transcript.csv",
-  "board_blob_sha": "31ed2ed873e607d945498964c737189762253e3a",
-  "board_captured_utc": "2026-11-24T14:46:00Z",
+  "date_ct": "2026-11-25",
+  "board_path": "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture_h1_corrected.csv",
+  "board_blob_sha": "6f10b2631d842b333fe62251978af94012b04068",
+  "board_captured_utc": "2026-11-25T12:36:15Z",
   "season": 2027,
-  "totals_order_verified": false,
+  "totals_order_verified": true,
   "label": "PAPER_0U"
 }

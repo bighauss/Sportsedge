@@ -646,5 +646,35 @@ class PricingConfigValidation(unittest.TestCase):
             make_config(max_quote_age_hours=1e308)
 
 
+class BonaventureDatedAlias(unittest.TestCase):
+    def test_observed_alias_requires_dated_event_and_unique_orientation(self):
+        slate = [{"game_id": "synthetic", "_home": "Belmont", "_away": "St. Bonaventure",
+                  "tipoff_utc": "2026-11-25T15:00:00Z"}]
+        row = {"dk_event_id": "35083406", "tip_utc": "2026-11-25T15:00:00Z"}
+        self.assertEqual(R._match(slate, "Belmont", "Saint Bonaventure", row), (slate[0], None))
+        for bad in ({}, {"tip_utc": row["tip_utc"]}, {"dk_event_id": row["dk_event_id"]},
+                    dict(row, tip_utc="2026-11-25T16:00:00Z")):
+            self.assertIsNone(R._match(slate, "Belmont", "Saint Bonaventure", bad)[0])
+        self.assertIsNone(R._match(slate, "Saint Bonaventure", "Belmont", row)[0])
+        self.assertIsNone(R._match(slate + [dict(slate[0], game_id="other")],
+                                   "Belmont", "Saint Bonaventure", row)[0])
+
+    def test_main_quotes_preserve_original_prices(self):
+        slate = [{"game_id": "synthetic", "_home": "Belmont", "_away": "St. Bonaventure",
+                  "tipoff_utc": "2026-11-25T15:00:00Z"}]
+        common = dict(sport="CBB", home="Belmont", away="Saint Bonaventure",
+                      dk_event_id="35083406", tip_utc="2026-11-25T15:00:00Z",
+                      captured_utc="2026-11-25T11:34:00Z", period="FG")
+        rows = [dict(common, market="SPREAD", line="4.5", price_a="-110", price_b="-110"),
+                dict(common, market="TOTAL", line="137.5", price_a="-112", price_b="-108"),
+                dict(common, market="ML", line="", price_a="+170", price_b="-205")]
+        quotes, holds = R.board_quotes(rows, slate, common["captured_utc"], totals_order_verified=True)
+        self.assertEqual(holds, [])
+        self.assertEqual(len(quotes), 3)
+        for q, b in zip(quotes, rows):
+            self.assertEqual((q["price_a"], q["price_b"], q["captured_utc"]),
+                             (b["price_a"], b["price_b"], b["captured_utc"]))
+
+
 if __name__ == "__main__":
     unittest.main()
