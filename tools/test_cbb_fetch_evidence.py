@@ -22,10 +22,22 @@ class Helpers(unittest.TestCase):
         self.assertFalse(E.d1_count_ok(2))
         self.assertTrue(E.d1_count_ok(362))
 
-    def test_team_venue_parsing(self):
-        raw = json.dumps({"team": {"franchise": {"venue": {"id": "77"}}}}).encode()
-        self.assertEqual(E.parse_team_venue(raw), "77")
-        self.assertIsNone(E.parse_team_venue(json.dumps({"team": {}}).encode()))
+    def test_team_venue_parsing_uses_documented_fields_only(self):
+        site = json.dumps({"team": {"franchise": {"venue": {"id": "77"}}}}).encode()
+        self.assertEqual(E.parse_team_venue(site), "77")
+        core = json.dumps({"venue": {"$ref": "http://sports.core.api.espn.com/v2/sports/basketball/"
+                                              "leagues/mens-college-basketball/venues/3984?lang=en"}}).encode()
+        self.assertEqual(E.parse_team_venue(core), "3984")
+        self.assertEqual(E.parse_team_venue(json.dumps({"venue": {"id": 12}}).encode()), "12")
+        self.assertIsNone(E.parse_team_venue(json.dumps({"team": {"name": "x"}}).encode()))
+        self.assertIsNone(E.parse_team_venue(json.dumps({"venue": {"fullName": "Arena"}}).encode()))
+        self.assertIsNone(E.parse_team_venue(json.dumps([1, 2]).encode()))
+
+    def test_venue_key_paths_for_schema_inspection(self):
+        doc = {"team": {"venue": {"id": "1"}, "links": [{"venueUrl": "x"}]}, "other": 1}
+        paths = E.venue_key_paths(doc)
+        self.assertIn("/team/venue", paths)
+        self.assertIn("/team/links[]/venueUrl", paths)
 
     def test_home_verification_rules(self):
         doc = {"events": [

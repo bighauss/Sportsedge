@@ -2,20 +2,23 @@
 """Capture public ESPN evidence for the AdjustedFit public-replay bridge (PAPER / 0u, NON_COUNTED).
 
 Writes, to --out:
-  d1_evidence.json     Division I team ids from the ESPN groups=50 team list (hash of the real bytes)
-  venue_evidence.json  event ids whose venue equals the home team's franchise venue and neutralSite is false
+  d1_evidence.json       Division I team ids from the ESPN groups=50 team list (hash of the real bytes)
+  venue_evidence.json    event ids whose venue equals the home team's venue and neutralSite is false
   capture_manifest.json  url -> sha256/bytes of every response used
-  status.json          always written, including on failure
+  raw/<sha256>.bin       the original response bytes behind each manifest hash
+  schema_probe.json      every JSON path containing a 'venue' key in sample responses
+  status.json            always written, including on failure
 
-Limits, stated plainly: ESPN's team list is a public mirror, not an NCAA registry; the venue rule
-uses each team's CURRENT franchise venue; captured_utc is the capture time, so the evidence can only
-be used for freezes after it. Nothing here is invented: ids come only from the responses.
+Limits, stated plainly: ESPN's team list is a public mirror, not an NCAA registry; team venues come
+from documented fields only (site team doc, then the core team resource venue $ref) and are never
+guessed; captured_utc is the capture start, so the evidence can only be used for freezes after it.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
 import urllib.error
@@ -25,9 +28,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball"
+CORE = "https://sports.core.api.espn.com/v2/sports/basketball/leagues/mens-college-basketball"
 HEADERS = {"User-Agent": "sportsedge-research/1.0"}
 D1_COUNT_RANGE = (340, 380)
 MIN_TEAMS_WITH_VENUE = 300
+_VENUE_REF = re.compile(r"/venues/(\d+)")
 
 
 def parse_team_ids(raw):
@@ -36,12 +41,45 @@ def parse_team_ids(raw):
     return sorted({str(t["team"]["id"]) for t in teams})
 
 
+def _venue_id(node):
+    if not isinstance(node, dict):
+        return None
+    value = str(node.get("id") or "").strip()
+    if value:
+        return value
+    match = _VENUE_REF.search(str(node.get("$ref") or ""))
+    return match.group(1) if match else None
+
+
 def parse_team_venue(raw):
-    """Franchise venue id of one team, or None when the response does not carry it."""
-    team = json.loads(raw).get("team") or {}
-    venue = (team.get("franchise") or {}).get("venue") or {}
-    value = str(venue.get("id") or "").strip()
-    return value or None
+    """Venue id of one team from documented fields only; None when absent. Never guesses."""
+    doc = json.loads(raw)
+    if not isinstance(doc, dict):
+        return None
+    team = doc.get("team") if isinstance(doc.get("team"), dict) else {}
+    franchise = team.get("franchise") if isinstance(team.get("franchise"), dict) else {}
+    for node in (franchise.get("venue"), team.get("venue"), doc.get("venue")):
+        found = _venue_id(node)
+        if found:
+            return found
+    return None
+
+
+def venue_key_paths(node, prefix="", out=None, limit=60):
+    """JSON paths whose key mentions 'venue' (schema inspection only)."""
+    out = [] if out is None else out
+    if len(out) >= limit:
+        return out
+    if isinstance(node, dict):
+        for key, value in node.items():
+            path = prefix + "/" + str(key)
+            if "venue" in str(key).lower():
+                out.append(path)
+            venue_key_paths(value, path, out, limit)
+    elif isinstance(node, list):
+        for value in node[:3]:
+            venue_key_paths(value, prefix + "[]", out, limit)
+    return out
 
 
 def d1_count_ok(count):
@@ -101,6 +139,10 @@ def _days(start, end):
         day += timedelta(days=1)
 
 
+def _stamp(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", required=True)
@@ -110,17 +152,19 @@ def main(argv=None):
     ap.add_argument("--workers", type=int, default=8)
     a = ap.parse_args(argv)
     out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
+    (out / "raw").mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
-    captured = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    captured = _stamp(now)
     start = date.fromisoformat(a.start)
     end = date.fromisoformat(a.end) if a.end else now.date() + timedelta(days=3)
     status = {"label": "PAPER_0U_NON_COUNTED", "status": "FAILED", "captured_utc": captured,
               "window": [start.isoformat(), end.isoformat()], "errors": []}
-    manifest = {}
+    manifest, probe = {}, {}
 
     def record(url, raw):
-        manifest[url] = {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+        digest = hashlib.sha256(raw).hexdigest()
+        manifest[url] = {"sha256": digest, "bytes": len(raw)}
+        (out / "raw" / (digest + ".bin")).write_bytes(raw)
         return raw
 
     try:
@@ -137,43 +181,63 @@ def main(argv=None):
                                       captured_utc=captured)
         (out / "d1_evidence.json").write_text(json.dumps(d1_doc, indent=1, sort_keys=True))
 
-        def team_venue_of(tid):
-            url = BASE + "/teams/" + tid
+        def team_job(tid):
+            pairs, venue, source, err = [], None, None, None
+            site_url = BASE + "/teams/" + tid
             try:
-                raw = fetch(url)
-            except RuntimeError as exc:
-                return tid, url, None, str(exc)
-            return tid, url, raw, None
-
-        team_venue, venue_errors = {}, []
-        with ThreadPoolExecutor(max_workers=a.workers) as pool:
-            for tid, url, raw, err in pool.map(team_venue_of, ids):
-                if err:
-                    venue_errors.append(err)
-                    continue
-                record(url, raw)
+                raw = fetch(site_url)
+                pairs.append((site_url, raw))
                 venue = parse_team_venue(raw)
+                source = "SITE_TEAM_DOC" if venue else None
+                if venue is None:
+                    core_url = CORE + "/seasons/" + str(a.season) + "/teams/" + tid
+                    raw2 = fetch(core_url)
+                    pairs.append((core_url, raw2))
+                    venue = parse_team_venue(raw2)
+                    source = "CORE_TEAM_RESOURCE" if venue else None
+            except (RuntimeError, ValueError) as exc:
+                err = str(exc)
+            return tid, pairs, venue, source, err
+
+        team_venue, errors, sources = {}, [], {}
+        with ThreadPoolExecutor(max_workers=a.workers) as pool:
+            for tid, pairs, venue, source, err in pool.map(team_job, ids):
+                for url, raw in pairs:
+                    record(url, raw)
+                    kind = "site_team" if url.startswith(BASE) else "core_team"
+                    if len(probe.setdefault(kind + "_venue_paths", {})) < 3:
+                        try:
+                            probe[kind + "_venue_paths"][url] = venue_key_paths(json.loads(raw))
+                        except ValueError:
+                            probe[kind + "_venue_paths"][url] = ["NOT_JSON"]
+                if err:
+                    errors.append(err)
                 if venue:
                     team_venue[tid] = venue
+                    sources[source] = sources.get(source, 0) + 1
         status["teams_with_venue"] = len(team_venue)
-        status["team_fetch_errors"] = len(venue_errors)
-        if len(team_venue) < MIN_TEAMS_WITH_VENUE:
-            raise RuntimeError("TEAM_VENUE_COVERAGE_TOO_LOW:" + str(len(team_venue)))
+        status["team_fetch_errors"] = len(errors)
+        status["venue_source_counts"] = sources
 
         verified, census = [], {}
         for day in _days(start, end):
             url = BASE + "/scoreboard?dates=" + day.strftime("%Y%m%d") + "&groups=50&limit=400"
             raw = record(url, fetch(url))
-            ids_day, day_census = classify_events(json.loads(raw), team_venue)
+            doc = json.loads(raw)
+            if len(probe.setdefault("scoreboard_venue_paths", {})) < 2 and doc.get("events"):
+                probe["scoreboard_venue_paths"][url] = venue_key_paths(doc["events"][0])
+            ids_day, day_census = classify_events(doc, team_venue)
             verified.extend(ids_day)
             for key, value in day_census.items():
                 census[key] = census.get(key, 0) + value
         status["scoreboard_census"] = census
+        if len(team_venue) < MIN_TEAMS_WITH_VENUE:
+            raise RuntimeError("TEAM_VENUE_COVERAGE_TOO_LOW:" + str(len(team_venue)))
         if not verified:
             raise RuntimeError("NO_VERIFIED_HOME_EVENTS")
         manifest_bytes = json.dumps(manifest, sort_keys=True).encode()
         venue_doc = A.build_evidence_doc(kind=A.KIND_VENUE, ids=verified, season=a.season,
-                                         source_label="ESPN_SCOREBOARD_PLUS_TEAM_FRANCHISE_VENUE",
+                                         source_label="ESPN_SCOREBOARD_PLUS_TEAM_VENUE",
                                          source_bytes=manifest_bytes, captured_utc=captured)
         (out / "venue_evidence.json").write_text(json.dumps(venue_doc, indent=1, sort_keys=True))
         status["status"] = "OK"
@@ -181,6 +245,8 @@ def main(argv=None):
     except Exception as exc:  # status.json must always be written
         status["errors"].append(type(exc).__name__ + ":" + str(exc))
     finally:
+        status["capture_completed_utc"] = _stamp(datetime.now(timezone.utc))
+        (out / "schema_probe.json").write_text(json.dumps(probe, indent=1, sort_keys=True))
         (out / "capture_manifest.json").write_text(json.dumps(manifest, indent=1, sort_keys=True))
         (out / "status.json").write_text(json.dumps(status, indent=1, sort_keys=True))
     print(json.dumps(status, sort_keys=True))

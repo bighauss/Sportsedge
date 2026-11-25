@@ -11,7 +11,7 @@ permissions:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/models/cbb
     steps:
@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
       - name: Offline unit tests
         run: python -m unittest -v tools.test_cbb_fetch_evidence
-      - name: Capture public ESPN evidence (network; failure is recorded, not hidden)
+      - name: Capture public ESPN evidence (network)
         id: capture
         continue-on-error: true
         run: python tools/cbb_fetch_evidence.py --out "$RUNNER_TEMP/evidence"
@@ -44,3 +44,8 @@ jobs:
           path: ${{ runner.temp }}/evidence
           retention-days: 14
           if-no-files-found: warn
+      - name: Fail the job when evidence capture failed
+        if: steps.capture.outcome == 'failure'
+        run: |
+          echo '::error::CBB_EVIDENCE_CAPTURE_FAILED (see status.json in the cbb-public-evidence artifact)'
+          exit 1
