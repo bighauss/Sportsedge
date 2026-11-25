@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import math
 import statistics
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -33,6 +34,10 @@ def delivery_audit(card, delivery_utc, *, max_age_minutes=MAX_QUOTE_AGE_MINUTES)
     Even rows without these defects remain PAPER/0u, NOT_RELEASED.
     No correlation assumptions: report positive research candidates per game.
     """
+    payload = {k: v for k, v in card.items() if k != "card_sha256"}
+    expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+    if card.get("card_sha256") != expected:
+        raise ValueError("CARD_DIGEST_MISMATCH")
     now = utc(delivery_utc)
     if not finite(max_age_minutes) or not 0 < max_age_minutes <= 60:
         raise ValueError("MAX_DELIVERY_QUOTE_AGE_INVALID")
