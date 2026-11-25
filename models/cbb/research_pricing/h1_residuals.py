@@ -28,26 +28,22 @@ def admit_records(
     *,
     cutoff_utc: str,
     min_n: int = 30,
-) -> List[dict]:
+) -> Tuple[List[dict], List[dict]]:
     """
     Admit only records that satisfy chronology and uniqueness.
 
-    Required keys per record:
-      game_id, forecast_utc, tipoff_utc, result_available_utc,
-      predicted_margin, actual_margin, predicted_total, actual_total
-    Optional: predicted_home, actual_home, predicted_away, actual_away
+    Returns (admitted, rejected).
+    Conflicting duplicates are quarantined (none of the conflicting rows are admitted).
+    Every rejected row receives an explicit reason.
     """
     cutoff = _utc(cutoff_utc)
-    seen = Counter()
-    admitted = []
+    by_id: Dict[str, List[dict]] = {}
+    rejected: List[dict] = []
     for i, r in enumerate(records):
         try:
             gid = r.get("game_id")
             if not isinstance(gid, str) or not gid.strip():
                 raise Hold("INVALID_GAME_ID")
-            seen[gid] += 1
-            if seen[gid] > 1:
-                raise Hold("DUPLICATE_GAME_ID")
             f, t, o = (_utc(r[k]) for k in ("forecast_utc", "tipoff_utc", "result_available_utc"))
             if not (f < t < o <= cutoff):
                 raise Hold("CHRONOLOGY_VIOLATION")
@@ -55,14 +51,19 @@ def admit_records(
                 v = r[k]
                 if type(v) not in (int, float) or not math.isfinite(v):
                     raise Hold("NONFINITE_VALUE")
-            admitted.append(r)
+            by_id.setdefault(gid, []).append(r)
         except (KeyError, TypeError, Hold) as exc:
-            # Individual rejection is recorded by the caller if needed;
-            # here we simply skip invalid rows so the fit can proceed on clean data.
-            continue
+            rejected.append({"index": i, "game_id": r.get("game_id"), "reason": str(exc)})
+    admitted = []
+    for gid, rows in by_id.items():
+        if len(rows) > 1:
+            for r in rows:
+                rejected.append({"index": None, "game_id": gid, "reason": "QUARANTINED_DUPLICATE"})
+        else:
+            admitted.append(rows[0])
     if len(admitted) < min_n:
         raise Hold("INSUFFICIENT_RESIDUAL_SAMPLE")
-    return admitted
+    return admitted, rejected
 
 def residual_stats(pairs: List[Tuple[float, float]]) -> Dict[str, float]:
     residuals = [a - p for p, a in pairs]
@@ -87,14 +88,13 @@ def fit_h1_residuals(
     Fit residual distributions from chronologically admissible records.
     Returns calibration summary plus residual SDs ready for pricing.
     """
-    admitted = admit_records(records, cutoff_utc=cutoff_utc, min_n=min_n)
+    admitted, rejected = admit_records(records, cutoff_utc=cutoff_utc, min_n=min_n)
     margin_pairs = [(r["predicted_margin"], r["actual_margin"]) for r in admitted]
     total_pairs = [(r["predicted_total"], r["actual_total"]) for r in admitted]
     fit = {
         "margin": residual_stats(margin_pairs),
         "total": residual_stats(total_pairs),
     }
-    # Team totals only when both predicted and actual are present for every admitted row
     if all("predicted_home" in r and "actual_home" in r for r in admitted):
         fit["home_team_total"] = residual_stats(
             [(r["predicted_home"], r["actual_home"]) for r in admitted]
@@ -109,6 +109,8 @@ def fit_h1_residuals(
         "evidence_sha256": evidence_sha256,
         "cutoff_utc": cutoff_utc,
         "admitted_n": len(admitted),
+        "rejected_n": len(rejected),
+        "rejected": rejected,
         "min_n": min_n,
         "fit": fit,
         "sds": {

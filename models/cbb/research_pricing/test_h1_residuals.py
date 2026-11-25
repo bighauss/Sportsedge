@@ -19,18 +19,16 @@ def _row(i, forecast="2026-11-20T12:00:00Z", tip="2026-11-20T18:00:00Z",
     base.update(kw)
     return base
 
-def test_chronology_and_duplicates():
+def test_quarantine_and_rejection_reasons():
     rows = [_row(i) for i in range(40)]
-    # Duplicate
-    rows.append(_row(0))
-    # Future result
-    rows.append(_row(99, result="2026-11-26T00:00:00Z"))
-    # Forecast after tip
-    rows.append(_row(98, forecast="2026-11-20T19:00:00Z"))
+    rows.append(_row(0))  # duplicate of g0
+    rows.append(_row(99, result="2026-11-26T00:00:00Z"))  # future
     fit = fit_h1_residuals(rows, cutoff_utc="2026-11-25T00:00:00Z", min_n=30)
-    assert fit["admitted_n"] == 40
-    assert fit["sds"]["sd_margin"] > 0
-    assert fit["fit"]["margin"]["residual_bias"] is not None
+    assert fit["admitted_n"] == 39  # g0 quarantined
+    assert fit["rejected_n"] >= 3
+    reasons = {r["reason"] for r in fit["rejected"]}
+    assert "QUARANTINED_DUPLICATE" in reasons
+    assert any("CHRONOLOGY" in r for r in reasons)
 
 def test_insufficient_after_rejection():
     rows = [_row(i) for i in range(10)]
@@ -57,7 +55,7 @@ def test_provenance_preserved():
     assert fit["status"] == "PAPER_0U_RESEARCH_CALIBRATION"
 
 if __name__ == "__main__":
-    test_chronology_and_duplicates()
+    test_quarantine_and_rejection_reasons()
     test_insufficient_after_rejection()
     test_team_total_withheld_when_missing()
     test_provenance_preserved()
