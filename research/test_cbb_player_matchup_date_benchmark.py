@@ -27,7 +27,7 @@ class DateBenchmark(unittest.TestCase):
         self.assertGreater(result["metrics"]["POINTS"]["matchup10"]["mae"],0)
         self.assertEqual(len(result["metrics"]),8)
         self.assertEqual(result["window_counts"], {8:2,9:2,10:6})
-        self.assertEqual(set(result["metrics"]["PTS"] if "PTS" in result["metrics"] else result["metrics"]["POINTS"]),
+        self.assertEqual(set(result["metrics"]["POINTS"]),
                          {"last5","last8","plain10","pace_only10","defense_only10","matchup10"})
         self.assertEqual(result["metrics"]["POINTS"]["plain10"]["mae"],0)
         self.assertEqual(result["metrics"]["POINTS"]["pace_only10"]["mae"],0)
@@ -39,6 +39,19 @@ class DateBenchmark(unittest.TestCase):
         p[-1]["day"]=p[-2]["day"]
         for row in r[-2:]:row["day"]=r[-3]["day"]
         self.assertEqual(evaluate(r,p)["paired_appearances"],0)
+
+    def test_probability_diagnostics_require_twenty_prior_residuals(self):
+        r,p=fixture(28)
+        self.assertEqual(evaluate(r,p)["probability_diagnostics"],{})
+        r,p=fixture(29)
+        report=evaluate(r,p)
+        self.assertEqual(len(report["probability_diagnostics"]),8)
+        for family, results in report["probability_diagnostics"].items():
+            for name in ("empirical_recent","matchup_residual"):
+                self.assertEqual(results[name]["n"],2)
+                self.assertGreaterEqual(results[name]["brier"],0)
+                self.assertLessEqual(results[name]["brier"],1)
+                self.assertGreaterEqual(results[name]["log_loss"],0)
 
     def test_reconcile_and_reject_missing_pace(self):
         r,p=fixture()
