@@ -13,6 +13,8 @@ from statistics import mean
 STATS = ("POINTS", "REBOUNDS", "ASSISTS", "THREES")
 COMBOS = {"PRA": (0,1,2), "PR": (0,1), "PA": (0,2), "RA": (1,2)}
 FAMILIES = {**{k:(i,) for i,k in enumerate(STATS)}, **COMBOS}
+DIAGNOSTIC_LINES = {"POINTS":9.5,"REBOUNDS":4.5,"ASSISTS":2.5,"THREES":1.5,
+                    "PRA":14.5,"PR":12.5,"PA":11.5,"RA":5.5}
 
 
 def evaluate(records, pace_rows):
@@ -48,9 +50,15 @@ def evaluate(records, pace_rows):
     errors = defaultdict(lambda:[0,0.,0.,0.])
     blocks = defaultdict(lambda:[0,0.,0.])
     windows = Counter()
+    residuals = defaultdict(lambda:deque(maxlen=60))
+    pending = deque()
+    prob_metrics = defaultdict(lambda:[0,0.,0.,0.,0.])
     paired_games, paired = set(), 0
     cursor = 0
     for day,gid,h,a,poss,players,totals in eligible:
+        while pending and pending[0][0] <= day-timedelta(days=2):
+            _, key, err = pending.popleft()
+            residuals[key].append(err)
         while cursor < len(eligible) and eligible[cursor][0] <= day-timedelta(days=2):
             _,_,ph,pa,pp,ps,ts = eligible[cursor]
             for t,o in ((ph,pa),(pa,ph)):
@@ -86,6 +94,27 @@ def evaluate(records, pace_rows):
             windows[len(past)] += 1
             actual = [r["stats"][s] for s in STATS]
             paired+=1;paired_games.add(gid)
+            # Fixed illustrative half-lines; compare on common conditional rows.
+            key = (t,pid)
+            prior_errs = residuals[key]
+            if len(prior_errs) >= 20:
+                samples = []
+                for err in prior_errs:
+                    draw = [max(0,round(v+e)) for v,e in zip(match,err)]
+                    draw[3] = min(draw[3],draw[0]//3)
+                    samples.append(draw)
+                for fam,ix in FAMILIES.items():
+                    line = DIAGNOSTIC_LINES[fam]
+                    y = int(sum(actual[i] for i in ix)>line)
+                    baseline_wins = sum(sum(x["stats"][STATS[i]] for i in ix)>line for x,_ in past)
+                    candidate_wins = sum(sum(draw[i] for i in ix)>line for draw in samples)
+                    for name,wins,n in (("empirical_recent",baseline_wins,len(past)),
+                                        ("matchup_residual",candidate_wins,len(samples))):
+                        p = (wins+0.5)/(n+1)
+                        v = prob_metrics[(fam,name)]
+                        v[0]+=1;v[1]+=(p-y)**2;v[2]+=-(y*math.log(p)+(1-y)*math.log1p(-p))
+                        v[3]+=p;v[4]+=y
+            pending.append((day,key,tuple(a-m for a,m in zip(actual,match))))
             for fam,ix in FAMILIES.items():
                 baseline_error = sum(plain[i]-actual[i] for i in ix)
                 week = day.isocalendar()[:2]
@@ -110,9 +139,13 @@ def evaluate(records, pace_rows):
                                         "delta_mse_vs_plain10":sum(v[2] for v in data)/n,
                                         "week_blocks":len(data),
                                         "weeks_better_mae":sum(v[1]<0 for v in data)}
+    probability = {}
+    for (fam,name),(n,bs,ll,p,y) in prob_metrics.items():
+        probability.setdefault(fam,{"diagnostic_line":DIAGNOSTIC_LINES[fam]})[name] = {
+            "n":n,"brier":bs/n,"log_loss":ll/n,"mean_probability":p/n,"observed_rate":y/n}
     return {"eligible_games":len(eligible),"paired_games":len(paired_games),"paired_appearances":paired,
             "window_counts":dict(windows),"rejections":dict(rejects),"metrics":metrics,
-            "paired_ablation_deltas":paired_deltas}
+            "paired_ablation_deltas":paired_deltas,"probability_diagnostics":probability}
 
 
 def main():
@@ -130,6 +163,7 @@ def main():
         "Team opponent rates sum admitted player stats; points must reconcile, rebounds exclude team-only rebounds.",
         "Common rows require eight appearances; plain10, pace-only, defense-only and combined use the identical up-to-ten window.",
         "Reused 2023–2025 seasons are development evidence, not untouched holdout; week counts are descriptive, not significance tests.",
+        "Probability diagnostics require twenty prior matchup residuals for the same player/team, capped at sixty; two-day lag, fixed illustrative half-lines, no actual odds.",
         "No confirmed availability, odds, ROI or promotion.",
         "Public-date benchmark of the heuristic, not exact prospective player bundle."],"seasons":{}}
     for season in args.seasons:
