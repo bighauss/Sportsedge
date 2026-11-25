@@ -9,7 +9,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent)); sys.path.insert(0, str(HERE.parents[2]))
 
 from fullgame import pricing as P, ratings as R, sdv_loader as L, espn_odds as O, evaluate as E  # noqa: E402
-from fullgame import nov24_diagnosis as D  # noqa: E402
+from fullgame import nov24_diagnosis as D, context as C, adjustments as A  # noqa: E402
 import cbb_pricing as PR  # noqa: E402
 
 CARD = HERE.parents[2] / "outputs" / "cbb" / "card_2026-11-24_45452279760_1.md"
@@ -256,6 +256,124 @@ class TNov24Card(unittest.TestCase):
         # p_away 0.122 at SD 12.5 -> home margin ~ +14.6 against a -25.5 market line
         self.assertAlmostEqual(g["card_margin"], 12.5 * D.N.inv_cdf(0.878), places=6)
         self.assertLess(g["card_margin"], 16)
+
+
+class TContext(unittest.TestCase):
+    def _games(self):
+        # season opener, then a back-to-back on the road, then a same-city rematch
+        lookup = {"1": {"city": "Durham", "state": "NC"},
+                  "2": {"city": "Lexington", "state": "KY"},
+                  "3": {"city": "Nassau", "state": "Bahamas"}}
+        games = [
+            {"game_id": "a", "date": "2021-11-09", "tip_utc": "2021-11-09T00:00Z",
+             "home": "H", "away": "A", "site": "HOME_VERIFIED", "venue_id": "1",
+             "home_venue_id": "1", "away_home_venue_id": "2"},
+            {"game_id": "b", "date": "2021-11-10", "tip_utc": "2021-11-10T00:00Z",
+             "home": "A", "away": "H", "site": "HOME_VERIFIED", "venue_id": "2",
+             "home_venue_id": "2", "away_home_venue_id": "1"},
+            {"game_id": "c", "date": "2021-11-20", "tip_utc": "2021-11-20T00:00Z",
+             "home": "H", "away": "A", "site": "NEUTRAL", "venue_id": "3",
+             "home_venue_id": "1", "away_home_venue_id": "2"},
+        ]
+        return C.attach_context(games, venue_lookup=lookup), lookup
+
+    def test_opener_is_capped_and_flagged(self):
+        rows, _ = self._games()
+        self.assertEqual(rows[0]["home_rest"], C.REST_CAP)
+        self.assertEqual(rows[0]["away_rest"], C.REST_CAP)
+        self.assertEqual((rows[0]["home_opener"], rows[0]["away_opener"]), (1, 1))
+        self.assertEqual((rows[0]["home_b2b"], rows[0]["away_b2b"]), (0, 0))
+
+    def test_b2b_and_rest_use_only_prior_games(self):
+        rows, _ = self._games()
+        # game b is the next day for both teams
+        self.assertEqual(rows[1]["home_rest"], 1)
+        self.assertEqual(rows[1]["away_rest"], 1)
+        self.assertEqual((rows[1]["home_b2b"], rows[1]["away_b2b"]), (1, 1))
+        self.assertEqual((rows[1]["home_opener"], rows[1]["away_opener"]), (0, 0))
+        # game c is 10 days after b
+        self.assertEqual(rows[2]["home_rest"], 10)
+        self.assertEqual(rows[2]["away_rest"], 10)
+        self.assertEqual(rows[2]["is_neutral"], 1)
+
+    def test_same_city_travel_is_zero_and_cross_region_is_positive(self):
+        self.assertEqual(C.travel_miles("Durham", "NC", "durham", "NC"), 0.0)
+        self.assertEqual(C.travel_miles("Charlotte", "NC", "Durham", "NC"), C.INTRA_STATE_MILES)
+        miles = C.travel_miles("Durham", "NC", "Nassau", "Bahamas")
+        self.assertIsNotNone(miles)
+        self.assertGreater(miles, 500)
+        rows, _ = self._games()
+        # game a: home at home venue -> 0 miles; away from KY to NC is interstate
+        self.assertEqual(rows[0]["home_miles"], 0.0)
+        self.assertGreater(rows[0]["away_miles"], 200)
+
+    def test_future_game_does_not_affect_earlier_rest(self):
+        rows, lookup = self._games()
+        # attaching again in shuffled input order must still sort and ignore the future
+        shuffled = [rows[2], rows[0], rows[1]]
+        # strip fields and re-run
+        raw = [{k: g[k] for k in ("game_id", "date", "tip_utc", "home", "away", "site",
+                                  "venue_id", "home_venue_id", "away_home_venue_id")} for g in shuffled]
+        out = {g["game_id"]: g for g in C.attach_context(raw, venue_lookup=lookup)}
+        self.assertEqual(out["a"]["home_rest"], C.REST_CAP)
+        self.assertEqual(out["b"]["home_rest"], 1)
+
+
+class TAdjustments(unittest.TestCase):
+    def test_ridge_recovers_rest_effect(self):
+        # synthetic: margin residual = 1.5 * rest_diff, no noise
+        rows = []
+        for i, rd in enumerate((-3, -2, -1, 0, 1, 2, 3, 4)):
+            rows.append({"n_home": 10, "n_away": 10, "rest_diff": rd, "home_b2b": 0, "away_b2b": 0,
+                         "is_neutral": 0, "away_miles": 0, "home_miles": 0, "away_moved": 0, "home_moved": 0,
+                         "home_points": 70 + 1.5 * rd, "away_points": 70,
+                         "f": {"FG1": {"margin": 0.0, "total": 140.0, "home_points": 70, "away_points": 70}}})
+        fit = A.fit_variant(rows, A.VARIANTS["rest"], "margin", lam=1e-6, min_n=8)
+        self.assertIsNotNone(fit)
+        # intercept ~0, rest_diff ~1.5
+        coef = dict(zip(fit["names"], fit["coef"]))
+        self.assertAlmostEqual(coef["rest_diff"], 1.5, places=1)
+        self.assertAlmostEqual(coef["intercept"], 0.0, delta=0.2)
+        adj = A.apply_fit(rows[-1], {"margin": fit, "total": None}, rows[-1]["f"]["FG1"])
+        self.assertAlmostEqual(adj["margin"], 1.5 * 4, places=1)
+
+    def test_longshot_shrinks_only_the_tail(self):
+        # model says 0.04, actually 0.02 in the tail; interior 0.5 stays
+        pairs = [(0.03, 0) for _ in range(40)] + [(0.03, 1) for _ in range(10)]  # rate 0.2? 10/50=0.2, model 0.03
+        # wait we want model overstate: model 0.06 mean, rate 0.03
+        pairs = [(0.06, 0) for _ in range(97)] + [(0.06, 1) for _ in range(3)]
+        pairs += [(0.5, 0) for _ in range(50)] + [(0.5, 1) for _ in range(50)]
+        cal = A.fit_longshot(pairs, edges=(0.08,))
+        self.assertEqual(cal["primary"], 0.08)
+        self.assertLess(cal["edges"]["0.08"]["rate"], cal["edges"]["0.08"]["model"])
+        tail = A.apply_longshot(0.06, cal)
+        mid = A.apply_longshot(0.5, cal)
+        self.assertLess(tail, 0.06)
+        self.assertAlmostEqual(mid, 0.5)
+
+    def test_fav_bump_raises_underconfident_favourite(self):
+        # model p_fav=0.60, actual rate 0.70
+        pairs = [(0.60, 1) for _ in range(70)] + [(0.60, 0) for _ in range(30)]
+        bump = A.fit_fav_bump(pairs)
+        self.assertGreater(bump["delta"], 0.05)
+        self.assertAlmostEqual(A.apply_fav_bump(0.60, bump), 0.60 + bump["delta"], places=6)
+        # underdog side mirrored
+        self.assertAlmostEqual(A.apply_fav_bump(0.40, bump), 0.40 - bump["delta"], places=6)
+
+    def test_frozen_coefs_do_not_depend_on_later_rows(self):
+        early = [{"n_home": 10, "n_away": 10, "rest_diff": 2, "home_b2b": 0, "away_b2b": 0,
+                  "is_neutral": 0, "away_miles": 0, "home_miles": 0, "away_moved": 0, "home_moved": 0,
+                  "home_points": 80, "away_points": 70,
+                  "f": {"FG1": {"margin": 5.0, "total": 150.0, "home_points": 77.5, "away_points": 72.5}}}
+                 for _ in range(80)]
+        fit1 = A.fit_variant(early, A.VARIANTS["rest"], "margin", lam=1.0)
+        later = dict(early[0])
+        later["home_points"] = 200  # would wreck a refit
+        fit2 = A.fit_variant(early, A.VARIANTS["rest"], "margin", lam=1.0)
+        self.assertEqual(fit1["coef"], fit2["coef"])
+        # applying the frozen fit to a later row does not refit
+        adj = A.apply_fit(later, {"margin": fit1}, later["f"]["FG1"])
+        self.assertTrue(math.isfinite(adj["margin"]))
 
 
 if __name__ == "__main__":
