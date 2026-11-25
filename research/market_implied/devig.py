@@ -155,13 +155,25 @@ class BookQuote:
     fmt: str = "american"
 
 
+def book_key(book):
+    """Normalize known target aliases and punctuation before exclusion/deduplication."""
+    if not isinstance(book, str) or not book.strip():
+        raise ValueError("invalid sportsbook identity")
+    key = "".join(c for c in book.casefold() if c.isalnum())
+    if not key:
+        raise ValueError("invalid sportsbook identity")
+    if key in {"dk", "draftkings", "draftkingssportsbook", "draftkingssports", "draftkingsus"}:
+        return "draftkings"
+    return key
+
+
 def consensus(quotes, method="power", exclude=("draftkings",), *, as_of=None, max_age_seconds=None):
     # DraftKings exclusion is mandatory, even if callers override exclude.
-    ex = {b.strip().casefold() for b in exclude} | {"draftkings"}
-    used = [q for q in quotes if q.book.strip().casefold() not in ex and q.copies is None]
-    if not used:
-        return FairResult("NO_PRICE", method, reason="no independent book")
     try:
+        ex = {book_key(b) for b in exclude} | {"draftkings"}
+        used = [q for q in quotes if book_key(q.book) not in ex and q.copies is None]
+        if not used:
+            return FairResult("NO_PRICE", method, reason="no independent book")
         now, age = utc(as_of), finite(max_age_seconds)
         if age <= 0:
             raise ValueError("positive freshness limit required")
@@ -184,7 +196,7 @@ def consensus(quotes, method="power", exclude=("draftkings",), *, as_of=None, ma
             if contract is not None and identity != contract:
                 raise ValueError("incompatible quote contracts")
             contract = identity
-            book = q.book.strip().casefold()
+            book = book_key(q.book)
             if book in seen:
                 raise ValueError("duplicate sportsbook")
             seen.add(book)
@@ -208,7 +220,7 @@ def consensus(quotes, method="power", exclude=("draftkings",), *, as_of=None, ma
 
 def implied_team_scores(spread_home, total):
     margin, total = -finite(spread_home), finite(total)
-    if total < abs(margin):
+    if total <= 0 or total < abs(margin):
         raise ValueError("negative implied team score")
     return (total+margin)/2, (total-margin)/2
 
