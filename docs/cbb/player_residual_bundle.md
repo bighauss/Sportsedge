@@ -11,3 +11,14 @@ Schema: `CBB_PLAYER_RESIDUAL_BUNDLE_V1`.
 - Exact ESPN player finals now support conditional W/L/push diagnostics for positive-minute participants; matching event/team/score and player identity required. Box hashes recorded. Missing, duplicate, DNP and mismatched rows withheld. No sportsbook settlement or player ROI until contract/DNP rules verified. Conditional calibration reported separately. Half score grading is paper only, with tied half ML and H2 withheld. No CLV claims without a matching pre-tip close.
 
 No current player forecasts, residual corpus, availability feed or authenticated quote data are included. This is a research integration interface, not a claim that current slate props are ready.
+
+
+## Generate matchup-aware research forecasts
+
+`python models/cbb/cbb_player_matchup_forecast.py --finals /private/observed-finals.json --targets /private/roster-candidates.json --out /private/player-bundle.json`
+
+Finals input: array of event_id, home_id, away_id, tip_utc, observed_final_utc, possessions, team_stats keyed by team ID (PTS/REB/AST/3PM), players (team_id, player_id, minutes, stats). Use only genuine observation timestamps and verified event/team/player crosswalks; never derive an observation time from tip. Targets: event_id, team_id, player_id, opponent_id, tip_utc, frozen_utc. Candidates are not confirmed active players.
+
+The fixed research challenger uses the latest ten eligible appearances (minimum five), player minutes and per-minute production, recent team pace, and opponent per-possession allowed rates shrunk toward the prior league average. This is an unvalidated heuristic, not a fitted opponent-specific usage model. Historical forecast cutoffs are reconstructed just before tip and clearly labeled CHRONOLOGICAL_REPLAY_NOT_PROSPECTIVE; only earlier observed finals enter each forecast. Metrics include paired MAE, RMSE and bias against recent-player averages for all eight stat families. Do not select model parameters on the reported evaluation set.
+
+Inputs are hashed. Replay may be slow on a full multi-season corpus; minimum twenty same-team/player/version residuals for pricing can leave many players unpriced. No real-data run or validated improvement is asserted. Existing cached box scores without actual observation receipts cannot demonstrate historical availability; collect timestamped sources rather than backdating.
