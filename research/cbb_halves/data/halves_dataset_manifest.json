@@ -1,0 +1,204 @@
+{
+ "admitted_games": 43522,
+ "builder": "research/cbb_halves/build_halves_dataset.py",
+ "by_season": {
+  "2019": {
+   "admitted": 5193,
+   "first_utc": "2018-11-06T17:30Z",
+   "last_utc": "2019-04-09T01:20Z",
+   "linescore_checked": 0,
+   "overtime": 293,
+   "rejected": 856
+  },
+  "2020": {
+   "admitted": 5129,
+   "first_utc": "2019-11-05T17:00Z",
+   "last_utc": "2020-03-12T03:30Z",
+   "linescore_checked": 0,
+   "overtime": 264,
+   "rejected": 638
+  },
+  "2021": {
+   "admitted": 3780,
+   "first_utc": "2020-11-25T16:00Z",
+   "last_utc": "2021-04-06T01:20Z",
+   "linescore_checked": 0,
+   "overtime": 190,
+   "rejected": 505
+  },
+  "2022": {
+   "admitted": 5493,
+   "first_utc": "2021-11-09T20:00Z",
+   "last_utc": "2022-04-05T01:20Z",
+   "linescore_checked": 0,
+   "overtime": 283,
+   "rejected": 483
+  },
+  "2023": {
+   "admitted": 5757,
+   "first_utc": "2022-11-07T17:00Z",
+   "last_utc": "2023-04-04T01:20Z",
+   "linescore_checked": 5757,
+   "overtime": 316,
+   "rejected": 504
+  },
+  "2024": {
+   "admitted": 5950,
+   "first_utc": "2023-11-06T16:00Z",
+   "last_utc": "2024-04-09T01:20Z",
+   "linescore_checked": 5950,
+   "overtime": 327,
+   "rejected": 299
+  },
+  "2025": {
+   "admitted": 5961,
+   "first_utc": "2024-11-04T16:00Z",
+   "last_utc": "2025-04-08T00:50Z",
+   "linescore_checked": 5961,
+   "overtime": 307,
+   "rejected": 338
+  },
+  "2026": {
+   "admitted": 6259,
+   "first_utc": "2025-11-03T13:00Z",
+   "last_utc": "2026-04-07T00:50Z",
+   "linescore_checked": 6259,
+   "overtime": 326,
+   "rejected": 59
+  }
+ },
+ "label": "PAPER_0U_NON_COUNTED_RESEARCH",
+ "outputs": {
+  "halves_games_2019.csv": {
+   "bytes": 574713,
+   "rows": 5193,
+   "sha256": "7d2c4e4777148533a8f6d8e2e356c228cd1367cd411afb955d584062aef384d3"
+  },
+  "halves_games_2020.csv": {
+   "bytes": 567842,
+   "rows": 5129,
+   "sha256": "ddf93cb3a5c753cec858e6a02b2aca04c16b772f294763ca5d1b588935c17d33"
+  },
+  "halves_games_2021.csv": {
+   "bytes": 417778,
+   "rows": 3780,
+   "sha256": "58e1772ec0179bd6306a5a87b2ce5d3c33d620305ceef433c3271a915b4675c1"
+  },
+  "halves_games_2022.csv": {
+   "bytes": 608540,
+   "rows": 5493,
+   "sha256": "ddd3c36e1092e8977c82d90bb77e062a550e066adfb0771c93f46d427ecad220"
+  },
+  "halves_games_2023.csv": {
+   "bytes": 632946,
+   "rows": 5757,
+   "sha256": "03ad470cbafd7c16587e5148c0070a373eaf229a529065f18c5bd72a319603bf"
+  },
+  "halves_games_2024.csv": {
+   "bytes": 654037,
+   "rows": 5950,
+   "sha256": "6370af962006061d8e186db51fb23171906b9c4b6c893a51199ca22e63b422df"
+  },
+  "halves_games_2025.csv": {
+   "bytes": 655499,
+   "rows": 5961,
+   "sha256": "3e71929117f555b3dba50863f6f252d53d318270bfdd074f1e281dc06b82564d"
+  },
+  "halves_games_2026.csv": {
+   "bytes": 688140,
+   "rows": 6259,
+   "sha256": "9b6ce4511524421ceec5fd303dec5a41fa95266134e82e9543eaf6220ad851e6"
+  }
+ },
+ "rejected_games": 3682,
+ "rejections_by_reason": {
+  "FINAL_MISMATCH_SCHEDULE": 442,
+  "H1_MISMATCH_LINESCORE": 16,
+  "NOT_COMPLETED": 64,
+  "NO_PBP": 1750,
+  "NO_PERIOD_2": 13,
+  "SCORE_NOT_MONOTONE": 1397
+ },
+ "sources": {
+  "mbb_schedule_2019.parquet": {
+   "bytes": 627071,
+   "sha256": "c285df779882719857048b1478c15d21868f4fdbe7d7d75d2ecb4f4ab970fb71",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2019.parquet"
+  },
+  "mbb_schedule_2020.parquet": {
+   "bytes": 598411,
+   "sha256": "f87d7a04d905c95221b1201a4fd43bdf9bad3bfae7b3f880800e9eb8ae1cfa3a",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2020.parquet"
+  },
+  "mbb_schedule_2021.parquet": {
+   "bytes": 465503,
+   "sha256": "26b26e9fd035a567ca66e65fadd8a3df9482e25e4a1c63ff40466e0d99c9cc76",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2021.parquet"
+  },
+  "mbb_schedule_2022.parquet": {
+   "bytes": 621024,
+   "sha256": "75a702d5c8db85bfd7ad30bc046a801742b88ac3f7a900d7e05450a6a4c10276",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2022.parquet"
+  },
+  "mbb_schedule_2023.parquet": {
+   "bytes": 1039184,
+   "sha256": "1a75500bd669a2e0f01b39623a1aa28d8d4cc1b8658f8adbabfc5319c73c496c",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2023.parquet"
+  },
+  "mbb_schedule_2024.parquet": {
+   "bytes": 1024630,
+   "sha256": "27889ecf392a9a6281e7898dc39d51a2f4a4576f689533dda0d67c4d57d52602",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2024.parquet"
+  },
+  "mbb_schedule_2025.parquet": {
+   "bytes": 1433410,
+   "sha256": "e01bf54b51c8d71b00cd8144e9a022ed170af2c2e57787b1cef672340891c45b",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2025.parquet"
+  },
+  "mbb_schedule_2026.parquet": {
+   "bytes": 1761833,
+   "sha256": "480896940f9502e537513386efa1ece6ed9cac0bcd8bd30f3493aa6254912aec",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_schedules/mbb_schedule_2026.parquet"
+  },
+  "play_by_play_2019.parquet": {
+   "bytes": 46542977,
+   "sha256": "f3cf176f1f7ee5b9906a5fa403d6e8b149526b34ada7e76a80ca3ac7c73a091e",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2019.parquet"
+  },
+  "play_by_play_2020.parquet": {
+   "bytes": 45352641,
+   "sha256": "5f0e2fa74c7fe18e13c5b37b4c3cea68a3f66ea6cb627135b23d8431ce8f6659",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2020.parquet"
+  },
+  "play_by_play_2021.parquet": {
+   "bytes": 35845273,
+   "sha256": "66cf0ed8446fe5d60cc135da81a08d8863b491d4dcf73a754435799c3be6ffd4",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2021.parquet"
+  },
+  "play_by_play_2022.parquet": {
+   "bytes": 53943041,
+   "sha256": "9994531e9914c08ec6566a30ad9871bd3b3c4a49913d16da23e49dd7c3814755",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2022.parquet"
+  },
+  "play_by_play_2023.parquet": {
+   "bytes": 53097235,
+   "sha256": "5362f30bac8b37b8b153f759a25d8432df2a79b646a1c25c90b0372cabba9d53",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2023.parquet"
+  },
+  "play_by_play_2024.parquet": {
+   "bytes": 54012143,
+   "sha256": "0b628b0bcfcfeda5bf5829747b6699e994313f8a45fa22731f3353927fd476aa",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2024.parquet"
+  },
+  "play_by_play_2025.parquet": {
+   "bytes": 63659461,
+   "sha256": "60cfc53e65c8779544aa470371814534ac695e2f32705b4132996106063a191f",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2025.parquet"
+  },
+  "play_by_play_2026.parquet": {
+   "bytes": 89782116,
+   "sha256": "d3fb9ebe459a9b6a4a0ad03583bd5058b4e52423970897b5ce0880b53d284bfe",
+   "url": "https://github.com/sportsdataverse/sportsdataverse-data/releases/download/espn_mens_college_basketball_pbp/play_by_play_2026.parquet"
+  }
+ }
+}
