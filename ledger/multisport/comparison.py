@@ -23,6 +23,7 @@ FIELDS = ("model_p", "market_p", "blend_p")
 VALID_PROB_DEFS = ("conditional_no_push", "unconditional_win")
 COVERAGE_REASONS = ("NOT_OFFERED", "NOT_CAPTURED", "NO_MODEL", "NO_PROVENANCE", "UNSUPPORTED", "LIVE_OR_CLOSED")
 EPS = 1e-6
+MODEL_WEIGHT_GRID = (0, 25, 50, 60, 75, 80, 90, 95, 100)
 
 
 class IntegrityError(ValueError):
@@ -253,10 +254,14 @@ def _calibration(pairs, num_bins=5):
 
 def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
                         authenticated_finals=None, closing_quotes=None,
-                        n_boot=1000, seed=42):
-    """Evaluate 4 fixed-weight candidates across all 7 sports on identical eligible samples."""
+                        n_boot=1000, seed=42, include_nine_weights=False):
+    """Evaluate on identical eligible rows; optional grid uses supplied market anchor.\n\n    Market provenance is not established by this comparison. Grid metrics\n    are conditional on non-push outcomes, not candidate-specific bets/ROI.\n    """
+    if type(include_nine_weights) is not bool:
+        raise ValueError("include_nine_weights must be boolean")
     eligible, run_audit = select_latest_pregame_runs(runs)
     cand_names = ("market_only", "blend_90_10", "current_model", "independent_model")
+    if include_nine_weights:
+        cand_names += tuple(f"model_{w:03d}_market_{100-w:03d}" for w in MODEL_WEIGHT_GRID)
     obs = {c: [] for c in cand_names}
     roi_obs = []
     exclusions = {"push_rows": 0, "dead_heat_rows": 0,
@@ -305,6 +310,8 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
                 "current_model": bp,
                 "independent_model": mp,
             }
+            if include_nine_weights:
+                probs.update({f"model_{w:03d}_market_{100-w:03d}": (w * mp + (100-w)*kp)/100 for w in MODEL_WEIGHT_GRID})
             for cname, pval in probs.items():
                 obs[cname].append({
                     "sport": sport, "event_id": f"{sport}:{m['event_id']}",
@@ -383,6 +390,10 @@ def evaluate_multisport(runs, pick_set, *, default_prob_definition=None,
     paired_events = {r["event_id"] for r in obs["independent_model"]}
     return {
         "pick_set": pick_set,
+        "weight_grid": {"model_percent": list(MODEL_WEIGHT_GRID) if include_nine_weights else [],
+                        "market_anchor": "CALLER_SUPPLIED_MARKET_PROBABILITY_PROVENANCE_UNVERIFIED",
+                        "probability_basis": "CONDITIONAL_NON_PUSH",
+                        "roi_scope": "SAME_FROZEN_SELECTIONS_NOT_WEIGHT_SPECIFIC"} if include_nine_weights else None,
         "run_audit": run_audit,
         "exclusion_audit": exclusions,
         "sample_census": {
