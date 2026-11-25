@@ -282,6 +282,36 @@ class UpstreamAdmission(unittest.TestCase):
             self.assertFalse(a)
             self.assertEqual(r[0].reason_code, reason)
 
+    def test_later_identity_requires_explicit_replay_basis(self):
+        from dataclasses import replace
+        q = replace(quote("TOTAL",145.5,-110,-110), identity_available_utc="2026-11-25T16:00:00Z",
+                    identity_basis="LATER_PUBLIC_PAGE_CORROBORATION")
+        meta = {"raw": {}, "order": "over_under", "price_bad": False, "line_bad": False}
+        def run(qs):
+            return P.validate(qs, [], "2026-11-25T15:00:00Z", totals_order_verified=True,
+                adapters=set(), match=lambda *args: ({"game_id":"g1","tipoff_utc":q.tip_utc},None))
+        a,r = run([(q,meta)])
+        self.assertFalse(a)
+        self.assertEqual(r[0].reason_code,"QUOTE_AFTER_FREEZE")
+        q = replace(q, replay_basis="RETROSPECTIVE_LATER_IDENTITY", row_key="pdf:7",
+                    source_sha256="a"*64)
+        a,r = run([(q,meta)])
+        self.assertFalse(r)
+        priced,_,_ = P.price(a,{"g1":proj()},{"g1":P.simulate(proj(),2000,3)},0.25,CFG)
+        self.assertTrue(all(x.row_key=="pdf:7" and x.replay_basis==q.replay_basis for x,_ in priced))
+
+    def test_conflicting_main_lines_do_not_select_first(self):
+        q1 = quote("TOTAL",145.5,-110,-110,i=0)
+        q2 = quote("TOTAL",146.5,-110,-110,i=1)
+        q3 = quote("ALT_TOTAL",150.5,-110,-110,i=2)
+        meta = {"raw": {}, "order": "over_under", "price_bad": False, "line_bad": False}
+        a,r = P.validate([(q,meta) for q in (q1,q2,q3)], [], "2026-11-25T15:00:00Z",
+                         totals_order_verified=True, adapters=set(),
+                         match=lambda *args: ({"game_id":"g1","tipoff_utc":q1.tip_utc},None))
+        self.assertEqual([q.market for q,_ in a],["ALT_TOTAL"])
+        self.assertEqual(len(r),2)
+        self.assertTrue(all(x.reason_code=="DUPLICATE_QUOTE" for x in r))
+
     def test_team_total_hybrid_label_not_validated(self):
         q = quote("TT_HOME", 74.5, -110, -110)
         priced, rejects, _ = P.price([(q, "g1")], {"g1": proj()},
