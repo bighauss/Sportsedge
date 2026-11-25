@@ -86,6 +86,17 @@
    "unaffected_rows_bit_identical": 32056
   }
  },
+ "evidence_labels": {
+  "applies_to": [
+   "nba_push_accounting_hist/analysis.json",
+   "historical_backtest",
+   "recalibration outputs (research branch)"
+  ],
+  "flag": "MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE",
+  "independent_model_evidence": false,
+  "not_applicable": "nba_push_accounting_20261125_equivalence.json is synthetic bit-identity evidence (no projections from real data)",
+  "projection_basis": "MARKET_DERIVED_STAND_IN"
+ },
  "first_introducing_commit": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
  "governance_followup": "Opening a PR touches protected paths (research/freezes/**); the PR must add docs/governance/changes/pr-<N>.json once its number is known.",
  "governance_record": "docs/governance/changes/pr-460.json",
@@ -93,10 +104,13 @@
  "historical_backtest": {
   "data_in_repo": "NONE: no real NBA results, boards or odds are committed on main.",
   "data_used": "ESPN public scoreboard linescores + ESPN core-API closing full-game spread/total/ML, 2023-24 and 2024-25 (2,644 final games). Fetched 2026-11-25 by research/freezes/nba_push_accounting_hist/fetch_espn.py; per-event response SHA-256 in games.csv. External, not repo/CI source: disclosed as supplementary.",
-  "hist_analysis_git_blob_sha1": "a3aeed683ce32922d55c1f491854f4d74805b506",
+  "flag": "MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE",
+  "hist_analysis_git_blob_sha1": "3ff09b055e92fc4f599e7383367133d8a254d7e0",
   "hist_games_csv_git_blob_sha1": "f24ae985937579d07b8ad2ba4b8b2278bb2145f3",
+  "independent_model_evidence": false,
   "no_period_ml_prices": "No 1H/1Q moneyline prices exist in the repo or in ESPN history: ROI and CLV for these markets CANNOT be computed. Not fabricated.",
-  "projection_stand_in": "market-implied margin (-closing spread) and closing total replace the SportsEdge projection (no real ratings committed).",
+  "projection_basis": "MARKET_DERIVED_STAND_IN",
+  "projection_stand_in": "Projections are market-derived stand-ins: market-implied margin (-closing spread) and closing total replace the SportsEdge projection (no real ratings committed). Results are NOT independent-model evidence and any recalibration output must carry this flag. Limitation preserved, not hidden or replaced (owner ruling on #536 review; details on issue #57).",
   "tie_rate_1H": 0.03445664521014767,
   "tie_rate_1Q": 0.048845134418780765
  },

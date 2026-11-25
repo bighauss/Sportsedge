@@ -66,8 +66,12 @@
     }
    }
   },
+  "flag": "MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE",
   "identity": "EV = p*dec - 1 + push, so raw_ev_new - raw_ev_old = (p_new - p_old)*dec + push exactly; old p = P(margin>0), new p = P(margin>=0.5), so p_new - p_old = -P(0<margin<0.5), about -push/2 for near-even matchups => shift about push*(1 - dec/2): positive below +100 (favorites), negative above +100 (underdogs), about zero at +100",
+  "independent_model_evidence": false,
+  "meaning": "Projections are market-derived stand-ins (closing full-game spread/total), not SportsEdge projections. Results describe the frozen pricer applied to market-implied inputs; they are not independent-model, forecast-quality, ROI or CLV evidence.",
   "note": "HYPOTHETICAL price -110 both sides; no 1H/1Q ML prices exist in the repo or ESPN odds, so real EV/ROI/CLV cannot be computed",
+  "projection_basis": "MARKET_DERIVED_STAND_IN",
   "segments": {
    "1H": {
     "max": 0.002337136670841178,
@@ -94,11 +98,18 @@
   "short_or_missing_linescore": 3,
   "spread_sign_vs_ml_inconsistent": 53
  },
+ "flag": "MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE",
  "games_csv_sha256": "89a59f4f0f39d6b5db8385f3db5f90936a6140ec403cd7f84d73ddd96f864914",
  "games_fetched": 2644,
  "games_used": 2588,
+ "independent_model_evidence": false,
+ "meaning": "Projections are market-derived stand-ins (closing full-game spread/total), not SportsEdge projections. Results describe the frozen pricer applied to market-implied inputs; they are not independent-model, forecast-quality, ROI or CLV evidence.",
  "model_replay_on_market_implied_margin": {
+  "flag": "MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE",
+  "independent_model_evidence": false,
+  "meaning": "Projections are market-derived stand-ins (closing full-game spread/total), not SportsEdge projections. Results describe the frozen pricer applied to market-implied inputs; they are not independent-model, forecast-quality, ROI or CLV evidence.",
   "method": "projection margin := -closing full-game spread, total := closing total (market-implied stand-in; NOT the SportsEdge projection); price_game_market of both blobs on 1H_ML/1Q_ML",
+  "projection_basis": "MARKET_DERIVED_STAND_IN",
   "segments": {
    "1H": {
     "abs_shift_p_max": 0.022472645843340522,
@@ -186,6 +197,7 @@
    }
   }
  },
+ "projection_basis": "MARKET_DERIVED_STAND_IN",
  "source": "ESPN public scoreboard (linescores) + ESPN core odds (closing full-game spread/total/ML); NOT in repo; fetched 2026-11-25 via fetch_espn.py",
  "tie_frequency_all_fetched_games": {
   "1H": {

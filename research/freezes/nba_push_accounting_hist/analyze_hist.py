@@ -4,6 +4,17 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import nba_push_accounting_equivalence as eq
 
+# Required on every output of this analysis (owner ruling, #536 review): the projections used
+# here are the closing market (margin = -closing spread, total = closing total), NOT the SportsEdge model.
+STAND_IN_FLAG = {
+    'projection_basis': 'MARKET_DERIVED_STAND_IN',
+    'independent_model_evidence': False,
+    'flag': 'MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE',
+    'meaning': ('Projections are market-derived stand-ins (closing full-game spread/total), not SportsEdge projections. '
+                'Results describe the frozen pricer applied to market-implied inputs; they are not independent-model, '
+                'forecast-quality, ROI or CLV evidence.'),
+}
+
 
 def _f(v):
     return float(v) if v != '' else None
@@ -27,7 +38,7 @@ def analyze():
     g = load_games()
     def wilson(k,n,z=1.96):
         p=k/n; d=1+z*z/n; c=p+z*z/(2*n); r=z*math.sqrt(p*(1-p)/n+z*z/(4*n*n)); return ((c-r)/d,(c+r)/d)
-    out={'source':'ESPN public scoreboard (linescores) + ESPN core odds (closing full-game spread/total/ML); NOT in repo; fetched 2026-11-25 via fetch_espn.py',
+    out={**STAND_IN_FLAG, 'source':'ESPN public scoreboard (linescores) + ESPN core odds (closing full-game spread/total/ML); NOT in repo; fetched 2026-11-25 via fetch_espn.py',
          'games_fetched':len(g)}
     use=[x for x in g if len(x['hl'])>=4 and len(x['al'])>=4 and x.get('odds') and x['odds'].get('total') is not None and x['odds'].get('spread_home') is not None]
     # spread sign sanity vs ML
@@ -105,7 +116,7 @@ def analyze():
           'logloss3_new_incl_ties':ll3,'logloss3_old':'infinite on tie games (P(tie)=0): %d tie games'%ties,
           'mean_home_win_prob_shift_new_minus_old':st.mean(r['new_h']-r['old_h'] for r in R),
           'abs_shift_p_max':max(abs(r['new_h']-r['old_h']) for r in R)}
-    out['model_replay_on_market_implied_margin']={'method':'projection margin := -closing full-game spread, total := closing total (market-implied stand-in; NOT the SportsEdge projection); price_game_market of both blobs on 1H_ML/1Q_ML','segments':res}
+    out['model_replay_on_market_implied_margin']={**STAND_IN_FLAG, 'method':'projection margin := -closing full-game spread, total := closing total (market-implied stand-in; NOT the SportsEdge projection); price_game_market of both blobs on 1H_ML/1Q_ML','segments':res}
     # EV shift at hypothetical fair-vig prices (-110/-110 two-way) over the real mu distribution (home side), raw EV per 1u
     def ev(p,dec,push): return p*(dec-1)-(1-p-push)
     dec=1+100/110
@@ -121,7 +132,7 @@ def analyze():
         evs[seg]={'sides':len(shift),'mean_raw_ev_shift_at_-110':st.mean(shift),'min':min(shift),'max':max(shift),
                   'sides_old_ev_gt0':sum(e>0 for e in d_old),'sides_new_ev_gt0':sum(e>0 for e in d_new),
                   'sides_ev_sign_flipped_pos_to_nonpos':sum(1 for a,b in zip(d_old,d_new) if a>0 and b<=0)}
-    out['ev_shift_hypothetical_minus110']={'note':'HYPOTHETICAL price -110 both sides; no 1H/1Q ML prices exist in the repo or ESPN odds, so real EV/ROI/CLV cannot be computed','segments':evs}
+    out['ev_shift_hypothetical_minus110']={**STAND_IN_FLAG, 'note':'HYPOTHETICAL price -110 both sides; no 1H/1Q ML prices exist in the repo or ESPN odds, so real EV/ROI/CLV cannot be computed','segments':evs}
     grid = {}
     for seg in ('1H', '1Q'):
         R = [r for r in rows if r['seg'] == seg]

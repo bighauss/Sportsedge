@@ -1,5 +1,7 @@
 # NBA push-accounting — versioned BEHAVIORAL transition record — 2026-11-25
 
+> **RESEARCH LIMITATION — `MARKET_STAND_IN_NOT_INDEPENDENT_MODEL_EVIDENCE`.** Every historical NBA result in this record uses *market-derived stand-ins* (margin = −closing full-game spread, total = closing total) instead of SportsEdge projections, because no real NBA ratings/boards are committed. They are **not independent-model evidence**: they show how the frozen pricer treats period ties given market-implied inputs, not forecast quality, ROI or CLV. This limitation is preserved, not hidden or replaced; any recalibration output must carry the same flag (`projection_basis = MARKET_DERIVED_STAND_IN`, `independent_model_evidence = false`). Synthetic bit-identity results (§3) use no historical projections.
+
 **Status: PENDING_OWNER_MERGE.** The owner's merge is the recording act. Release stays PAPER_0U, official_counted = 0,
 approved stake 0u, no certification, no source authentication. Machine-readable twin:
 [`nba_push_accounting_transition_20261125.json`](nba_push_accounting_transition_20261125.json); candidate entry (Nov 18 format):
@@ -46,7 +48,7 @@ Harness `nba_push_accounting_equivalence.py`; previous bytes kept in `pinned_blo
 Also identical: all 2,004 game projections and every non-affected card row (all fields except rank-derived).
 
 ## 4. Backtest of the affected markets
-**No real NBA data in the repo or CI.** Supplementary, external, disclosed: ESPN public linescores + closing full-game spread/total, 2023-24 and 2024-25 (2,644 final games; per-event response hashes in `nba_push_accounting_hist/games.csv`). **No 1H/1Q moneyline prices exist anywhere available, so real ROI/CLV is not computable and is not reported.** The SportsEdge projection is replaced by a market-implied stand-in (margin = −closing spread).
+**No real NBA data in the repo or CI.** Supplementary, external, disclosed: ESPN public linescores + closing full-game spread/total, 2023-24 and 2024-25 (2,644 final games; per-event response hashes in `nba_push_accounting_hist/games.csv`). **No 1H/1Q moneyline prices exist anywhere available, so real ROI/CLV is not computable and is not reported.** **Projection basis: `MARKET_DERIVED_STAND_IN` (margin = −closing spread; `independent_model_evidence = false`). The SportsEdge projection is replaced by a market-implied stand-in, so this section is not independent-model evidence.**
 
 | | 1H | 1Q |
 |---|---|---|
