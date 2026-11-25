@@ -1,0 +1,822 @@
+{
+ "candidate_blob": "8bbe83b7a17d184b3521094b40e00be66ba0f852",
+ "corpora": {
+  "RANDOM": {
+   "meta": {
+    "board": "RANDOM_SEED_20261125",
+    "games": 2500,
+    "odds": 29700,
+    "props": 1810,
+    "skipped": {},
+    "teams": 270
+   },
+   "primitives": {
+    "by_market_rows_mismatches": {
+     "h1_spread": [
+      4250,
+      0
+     ],
+     "h1_total": [
+      4248,
+      0
+     ],
+     "ml": [
+      4264,
+      0
+     ],
+     "spread": [
+      4224,
+      0
+     ],
+     "team_total_away": [
+      4276,
+      0
+     ],
+     "team_total_home": [
+      4216,
+      0
+     ],
+     "total": [
+      4222,
+      0
+     ]
+    },
+    "game_projection_mismatches": 0,
+    "game_projection_sha256_new": "268cd53208c00eb6a4125bfb8541bfdcf2b6c1d358258f6f18b9851b43f30b37",
+    "game_projection_sha256_old": "268cd53208c00eb6a4125bfb8541bfdcf2b6c1d358258f6f18b9851b43f30b37",
+    "games_projected": 2500,
+    "market_row_mismatches": 0,
+    "market_rows_priced": 29700,
+    "market_sha256_new": "5dee5cfd05f7ef2d19bb0e259e3bff1ffe3a6e5b76968a8945493939cea0ed13",
+    "market_sha256_old": "5dee5cfd05f7ef2d19bb0e259e3bff1ffe3a6e5b76968a8945493939cea0ed13"
+   },
+   "run_card": {
+    "dropped_identical": true,
+    "dropped_total": 14527,
+    "files": {
+     "cbb_card.csv": {
+      "bytes": 1135605,
+      "identical": true,
+      "sha256_new": "32dd3fd1252f65807f37f5e972c506c24ce33bb4d5a01b3e4dcd67c98bbd5418",
+      "sha256_old": "32dd3fd1252f65807f37f5e972c506c24ce33bb4d5a01b3e4dcd67c98bbd5418"
+     },
+     "cbb_card.md": {
+      "bytes": 2446169,
+      "identical": true,
+      "sha256_new": "af4d5dab6c0d5630eda1894cb8848a511ea26179714e7c084a249d68913883ae",
+      "sha256_old": "af4d5dab6c0d5630eda1894cb8848a511ea26179714e7c084a249d68913883ae"
+     }
+    },
+    "game_rows_identical": true,
+    "projections_identical": true,
+    "prop_rows_identical": true,
+    "rows_game": 10970,
+    "rows_identical": true,
+    "rows_prop": 1725,
+    "rows_total": 12695,
+    "stacks_identical": true
+   }
+  },
+  "models/cbb/lines/board_2026-11-21_0914CT_CBB.csv": {
+   "meta": {
+    "board": "models/cbb/lines/board_2026-11-21_0914CT_CBB.csv",
+    "games": 46,
+    "odds": 270,
+    "props": 0,
+    "skipped": {},
+    "teams": 92
+   },
+   "primitives": {
+    "by_market_rows_mismatches": {
+     "ml": [
+      86,
+      0
+     ],
+     "spread": [
+      92,
+      0
+     ],
+     "total": [
+      92,
+      0
+     ]
+    },
+    "game_projection_mismatches": 0,
+    "game_projection_sha256_new": "60074e6ca0a6c42a02e4fea737f8f308ac16a6d24a945678c022e33aa9669772",
+    "game_projection_sha256_old": "60074e6ca0a6c42a02e4fea737f8f308ac16a6d24a945678c022e33aa9669772",
+    "games_projected": 46,
+    "market_row_mismatches": 0,
+    "market_rows_priced": 270,
+    "market_sha256_new": "1f21dcf35ded492964362907c67d94faeaa150d48422e3a9d81fd729d05d5ced",
+    "market_sha256_old": "1f21dcf35ded492964362907c67d94faeaa150d48422e3a9d81fd729d05d5ced"
+   },
+   "run_card": {
+    "dropped_identical": true,
+    "dropped_total": 46,
+    "files": {
+     "cbb_card.csv": {
+      "bytes": 11373,
+      "identical": true,
+      "sha256_new": "453e709eeabc10e13d49a7f7c205c5273482821d684c961614971e5e94a12c5d",
+      "sha256_old": "453e709eeabc10e13d49a7f7c205c5273482821d684c961614971e5e94a12c5d"
+     },
+     "cbb_card.md": {
+      "bytes": 18964,
+      "identical": true,
+      "sha256_new": "bdd0ffcfaf5e40fa547aeb47b3c2d52af9e12dd8d9920323ce7b20df0beaab47",
+      "sha256_old": "bdd0ffcfaf5e40fa547aeb47b3c2d52af9e12dd8d9920323ce7b20df0beaab47"
+     }
+    },
+    "game_rows_identical": true,
+    "projections_identical": true,
+    "prop_rows_identical": true,
+    "rows_game": 122,
+    "rows_identical": true,
+    "rows_prop": 0,
+    "rows_total": 122,
+    "stacks_identical": true
+   }
+  },
+  "models/cbb/lines/board_2026-11-24_operator_transcript.csv": {
+   "meta": {
+    "board": "models/cbb/lines/board_2026-11-24_operator_transcript.csv",
+    "games": 78,
+    "odds": 12590,
+    "props": 0,
+    "skipped": {},
+    "teams": 156
+   },
+   "primitives": {
+    "by_market_rows_mismatches": {
+     "ml": [
+      148,
+      0
+     ],
+     "spread": [
+      3356,
+      0
+     ],
+     "team_total_away": [
+      2712,
+      0
+     ],
+     "team_total_home": [
+      2630,
+      0
+     ],
+     "total": [
+      3744,
+      0
+     ]
+    },
+    "game_projection_mismatches": 0,
+    "game_projection_sha256_new": "189d3b8120b196787d2eae1c86197063324fc0870786b2e5038ab9db029cee86",
+    "game_projection_sha256_old": "189d3b8120b196787d2eae1c86197063324fc0870786b2e5038ab9db029cee86",
+    "games_projected": 78,
+    "market_row_mismatches": 0,
+    "market_rows_priced": 12590,
+    "market_sha256_new": "35cd950a79d895f6f55666bbdd623561b482945ea3a41b0a9411b2454aefcd55",
+    "market_sha256_old": "35cd950a79d895f6f55666bbdd623561b482945ea3a41b0a9411b2454aefcd55"
+   },
+   "run_card": {
+    "dropped_identical": true,
+    "dropped_total": 4547,
+    "files": {
+     "cbb_card.csv": {
+      "bytes": 409136,
+      "identical": true,
+      "sha256_new": "b97cfa5f62b26b2dfff137fa44869cc460d228dffc1836098d3bea11ed7e7c60",
+      "sha256_old": "b97cfa5f62b26b2dfff137fa44869cc460d228dffc1836098d3bea11ed7e7c60"
+     },
+     "cbb_card.md": {
+      "bytes": 789170,
+      "identical": true,
+      "sha256_new": "8b117c93c19792dc2b654e7144a1e2b382a2c6b07d3187b8fc6f8398667ad796",
+      "sha256_old": "8b117c93c19792dc2b654e7144a1e2b382a2c6b07d3187b8fc6f8398667ad796"
+     }
+    },
+    "game_rows_identical": true,
+    "projections_identical": true,
+    "prop_rows_identical": true,
+    "rows_game": 4110,
+    "rows_identical": true,
+    "rows_prop": 0,
+    "rows_total": 4110,
+    "stacks_identical": true
+   }
+  },
+  "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture.csv": {
+   "meta": {
+    "board": "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture.csv",
+    "games": 53,
+    "odds": 740,
+    "props": 185,
+    "skipped": {
+     "1H_ML": 20,
+     "1H_TT_AWAY": 19,
+     "1H_TT_HOME": 19,
+     "PLAYER_PA_AT_LEAST": 40,
+     "PLAYER_PRA_AT_LEAST": 39,
+     "PLAYER_PR_AT_LEAST": 46
+    },
+    "teams": 106
+   },
+   "primitives": {
+    "by_market_rows_mismatches": {
+     "h1_spread": [
+      40,
+      0
+     ],
+     "h1_total": [
+      40,
+      0
+     ],
+     "ml": [
+      100,
+      0
+     ],
+     "spread": [
+      190,
+      0
+     ],
+     "team_total_away": [
+      90,
+      0
+     ],
+     "team_total_home": [
+      90,
+      0
+     ],
+     "total": [
+      190,
+      0
+     ]
+    },
+    "game_projection_mismatches": 0,
+    "game_projection_sha256_new": "b1d31d3f7016feb8553f9d1f732b3db13d5a2d51569eb0db5e086a3c683ea80c",
+    "game_projection_sha256_old": "b1d31d3f7016feb8553f9d1f732b3db13d5a2d51569eb0db5e086a3c683ea80c",
+    "games_projected": 53,
+    "market_row_mismatches": 0,
+    "market_rows_priced": 740,
+    "market_sha256_new": "1f50b0146689ebdee56309a19c8255bfc53760a4b3d1192d338eb2de2574e65a",
+    "market_sha256_old": "1f50b0146689ebdee56309a19c8255bfc53760a4b3d1192d338eb2de2574e65a"
+   },
+   "run_card": {
+    "dropped_identical": true,
+    "dropped_total": 450,
+    "files": {
+     "cbb_card.csv": {
+      "bytes": 39547,
+      "identical": true,
+      "sha256_new": "f80d823d2c6dddc9826c2f22cfdbcc416bd5d6e2081643b5e3015db82e58fc0f",
+      "sha256_old": "f80d823d2c6dddc9826c2f22cfdbcc416bd5d6e2081643b5e3015db82e58fc0f"
+     },
+     "cbb_card.md": {
+      "bytes": 79174,
+      "identical": true,
+      "sha256_new": "dddac1fe791abac87aaac019211200347b00996f51dd699c1f938b31bd0f2e5e",
+      "sha256_old": "dddac1fe791abac87aaac019211200347b00996f51dd699c1f938b31bd0f2e5e"
+     }
+    },
+    "game_rows_identical": true,
+    "projections_identical": true,
+    "prop_rows_identical": true,
+    "rows_game": 276,
+    "rows_identical": true,
+    "rows_prop": 151,
+    "rows_total": 427,
+    "stacks_identical": true
+   }
+  },
+  "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture_h1_corrected.csv": {
+   "meta": {
+    "board": "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture_h1_corrected.csv",
+    "games": 53,
+    "odds": 740,
+    "props": 185,
+    "skipped": {
+     "1H_ML": 20,
+     "1H_TT_AWAY": 19,
+     "1H_TT_HOME": 19,
+     "PLAYER_PA_AT_LEAST": 40,
+     "PLAYER_PRA_AT_LEAST": 39,
+     "PLAYER_PR_AT_LEAST": 46
+    },
+    "teams": 106
+   },
+   "primitives": {
+    "by_market_rows_mismatches": {
+     "h1_spread": [
+      40,
+      0
+     ],
+     "h1_total": [
+      40,
+      0
+     ],
+     "ml": [
+      100,
+      0
+     ],
+     "spread": [
+      190,
+      0
+     ],
+     "team_total_away": [
+      90,
+      0
+     ],
+     "team_total_home": [
+      90,
+      0
+     ],
+     "total": [
+      190,
+      0
+     ]
+    },
+    "game_projection_mismatches": 0,
+    "game_projection_sha256_new": "4503f774b4d862dca54c0b447f56a22b2e99a992b8b973925875ef6562dd157e",
+    "game_projection_sha256_old": "4503f774b4d862dca54c0b447f56a22b2e99a992b8b973925875ef6562dd157e",
+    "games_projected": 53,
+    "market_row_mismatches": 0,
+    "market_rows_priced": 740,
+    "market_sha256_new": "f4a6f9316eb85f961f796b730e75eea16ce59508383d5f68d5f7ef03a159f637",
+    "market_sha256_old": "f4a6f9316eb85f961f796b730e75eea16ce59508383d5f68d5f7ef03a159f637"
+   },
+   "run_card": {
+    "dropped_identical": true,
+    "dropped_total": 430,
+    "files": {
+     "cbb_card.csv": {
+      "bytes": 40692,
+      "identical": true,
+      "sha256_new": "4e758e6d4fd5354c8261f380763942fc42f2ca1122289a2dad65ce4c3cebf29b",
+      "sha256_old": "4e758e6d4fd5354c8261f380763942fc42f2ca1122289a2dad65ce4c3cebf29b"
+     },
+     "cbb_card.md": {
+      "bytes": 79488,
+      "identical": true,
+      "sha256_new": "50d648c3f21eb0ef95774d69f9204457ef4801ea2db498a0f94443bd15f52e5d",
+      "sha256_old": "50d648c3f21eb0ef95774d69f9204457ef4801ea2db498a0f94443bd15f52e5d"
+     }
+    },
+    "game_rows_identical": true,
+    "projections_identical": true,
+    "prop_rows_identical": true,
+    "rows_game": 289,
+    "rows_identical": true,
+    "rows_prop": 149,
+    "rows_total": 438,
+    "stacks_identical": true
+   }
+  },
+  "models/cbb/lines/board_2026-11-25_0900CT_operator_transcript.csv": {
+   "meta": {
+    "board": "models/cbb/lines/board_2026-11-25_0900CT_operator_transcript.csv",
+    "games": 1,
+    "odds": 186,
+    "props": 91,
+    "skipped": {
+     "BOTH_TEAM_TOTAL": 21,
+     "PLAYER_PA_AT_LEAST": 20,
+     "PLAYER_PRA_AT_LEAST": 20,
+     "PLAYER_PR_AT_LEAST": 19
+    },
+    "teams": 2
+   },
+   "primitives": {
+    "by_market_rows_mismatches": {
+     "ml": [
+      2,
+      0
+     ],
+     "spread": [
+      50,
+      0
+     ],
+     "team_total_away": [
+      42,
+      0
+     ],
+     "team_total_home": [
+      42,
+      0
+     ],
+     "total": [
+      50,
+      0
+     ]
+    },
+    "game_projection_mismatches": 0,
+    "game_projection_sha256_new": "2b123ab4d93d5d6dddfbd59df085f1ae724d3cb0a641b51920d53e44d450954f",
+    "game_projection_sha256_old": "2b123ab4d93d5d6dddfbd59df085f1ae724d3cb0a641b51920d53e44d450954f",
+    "games_projected": 1,
+    "market_row_mismatches": 0,
+    "market_rows_priced": 186,
+    "market_sha256_new": "096677669555359491712c12619d6d744636f7197ccf70284dc2d900e028315e",
+    "market_sha256_old": "096677669555359491712c12619d6d744636f7197ccf70284dc2d900e028315e"
+   },
+   "run_card": {
+    "dropped_identical": true,
+    "dropped_total": 158,
+    "files": {
+     "cbb_card.csv": {
+      "bytes": 13010,
+      "identical": true,
+      "sha256_new": "0de46d7934116364022cb5e56cff6710565c110281658ccc018886d10b1ee3b0",
+      "sha256_old": "0de46d7934116364022cb5e56cff6710565c110281658ccc018886d10b1ee3b0"
+     },
+     "cbb_card.md": {
+      "bytes": 25272,
+      "identical": true,
+      "sha256_new": "c9b617669d1f35c2f701e9992fbda056cf6f53fd10b2c3d0658f0f095ffe4f32",
+      "sha256_old": "c9b617669d1f35c2f701e9992fbda056cf6f53fd10b2c3d0658f0f095ffe4f32"
+     }
+    },
+    "game_rows_identical": true,
+    "projections_identical": true,
+    "prop_rows_identical": true,
+    "rows_game": 80,
+    "rows_identical": true,
+    "rows_prop": 57,
+    "rows_total": 137,
+    "stacks_identical": true
+   }
+  },
+  "research/cbb/boards/2026-11-24_operator_main_fallback.csv": {
+   "meta": {
+    "board": "research/cbb/boards/2026-11-24_operator_main_fallback.csv",
+    "games": 63,
+    "odds": 370,
+    "props": 0,
+    "skipped": {
+     "MISSING_PRICE_ML": 4
+    },
+    "teams": 126
+   },
+   "primitives": {
+    "by_market_rows_mismatches": {
+     "ml": [
+      118,
+      0
+     ],
+     "spread": [
+      126,
+      0
+     ],
+     "total": [
+      126,
+      0
+     ]
+    },
+    "game_projection_mismatches": 0,
+    "game_projection_sha256_new": "6cd59d54e2dd23bafe8be0f10b51cf433350f01c5d4aeeb4c7c650d78535a015",
+    "game_projection_sha256_old": "6cd59d54e2dd23bafe8be0f10b51cf433350f01c5d4aeeb4c7c650d78535a015",
+    "games_projected": 63,
+    "market_row_mismatches": 0,
+    "market_rows_priced": 370,
+    "market_sha256_new": "6bba9bb78940c9069fbc546517f74cdc3d847c421b29eba2cbaeaacd9fcc70c3",
+    "market_sha256_old": "6bba9bb78940c9069fbc546517f74cdc3d847c421b29eba2cbaeaacd9fcc70c3"
+   },
+   "run_card": {
+    "dropped_identical": true,
+    "dropped_total": 63,
+    "files": {
+     "cbb_card.csv": {
+      "bytes": 14908,
+      "identical": true,
+      "sha256_new": "db32495556260f35515b06b2b8afc4ebaa0462d8ee14f867f5c61e62436740fa",
+      "sha256_old": "db32495556260f35515b06b2b8afc4ebaa0462d8ee14f867f5c61e62436740fa"
+     },
+     "cbb_card.md": {
+      "bytes": 25184,
+      "identical": true,
+      "sha256_new": "a40415fbcc4db0c016b2d0afc8eefca382e333f9d9f958b7531791b7d2a506e9",
+      "sha256_old": "a40415fbcc4db0c016b2d0afc8eefca382e333f9d9f958b7531791b7d2a506e9"
+     }
+    },
+    "game_rows_identical": true,
+    "projections_identical": true,
+    "prop_rows_identical": true,
+    "rows_game": 161,
+    "rows_identical": true,
+    "rows_prop": 0,
+    "rows_total": 161,
+    "stacks_identical": true
+   }
+  }
+ },
+ "equivalent_game_path": true,
+ "mode": "full",
+ "new_blob_computed": "8bbe83b7a17d184b3521094b40e00be66ba0f852",
+ "old_blob_computed": "f02dd29ef444f49cdf4560a86d5b8a517519081d",
+ "pinned_blob": "f02dd29ef444f49cdf4560a86d5b8a517519081d",
+ "prop_cases": [
+  {
+   "actual": "IDENTICAL",
+   "expected": "IDENTICAL",
+   "name": "CONTROL_unique_player_in_event",
+   "new": {
+    "dropped": [
+     "Solo Alpha under 8.5 pts"
+    ],
+    "prop_row_digest": "98563854b1708fab8a0d83fc239b9aea9b47c7e64ad3f08c9630f61ccf73b1eb",
+    "rows": [
+     [
+      "Solo Alpha over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Solo Alpha under 8.5 pts"
+    ],
+    "prop_row_digest": "98563854b1708fab8a0d83fc239b9aea9b47c7e64ad3f08c9630f61ccf73b1eb",
+    "rows": [
+     [
+      "Solo Alpha over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": null
+  },
+  {
+   "actual": "DIFFERENT",
+   "expected": "DIFFERENT",
+   "name": "same_name_two_teams_in_different_games",
+   "new": {
+    "dropped": [
+     "Cross Name over 8.5 pts"
+    ],
+    "prop_row_digest": "26b9b5ff76b5d537855176238b8bd2f28f552a200222fa6d9bec6b0b96e7946b",
+    "rows": [
+     [
+      "Cross Name under 8.5 pts",
+      "Gamma"
+     ]
+    ],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Cross Name under 8.5 pts"
+    ],
+    "prop_row_digest": "10b78f01a6e4a2e90a33c99b4134e115cc11af1912617869c0c7e3a91cf79de2",
+    "rows": [
+     [
+      "Cross Name over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": "old priced Alpha's Cross Name (not in G2) because first global name match wins; new resolves to Gamma's"
+  },
+  {
+   "actual": "DIFFERENT",
+   "expected": "DIFFERENT",
+   "name": "same_name_on_both_event_teams_no_team_hint",
+   "new": {
+    "dropped": [
+     "AMBIGUOUS_PROP_PLAYER:G1:Dup Name"
+    ],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Dup Name under 8.5 pts"
+    ],
+    "prop_row_digest": "08f5a5c70504d9f8cdd03fa3c2f8d333b1ac29876738583eb1f3db09d508d1fa",
+    "rows": [
+     [
+      "Dup Name over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": "old priced first-listed Alpha player silently; new quarantines AMBIGUOUS_PROP_PLAYER"
+  },
+  {
+   "actual": "DIFFERENT_ROW_TEAM",
+   "expected": "DIFFERENT_ROW_TEAM",
+   "name": "same_name_both_teams_with_team_hint",
+   "new": {
+    "dropped": [
+     "Dup Name under 8.5 pts"
+    ],
+    "prop_row_digest": "da3e338cf2f46683103c22efc9623b7948a6acffda29e41f16eeb14d6ecb5c4e",
+    "rows": [
+     [
+      "Dup Name over 8.5 pts",
+      "Beta"
+     ]
+    ],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Dup Name under 8.5 pts"
+    ],
+    "prop_row_digest": "08f5a5c70504d9f8cdd03fa3c2f8d333b1ac29876738583eb1f3db09d508d1fa",
+    "rows": [
+     [
+      "Dup Name over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": "old ignored team hint (priced Alpha's player); new honours hint (Beta)"
+  },
+  {
+   "actual": "DIFFERENT",
+   "expected": "DIFFERENT",
+   "name": "player_exists_only_in_other_game",
+   "new": {
+    "dropped": [
+     "PROP_PLAYER_NOT_ON_EVENT_ROSTER:G1:Only Delta"
+    ],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Only Delta under 8.5 pts"
+    ],
+    "prop_row_digest": "daf9543efd09bcb11acc99dba1cc4a43428c8a26c1ebb12d35e887b2bdd43b5a",
+    "rows": [
+     [
+      "Only Delta over 8.5 pts",
+      "Delta"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": "old priced a player from a different game; new drops PROP_PLAYER_NOT_ON_EVENT_ROSTER"
+  },
+  {
+   "actual": "DROP_REASON_ONLY",
+   "expected": "DROP_REASON_ONLY",
+   "name": "player_unknown_everywhere",
+   "new": {
+    "dropped": [
+     "PROP_PLAYER_NOT_ON_EVENT_ROSTER:G1:Nobody Known"
+    ],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "why": "both emit no row; new records PROP_PLAYER_NOT_ON_EVENT_ROSTER in dropped"
+  },
+  {
+   "actual": "DIFFERENT",
+   "expected": "DIFFERENT",
+   "name": "team_hint_not_in_event",
+   "new": {
+    "dropped": [
+     "PROP_TEAM_NOT_IN_EVENT:G1:Solo Alpha"
+    ],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Solo Alpha under 8.5 pts"
+    ],
+    "prop_row_digest": "98563854b1708fab8a0d83fc239b9aea9b47c7e64ad3f08c9630f61ccf73b1eb",
+    "rows": [
+     [
+      "Solo Alpha over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": "old ignored hint and priced; new drops PROP_TEAM_NOT_IN_EVENT"
+  },
+  {
+   "actual": "DROP_REASON_ONLY",
+   "expected": "DROP_REASON_ONLY",
+   "name": "blank_subject",
+   "new": {
+    "dropped": [
+     "PROP_SUBJECT_MISSING:G1:"
+    ],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "why": "both emit no row; new records PROP_SUBJECT_MISSING"
+  },
+  {
+   "actual": "DIFFERENT",
+   "expected": "DIFFERENT",
+   "name": "optional_player_id_mismatch",
+   "new": {
+    "dropped": [
+     "PROP_PLAYER_NOT_ON_EVENT_ROSTER:G1:Idd One"
+    ],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Idd One under 8.5 pts"
+    ],
+    "prop_row_digest": "eb04895a3122dcd5356088166028ffc88cd4eda12189c7e54a41e4f8671e4afd",
+    "rows": [
+     [
+      "Idd One over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": "old ignored player_id and priced; new drops (no roster row matches the id)"
+  },
+  {
+   "actual": "IDENTICAL",
+   "expected": "IDENTICAL",
+   "name": "optional_player_id_match",
+   "new": {
+    "dropped": [
+     "Idd One under 8.5 pts"
+    ],
+    "prop_row_digest": "eb04895a3122dcd5356088166028ffc88cd4eda12189c7e54a41e4f8671e4afd",
+    "rows": [
+     [
+      "Idd One over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "old": {
+    "dropped": [
+     "Idd One under 8.5 pts"
+    ],
+    "prop_row_digest": "eb04895a3122dcd5356088166028ffc88cd4eda12189c7e54a41e4f8671e4afd",
+    "rows": [
+     [
+      "Idd One over 8.5 pts",
+      "Alpha"
+     ]
+    ],
+    "status": "ok"
+   },
+   "why": null
+  },
+  {
+   "actual": "OLD_CRASH",
+   "expected": "OLD_CRASH",
+   "name": "unknown_game_id",
+   "new": {
+    "dropped": [
+     "PROP_EVENT_NOT_FOUND:G9:Solo Alpha"
+    ],
+    "prop_row_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "rows": [],
+    "status": "ok"
+   },
+   "old": {
+    "error": "KeyError:'G9'",
+    "status": "crash"
+   },
+   "why": "old raised KeyError and aborted the whole card; new records PROP_EVENT_NOT_FOUND"
+  }
+ ],
+ "prop_cases_as_intended": true,
+ "ratings_note": "Torvik team ratings/rosters are not committed in the repo; they are deterministic SYNTHETIC values derived from sha256(team name). Matchups, lines and prices on BOARDS are real committed data.",
+ "schema": "sportsedge-cbb-repin-equivalence-v1",
+ "tolerance": "exact (float.hex equality, zero tolerance)",
+ "totals": {
+  "game_proj_mismatch": 0,
+  "games": 2794,
+  "market_mismatch": 0,
+  "market_rows": 44596,
+  "prop_rows": 2082
+ }
+}
