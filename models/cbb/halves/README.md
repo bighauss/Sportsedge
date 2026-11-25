@@ -73,3 +73,37 @@ fg_away, …).
    It isn't a live in-play model (no clock, fouls or lineup).
 6. Joint correlation between margin and total or across periods isn't modelled. Each market is priced
    from its own marginal distribution.
+
+
+## Joint distributions (`halves_joint.py`)
+Univariate marginals are unchanged. A copula on (margin, total) and a 4x4 Gaussian copula
+on pregame (H1 margin, H1 total, H2 margin, H2 total) sit in
+`coefficients_halves_joint_v1.json`, fitted on 2019–2025 after the kind was chosen on
+2021–2025 folds. Season 2026 was not used for that choice or fit; any 2026 joint metric
+is a secondary re-use.
+
+```python
+from halves import halves_joint as HJ
+joint = HJ.load_joint()
+d = HJ.project_period_joint("H1", 76.1, 68.4, min_games=6, fg_poss=69.0, joint=joint)
+# d["joint"] has kind, rho or grid; d["pmf"] is still the v1 marginal
+draw = HJ.sample_h1_h2(h1_dist, h2_dist, joint, rng)
+```
+
+## Production-compatible refit
+Do not overwrite `coefficients_halves_v1.json`. To retarget the means at the FG1/FG1C
+challenger (PR #534, branch `grok-cbb/fullgame-ev-20261125`):
+
+```
+python research/cbb_halves/import_fullgame_forecasts.py \
+    --wf-dir <walk-forward JSON dir> --tag fg1t --engine FG1 --debias \
+    --train-until 2025 --seasons 2020-2025 --out /tmp/fg1c_proj.csv
+python research/cbb_halves/fit_halves.py --cache <sdv cache> --stage refit \
+    --projections /tmp/fg1c_proj.csv --train-until 2025 \
+    --out-coefficients models/cbb/halves/coefficients_halves_fg1c_v1.json \
+    --source-label FG1C
+```
+
+`--train-until 2025` is required. The refit stage refuses to include 2026 in training
+and refuses to overwrite the v1 file. Totals bias is not corrected on the test season
+(see `research/cbb_halves/TOTALS_BIAS.md`).

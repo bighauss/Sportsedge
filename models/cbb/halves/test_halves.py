@@ -226,6 +226,80 @@ class ShippedCoefficientsTests(unittest.TestCase):
         self.assertEqual(ht["variants"]["total"], "pace")
         self.assertNotAlmostEqual(ht["mean"]["margin"], h2["mean"]["margin"], places=3)
 
+    def test_shipped_joint_matches_reported_hash_and_loads(self):
+        from halves import halves_joint as HJ
+        j = HJ.load_joint()
+        self.assertEqual(j["label"], "PAPER_0U")
+        self.assertNotIn(j["untouched_test_season"], j["trained_seasons"])
+        self.assertIn("secondary_reuse_note", j)
+        d = HJ.project_period_joint("H1", 76.0, 68.0, coefficients=HM.load_coefficients(),
+                                    min_games=10, fg_poss=68.0, joint=j)
+        self.assertIn("joint", d)
+        self.assertEqual(d["mean"]["margin"], HM.project_period("H1", 76.0, 68.0, coefficients=HM.load_coefficients(),
+                                                               min_games=10, fg_poss=68.0)["mean"]["margin"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class JointTests(unittest.TestCase):
+    def test_bivariate_normal_known_values(self):
+        import math
+        from halves import halves_joint as HJ
+        self.assertAlmostEqual(HJ.bivariate_normal_cdf(0, 0, 0.0), 0.25)
+        self.assertAlmostEqual(HJ.bivariate_normal_cdf(0, 0, 0.5),
+                               0.25 + math.asin(0.5) / (2 * math.pi), places=9)
+        self.assertAlmostEqual(HJ.bivariate_normal_cdf(0, 0, -0.5),
+                               0.25 + math.asin(-0.5) / (2 * math.pi), places=9)
+        self.assertAlmostEqual(HJ.bivariate_normal_cdf(8, 8, 0.3), 1.0, places=5)
+        self.assertAlmostEqual(HJ.bivariate_normal_cdf(-8, 0, 0.3), 0.0, places=5)
+
+    def test_independence_is_the_product(self):
+        from halves import halves_joint as HJ
+        d = dist()
+        pm, pt = d["pmf"]["margin"], d["pmf"]["total"]
+        for m in range(int(d["mean"]["margin"]) - 2, int(d["mean"]["margin"]) + 3):
+            for t in range(int(d["mean"]["total"]) - 2, int(d["mean"]["total"]) + 3):
+                p = HJ.joint_cell(pm, pt, m, t, "independent", {})
+                self.assertAlmostEqual(p, pm.pmf(m) * pt.pmf(t), places=10)
+
+    def test_positive_rho_increases_same_direction_mass(self):
+        from halves import halves_joint as HJ
+        d = dist()
+        pm, pt = d["pmf"]["margin"], d["pmf"]["total"]
+        m0, t0 = int(round(d["mean"]["margin"])), int(round(d["mean"]["total"]))
+        pos = HJ.joint_cell(pm, pt, m0 + 6, t0 + 8, "gaussian", {"rho": 0.6})
+        neg = HJ.joint_cell(pm, pt, m0 + 6, t0 + 8, "gaussian", {"rho": -0.6})
+        ind = HJ.joint_cell(pm, pt, m0 + 6, t0 + 8, "independent", {})
+        self.assertGreater(pos, ind)
+        self.assertGreater(ind, neg)
+
+    def test_joint_cells_sum_near_one(self):
+        from halves import halves_joint as HJ
+        d = dist()
+        pm, pt = d["pmf"]["margin"], d["pmf"]["total"]
+        acc = 0.0
+        for m in range(pm.lo, pm.hi + 1):
+            for t in range(pt.lo, pt.hi + 1):
+                acc += HJ.joint_cell(pm, pt, m, t, "gaussian", {"rho": 0.25})
+        self.assertAlmostEqual(acc, 1.0, places=2)
+
+    def test_sample_h1_h2_period_guard(self):
+        from halves import halves_joint as HJ
+        import random
+        h1, h2 = dist("H1"), dist("H2")
+        with self.assertRaises(HM.HalvesHold):
+            HJ.sample_h1_h2(h2, h1, {"h1_h2": {"kind": "gaussian", "corr": [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]}},
+                            random.Random(0))
+        out = HJ.sample_h1_h2(h1, h2, {"h1_h2": {"kind": "gaussian",
+                                                  "corr": [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]}},
+                              random.Random(1))
+        self.assertEqual(out["H1"]["home"] + out["H1"]["away"], out["H1"]["total"])
+        self.assertEqual(out["H1"]["home"] - out["H1"]["away"], out["H1"]["margin"])
+        self.assertEqual(out["H2"]["home"] + out["H2"]["away"], out["H2"]["total"])
+
+    def test_cholesky_shrinks_a_nearly_singular_matrix(self):
+        from halves import halves_joint as HJ
+        L = HJ.cholesky([[1.0, 0.99], [0.99, 1.0]])
+        self.assertAlmostEqual(L[0][0] ** 2, 1.0, places=6)
