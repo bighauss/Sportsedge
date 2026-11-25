@@ -716,14 +716,26 @@ def public_replay_project(games, slate_ids, season, freeze_utc, cfg):
     prior = [g for g in games.values() if g["completed"] and g["possessions"] and 40 <= g["possessions"] <= 110
              and parse_z(g["tip_utc"]) + timedelta(hours=3) <= freeze and g["home_score"] != g["away_score"]]
     n_all = len(prior)
-    prior = d1_filter(prior)
+    filtered = d1_filter(prior)
+    # Early-season path: if national filter empties, still rate teams that have >=2 prior games
+    # and project only matchups where both teams qualify. Does not lower the global min_games
+    # used by d1_filter; this is a separate eligibility for sparse samples.
+    if not filtered:
+        from collections import Counter
+        n = Counter(t for g in prior for t in (g["home_id"], g["away_id"]))
+        eligible_teams = {t for t, c in n.items() if c >= 2}
+        filtered = [g for g in prior if g["home_id"] in eligible_teams and g["away_id"] in eligible_teams]
+        early = True
+    else:
+        early = False
     try:
-        body, lg = public_ratings(prior, season)
+        body, lg = public_ratings(filtered, season)
     except ValueError as e:
         if "RATINGS_INSUFFICIENT_SAMPLE" in str(e):
-            # Explicit withhold: do not invent ratings. Downstream stages will see empty projections.
-            return {}, {"reason": str(e), "prior_raw": n_all, "prior_after_filter": len(prior)}, b""
+            return {}, {"reason": str(e), "prior_raw": n_all, "prior_after_filter": len(filtered), "early_season": early}, b""
         raise
+    # Continue with the filtered prior for context fit
+    prior = filtered
     rows = [{"game_id": g["id"], "season": season, "tipoff_utc": g["tip_utc"],
              "final_captured_utc": utcz(parse_z(g["tip_utc"]) + timedelta(hours=3)),
              "home_team_id": g["home_id"], "away_team_id": g["away_id"], "neutral": g["neutral"],
