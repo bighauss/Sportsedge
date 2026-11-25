@@ -2,6 +2,7 @@
  "approved_stake_u": 0,
  "candidate_blob": "8bbe83b7a17d184b3521094b40e00be66ba0f852",
  "change_pr": 292,
+ "decision": "RETAIN_NOV18_TRANSITION_EQUIVALENCE_EVIDENCE_ONLY",
  "diff_classification": {
   "coefficients": 0,
   "game_projection_path": 0,
@@ -30,7 +31,7 @@
   }
  },
  "first_introducing_commit": "45f44c08d5e735bad842e64f336328d078b0765b",
- "governance_followup": "Opening a PR from this branch touches protected paths (research/freezes/**, models/ is untouched); the PR must add docs/governance/changes/pr-<N>.json once its number is known.",
+ "governance_followup": "Draft PR #531; docs/governance/changes/pr-531.json is the required protected-path manifest for research/freezes/**. Independent exact-head review still required. Do not mark ready or merge from this change. MLB/NBA transitions are out of scope.",
  "immutable_inputs": {
   "legacy_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
   "pinned_blob_copy": "research/freezes/pinned_blobs/f02dd29e_sportsedge_cbb_model.py.txt (byte-identical to git blob f02dd29e; checked by test)",
@@ -74,15 +75,15 @@
   "note": "Reported only. Owner decision: do not re-pin NBA/MLB in this change.",
   "repinned": false
  },
- "owner_decision_ct": "2026-11-25 (owner chat instruction to the SportsEdge Constructions bot: prepare a DOCUMENTED re-pin of the frozen CBB model after verification; do not revert PR #292)",
+ "owner_decision_ct": "2026-11-25 (owner ruling on draft PR #531 at 37b1b1b4: retain the existing Nov 18 CBB pin transition and preserve the equivalence evidence; no new pin. Earlier same-day instruction: document after verification; do not revert PR #292.)",
  "path": "models/cbb/sportsedge_cbb_model.py",
- "pin_mechanism_note": "The CI step 'Seven code pin verification' (verify_versioned_transition.py) ALREADY accepts 8bbe83b7 for CBB via code_identity_transitions_20261118.json (merged Nov 18). That step fails on MLB (current 30c6cb33 vs approved 3f630532) and NBA (current b353de86 vs approved da0c1503), not CBB. This record therefore edits no pin manifest or verifier: it adds the missing output-equivalence evidence and the owner-merge recording act for CBB. The legacy verifier verify_code_freezes.py (used by whole-repo-release-audit) intentionally still checks the original Nov 15 blob f02dd29e.",
+ "pin_mechanism_note": "Retain the Nov 18 transition; equivalence evidence only. The CI step 'Seven code pin verification' (verify_versioned_transition.py) already accepts 8bbe83b7 for CBB via code_identity_transitions_20261118.json (merged Nov 18; provenance including first-introducing commit is checked). That step fails on MLB (current 30c6cb33 vs approved 3f630532) and NBA (current b353de86 vs approved da0c1503), not CBB. This record therefore edits no pin manifest or verifier: it preserves the Nov 18 candidate and adds the missing output-equivalence evidence. The owner's merge records acceptance of that evidence, not a new pin. The legacy verifier verify_code_freezes.py (used by whole-repo-release-audit) intentionally still checks the original Nov 15 blob f02dd29e. MLB and NBA are reported only and will be handled in separate transitions; the pin step stays red until then.",
  "pinned_blob": "f02dd29ef444f49cdf4560a86d5b8a517519081d",
  "recording_act": "OWNER_MERGE",
  "release": "PAPER_0U",
  "repo_base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
  "schema": "sportsedge-cbb-repin-record-v1",
- "scope": "CODE IDENTITY ONLY. No coefficient, projection, probability or pricing line changed; no promotion, no stake, no certification.",
+ "scope": "Retain the Nov 18 transition; equivalence evidence only. CODE IDENTITY ONLY. No coefficient, projection, probability or pricing line changed; no pin manifest or verifier edited; no promotion, no stake, no certification.",
  "source_authenticated": false,
  "status": "PENDING_OWNER_MERGE"
 }

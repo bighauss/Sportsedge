@@ -111,6 +111,7 @@ class RecordConsistency(unittest.TestCase):
         self.assertEqual(r["pinned_blob"], E.PINNED_BLOB)
         self.assertEqual(r["candidate_blob"], E.CANDIDATE_BLOB)
         self.assertEqual(r["change_pr"], 292)
+        self.assertEqual(r["decision"], "RETAIN_NOV18_TRANSITION_EQUIVALENCE_EVIDENCE_ONLY")
 
     def test_record_matches_immutable_manifests_and_never_edits_them(self):
         legacy = json.loads(LEGACY.read_text())
