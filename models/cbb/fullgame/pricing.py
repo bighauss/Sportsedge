@@ -76,9 +76,11 @@ class Dist:
     """Location-scale distribution of the target given a forecast: X = forecast + loc + scale * T_df."""
 
     def __init__(self, loc, sd, df=None):
+        if not math.isfinite(loc):
+            raise ValueError("LOC_INVALID")
         if not (math.isfinite(sd) and sd > 0):
             raise ValueError("SD_INVALID")
-        if df is not None and df <= 2:
+        if df is not None and (not math.isfinite(df) or df <= 2):
             raise ValueError("DF_INVALID")
         self.loc, self.sd, self.df = loc, sd, df
         self.scale = sd * math.sqrt((df - 2) / df) if df else sd
@@ -92,11 +94,15 @@ class Dist:
 
 def fit_dist(residuals, *, min_n=MIN_PHASE_N, df_floor=4.0):
     """Moments of chronological forecast residuals -> Dist (t df from excess kurtosis)."""
-    r = [x for x in residuals if math.isfinite(x)]
-    if len(r) < min_n:
+    r = list(residuals)
+    if any(not math.isfinite(x) for x in r):
+        raise ValueError("RESIDUAL_NONFINITE")
+    if len(r) < max(2, min_n):
         raise ValueError("INSUFFICIENT_RESIDUALS")
     m = mean(r)
     v = sum((x - m) ** 2 for x in r) / (len(r) - 1)
+    if not math.isfinite(v) or v <= 0:
+        raise ValueError("RESIDUAL_VARIANCE_INVALID")
     k4 = sum((x - m) ** 4 for x in r) / len(r) / (v * v) - 3
     df = None if k4 <= 0.05 else max(df_floor, 6 / k4 + 4)
     return Dist(m, math.sqrt(v), df)
@@ -124,7 +130,11 @@ def fit_phase_dists(rows, target):
 # ---------------------------------------------------------------- push-aware line probabilities
 def line_probs(dist, mu, line):
     """(P(X > line), P(push), P(X < line)) for target X; integer lines push on the integer."""
+    if isinstance(line, bool) or not math.isfinite(mu):
+        raise ValueError("LINE_OR_MEAN_INVALID")
     line = float(line)
+    if not math.isfinite(line) or not (line * 2).is_integer():
+        raise ValueError("LINE_INVALID")
     if line.is_integer():
         lo, hi = dist.cdf(line - 0.5, mu), dist.cdf(line + 0.5, mu)
         return 1 - hi, hi - lo, lo
@@ -134,6 +144,8 @@ def line_probs(dist, mu, line):
 
 def ml_probs(dist, mu):
     """P(home wins) with the [-1/2, 1/2] tie mass split evenly (games cannot end tied)."""
+    if not math.isfinite(mu):
+        raise ValueError("MEAN_INVALID")
     lo, hi = dist.cdf(-0.5, mu), dist.cdf(0.5, mu)
     p = 1 - hi + 0.5 * (hi - lo)
     return p, 1 - p
@@ -155,11 +167,15 @@ def no_vig(pa, pb):
 
 
 def ev(p_win, p_push, price):
-    return p_win * (decimal_odds(price) - 1) - (1 - p_win - p_push)
+    if not (math.isfinite(p_win) and math.isfinite(p_push) and 0 <= p_win <= 1
+            and 0 <= p_push <= 1 and p_win + p_push <= 1 + 1e-12):
+        raise ValueError("PROBABILITY_MASS_INVALID")
+    return p_win * (decimal_odds(price) - 1) - max(0.0, 1 - p_win - p_push)
 
 
 def fair_american(p):
-    if not 0 < p < 1:
+    """Fair odds from conditional win probability given no push."""
+    if not math.isfinite(p) or not 0 < p < 1:
         return None
     return round(-100 * p / (1 - p)) if p >= 0.5 else round(100 * (1 - p) / p)
 
@@ -185,7 +201,18 @@ def ev_audit(row, *, threshold=0.30, z_disagree=1.5):
 
 # ---------------------------------------------------------------- moneyline tail calibration
 def _lg(p):
+    if not math.isfinite(p) or not 0 <= p <= 1:
+        raise ValueError("PROBABILITY_INVALID")
     p = min(1 - 1e-12, max(1e-12, p)); return math.log(p / (1 - p))
+
+
+def _sigmoid(z):
+    if not math.isfinite(z):
+        raise ValueError("LOGIT_NONFINITE")
+    if z >= 0:
+        return 1 / (1 + math.exp(-z))
+    e = math.exp(z)
+    return e / (1 + e)
 
 
 def fit_logit_recal(pairs, iters=50):
@@ -196,7 +223,7 @@ def fit_logit_recal(pairs, iters=50):
     for _ in range(iters):
         g0 = g1 = h00 = h01 = h11 = 0.0
         for x, y in xs:
-            q = 1 / (1 + math.exp(-(a + b * x)))
+            q = _sigmoid(a + b * x)
             w = q * (1 - q)
             g0 += y - q; g1 += (y - q) * x
             h00 += w; h01 += w * x; h11 += w * x * x
@@ -214,4 +241,4 @@ def apply_logit_recal(p, recal):
     if not recal:
         return p
     z = recal["a"] + recal["b"] * _lg(p)
-    return 1 / (1 + math.exp(-z))
+    return _sigmoid(z)
