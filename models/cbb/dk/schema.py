@@ -48,6 +48,12 @@ REASONS = {
     # governance
     "ISSUE57_ORIENTATION_HOLD": "Issue #57 directs both 9 AM orientation captures to be withheld pending owner verification.",
     "SUPERSEDED_BY_LATER_CAPTURE": "A later capture of the same market (same event/period/market/line/player) exists.",
+    # chronology / duplicates (added after the owner's PR #532 review)
+    "CAPTURE_CLOCK_INVALID": "captured_utc is missing or unparsable, so the row cannot be placed before the as-of time (fail closed).",
+    "DK_EVENT_ID_NOT_VERIFIED_AS_OF": "No public DK event page confirming the ID had been retrieved by the as-of time (strict identity basis).",
+    "CONFLICTING_DUPLICATE_QUOTE": "Two or more rows for the same market and rung share the latest capture time but disagree on price (fail closed).",
+    "DUPLICATE_QUOTE_ROW": "Exact duplicate of another row for the same market and rung at the same capture time; only the first is kept.",
+    "UNCORRECTED_TRUNCATED_ROW_AS_OF": "Row was truncated on the board and its PR #530 re-transcription was not yet available at the as-of time (strict basis).",
     "UNAUTHENTICATED_SOURCE": "Row comes from a PDF/screenshot/transcript, not an authenticated provider capture.",
 }
 
@@ -92,6 +98,11 @@ class DerivedRow:
     disposition: str = ""
     reason_codes: str = ""          # ';'-joined
     notes: str = ""
+    as_of_utc: str = ""             # replay time this row was derived for
+    replay_basis: str = ""          # STRICT_AS_OF | RETROSPECTIVE_LATER_IDENTITY (see docs/cbb/dk_interface.md)
+    quote_available_utc: str = ""   # when the quote itself became available (capture clock, or the PR #530 correction)
+    identity_available_utc: str = ""  # when the DK event-page evidence for dk_event_id was retrieved
+    identity_basis: str = ""        # AS_OF | LATER_PUBLIC_PAGE_CORROBORATION | NONE
     label: str = "PAPER_0U"
     official_counted: int = 0
     approved_stake_u: int = 0

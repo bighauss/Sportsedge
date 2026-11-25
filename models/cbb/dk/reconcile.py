@@ -148,12 +148,54 @@ def _gkey(r):
     return (r["away"], r["home"], r["tip_utc"])
 
 
+MAIN_MARKETS = {"SPREAD", "TOTAL", "ML"}   # one live line per (game, period): a later line is a move
+
+
+def _line_norm(v):
+    f = fnum(v)
+    return repr(f) if f is not None else (v or "").strip()
+
+
 def _family_key(r):
-    return (_gkey(r), r["period"], r["market"], r.get("player") or "")
+    """Supersession family. Main markets supersede across lines (a line move); every other market
+    (alternate ladders, team totals, player rungs) is keyed by its line so one rung never replaces another."""
+    line = "" if r["market"] in MAIN_MARKETS else _line_norm(r.get("line"))
+    return (_gkey(r), r["period"], r["market"], r.get("player") or "", line)
+
+
+def _clock(r):
+    """Parsed captured_utc, or None when missing/unparsable."""
+    try:
+        return EV.parse_utc(r["captured_utc"])
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def visible_rows(rows, as_of_utc):
+    """Rows whose capture clock is at or before as_of_utc. Rows with an unusable clock are returned
+    separately (they are rejected, and never feed supersession or identity checks)."""
+    vis, bad = [], []
+    for r in rows:
+        c = _clock(r)
+        if c is None:
+            bad.append(r)
+        elif c <= as_of_utc:
+            vis.append(r)
+    return vis, bad
+
+
+def effective_as_of(rows, as_of_utc):
+    if as_of_utc is not None:
+        return as_of_utc
+    clocks = [c for c in map(_clock, rows) if c is not None]
+    if not clocks:
+        raise ValueError("no parsable captured_utc and no as_of_utc given")
+    return max(clocks)
 
 
 def load_captures(pdf_original, pdf_corrected, transcript):
-    """Return (rows, truncated_original_rows). Rows carry capture metadata."""
+    """Return (rows, truncated_original_rows). Rows carry capture metadata. A corrected PDF row keeps its
+    original in row["_original"] so a strict as-of replay can fall back to what the board said at capture."""
     orig = read_csv(pdf_original)
     corr = read_csv(pdf_corrected)
     if len(orig) != len(corr):
@@ -161,10 +203,15 @@ def load_captures(pdf_original, pdf_corrected, transcript):
     rows, truncated = [], []
     for i, (o, c) in enumerate(zip(orig, corr), start=2):
         changed = any(o[k] != c[k] for k in o)
+        o_row = dict(o, capture_id="pdf_0636CT_original", source_file=Path(pdf_original).name, source_row=i)
         if changed:
-            truncated.append(dict(o, capture_id="pdf_0636CT_original", source_file=Path(pdf_original).name, source_row=i))
-        rows.append(dict(c, capture_id="pdf_0636CT", source_file=Path(pdf_corrected).name, source_row=i,
-                         provenance=S.PROV_PDF_RETRANSCRIBED if changed else S.PROV_PDF))
+            truncated.append(o_row)
+        row = dict(c, capture_id="pdf_0636CT", source_file=Path(pdf_corrected).name, source_row=i,
+                   provenance=S.PROV_PDF_RETRANSCRIBED if changed else S.PROV_PDF)
+        if changed:
+            row["_original"] = dict(o, capture_id="pdf_0636CT", source_file=Path(pdf_original).name, source_row=i,
+                                    provenance=S.PROV_PDF)
+        rows.append(row)
     for i, t in enumerate(read_csv(transcript), start=2):
         rows.append(dict(t, capture_id="transcript_0517_0534CT", source_file=Path(transcript).name, source_row=i,
                          provenance=S.PROV_TRANSCRIPT))
@@ -287,52 +334,127 @@ def transcript_explicit_totals_order(markdown_text, transcript_rows):
     return False
 
 
+STRICT = "STRICT_AS_OF"
+RETRO = "RETROSPECTIVE_LATER_IDENTITY"
+
+
+def _supersession(vis):
+    """vis: chronologically visible rows (index list). Returns (superseded, duplicate, conflict) index sets.
+    Only rows already visible at the as-of time take part."""
+    groups = defaultdict(list)
+    for i, r in enumerate(vis):
+        groups[_family_key(r)].append(i)
+    superseded, duplicate, conflict = set(), set(), set()
+    for idx in groups.values():
+        tmax = max(_clock(vis[i]) for i in idx)
+        latest = [i for i in idx if _clock(vis[i]) == tmax]
+        superseded.update(i for i in idx if _clock(vis[i]) < tmax)
+        sigs = {(_line_norm(vis[i].get("line")), (vis[i].get("price_a") or "").strip(), (vis[i].get("price_b") or "").strip())
+                for i in latest}
+        if len(sigs) > 1:
+            conflict.update(latest)
+        elif len(latest) > 1:
+            first = min(latest, key=lambda i: (vis[i]["capture_id"], int(vis[i]["source_row"])))
+            duplicate.update(i for i in latest if i != first)
+    return superseded, duplicate, conflict
+
+
+def _unique_index(rows, keyf, what):
+    out = {}
+    for r in rows:
+        k = keyf(r)
+        if k in out:
+            raise ValueError(f"duplicate {what} key {k!r}: crosswalk must fail closed")
+        out[k] = r
+    return out
+
+
 def reconcile(rows, truncated, event_xw, espn_by_game, team_xw, *, as_of_utc=None,
               transcript_totals_verified=False, require_authenticated=False,
-              issue57_hold_games=frozenset()):
-    xw = {(r["board_away"], r["board_home"], r["board_tip_utc"]): r for r in event_xw}
-    canon = {r["board_name"]: r for r in team_xw}
-    flags, info = market_identity_checks(rows)
-    # supersession: a later capture of the same (game, period, market family, player) wins
-    latest_cap = {}
-    for r in rows:
-        k = _family_key(r)
-        if k not in latest_cap or r["captured_utc"] > latest_cap[k][0]:
-            latest_cap[k] = (r["captured_utc"], r["capture_id"])
+              issue57_hold_games=frozenset(), identity_basis=STRICT,
+              correction_available_utc=None, espn_retrieved_utc=None):
+    """Reconcile the rows captured at or before as_of_utc (default: the latest capture clock).
+
+    Chronology contract: the output depends only on rows with captured_utc <= as_of_utc. Rows captured
+    later are dropped before supersession, duplicate detection, identity checks and holds are computed,
+    and leave no trace in the output. Identity/ESPN evidence retrieved after as_of_utc is used only when
+    identity_basis == RETRO, and then each row says so (identity_basis=LATER_PUBLIC_PAGE_CORROBORATION).
+    correction_available_utc: when the PR #530 re-transcription of truncated rows became available; in
+    STRICT mode an earlier as_of falls back to the truncated original and rejects it."""
+    if identity_basis not in (STRICT, RETRO):
+        raise ValueError(f"unknown identity_basis {identity_basis!r}")
+    as_of = effective_as_of(rows, as_of_utc)
+    xw = _unique_index(event_xw, lambda r: (r["board_away"], r["board_home"], r["board_tip_utc"]), "event crosswalk")
+    canon = _unique_index(team_xw, lambda r: r["board_name"], "team crosswalk")
+    strict = identity_basis == STRICT
+    espn_known = not (strict and espn_retrieved_utc is not None and EV.parse_utc(espn_retrieved_utc) > as_of)
+    espn_by_game = espn_by_game if espn_known else {}
+
+    vis, bad_clock = visible_rows(rows, as_of)
+    # strict basis: a correction that did not exist yet at as_of cannot be used
+    use_corr = (correction_available_utc is None) or (as_of >= correction_available_utc) or not strict
+    work, uncorrected = [], set()
+    for r in vis:
+        if r.get("_original") and not use_corr:
+            w = dict(r["_original"]); uncorrected.add(len(work)); work.append(w)
+        else:
+            work.append(r)
+    flags, info = market_identity_checks(work)
+    superseded, duplicate, conflict = _supersession(work)
+    quote_avail = {}
     derived, ledger = [], []
-    for i, r in enumerate(rows):
+    ordered = [(i, r) for i, r in enumerate(work)] + [(None, r) for r in bad_clock]
+    for i, r in ordered:
         reasons, notes = [], []
         g = _gkey(r); x = xw.get(g) or {}
         board_id = (r.get("dk_event_id") or "").strip()
-        eid, state = "", S.EID_MISSING
+        eid, state, id_basis, id_avail = "", S.EID_MISSING, "NONE", ""
         if x.get("state") == S.EID_VERIFIED:
-            if board_id and board_id != x["dk_event_id"]:
+            try:
+                id_avail_dt = EV.parse_utc(x["retrieved_utc"])
+            except (ValueError, KeyError, TypeError):
+                id_avail_dt = None
+            known_at_as_of = id_avail_dt is not None and id_avail_dt <= as_of
+            if strict and not known_at_as_of:
+                reasons.append("DK_EVENT_ID_NOT_VERIFIED_AS_OF")
+                notes.append("public event page retrieved after the as-of time; ID withheld in strict basis"
+                             + (f"; board carried {board_id} unverified" if board_id else ""))
+            elif board_id and board_id != x["dk_event_id"]:
                 reasons.append("DK_EVENT_TEAM_MISMATCH"); notes.append(f"board id {board_id} != verified {x['dk_event_id']}")
             else:
                 eid = x["dk_event_id"]; state = S.EID_BOARD_VERIFIED if board_id else S.EID_VERIFIED
+                id_avail = x["retrieved_utc"]
+                id_basis = "AS_OF" if known_at_as_of else "LATER_PUBLIC_PAGE_CORROBORATION"
         else:
             reasons.append("DK_EVENT_ID_MISSING")
             if board_id:
                 notes.append(f"board carried {board_id} but no public page confirmed it")
+        if i is None:
+            reasons.append("CAPTURE_CLOCK_INVALID")
         try:
-            tip = EV.parse_utc(r["tip_utc"]); cap = EV.parse_utc(r["captured_utc"])
-            if cap >= tip:
-                reasons.append("LIVE_AT_CAPTURE")
-            if as_of_utc is not None and as_of_utc >= tip:
-                reasons.append("STARTED_BEFORE_AS_OF")
+            tip = EV.parse_utc(r["tip_utc"])
             tip_ct = tip.astimezone(CT).strftime("%Y-%m-%d %H:%M CT")
+            cap = _clock(r)
+            if cap is not None and cap >= tip:
+                reasons.append("LIVE_AT_CAPTURE")
+            if as_of >= tip:
+                reasons.append("STARTED_BEFORE_AS_OF")
         except (ValueError, KeyError):
-            reasons.append("LINE_INVALID"); notes.append("tip/capture clock unparsable"); tip_ct = ""
+            reasons.append("LINE_INVALID"); notes.append("tip clock unparsable"); tip_ct = ""
         imp = _price_checks(r, reasons)
         m = r["market"]
         if m not in SUPPORTED and "ONE_SIDED_QUOTE" not in reasons:
             reasons.append("UNSUPPORTED_MARKET")
         if "selected rung only" in (r.get("note") or ""):
             notes.append("SELECTED_RUNG_ONLY")
-        reasons += flags.get(i, [])
+        if i is not None:
+            reasons += flags.get(i, [])
+            if i in uncorrected:
+                reasons.append("UNCORRECTED_TRUNCATED_ROW_AS_OF")
+                notes.append("PR #530 re-transcription not yet available at as-of; board row as captured")
         key = (r["capture_id"], g, r["period"])
         totals_order = ""
-        if m in TOTAL_LIKE and imp is not None:
+        if m in TOTAL_LIKE and imp is not None and i is not None:
             if r["provenance"] == S.PROV_PDF_RETRANSCRIBED and m == "TOTAL":
                 totals_order = "over_under"; notes.append("over/under order stated in PR #530 re-transcription")
             elif r["capture_id"].startswith("transcript") and m in ("TOTAL", "ALT_TOTAL") and transcript_totals_verified:
@@ -341,14 +463,22 @@ def reconcile(rows, truncated, event_xw, espn_by_game, team_xw, *, as_of_utc=Non
                 totals_order = "over_under"; notes.append("alt-vs-main total prices support price_a=over")
             elif "TOTALS_ORDER_CONFLICT" not in reasons:
                 reasons.append("TOTALS_ORDER_UNVERIFIED")
-        if latest_cap[_family_key(r)][1] != r["capture_id"]:
-            reasons.append("SUPERSEDED_BY_LATER_CAPTURE")
+        elif m in TOTAL_LIKE and imp is not None:
+            reasons.append("TOTALS_ORDER_UNVERIFIED")
+        if i is not None:
+            if i in superseded:
+                reasons.append("SUPERSEDED_BY_LATER_CAPTURE")
+            if i in duplicate:
+                reasons.append("DUPLICATE_QUOTE_ROW")
+            if i in conflict:
+                reasons.append("CONFLICTING_DUPLICATE_QUOTE")
         if g in issue57_hold_games:
             reasons.append("ISSUE57_ORIENTATION_HOLD")
         if require_authenticated and r["provenance"] != S.PROV_AUTHENTICATED:
             reasons.append("UNAUTHENTICATED_SOURCE")
         soft = {"TOTALS_ORDER_UNVERIFIED", "ISSUE57_ORIENTATION_HOLD"}
-        if "SUPERSEDED_BY_LATER_CAPTURE" in reasons and not (set(reasons) - soft - {"SUPERSEDED_BY_LATER_CAPTURE", "DK_EVENT_ID_MISSING"}):
+        stale = {"SUPERSEDED_BY_LATER_CAPTURE", "DUPLICATE_QUOTE_ROW"}
+        if (set(reasons) & stale) and not (set(reasons) - soft - stale - {"DK_EVENT_ID_MISSING", "DK_EVENT_ID_NOT_VERIFIED_AS_OF"}):
             disp = S.SUPERSEDED
         elif set(reasons) - soft:
             disp = S.REJECTED
@@ -357,6 +487,9 @@ def reconcile(rows, truncated, event_xw, espn_by_game, team_xw, *, as_of_utc=Non
         else:
             disp = S.ACCEPTED
         e = espn_by_game.get(g)
+        qa = r["captured_utc"]
+        if r.get("provenance") == S.PROV_PDF_RETRANSCRIBED and correction_available_utc is not None:
+            qa = correction_available_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
         d = S.DerivedRow(
             sport=r.get("sport", "CBB"), away=r["away"], home=r["home"], market=m, line=r.get("line", ""),
             price_a=r.get("price_a", ""), price_b=r.get("price_b", ""), period=r["period"], player=r.get("player", ""),
@@ -372,17 +505,23 @@ def reconcile(rows, truncated, event_xw, espn_by_game, team_xw, *, as_of_utc=Non
             implied_a=f"{imp[0]:.6f}" if imp else "", implied_b=f"{imp[1]:.6f}" if imp else "",
             novig_a=f"{imp[0]/(imp[0]+imp[1]):.6f}" if imp else "", novig_b=f"{imp[1]/(imp[0]+imp[1]):.6f}" if imp else "",
             totals_order=totals_order, disposition=disp, reason_codes=";".join(dict.fromkeys(reasons)),
-            notes="; ".join(notes))
+            notes="; ".join(notes),
+            as_of_utc=as_of.strftime("%Y-%m-%dT%H:%M:%SZ"), replay_basis=identity_basis,
+            quote_available_utc=qa, identity_available_utc=id_avail, identity_basis=id_basis)
         if not e:
-            d.notes = "; ".join(filter(None, [d.notes, "ESPN_EVENT_UNMATCHED"]))
+            d.notes = "; ".join(filter(None, [d.notes, "ESPN_EVENT_UNMATCHED" if espn_known else "ESPN_NOT_AVAILABLE_AS_OF"]))
         derived.append(d)
-    for t in truncated:
-        ledger.append({"row_key": f"{t['capture_id']}:{t['source_row']}", "capture_id": t["capture_id"],
-                       "source_file": t["source_file"], "source_row": t["source_row"], "away": t["away"], "home": t["home"],
-                       "period": t["period"], "market": t["market"], "line": t["line"], "player": t.get("player", ""),
-                       "price_a": t["price_a"], "price_b": t["price_b"], "disposition": S.REJECTED,
-                       "reason_codes": "LINE_TRUNCATED_SUPERSEDED_PR530",
-                       "reason_text": S.REASONS["LINE_TRUNCATED_SUPERSEDED_PR530"], "notes": "original row kept unchanged on main"})
+    if use_corr:
+        for t in truncated:
+            c = _clock(t)
+            if c is None or c > as_of:
+                continue
+            ledger.append({"row_key": f"{t['capture_id']}:{t['source_row']}", "capture_id": t["capture_id"],
+                           "source_file": t["source_file"], "source_row": t["source_row"], "away": t["away"], "home": t["home"],
+                           "period": t["period"], "market": t["market"], "line": t["line"], "player": t.get("player", ""),
+                           "price_a": t["price_a"], "price_b": t["price_b"], "disposition": S.REJECTED,
+                           "reason_codes": "LINE_TRUNCATED_SUPERSEDED_PR530",
+                           "reason_text": S.REASONS["LINE_TRUNCATED_SUPERSEDED_PR530"], "notes": "original row kept unchanged on main"})
     for d in derived:
         if d.disposition != S.ACCEPTED:
             ledger.append({"row_key": d.row_key, "capture_id": d.capture_id, "source_file": d.source_file,
@@ -403,21 +542,53 @@ PREGAME_EXCLUSIONS = frozenset({
 })
 
 
+RUNNER_COLUMNS = ["sport", "away", "home", "market", "line", "price_a", "price_b", "period", "player", "tip_utc",
+                  "captured_utc", "dk_event_id", "totals_order", "provenance", "authenticated", "row_key", "notes",
+                  "disposition", "reason_codes", "quote_available_utc", "identity_basis", "replay_basis", "as_of_utc"]
+SOFT_RUNNER_CODES = {"TOTALS_ORDER_UNVERIFIED"}
+
+
+def admissible_for_runner(row):
+    """Single gate for every runner entry point. Returns (ok, why). A row is admissible only if it is
+    ACCEPTED, or HELD for exactly TOTALS_ORDER_UNVERIFIED with a blank totals_order (the runner then
+    withholds the total itself); it is not from a pregame-excluded game; it carries no other reason code."""
+    codes = set(filter(None, (row.get("reason_codes") or "").split(";")))
+    disp = row.get("disposition") or ""
+    if (row.get("away"), row.get("home"), row.get("tip_utc")) in PREGAME_EXCLUSIONS:
+        return False, "PREGAME_EXCLUDED_GAME"
+    if str(row.get("authenticated", "0")) not in ("0", "1"):
+        return False, "BAD_AUTHENTICATED_FLAG"
+    if disp == S.ACCEPTED and not codes:
+        return True, ""
+    if disp == S.HELD and codes == SOFT_RUNNER_CODES and not (row.get("totals_order") or "").strip():
+        return True, "HELD_TOTALS_ORDER_UNVERIFIED"
+    return False, f"DISPOSITION_{disp or 'MISSING'}:{';'.join(sorted(codes))}"
+
+
+def read_runner_board(path):
+    """Fail-closed loader for any consumer of runner_board.csv: every row must pass admissible_for_runner
+    and the disposition/reason columns must be present. Raises ValueError otherwise."""
+    rows = read_csv(path)
+    if rows:
+        missing = {"disposition", "reason_codes", "identity_basis", "quote_available_utc"} - set(rows[0])
+        if missing:
+            raise ValueError(f"runner board lacks required columns {sorted(missing)}")
+    for n, r in enumerate(rows, start=2):
+        ok, why = admissible_for_runner(r)
+        if not ok:
+            raise ValueError(f"runner board row {n} not admissible: {why}")
+    return rows
+
+
 def runner_board(derived):
-    """Rows the runner may ingest: ACCEPTED or HELD-only-for-totals-order (runner keeps its own totals gate).
-    Same leading columns as the original boards plus totals_order and provenance."""
+    """Rows the runner may ingest (see admissible_for_runner). Disposition and reason codes are carried."""
     keep = []
     for d in derived:
-        if (d.away, d.home, d.tip_utc) in PREGAME_EXCLUSIONS:
-            continue
-        codes = set(filter(None, d.reason_codes.split(";")))
-        if d.disposition == S.ACCEPTED or (d.disposition == S.HELD and codes == {"TOTALS_ORDER_UNVERIFIED"}):
-            keep.append(d.as_dict())
+        row = d.as_dict()
+        ok, _ = admissible_for_runner(row)
+        if ok:
+            keep.append(row)
     return keep
-
-
-RUNNER_COLUMNS = ["sport", "away", "home", "market", "line", "price_a", "price_b", "period", "player", "tip_utc",
-                  "captured_utc", "dk_event_id", "totals_order", "provenance", "authenticated", "row_key", "notes"]
 
 
 def espn_orientation_check(derived, espn_by_game):

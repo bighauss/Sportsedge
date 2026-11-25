@@ -21,6 +21,10 @@ ROOT = Path(__file__).resolve().parents[3]
 LINES = ROOT / "models/cbb/lines"
 DK = ROOT / "models/cbb/dk"
 
+# When the PR #530 re-transcription of the 20 truncated first-half totals became available on main
+# (commit 7fc5aaa9, 2026-11-25T07:08:56-06:00). A strict replay earlier than this sees the truncated rows.
+PR530_CORRECTION_AVAILABLE_UTC = datetime(2026, 11, 25, 13, 8, 56, tzinfo=timezone.utc)
+
 # Board spelling -> ESPN 'location' where they differ. Each was checked by hand against the
 # ESPN scoreboard for the same tip minute AND the same opponent (unique hit); no fuzzy matching.
 ESPN_LOCATION_ALIASES = {
@@ -114,16 +118,29 @@ def cmd_reconcile(a):
     out = Path(a.out_dir) if a.out_dir else p["out"]
     rows, truncated = R.load_captures(p["pdf_original"], p["pdf_corrected"], p["transcript"])
     exw = R.read_csv(p["event_xw"]); txw = R.read_csv(p["team_xw"])
-    espn = json.loads(p["espn"].read_text())["events"]
-    games = games_of(rows)
-    espn_by = R.match_espn(games, espn, ESPN_LOCATION_ALIASES)
+    espn_doc = json.loads(p["espn"].read_text()); espn = espn_doc["events"]
+    as_of = R.effective_as_of(rows, EV.parse_utc(a.as_of) if a.as_of else None)
+    basis = R.STRICT if a.identity_basis == "strict" else R.RETRO
+    vis, bad_clock = R.visible_rows(rows, as_of)
+    live_rows = vis + bad_clock
+    games = games_of(live_rows)          # games are taken from rows visible at as_of only
+    gset = set(games)
+    exw_scope = [x for x in exw if (x["board_away"], x["board_home"], x["board_tip_utc"]) in gset]
+    espn_by_full = R.match_espn(games, espn, ESPN_LOCATION_ALIASES)
+    # the markdown is a compile of the operator capture; it counts only once its TOTAL row is visible
+    vis_tr = [r for r in vis if r["capture_id"].startswith("transcript")]
     md_ok = p["transcript_md"].exists() and R.transcript_explicit_totals_order(
-        p["transcript_md"].read_text(encoding="utf-8"), R.read_csv(p["transcript"]))
-    as_of = EV.parse_utc(a.as_of) if a.as_of else None
+        p["transcript_md"].read_text(encoding="utf-8"), vis_tr)
     hold = frozenset(g for g in games if (g[0], g[1]) in {tuple(h.split("@")) for h in a.issue57_hold})
-    derived, ledger, info = R.reconcile(rows, truncated, exw, espn_by, txw, as_of_utc=as_of,
+    derived, ledger, info = R.reconcile(rows, truncated, exw, espn_by_full, txw, as_of_utc=as_of,
                                         transcript_totals_verified=md_ok,
-                                        require_authenticated=a.require_authenticated, issue57_hold_games=hold)
+                                        require_authenticated=a.require_authenticated, issue57_hold_games=hold,
+                                        identity_basis=basis,
+                                        correction_available_utc=PR530_CORRECTION_AVAILABLE_UTC,
+                                        espn_retrieved_utc=espn_doc.get("retrieved_utc"))
+    id_times = [x["retrieved_utc"] for x in exw_scope if x["state"] == S.EID_VERIFIED]
+    espn_known = not (basis == R.STRICT and EV.parse_utc(espn_doc["retrieved_utc"]) > as_of)
+    espn_by = espn_by_full if espn_known else {}
     out.mkdir(parents=True, exist_ok=True)
     R.write_csv(out / "derived_board.csv", S.DerivedRow.columns(), [d.as_dict() for d in derived])
     rb = R.runner_board(derived)
@@ -135,27 +152,39 @@ def cmd_reconcile(a):
     for d in derived:
         by_cap.setdefault(d.capture_id, Counter())[d.disposition] += 1
     report = {
-        "schema": S.SCHEMA_VERSION, "date": a.date, "as_of_utc": a.as_of or None,
+        "schema": S.SCHEMA_VERSION, "date": a.date, "as_of_utc": as_of.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "replay_basis": basis,
+        "chronology": {
+            "rule": ("Output depends only on rows with captured_utc <= as_of_utc. Later rows are dropped before "
+                     "supersession, duplicate detection, identity checks and holds, and leave no trace in the outputs."),
+            "rows_after_as_of_dropped": len(rows) - len(vis) - len(bad_clock),
+            "rows_with_unusable_clock": len(bad_clock),
+            "identity_evidence_retrieved_utc_range": [min(id_times, default=""), max(id_times, default="")],
+            "espn_retrieved_utc": espn_doc.get("retrieved_utc"),
+            "pr530_correction_available_utc": PR530_CORRECTION_AVAILABLE_UTC.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "identity_basis_counts": dict(Counter(d.identity_basis for d in derived)),
+            "issue57_hold_input": sorted(a.issue57_hold),
+        },
         "generated_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "inputs": {k: {"path": str(p[k].relative_to(ROOT)), "sha256": sha(p[k])}
                    for k in ("pdf_original", "pdf_corrected", "transcript", "transcript_md", "pages", "sitemap", "espn", "event_xw", "team_xw")
                    if p[k].exists()},
-        "rows_in": len(rows), "original_truncated_rows": len(truncated),
+        "rows_in": len(derived), "original_truncated_rows": sum(1 for x in ledger if x["reason_codes"] == "LINE_TRUNCATED_SUPERSEDED_PR530"),
         "dispositions": disp, "by_capture": by_cap, "reason_code_counts": codes,
         "runner_board_rows": len(rb),
         "event_ids": {"games": len(games),
-                      "verified": sum(1 for x in exw if x["state"] == S.EID_VERIFIED),
+                      "verified": sum(1 for x in exw_scope if x["state"] == S.EID_VERIFIED),
                       "missing": [{"game": f"{x['board_away']} @ {x['board_home']}", "tip_utc": x["board_tip_utc"], "reason": x["reason"]}
-                                  for x in exw if x["state"] != S.EID_VERIFIED],
+                                  for x in exw_scope if x["state"] != S.EID_VERIFIED],
                       "rows_with_verified_id": sum(1 for d in derived if d.dk_event_id),
                       "pdf_rows_with_verified_id": sum(1 for d in derived if d.dk_event_id and d.capture_id == "pdf_0636CT"),
-                      "pdf_rows_with_board_id_on_main": sum(1 for r in rows if r["capture_id"] == "pdf_0636CT" and (r.get("dk_event_id") or "").strip())},
+                      "pdf_rows_with_board_id_on_main": sum(1 for r in live_rows if r["capture_id"] == "pdf_0636CT" and (r.get("dk_event_id") or "").strip())},
         "espn_matched_games": sum(1 for v in espn_by.values() if v),
         "neutral_games": sorted(f"{g[0]} @ {g[1]}" for g, e in espn_by.items() if e and e["neutral_site"]),
         "identity_checks": {k: {" | ".join([c, *g[:2], per]): v for (c, g, per), v in d.items()} for k, d in info.items()},
         "transcript_totals_order_verified_from_markdown": md_ok,
         "espn_current_feed_orientation": R.espn_orientation_check(derived, espn_by),
-        "cross_capture_saint_bonaventure_belmont": R.cross_capture_diff(rows, ("Saint Bonaventure", "Belmont")),
+        "cross_capture_saint_bonaventure_belmont": R.cross_capture_diff(live_rows, ("Saint Bonaventure", "Belmont")),
         "authenticated_rows": sum(d.authenticated for d in derived),
         "authenticated_quote_rows": 0,
         "event_id_verification_is_not_quote_authentication": True,
@@ -183,7 +212,7 @@ def cmd_reconcile(a):
         "label": "PAPER_0U", "official_counted": 0, "approved_stake_u": 0,
     }
     (out / "report.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=dict) + "\n", encoding="utf-8")
-    print(json.dumps({"rows_in": len(rows), "dispositions": disp, "runner_board_rows": len(rb),
+    print(json.dumps({"rows_in": len(derived), "dispositions": disp, "runner_board_rows": len(rb),
                       "verified_games": report["event_ids"]["verified"], "games": len(games)}, default=dict))
     return 0
 
@@ -193,7 +222,12 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("crosswalk"); c.add_argument("--date", default="2026-11-25")
     r = sub.add_parser("reconcile"); r.add_argument("--date", default="2026-11-25")
-    r.add_argument("--as-of", default=None, help="UTC run time; games tipped by then are STARTED_BEFORE_AS_OF")
+    r.add_argument("--as-of", default=None,
+                   help="UTC replay time; only rows captured at or before it are used (default: latest capture clock); "
+                        "games tipped by then are STARTED_BEFORE_AS_OF")
+    r.add_argument("--identity-basis", choices=["retrospective", "strict"], default="retrospective",
+                   help="strict: DK event IDs, ESPN fields and PR #530 corrections count only if available by --as-of; "
+                        "retrospective: later identity evidence may be used and every row is labelled with it")
     r.add_argument("--out-dir", default=None)
     r.add_argument("--require-authenticated", action="store_true")
     r.add_argument("--issue57-hold", nargs="*", default=["Saint Bonaventure@Belmont"],
