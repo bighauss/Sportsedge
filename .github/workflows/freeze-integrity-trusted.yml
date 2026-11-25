@@ -1,0 +1,73 @@
+name: Trusted base-pinned freeze integrity gate
+
+# Independent integrity check for the research-code freeze verifiers, the Nov 15
+# freeze, the Nov 18 / Nov 25 transition manifests, and this gate itself.
+# Expected blob values come ONLY from research/freezes/integrity_pins.json on the
+# trusted BASE commit; the PR head cannot rewrite them. Any change to a pinned
+# path fails this job until the owner merges (the recording act). PAPER / 0u.
+
+on:
+  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-freeze-integrity:
+    # CRITICAL: pull_request_target runs this workflow and Python from the BASE
+    # branch, never checks out or executes PR-head code, and supplies no secrets.
+    # The PR head is read only as git objects (ls-tree / show) by base code.
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout trusted base SHA (never checkout PR head)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch untrusted commit objects only and enforce precise head identity
+        shell: bash
+        env:
+          PR_NUM: ${{ github.event.pull_request.number }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git -c protocol.file.allow=never fetch --no-tags origin "refs/pull/${PR_NUM}/head"
+          actual="$(git rev-parse FETCH_HEAD)"
+          if [[ "$actual" != "$EXPECTED_HEAD" ]]; then
+            echo "::error::PR head advanced during fetch; rerun on current head"
+            exit 2
+          fi
+      - name: Compare head verifier, manifests and freeze blobs with BASE-pinned values
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+        run: |
+          python research/freezes/integrity_gate.py \
+            --repo . --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --pr-number "$PR_NUM"
+
+  tree-matches-own-pins:
+    # On PRs (untrusted head code; consistency evidence only, NOT the trust anchor),
+    # on main after an owner merge, and on demand: the committed tree must match the
+    # pins committed with it, so the next PR's base pins are self-consistent.
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Self-check pins at this commit and run gate unit tests
+        run: |
+          python research/freezes/integrity_gate.py --repo . --self-check "$(git rev-parse HEAD)"
+          python -m unittest discover -s research/freezes -p 'test_integrity_gate.py' -v

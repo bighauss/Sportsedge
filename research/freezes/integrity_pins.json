@@ -1,0 +1,15 @@
+{
+  "description": "Trusted expected git blob SHA-1s for the freeze verifiers, the Nov 15 freeze, the Nov 18 and Nov 25 transition manifests, the integrity gate and its workflows. Read by research/freezes/integrity_gate.py from the BASE commit only (pull_request_target). A PR head cannot change the expected values: any change fails the trusted job until the owner merges. PAPER/0u, NON_COUNTED.",
+  "pins": {
+    ".github/workflows/freeze-integrity-trusted.yml": "6519e0a9b04a96032ef2f7243f7c32486a3540ef",
+    ".github/workflows/risk-lock-research.yml": "9b47261ef2467c3df29023536e3cb1db436bf067",
+    "research/freezes/code_identity_transitions_20261118.json": "399a4df65036eb236f9f56699bc4090507786a3c",
+    "research/freezes/code_identity_transitions_20261125.json": "e22ad861c87a99e043d97f470b71522bc63ed386",
+    "research/freezes/frozen_baselines_20261115.json": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
+    "research/freezes/integrity_gate.py": "021a47b2f54ad3eeeaf02ee782ee3c4bb0362078",
+    "research/freezes/verify_code_freezes.py": "27d2b51d27d4b7da6f22dad31d55257541af8f67",
+    "research/freezes/verify_versioned_transition.py": "b342a626681c63fdf2449e97c8814663b40a8015"
+  },
+  "recording_act": "OWNER_MERGE",
+  "schema": "sportsedge-freeze-integrity-pins-v1"
+}
