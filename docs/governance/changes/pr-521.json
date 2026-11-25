@@ -3,7 +3,8 @@
   "pr_number": 521,
   "base_commit": "d7d608ca387cbcea04225d5253bb6331b10f145c",
   "protected_paths": [
-    ".github/workflows/cbb-factorial-research.yml"
+    ".github/workflows/cbb-factorial-research.yml",
+    "models/cbb/cbb_run_it.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
   "change_summary": "Register provider-free challenger, chronology, distribution and publication regressions. Forecast records require parent-card and source receipt digests. No baseline, ledger or production-runner modification. Add separate public historical schedule/team-box reconstruction using native factorial comparator and read-only historical CI; no live runner changes. Fit residual family parameters once on 2019–22 reconstructed baseline forecasts; score fixed 2023–25 holdout and retain per-event probabilities, reliability and diagnostic total threshold outcomes. Explicit RUN IT private source contract, receipt-byte verification and parent native parity; optional --factorial-sidecar path, disabled by default. Register fixed-train pace/efficiency/HCA and full-game diagnostic calibration on common model-derived thresholds; retain separate research outputs.",
@@ -17,7 +18,8 @@
     "Historical calibration uses public reconstructed raw-rating forecasts, not original CBBD adjusted ratings or archived odds; total thresholds are model-derived half-integers, not actual contracts.",
     "Holdout is not untouched by earlier scoring research; zero-location comparison prespecified, prior-mean shift separate sensitivity. Week-block CIs descriptive; no distribution promotion.",
     "Sidecar is opt-in, captures local receipt clocks only, may observe a repeat diagnostic parent, not evidence of first ledger freeze; no production pricing changes. Live hosted execution and grading not yet demonstrated.",
-    "Complete-box historical sample is not an untouched holdout; probability bins measure moneyline winner confidence, not EV star ratings. No first-half, integer-push or true market-contract calibration is established."
+    "Complete-box historical sample is not an untouched holdout; probability bins measure moneyline winner confidence, not EV star ratings. No first-half, integer-push or true market-contract calibration is established.",
+    "Additional historical self-tests and sidecar-contract tests are specified in the dedicated workflow; the manifest command identifies the core regression suite."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
@@ -41,7 +43,7 @@
   },
   "evaluation": {
     "method": "DETERMINISTIC_REGRESSION",
-    "test_command": "python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io research.cbb_hca.test_cbb_critical_path && python -m research.cbb_hca.public_factorial_backtest --self-test && python -m research.cbb_hca.public_residual_calibration --self-test && python -m unittest -v research.cbb_hca.test_cbb_sidecar_contract && python -m research.cbb_hca.public_market_calibration --self-test",
+    "test_command": "python -m unittest -v research.cbb_hca.test_cbb_research_math research.cbb_hca.test_cbb_research_native research.cbb_hca.test_cbb_hca_backtest research.cbb_hca.test_cbb_evidence_io research.cbb_hca.test_cbb_critical_path",
     "external_review_state": "NOT_VERIFIED",
     "unseen_data_verified": false
   },
