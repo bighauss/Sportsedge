@@ -1200,6 +1200,7 @@ def render(meta, games, projections, market_views, hybrids, ranked, rejects, a, 
          (f"Board `{meta['board_path']}` (sha256 `{meta['board_sha256'][:12]}`), provenance **{meta['provenance']}**: "
           "not an authenticated DraftKings capture.") if meta["provenance"] != C.AUTHENTICATED else
          f"Board: authenticated DK capture `{meta['board_path']}`.", ""]
+    o += ["> Frozen research record only: check delivery_audit.json at actual delivery time; positive historical EV is not a fresh or released selection.", ""]
     o += [f"> {w}" for w in meta.get("warnings", [])]
     w = meta["blend_weight_model"]
     chv, chh = meta.get("challenger_views") or {}, meta.get("challenger_hybrids") or {}
@@ -1433,8 +1434,9 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
     # Separate delivery evidence, never edit the original frozen research card.
-    if now >= freeze:
-        (out / "delivery_audit.json").write_text(json.dumps(delivery_audit(frozen, utcz(now)), indent=1, sort_keys=True))
+    delivery_now = datetime.now(timezone.utc)
+    if delivery_now >= freeze:
+        (out / "delivery_audit.json").write_text(json.dumps(delivery_audit(frozen, utcz(delivery_now)), indent=1, sort_keys=True))
     log = out / "freeze_log.jsonl"
     prev = log.read_text().strip().splitlines()[-1] if log.exists() and log.read_text().strip() else None
     with log.open("a") as f:
