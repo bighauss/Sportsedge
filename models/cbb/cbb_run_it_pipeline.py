@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import argparse, csv, hashlib, io, json, math, os, random, re, sys
 from collections import Counter, defaultdict
-from dataclasses import replace
+from dataclasses import replace, is_dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import NormalDist, mean
@@ -1373,8 +1373,16 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
             gm[gid] = replace(gm[gid], dk_event_id=q.dk_event_id)
     # ---- project: independent first (reads no quotes), then market and hybrid views
     projections, leakage, ratings_body = public_replay_project(games, slate_ids, season, freeze_utc, cfg)
+    # Ensure every slate game has a Projection so later stages do not KeyError.
+    reason = (leakage or {}).get("reason", "RATINGS_INSUFFICIENT_SAMPLE") if isinstance(leakage, dict) else "NO_PROJECTION"
+    for gid in slate_ids:
+        if gid not in projections or projections[gid] is None:
+            projections[gid] = C.Projection(gid, "INDEPENDENT", None, None, None, None, None, None,
+                                            "", "PASS", reason_code=reason)
     market_views = {gid: market_view(gid, accepted, cfg) for gid in slate_ids}
-    hybrids = {gid: hybrid_view(projections[gid], market_views[gid], w) for gid in slate_ids}
+    hybrids = {}
+    for gid in slate_ids:
+        hybrids[gid] = hybrid_view(projections[gid], market_views[gid], w)
     ch_proj, ch_views, ch_hyb = (challenger_views(challenger, games, slate_ids, market_views) if challenger
                                  else ({}, {}, {}))
     # ---- simulate
@@ -1398,7 +1406,7 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
               "canonical_blend_weights": list(C.CANONICAL_BLEND_WEIGHTS), "sim": {"n": n_sims, "seed": seed},
               "games": [C.row_dict(g) for g in gm.values()],
               "projections": [C.row_dict(p) for d in (projections, ch_views, market_views, hybrids, ch_hyb)
-                              for p in d.values()],
+                              for p in d.values() if is_dataclass(p)],
               "challenger": ({"meta": challenger.meta, "module_paths": challenger.module_paths,
                               "blend_weights_open": CHALLENGER_BLEND_W_OPEN, "caveat": CHALLENGER_CAVEAT}
                              if challenger else None),
