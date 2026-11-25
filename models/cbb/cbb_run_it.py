@@ -740,6 +740,7 @@ def main(argv=None):
     a.add_argument("--season", type=int, required=True)
     a.add_argument("--private-dir"); a.add_argument("--out", required=True)
     a.add_argument("--ledger")
+    a.add_argument("--factorial-sidecar", action="store_true", help="opt-in prospective research; no parent or ledger mutation")
     a.add_argument("--diagnostic-repeat", action="store_true",
                    help="retain previous game freezes; append unseen games only; report full current diagnostic")
     a.add_argument("--season-start-utc", help="UTC Z start of the prior-finals window; default Nov 1 of the season's start year (2026-11-01 for season 2027)")
@@ -920,6 +921,16 @@ def main(argv=None):
                                        "historical_players": 0, "confirmed_activity": False, "approved_stake_u": 0}
     (out / "cbb_card.json").write_text(json.dumps(card, indent=1, sort_keys=True))
     (out / "receipts.json").write_text(json.dumps(receipts, indent=1))
+    if x.factorial_sidecar:
+        if x.fixture_dir or x.now:
+            print("FACTORIAL_SIDECAR BLOCK_FIXTURE_OR_OVERRIDE", file=sys.stderr)
+        else:
+            from research.cbb_hca.collect_sidecar import discover_and_record
+            try:
+                result = discover_and_record(out / "cbb_card.json", priv, priv / "factorial_sidecar")
+                print("FACTORIAL_SIDECAR", result["state"], result["forecasts_written"])
+            except (ValueError, KeyError, TypeError, OSError) as exc:
+                print("FACTORIAL_SIDECAR BLOCK_SOURCE_CONTRACT", type(exc).__name__, file=sys.stderr)
     md = render(card, names, extra) + "\n## Source receipts\n\n" + "\n".join(
         f"- {r['source']}: sha256 {str(r['sha256']).replace('sha256:', '')[:16]}…" for r in receipts) + "\n"
     (out / "cbb_card.md").write_text(md)
