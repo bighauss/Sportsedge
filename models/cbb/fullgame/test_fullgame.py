@@ -481,5 +481,47 @@ class TAmericanQuote(unittest.TestCase):
         self.assertEqual(ok[1], 110)
 
 
+class AdversarialPricing(unittest.TestCase):
+    def test_invalid_distributions_and_quotes(self):
+        for loc, sd, df in ((float("nan"),10,None),(0,0,None),(0,10,float("inf"))):
+            with self.assertRaises(ValueError):
+                P.Dist(loc,sd,df)
+        for data in ([1]*200,[float("nan")]*200):
+            with self.assertRaises(ValueError):
+                P.fit_dist(data)
+        d=P.Dist(0,10)
+        for line in (1.25,float("nan"),float("inf"),True):
+            with self.assertRaises(ValueError):
+                P.line_probs(d,0,line)
+        for win,push in ((.8,.3),(-.1,0),(float("nan"),0)):
+            with self.assertRaises(ValueError):
+                P.ev(win,push,-110)
+        self.assertEqual(abs(P.fair_american(.45/.9)),100)
+        self.assertAlmostEqual(P.ev(.45,.1,100),0)
+        self.assertEqual(P.apply_logit_recal(.5,{"a":-1000,"b":1}),0)
+
+    def test_future_season_venue_mutation_invariance(self):
+        import tempfile
+        from unittest.mock import patch
+        from fullgame import improve_eval as I
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for year in (2020,2021,2022):
+                (root/f"games_{year}.csv").touch()
+            data = {
+                2020:[dict(game(1,"2019-11-01","a","b",70,65,season=2020),venue_id="1",home_venue_id="1")],
+                2021:[dict(game(2,"2020-11-01","b","a",70,65,season=2021),venue_id="2",home_venue_id="2")],
+                2022:[dict(game(3,"2021-11-01","a","b",70,65,season=2022),venue_id="3",home_venue_id="3")]}
+            def read(p):
+                return [dict(row) for row in data[int(Path(p).stem.split("_")[-1])]]
+            with patch.object(I.L,"read_csv",side_effect=read), patch.object(I,"venue_lookup_from_parquets",return_value={}):
+                before,_=I.load_context(root,root)
+                data[2022][0]["home_venue_id"]="999"
+                after,_=I.load_context(root,root)
+            self.assertEqual(before[2021],after[2021])
+            self.assertEqual(before[2021]["2"]["away_home_venue_id"],"1")
+            self.assertFalse(before[2020]["1"]["away_home_known"])
+
+
 if __name__ == "__main__":
     unittest.main()
