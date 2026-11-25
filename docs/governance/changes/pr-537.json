@@ -71,7 +71,7 @@
   },
   "baseline": {
     "metric": "Validated actionable markets",
-    "before": 0,
+    "before": null,
     "unit": "markets",
     "source_state": "UNKNOWN"
   },
