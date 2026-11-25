@@ -57,3 +57,13 @@ def test_push_invalid_and_fair_ev():
     with pytest.raises(ValueError): ev_per_unit(.6,2,.5)
     with pytest.raises(ValueError): ev_per_unit(.5,2,-.1)
     assert ev_per_unit(.47,2,.06) == pytest.approx(0)
+
+
+@pytest.mark.parametrize("alias", ["DK", "Draft Kings", "draftkings_sportsbook", "DraftKings US"])
+def test_target_alias_excluded(alias):
+    assert run([quote(book=alias)]).status == "NO_PRICE"
+    result=run([quote(),quote(book=alias,prices=[-200,170])])
+    assert result.status == "OK" and result.fair == pytest.approx([.5,.5])
+
+def test_normalized_duplicate_book_rejected():
+    assert run([quote(book="External Book"),quote(book="external-book")]).status == "INVALID"
