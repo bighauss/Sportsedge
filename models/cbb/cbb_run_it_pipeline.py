@@ -1652,6 +1652,16 @@ def run_from_card(card, names, board_path, board_captured_utc, out_dir, *, total
               "neutral": "1" if rows.get(gid, {}).get("neutral") else "0"} for gid, (a, h, tip) in names.items()]
     accepted, val_rejects = validate(quotes, slate, card["freeze_utc"], totals_order_verified=totals_order_verified,
                                      match=R._match, adapters=active, as_of_utc=card["freeze_utc"])
+    # A prospective CBBD parent cannot confer prospective status on later quote identity.
+    strict_accepted = []
+    for q, gid in accepted:
+        if q.replay_basis == "RETROSPECTIVE_LATER_IDENTITY":
+            val_rejects.append(C.Rejection("validate", q.period, q.market, "QUOTE_AFTER_FREEZE",
+                                           "retrospective identity incompatible with native prospective path",
+                                           q.board_index, gid, q.provenance))
+        else:
+            strict_accepted.append((q,gid))
+    accepted = strict_accepted
     projections = projections_from_card(card, cfg)
     gm = {}
     for gid, (a, h, tip) in names.items():
