@@ -126,3 +126,45 @@ def price(distribution, stat, kind, line):
     return {"p_a": wins / n, "p_push": pushes / n, "p_b": (n-wins-pushes) / n,
             "mean": mean(draws), "samples": n, "status": "PAPER_0U", "counted": "NON_COUNTED",
             "approved_stake_u": 0}
+
+
+class PlayerBundle:
+    """Research-only input bridge. Hash original bundle bytes; exact event/team/player IDs.
+
+    The caller must provide independently verified forecast/final provenance. A local
+    JSON file alone cannot establish provider authenticity or actual availability.
+    """
+    def __init__(self, path, as_of_utc):
+        import hashlib
+        import json
+        from pathlib import Path
+        raw = Path(path).read_bytes()
+        self.sha256 = hashlib.sha256(raw).hexdigest()
+        doc = json.loads(raw)
+        if doc.get("schema") != "CBB_PLAYER_RESIDUAL_BUNDLE_V1":
+            raise ValueError("PLAYER_BUNDLE_SCHEMA")
+        self.as_of_utc = as_of_utc
+        self.targets = {}
+        for item in doc["targets"]:
+            f = Forecast(**item)
+            validate_forecast(f)
+            key = (f.event_id, f.team_id, f.player_id)
+            if key in self.targets:
+                raise ValueError("DUPLICATE_TARGET_PLAYER")
+            self.targets[key] = f
+        self.history = [Observation(Forecast(**item["forecast"]), item["observed_final_utc"],
+                                    item["actual"], item["participated"]) for item in doc["history"]]
+        self.cache = {}
+
+    def probs(self, game_id, team_id, player_id, tip_utc, market, line):
+        key = (game_id, team_id, player_id)
+        target = self.targets.get(key)
+        if target is None:
+            raise ValueError("PLAYER_FORECAST_MISSING")
+        if clock(target.tip_utc) != clock(tip_utc):
+            raise ValueError("PLAYER_TIP_MISMATCH")
+        if key not in self.cache:
+            self.cache[key] = predictive_draws(target, self.history, as_of_utc=self.as_of_utc)
+        stat, kind = market.removeprefix("PLAYER_").split("_", 1)
+        p = price(self.cache[key], stat, kind, line)
+        return p["p_a"], p["p_push"], p["p_b"]
