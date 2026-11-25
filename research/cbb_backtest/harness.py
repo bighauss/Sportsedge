@@ -350,24 +350,27 @@ def blend_ll(rows, name, fam, w):
 
 
 # ---------------------------------------------------------------- driver
-def run(root, odds_path, out_dir, seasons, extra_models=(), reps=1000):
-    out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
-    names = list(M.MODELS)
-    for spec in extra_models:
-        names.append(M.load_spec(spec))
-    odds, odds_census = D.load_odds(odds_path) if odds_path else ({}, {"games": 0})
-    leak = {"origins": 0, "violations": []}
+def build_rows(seasons, names, games_loader, odds, leak, cutoff_day=None):
+    """Forecast every season in order (shared by run() and the reproduction slice).
+
+    games_loader(season) -> (games, census). cutoff_day (optional) keeps only games with
+    day < cutoff_day in the FORECAST seasons; the previous season is always complete.
+    Because an origin's fit uses only games with day < origin, truncating after the
+    last wanted window cannot change any forecast inside it.
+    """
     all_rows, coverage = [], []
     prev_games = None
     first = min(seasons)
     history = {}
     try:
-        prev_games, _ = D.load_games(root, first - 1)
+        prev_games, _ = games_loader(first - 1)
         history[first - 1] = prev_games
     except Exception:
         prev_games = None
     for s in seasons:
-        games, census = D.load_games(root, s)
+        games, census = games_loader(s)
+        if cutoff_day is not None:
+            games = [g for g in games if g["day"] < cutoff_day]
         carry = M.season_end_carry(prev_games) if prev_games else {}
         carry = dict(carry)
         carry["_history"] = {k: v for k, v in history.items() if k < s}   # earlier seasons only
@@ -402,6 +405,25 @@ def run(root, odds_path, out_dir, seasons, extra_models=(), reps=1000):
     for r in all_rows:
         r["p"] = {n: (probabilities(r, n) if n in r["f"] else {}) for n in names}
     ident = [r for r in all_rows if all(n in r["f"] and "sd_margin" in r["f"][n] for n in names)]
+    return all_rows, ident, coverage
+
+
+def run(root, odds_path, out_dir, seasons, extra_models=(), reps=1000, data_dir=None):
+    """root/odds_path: raw SDV parquet dir + raw ESPN odds jsonl.gz (original path).
+    data_dir: committed normalized inputs (research/cbb_backtest/data) instead; see inputs.py."""
+    out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
+    names = list(M.MODELS)
+    for spec in extra_models:
+        names.append(M.load_spec(spec))
+    if data_dir:
+        from . import inputs as I
+        odds, odds_census = I.load_odds_normalized(data_dir)
+        loader = lambda s: I.load_games_normalized(data_dir, s)
+    else:
+        odds, odds_census = D.load_odds(odds_path) if odds_path else ({}, {"games": 0})
+        loader = lambda s: D.load_games(root, s)
+    leak = {"origins": 0, "violations": []}
+    all_rows, ident, coverage = build_rows(seasons, names, loader, odds, leak)
     return _report(all_rows, ident, names, coverage, odds_census, leak, out_dir, seasons, reps)
 
 
@@ -422,10 +444,33 @@ def _write(path, rows):
             if k not in keys:
                 keys.append(k)
     with path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=keys)
+        w = csv.DictWriter(f, fieldnames=keys, lineterminator="\n")
         w.writeheader()
         for r in rows:
             w.writerow({k: (round(v, 6) if isinstance(v, float) else v) for k, v in r.items()})
+
+
+def paired_rows(all_rows, ident, names):
+    """One dict per forecast row (all models, market columns): the content of rows_paired_forecasts.csv."""
+    rowsout = []
+    for r in all_rows:
+        x = {"event_id": r["event_id"], "season": r["season"], "day": r["day"].isoformat(), "origin": r["origin"].isoformat(),
+             "split": split_of(r["season"]), "home": r["home"], "away": r["away"], "neutral": r["neutral"],
+             "home_points": r["home_points"], "away_points": r["away_points"], "identical_row": r in ident_set(ident),
+             "d1_both_prior_season": r.get("d1_both")}
+        for n in names:
+            f = r["f"].get(n)
+            x[f"{n}_margin"] = round(f["margin"], 3) if f else None
+            x[f"{n}_total"] = round(f["total"], 3) if f else None
+            x[f"{n}_sd_margin"] = round(f["sd_margin"], 3) if f and "sd_margin" in f else None
+            x[f"{n}_hold"] = r["hold"].get(n)
+        m = r.get("mkt") or {}
+        for k in ("provider", "close_spread_home", "close_total", "close_ml_home", "close_ml_away", "close_spread_price_home",
+                  "close_spread_price_away", "close_over_price", "close_under_price", "open_spread_home", "open_total",
+                  "open_ml_home", "open_ml_away", "close_from_current_fallback"):
+            x["mkt_" + k] = m.get(k)
+        rowsout.append(x)
+    return rowsout
 
 
 def _report(all_rows, ident, names, coverage, odds_census, leak, out, seasons, reps):
@@ -616,24 +661,7 @@ def _report(all_rows, ident, names, coverage, odds_census, leak, out, seasons, r
                   ("select", "blend_selection.csv"), ("betsplit", "betting_splits.csv")):
         _write(out / fn, res[k])
     _write(out / "coverage.csv", coverage)
-    rowsout = []
-    for r in all_rows:
-        x = {"event_id": r["event_id"], "season": r["season"], "day": r["day"].isoformat(), "origin": r["origin"].isoformat(),
-             "split": split_of(r["season"]), "home": r["home"], "away": r["away"], "neutral": r["neutral"],
-             "home_points": r["home_points"], "away_points": r["away_points"], "identical_row": r in ident_set(ident),
-             "d1_both_prior_season": r.get("d1_both")}
-        for n in names:
-            f = r["f"].get(n)
-            x[f"{n}_margin"] = round(f["margin"], 3) if f else None
-            x[f"{n}_total"] = round(f["total"], 3) if f else None
-            x[f"{n}_sd_margin"] = round(f["sd_margin"], 3) if f and "sd_margin" in f else None
-            x[f"{n}_hold"] = r["hold"].get(n)
-        m = r.get("mkt") or {}
-        for k in ("provider", "close_spread_home", "close_total", "close_ml_home", "close_ml_away", "close_spread_price_home",
-                  "close_spread_price_away", "close_over_price", "close_under_price", "open_spread_home", "open_total",
-                  "open_ml_home", "open_ml_away", "close_from_current_fallback"):
-            x["mkt_" + k] = m.get(k)
-        rowsout.append(x)
+    rowsout = paired_rows(all_rows, ident, names)
     _write(out / "rows_paired_forecasts.csv", rowsout)
     meta = {"schema": "CBB_ROLLING_ORIGIN_BACKTEST_V1", "status": "RESEARCH_PAPER_0U", "official_counted": 0,
             "approved_stake_u": 0, "label": "NON_COUNTED", "generated_utc": datetime.now(timezone.utc).isoformat(),
@@ -675,11 +703,14 @@ def _native_sha():
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--root", type=Path, required=True)
+    p.add_argument("--root", type=Path)
     p.add_argument("--odds", type=Path)
+    p.add_argument("--data-dir", type=Path, help="committed normalized inputs (research/cbb_backtest/data)")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--seasons", nargs="+", type=int, default=list(range(2019, 2027)))
     p.add_argument("--model", action="append", default=[], help="name=module:callable challenger")
     p.add_argument("--reps", type=int, default=1000)
     a = p.parse_args()
-    run(a.root, a.odds, a.out, a.seasons, a.model, a.reps)
+    if not (a.data_dir or a.root):
+        p.error('give --data-dir (committed inputs) or --root/--odds (raw inputs)')
+    run(a.root, a.odds, a.out, a.seasons, a.model, a.reps, a.data_dir)
