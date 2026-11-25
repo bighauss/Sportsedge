@@ -3,8 +3,7 @@
 **Status: PENDING_OWNER_MERGE.** The owner's merge is the recording act. Release stays PAPER_0U, official_counted = 0,
 approved stake 0u, no certification, no source authentication. Machine-readable twin:
 [`nba_push_accounting_transition_20261125.json`](nba_push_accounting_transition_20261125.json); candidate entry (Nov 18 format):
-[`code_identity_transitions_20261125.json`](code_identity_transitions_20261125.json); verifier:
-[`verify_nba_behavioral_transition.py`](verify_nba_behavioral_transition.py).
+[`code_identity_transitions_20261125_nba_candidate.json`](code_identity_transitions_20261125_nba_candidate.json) (same format as the MLB candidate in #535). Verification is by the unified stock verifier being built in #535 — this change adds no verifier.
 
 Owner decision (Nov 25): **KEEP** the fix in `8537ae4` (pr-460); prepare a separate versioned *behavioral* transition; do **not** revert;
 never bypass or weaken a verifier.
@@ -63,10 +62,8 @@ Findings: ties are real and common (≈1 in 29 first halves, ≈1 in 20 first qu
 EV shift: raw EV = p·dec − 1 + push, so shift = Δp·dec + push ≈ push·(1 − dec/2): favorites/short prices gain, underdogs above +100 lose. At −110 both sides: +0.19 pts (1H) / +0.28 pts (1Q); at +300 −4.1 / −6.1 pts. No side flips sign at −110 (hypothetical price; none exists in the repo).
 Seeded synthetic corpus: 54 period-ML picks flip from +blend EV to ≤0, net card −6 rows of 15,515, 210 star-bucket changes.
 
-## 5. Verification and CI wiring
-`python research/freezes/verify_nba_behavioral_transition.py` re-runs the Nov 15/Nov 18 authority unchanged (`checked_manifest`, `check_provenance`), requires the Nov-18-format entry to match exactly, checks that `8537ae4` is the first introducing commit (every parent has `da0c1503`) and an ancestor of HEAD, that the on-disk file is `b353de86`, the record, evidence hashes and the exact diff. Scope is the NBA file only; other sports' pins are listed informationally (MLB still drifts).
-**This change edits no existing pin file or verifier.** The existing "Seven code pin verification" step stays red (MLB first in sort order, then NBA). The minimal edit that would make that step accept NBA's chained candidate is provided, **not applied**, in `nba_push_accounting_20261125_wiring_proposal.patch`; it edits the Nov 18 authority and verifier, so it needs explicit owner approval, and MLB is a separate decision.
+## 5. Verification and CI wiring (unified verifier, owner option B)
+This change adds **no verifier and edits no existing pin file**. The owner chose one unified, reviewed extension of `verify_versioned_transition.py` (MLB stream, PR #535, generic multi-hop manifest). The NBA candidate entry matches the #535 entry format (`prior_*` = Nov 18 link `da0c1503` / `098c92bf` / #294; approved = `b353de86` / `8537ae481a34fa6972a67389a6ac75172ee1f59c` / #460; `governance_record` = `pr-460.json`).
+Requirements the unified verifier must enforce for this entry: first-introducing commit `8537ae4` is an ancestor of HEAD and **every parent holds `da0c1503`**; on-disk file is `b353de86`; Nov 15 manifest and Nov 18 manifest blobs unchanged; any mismatch exits non-zero. Offline tests here (`test_nba_behavioral_transition.py`) cover the diff, normalization, bit-identity, historical analysis reproduction, and consistency of the candidate entry/record (blobs, provenance, PAPER_0U fields).
+Until the unified verifier lands, the stock "Seven code pin verification" step stays red (MLB first in sort order, then NBA).
 Governance follow-up: opening a PR touches `research/freezes/**`; add `docs/governance/changes/pr-<N>.json` once the number is known.
-
-### Scratch demonstration of the proposed wiring (not on this branch)
-Applying the patch in a scratch clone: `checked_manifest` and `check_provenance` pass for all three sports, NBA's on-disk pin verifies as `b353de86`, the 10 existing `test_versioned_transition` / `test_verify_code_freezes` tests pass, and the first remaining failure is `CODE_CHANGED_SINCE_FREEZE:models/mlb/sportsedge_mlb_model.py` (MLB, separate decision). If the owner approves the patch, `verify_nba_behavioral_transition.py` (which pins the Nov 18 manifest blob) must be retired in the same change.
