@@ -242,7 +242,11 @@ def normalize_quotes(cap, *, totals_order_verified):
                           source_sha256=cap["source_sha256"], source_label=label or None,
                           row_key=str(r.get("row_key") or "").strip() or None,
                           player_id=str(r.get("player_id") or "").strip() or None,
-                          player_team_id=str(r.get("player_team_id") or "").strip() or None)
+                          player_team_id=str(r.get("player_team_id") or "").strip() or None,
+                          quote_available_utc=str(r.get("quote_available_utc") or "").strip() or None,
+                          identity_available_utc=str(r.get("identity_available_utc") or "").strip() or None,
+                          identity_basis=str(r.get("identity_basis") or "").strip() or None,
+                          replay_basis=str(r.get("replay_basis") or "").strip() or None)
         quotes.append((q, {"line_bad": line == "BAD", "price_bad": "BAD" in (pa, pb),
                            "order": order, "raw": r}))
     return quotes, rejects
@@ -324,6 +328,14 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             clock_field = None
         if clock_field is not None:
             continue
+        if q.identity_available_utc and q.replay_basis != "RETROSPECTIVE_LATER_IDENTITY":
+            try:
+                if parse_z(q.identity_available_utc) > freeze:
+                    raise ValueError("identity evidence after freeze")
+            except (ValueError, TypeError):
+                rej("QUOTE_AFTER_FREEZE", "identity evidence unavailable at freeze"); continue
+        if q.identity_basis == "LATER_PUBLIC_PAGE_CORROBORATION" and q.replay_basis != "RETROSPECTIVE_LATER_IDENTITY":
+            rej("QUOTE_AFTER_FREEZE", "later identity evidence requires explicit retrospective basis"); continue
         if (freeze - cap).total_seconds() > max_quote_age_hours * 3600:
             rej("STALE_QUOTE"); continue
         g, why = match(slate_rows, q.home, q.away, meta["raw"])
@@ -366,6 +378,18 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
                                        "identical duplicate; first kept", dup.board_index,
                                        f"{dup.away} @ {dup.home}", dup.provenance))
         accepted.append((qs[0], key[0]))
+    # Reject ambiguous main lines rather than letting market_view select the first.
+    main_counts = Counter((gid, q.period, q.market) for q, gid in accepted
+                          if q.market in ("SPREAD", "TOTAL", "ML"))
+    kept = []
+    for q, gid in accepted:
+        if main_counts[(gid, q.period, q.market)] > 1:
+            rejects.append(C.Rejection("validate", q.period, q.market, "DUPLICATE_QUOTE",
+                                       "multiple main lines; no verified supersession", q.board_index,
+                                       f"{q.away} @ {q.home}", q.provenance))
+        else:
+            kept.append((q, gid))
+    accepted = kept
     # orientation: main spread sign must agree with the moneyline favourite (home perspective)
     by_game = defaultdict(dict)
     for q, gid in accepted:
@@ -918,7 +942,10 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
                                  prob_challenger=pc, ev_challenger=evc, hybrid_method=hmethod, audit_flags=flags,
                                  dk_event_id=q.dk_event_id, captured_utc=q.captured_utc, provenance=q.provenance,
                                  prob_source=src, player_id=q.player_id, player_team_id=q.player_team_id,
-                                 player=q.player)
+                                 player=q.player, board_index=q.board_index, source_sha256=q.source_sha256,
+                                 row_key=q.row_key, quote_available_utc=q.quote_available_utc,
+                                 identity_available_utc=q.identity_available_utc, identity_basis=q.identity_basis,
+                                 replay_basis=q.replay_basis)
             C.check_paper(row)
             priced.append((row, q))
     return priced, rejects, parity
@@ -1479,7 +1506,11 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     ranked = rank(priced)
     rejects = cap_rejects + val_rejects + price_rejects
     # ---- freeze
-    kind = "PROSPECTIVE" if now <= freeze + timedelta(minutes=10) else "REPLAY_RECORD_NOT_PROSPECTIVE"
+    # This path reconstructs public inputs and assumes prior final availability.
+    # A wall-clock-near freeze is not sufficient to establish prospective evidence.
+    kind = "PUBLIC_RECONSTRUCTION_NOT_PROSPECTIVE"
+    if any(q.replay_basis == "RETROSPECTIVE_LATER_IDENTITY" for q, _ in accepted):
+        kind = "RETROSPECTIVE_LATER_IDENTITY_NOT_PROSPECTIVE"
     frozen = {"schema": C.SCHEMA_VERSION, "pipeline": PIPELINE_VERSION, "label": C.PAPER_0U, "counted": C.NON_COUNTED,
               "approved_stake_u": 0, "freeze_utc": utcz(freeze), "date_ct": date_ct, "freeze_kind": kind,
               "projection_adapter": "native_formula_public_replay",
