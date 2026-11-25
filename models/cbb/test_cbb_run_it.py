@@ -489,7 +489,7 @@ class PlayerHistorySource(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH"):
                 check(raw=original+b" ")
             with self.assertRaisesRegex(ValueError, "PLAYER_ORIGINAL_REPORT_REPLAY_MISMATCH"):
-                check(receipt=dict(trec, observed_utc=OBS.replace("Z", "+00:00") if OBS.endswith("Z") else OBS.replace("+00:00", "Z")))
+                check(receipt=dict(trec, observed_utc="2026-11-21T13:59:59Z"))
 
     def test_conditional_player_means_reject_inconsistent_pra(self):
         from cbbd_player_history import historical_baselines, conditional_player_means
