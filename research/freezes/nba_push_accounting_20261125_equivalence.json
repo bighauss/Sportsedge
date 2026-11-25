@@ -1,0 +1,391 @@
+{
+ "contract_probes": {
+  "PARTIAL_capture_H_plus_TIE_only_under_1H_ML": {
+   "new": [
+    {
+     "market": "1H_ML",
+     "model_p": 0.5435,
+     "raw_ev": 0.0408,
+     "selection": "H"
+    },
+    {
+     "market": "1H_ML",
+     "model_p": 0.4122,
+     "raw_ev": 3.5782,
+     "selection": "TIE"
+    }
+   ],
+   "old": [
+    {
+     "market": "1H_ML",
+     "model_p": 0.5658,
+     "raw_ev": 0.0373,
+     "selection": "H"
+    },
+    {
+     "market": "1H_ML",
+     "model_p": 0.4342,
+     "raw_ev": 3.7764,
+     "selection": "TIE"
+    }
+   ]
+  },
+  "three_way_H_A_TIE_under_1H_ML": {
+   "new": [],
+   "old": []
+  },
+  "three_way_labelled_1H_ML_3WAY_H_A": {
+   "new": [],
+   "old": []
+  },
+  "three_way_labelled_1H_ML_3WAY_H_A_TIE": {
+   "new": [],
+   "old": []
+  },
+  "two_way_H_A": {
+   "new": [
+    {
+     "market": "1H_ML",
+     "model_p": 0.5435,
+     "raw_ev": -0.0096,
+     "selection": "H"
+    },
+    {
+     "market": "1H_ML",
+     "model_p": 0.4122,
+     "raw_ev": -0.0695,
+     "selection": "A"
+    }
+   ],
+   "old": [
+    {
+     "market": "1H_ML",
+     "model_p": 0.5658,
+     "raw_ev": -0.0151,
+     "selection": "H"
+    },
+    {
+     "market": "1H_ML",
+     "model_p": 0.4342,
+     "raw_ev": -0.0664,
+     "selection": "A"
+    }
+   ]
+  }
+ },
+ "new_blob": "b353de86445188288cab4050f6cae13eee76bff6",
+ "normalization_grid": {
+  "1H": {
+   "grid_points": 1601,
+   "max_abs_dev_win_home_plus_win_away_plus_push_minus_1": 1.1102230246251565e-16,
+   "max_abs_push_home_minus_push_away": 1.6653345369377348e-16,
+   "max_abs_push_minus_closed_form_tie_band": 1.1102230246251565e-16,
+   "old_max_dev_two_outcome_sum_or_push": 1.1102230246251565e-16,
+   "push_range": [
+    1.762631853696739e-06,
+    0.04492747517062301
+   ]
+  },
+  "1Q": {
+   "grid_points": 1601,
+   "max_abs_dev_win_home_plus_win_away_plus_push_minus_1": 1.1102230246251565e-16,
+   "max_abs_push_home_minus_push_away": 1.6653345369377348e-16,
+   "max_abs_push_minus_closed_form_tie_band": 5.551115123125783e-17,
+   "old_max_dev_two_outcome_sum_or_push": 1.1102230246251565e-16,
+   "push_range": [
+    8.492029301976345e-11,
+    0.06376274402797472
+   ]
+  },
+  "FG": {
+   "grid_points": 1601,
+   "max_abs_dev_win_home_plus_win_away_plus_push_minus_1": 1.1102230246251565e-16,
+   "max_abs_push_home_minus_push_away": 0.0,
+   "max_abs_push_minus_closed_form_tie_band": 0.0,
+   "old_max_dev_two_outcome_sum_or_push": 1.1102230246251565e-16,
+   "push_range": [
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "old_blob": "da0c1503af5ed9ad548d1458588505f695b749e5",
+ "results": [
+  {
+   "affected_changed": 0,
+   "affected_new_push_zero": 0,
+   "affected_norm_violations": 0,
+   "affected_old_push_nonzero": 0,
+   "affected_pick_shift": {
+    "blend_ev_delta": {
+     "n": 0
+    },
+    "blend_ev_positive_flips": 0,
+    "model_p_delta": {
+     "n": 0
+    },
+    "net_card_inclusion_change": 0,
+    "new_pick_rows": 0,
+    "old_pick_rows": 0,
+    "raw_ev_delta": {
+     "n": 0
+    },
+    "star_bucket_changes": 0
+   },
+   "affected_push_asymmetry": 0,
+   "affected_rows": 0,
+   "by_market": {
+    "1H_SPREAD": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "1H_TOTAL": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "1Q_TOTAL": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "ML": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "SPREAD": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "TOTAL": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "TT_*": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    }
+   },
+   "card_affected_rows_new": 0,
+   "card_affected_rows_old": 0,
+   "card_byte_identical": true,
+   "card_rows_new": 11,
+   "card_rows_old": 11,
+   "card_run_unaffected_identical": true,
+   "card_unaffected_mismatch": 0,
+   "card_unaffected_rows": 28,
+   "corpus": "sample_board_make_samples (synthetic; contains zero 1H/1Q ML rows)",
+   "games": 2,
+   "priced_rows": 28,
+   "projection_mismatch": 0,
+   "prop_mismatch": 0,
+   "prop_rows": 12,
+   "unaffected_mismatch": 0,
+   "unaffected_rows": 28
+  },
+  {
+   "affected_changed": 8,
+   "affected_new_push_zero": 0,
+   "affected_norm_violations": 0,
+   "affected_old_push_nonzero": 0,
+   "affected_pick_shift": {
+    "blend_ev_delta": {
+     "max": 0.0040999999999999995,
+     "mean": 0.0017249999999999995,
+     "min": 0.0001999999999999988,
+     "n": 8
+    },
+    "blend_ev_positive_flips": 0,
+    "model_p_delta": {
+     "max": -0.017699999999999994,
+     "mean": -0.025150000000000027,
+     "min": -0.03190000000000004,
+     "n": 8
+    },
+    "net_card_inclusion_change": 0,
+    "new_pick_rows": 8,
+    "old_pick_rows": 8,
+    "raw_ev_delta": {
+     "max": 0.008,
+     "mean": 0.0014124999999999951,
+     "min": -0.004499999999999999,
+     "n": 8
+    },
+    "star_bucket_changes": 0
+   },
+   "affected_push_asymmetry": 0,
+   "affected_rows": 8,
+   "by_market": {
+    "1H_ML": {
+     "different": 4,
+     "identical": 0,
+     "rows": 4
+    },
+    "1H_SPREAD": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "1H_TOTAL": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "1Q_ML": {
+     "different": 4,
+     "identical": 0,
+     "rows": 4
+    },
+    "1Q_TOTAL": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "ML": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "SPREAD": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "TOTAL": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    },
+    "TT_*": {
+     "different": 0,
+     "identical": 4,
+     "rows": 4
+    }
+   },
+   "card_affected_rows_new": 2,
+   "card_affected_rows_old": 2,
+   "card_byte_identical": false,
+   "card_rows_new": 13,
+   "card_rows_old": 13,
+   "card_run_unaffected_identical": true,
+   "card_unaffected_mismatch": 0,
+   "card_unaffected_rows": 28,
+   "corpus": "sample_board_plus_synthetic_1H_1Q_ML_rows",
+   "games": 2,
+   "priced_rows": 36,
+   "projection_mismatch": 0,
+   "prop_mismatch": 0,
+   "prop_rows": 12,
+   "unaffected_mismatch": 0,
+   "unaffected_rows": 28
+  },
+  {
+   "affected_changed": 8000,
+   "affected_new_push_zero": 0,
+   "affected_norm_violations": 0,
+   "affected_old_push_nonzero": 0,
+   "affected_pick_shift": {
+    "blend_ev_delta": {
+     "max": 0.01050000000000001,
+     "mean": -0.0044828375,
+     "min": -0.05890000000000006,
+     "n": 8000
+    },
+    "blend_ev_positive_flips": 54,
+    "model_p_delta": {
+     "max": -0.006800000000000007,
+     "mean": -0.024806,
+     "min": -0.03200000000000003,
+     "n": 8000
+    },
+    "net_card_inclusion_change": -6,
+    "new_pick_rows": 8000,
+    "old_pick_rows": 8000,
+    "raw_ev_delta": {
+     "max": 0.029100000000000015,
+     "mean": -0.019402925,
+     "min": -0.2020000000000004,
+     "n": 8000
+    },
+    "star_bucket_changes": 210
+   },
+   "affected_push_asymmetry": 0,
+   "affected_rows": 8000,
+   "by_market": {
+    "1H_ML": {
+     "different": 4000,
+     "identical": 0,
+     "rows": 4000
+    },
+    "1H_SPREAD": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    },
+    "1H_TOTAL": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    },
+    "1Q_ML": {
+     "different": 4000,
+     "identical": 0,
+     "rows": 4000
+    },
+    "1Q_SPREAD": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    },
+    "1Q_TOTAL": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    },
+    "ML": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    },
+    "SPREAD": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    },
+    "TOTAL": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    },
+    "TT_*": {
+     "different": 0,
+     "identical": 4000,
+     "rows": 4000
+    }
+   },
+   "card_affected_rows_new": 3481,
+   "card_affected_rows_old": 3487,
+   "card_byte_identical": false,
+   "card_rows_new": 15509,
+   "card_rows_old": 15515,
+   "card_run_unaffected_identical": true,
+   "card_unaffected_mismatch": 0,
+   "card_unaffected_rows": 32000,
+   "corpus": "seeded_random_seed20261125_2000games",
+   "games": 2000,
+   "priced_rows": 40000,
+   "projection_mismatch": 0,
+   "prop_mismatch": 0,
+   "prop_rows": 1182,
+   "unaffected_mismatch": 0,
+   "unaffected_rows": 32000
+  }
+ ],
+ "schema": "sportsedge-nba-push-accounting-equivalence-v1",
+ "seed": 20261125
+}

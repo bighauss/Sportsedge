@@ -1,0 +1,32 @@
+{
+  "schema": "sportsedge-code-identity-transitions-v1",
+  "status": "PENDING_OWNER_MERGE",
+  "recording_act": "OWNER_MERGE",
+  "owner_decision": "VERSIONED_RESEARCH_CANDIDATES_ONLY",
+  "owner_decision_ct": "2026-11-25",
+  "supplements_manifest": {
+    "path": "research/freezes/code_identity_transitions_20261118.json",
+    "git_blob_sha1": "399a4df65036eb236f9f56699bc4090507786a3c",
+    "edited_by_this_change": false
+  },
+  "original_baseline_commit": "29c85365e27665f16ba378cf2c7fc9c81f5754c1",
+  "original_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
+  "frozen_engine_v5_unchanged": true,
+  "official_counted": 0,
+  "approved_stake_u": 0,
+  "candidates": [
+    {
+      "sport": "NBA",
+      "path": "models/nba/sportsedge_nba_model.py",
+      "original_git_blob_sha1": "0036cb9a2a7eff9fed9b175a0175a963d20e6b3e",
+      "prior_approved_candidate_git_blob_sha1": "da0c1503af5ed9ad548d1458588505f695b749e5",
+      "prior_first_introducing_commit": "098c92bfd538fbb664b1c8eccccf61779cabe2b2",
+      "prior_change_pr": 294,
+      "approved_candidate_git_blob_sha1": "b353de86445188288cab4050f6cae13eee76bff6",
+      "first_introducing_commit": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
+      "change_pr": 460,
+      "governance_record": "docs/governance/changes/pr-460.json",
+      "change_class": "BEHAVIORAL_TWO_WAY_1H_1Q_ML_TIE_PUSH_ACCOUNTING"
+    }
+  ]
+}
