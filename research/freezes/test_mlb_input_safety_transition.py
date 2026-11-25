@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 
 import mlb_input_safety_equivalence as E
-import verify_mlb_input_safety_transition as V
+import verify_versioned_transition as VT
 from verify_code_freezes import FreezeViolation, git_blob_digest, verified_file
 
 HERE = Path(__file__).resolve().parent
@@ -220,9 +220,13 @@ class RecordConsistency(unittest.TestCase):
         self.assertEqual(git_blob_digest(LEGACY.read_bytes()), i["legacy_manifest_git_blob_sha1"])
         self.assertEqual(git_blob_digest(NOV18.read_bytes()), i["nov18_transition_manifest_git_blob_sha1"])
         self.assertEqual(git_blob_digest((HERE / "verify_code_freezes.py").read_bytes()), i["verify_code_freezes_git_blob_sha1"])
+        self.assertFalse(i["nov15_and_nov18_and_code_freezes_verifier_edited_by_this_change"])
+        # The stock verifier is the reviewed Option B edit; its hash is pinned in the hops file.
         self.assertEqual(git_blob_digest((HERE / "verify_versioned_transition.py").read_bytes()),
                          i["verify_versioned_transition_git_blob_sha1"])
-        self.assertFalse(i["edited_by_this_change"])
+        hops = json.loads((HERE / "code_identity_transitions_20261125.json").read_text())
+        self.assertEqual(hops["verify_versioned_transition_git_blob_sha1"],
+                         i["verify_versioned_transition_git_blob_sha1"])
 
     def test_candidate_manifest_chains_to_nov18_manifest(self):
         cand = json.loads(CANDIDATE.read_text())
@@ -238,79 +242,33 @@ class RecordConsistency(unittest.TestCase):
         legacy = json.loads(LEGACY.read_text())
         self.assertEqual(legacy["sports"]["MLB"]["sources"][MODEL_PATH], c["original_git_blob_sha1"])
 
-    def test_nba_drift_reported_not_handled(self):
-        self.assertEqual(sorted(self.rec["other_drift_not_handled"]), ["NBA"])
+    def test_nba_hop_is_registered_with_evidence_cited(self):
+        nba = self.rec["other_drift_not_handled"]["NBA"]
+        self.assertTrue(nba["incorporated_on_this_branch"])
+        self.assertIn("737dd2a3", nba["evidence_source"])
+        hops = json.loads((HERE / "code_identity_transitions_20261125.json").read_text())
+        sports = {c["sport"]: c for c in hops["candidates"]}
+        self.assertEqual(sports["NBA"]["approved_candidate_git_blob_sha1"], nba["approved_candidate"])
+        self.assertEqual(sports["NBA"]["first_introducing_commit"], nba["commit"])
 
 
-class AdditiveVerifier(unittest.TestCase):
-    def test_mlb_scope_passes_and_reports_other_sports_honestly(self):
-        rep = V.run(scope="MLB")
-        self.assertEqual(rep["gate_failures"], [])
-        self.assertEqual(rep["sports"]["MLB"], "OK")
-        self.assertEqual(rep["status"], "MLB_INPUT_SAFETY_TRANSITION_VERIFIED_PENDING_OWNER_MERGE_PAPER_0U")
-        self.assertEqual((rep["official_counted"], rep["approved_stake_u"]), (0, 0))
-        self.assertFalse(rep["model_release_certified"])
-        self.assertTrue(all(rep["existing_verifiers_unmodified"].values()))
+class UnifiedVerifierHook(unittest.TestCase):
+    """The standalone MLB verifier is retired; the stock verifier is the only gate."""
 
-    def test_all_scope_gates_every_sport_nothing_is_hidden(self):
-        rep = V.run(scope="ALL")
-        # independent recomputation of which sports' files do not match their (two-hop) pins
-        legacy = json.loads(LEGACY.read_bytes())
-        m = V.two_hop_manifest(V.vt.checked_manifest(legacy, json.loads(NOV18.read_bytes()), LEGACY.read_bytes()))
-        expect_bad = []
-        for sport, rec in m["sports"].items():
-            try:
-                for p, sha in rec["sources"].items():
-                    verified_file(V.ROOT, p, sha)
-            except FreezeViolation:
-                expect_bad.append(sport)
-        self.assertEqual(sorted(s for s, v in rep["sports"].items() if v != "OK"), sorted(expect_bad))
-        self.assertEqual(sorted(s for s in rep["gate_failures"] if s in rep["sports"]), sorted(expect_bad))
+    def test_stock_verifier_accepts_mlb_hop(self):
+        rec = json.loads(RECORD.read_text())
+        rep = VT.run()
+        self.assertEqual(rep['status'], 'VERSIONED_CODE_IDENTITY_ONLY_PAPER_0U')
+        mlb = [h for h in rep['additional_hops'] if h['sport'] == 'MLB'][0]
+        self.assertEqual(mlb['candidate_git_blob_sha1'], E.CURRENT_BLOB)
+        self.assertEqual(mlb['from_git_blob_sha1'], E.APPROVED_BLOB)
+        self.assertEqual(mlb['introducing_commit'], rec['first_introducing_commit'])
 
-    def test_stale_or_changed_mlb_file_is_refused(self):
-        with tempfile.TemporaryDirectory() as td:
-            dst = Path(td) / MODEL_PATH
-            dst.parent.mkdir(parents=True)
-            for src in (E.OLD_SRC, E.NEW_SRC):                         # approved bytes no longer match the new pin
-                shutil.copy(src, dst)
-                if src == E.OLD_SRC:
-                    with self.assertRaises(FreezeViolation):
-                        verified_file(Path(td), MODEL_PATH, V.NEW_BLOB)
-                else:
-                    self.assertEqual(verified_file(Path(td), MODEL_PATH, V.NEW_BLOB)["git_blob_sha1"], V.NEW_BLOB)
-            dst.write_bytes(E.NEW_SRC.read_bytes() + b"\n# tamper\n")
-            with self.assertRaisesRegex(FreezeViolation, "CODE_CHANGED_SINCE_FREEZE"):
-                verified_file(Path(td), MODEL_PATH, V.NEW_BLOB)
+    def test_standalone_mlb_verifier_is_not_the_gate(self):
+        workflow = (HERE.parents[1] / '.github/workflows/risk-lock-research.yml').read_text()
+        self.assertIn('verify_versioned_transition.py', workflow)
+        self.assertNotIn('verify_mlb_input_safety_transition.py', workflow)
 
-    def test_tampered_candidate_manifest_refused(self):
-        good = json.loads(CANDIDATE.read_text())
-        V.checked_candidate_manifest(good)
-        edits = {
-            "wrong candidate blob": lambda m: m["candidates"][0].__setitem__("approved_candidate_git_blob_sha1", "0" * 40),
-            "wrong introducing commit": lambda m: m["candidates"][0].__setitem__("first_introducing_commit", "1" * 40),
-            "extra candidate": lambda m: m["candidates"].append(copy.deepcopy(m["candidates"][0])),
-            "stake": lambda m: m.__setitem__("approved_stake_u", 1),
-            "counted": lambda m: m.__setitem__("official_counted", 1),
-            "status flipped": lambda m: m.__setitem__("status", "OWNER_APPROVED"),
-            "different path": lambda m: m["candidates"][0].__setitem__("path", "models/nba/sportsedge_nba_model.py"),
-        }
-        for label, edit in edits.items():
-            with self.subTest(label):
-                m = copy.deepcopy(good)
-                edit(m)
-                with self.assertRaisesRegex(FreezeViolation, "UNAUTHORIZED_OR_UNVERSIONED_MLB_CODE_TRANSITION"):
-                    V.checked_candidate_manifest(m)
-
-    def test_prior_pin_must_be_the_nov18_pin(self):
-        legacy = json.loads(LEGACY.read_bytes())
-        c18 = V.vt.checked_manifest(legacy, json.loads(NOV18.read_bytes()), LEGACY.read_bytes())
-        bad = copy.deepcopy(c18)
-        bad["sports"]["MLB"]["sources"][MODEL_PATH] = "2" * 40
-        with self.assertRaisesRegex(FreezeViolation, "PRIOR_MLB_PIN_INVALID"):
-            V.two_hop_manifest(bad)
-
-    def test_second_hop_provenance_and_governance_record(self):
-        V.check_second_hop_provenance(V.ROOT)
 
 
 if __name__ == "__main__":

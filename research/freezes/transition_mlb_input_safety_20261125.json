@@ -1,5 +1,5 @@
 {
- "additive_verifier": "research/freezes/verify_mlb_input_safety_transition.py",
+ "additive_verifier": null,
  "approved_blob": "3f630532e9ff499912bc06041906d3b7c11d9887",
  "approved_blob_origin": "PR #293, commit 85adaf523dbc46b6a7839151d5593c1ceade2be9 (Nov 18 transition manifest)",
  "approved_stake_u": 0,
@@ -11,7 +11,7 @@
   "blast radius: load_inputs() (pitchers/batters by player_id, bullpen/defense by team, parks by park) - and therefore sportsedge/markets/projection_bridge.py and models/mlb/shared_inning_sim.py which call load_inputs() - now refuse a whole folder containing such a row instead of pricing from an arbitrary row. Intended (pr-446 assumption)."
  ],
  "candidate_blob": "30c6cb3355ac5f6b6cbb018729c4fdc41255e057",
- "candidate_manifest": "research/freezes/code_identity_transitions_20261125_mlb_candidate.json",
+ "candidate_manifest": "research/freezes/code_identity_transitions_20261125.json",
  "change_pr": 446,
  "diff_classification": {
   "coefficients": 0,
@@ -49,11 +49,12 @@
  "governance_followup": "Opening a PR from this branch touches protected path research/freezes/**; the PR must add docs/governance/changes/pr-<N>.json once its number is known, then needs an exact-head independent review before the owner's merge.",
  "governance_record": "docs/governance/changes/pr-446.json",
  "immutable_inputs": {
-  "edited_by_this_change": false,
   "legacy_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
+  "nov15_and_nov18_and_code_freezes_verifier_edited_by_this_change": false,
   "nov18_transition_manifest_git_blob_sha1": "399a4df65036eb236f9f56699bc4090507786a3c",
   "verify_code_freezes_git_blob_sha1": "27d2b51d27d4b7da6f22dad31d55257541af8f67",
-  "verify_versioned_transition_git_blob_sha1": "522ee86d6a2608568dc456145b6bde461799cf3a"
+  "verify_versioned_transition_change": "OPTION_B_REVIEWED_UNIFIED_MULTI_HOP_EXTENSION",
+  "verify_versioned_transition_git_blob_sha1": "62e5a091d1bcca671193a4e47f6d941f06c8e047"
  },
  "model_release_certified": false,
  "negative_cases": {
@@ -76,19 +77,23 @@
  "official_counted": 0,
  "other_drift_not_handled": {
   "NBA": {
-   "approved_candidate": "da0c1503af5ed9ad548d1458588505f695b749e5",
-   "commit": "8537ae4",
-   "current": "b353de86445188288cab4050f6cae13eee76bff6",
-   "note": "separate owner decision; behavioural (tied period moneyline push), not input hygiene; untouched here and still red under --scope ALL"
+   "approved_candidate": "b353de86445188288cab4050f6cae13eee76bff6",
+   "change_pr": 460,
+   "commit": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
+   "evidence_file": "research/freezes/code_identity_transitions_20261125_nba_candidate.json",
+   "evidence_source": "grok-cbb/nba-push-accounting-transition-20261125@737dd2a3888ed76b37102f79d9b6e1ae2c6baf04",
+   "incorporated_on_this_branch": true,
+   "note": "Behavioral (tied period moneyline push). Evidence remains on the NBA branch; only the hop entry is registered in the unified manifest.",
+   "prior": "da0c1503af5ed9ad548d1458588505f695b749e5"
   }
  },
  "owner_decision_ct": "2026-11-25 (owner chat instruction to the SportsEdge Constructions bot: KEEP the MLB input-safety fix; prepare a separate documented versioned transition; do not revert; never bypass or weaken the verifier)",
  "owner_options_after_merge": [
-  "A) add a CI step 'python research/freezes/verify_mlb_input_safety_transition.py' (needs a workflow edit; --scope MLB gates MLB, --scope ALL also gates NBA)",
-  "B) author a reviewed edit to verify_versioned_transition.py + the Nov 18 transition manifest that adds this second hop (this record's manifest is the exact content to adopt)"
+  "The stock CI step python research/freezes/verify_versioned_transition.py is the single gate; no second CI verifier step.",
+  "Further hops use the documented entry format in code_identity_transitions_20261125.json and a reviewed update of EXPECTED_ADDITIONAL_CANDIDATES in the verifier."
  ],
  "path": "models/mlb/sportsedge_mlb_model.py",
- "pin_mechanism_note": "verify_versioned_transition.py hard-codes the exact Nov 18 transition set and requires the working tree to equal 3f630532 for MLB, so the stock CI step 'Seven code pin verification' cannot accept 30c6cb33 without editing that verifier. This change does NOT edit it. Instead the new additive verifier imports it, runs all of its checks unchanged, adds an explicit second MLB hop with its own provenance checks, and pins 30c6cb33 only in memory. The stock step therefore stays red for MLB (and NBA) until the owner chooses how to wire it.",
+ "pin_mechanism_note": "Owner chose Option B (PR #535): a reviewed, unified update of verify_versioned_transition.py. The Nov 15 freeze and the Nov 18 first-hop manifest stay byte-immutable. Additional hops live in code_identity_transitions_20261125.json (MLB input-safety 3f630532->30c6cb33 via b73874a/pr-446; NBA behavioral da0c1503->b353de86 via 8537ae48/pr-460, evidence sourced from grok-cbb/nba-push-accounting-transition-20261125@737dd2a3). The stock CI step runs this single verifier; the standalone verify_mlb_input_safety_transition.py is retired. A verifier or freeze hash mismatch exits non-zero.",
  "recording_act": "OWNER_MERGE",
  "release": "PAPER_0U",
  "schema": "sportsedge-mlb-input-safety-transition-record-v1",
@@ -99,5 +104,6 @@
   "valid unique keys (incl. case-distinct a/A, whitespace-padded, BOM header, header-only file)",
   "missing file -> {}",
   "ragged-row AttributeError and invalid-UTF-8 UnicodeDecodeError come from load_csv, which is untouched"
- ]
+ ],
+ "unified_verifier": "research/freezes/verify_versioned_transition.py"
 }

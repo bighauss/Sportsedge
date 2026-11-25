@@ -46,17 +46,41 @@ rows, whole and half lines, one-sided books, all game and prop markets) — synt
 19-case negative matrix (old vs new outcome recorded), every keyed file × {duplicate, blank} through `load_inputs` and `run_card`, malformed
 files unchanged, and an end-to-end duplicate-starter demo (old priced a card silently from the wrong row; new raises `DuplicateInputKey`).
 
-## 4. Pin mechanism (read first)
-`verify_versioned_transition.py` hard-codes the exact Nov 18 set and requires MLB = `3f630532`, so the stock CI step *Seven code pin verification* cannot accept
-`30c6cb33` without editing that verifier. **This change edits neither verifier, nor the Nov 15 or Nov 18 manifests** (byte hashes asserted by tests).
-`verify_mlb_input_safety_transition.py` imports the stock verifier, runs all of its checks unchanged (immutable manifests, exact three-candidate set,
-historical bytes and first-introducing-commit provenance for CBB/MLB/NBA), adds an explicit second MLB hop (`b73874a`: blob bytes, single parent still at `3f630532`,
-ancestry, pr-446 governance record), moves the MLB pin only in memory, and hashes every pinned file. `--scope MLB` (default) gates on MLB and reports the other
-sports; `--scope ALL` gates on all seven.
+## 4. Pin mechanism — Option B (PR #535)
+The owner chose a reviewed, unified update of the stock verifier `verify_versioned_transition.py`. The Nov 15 freeze and the Nov 18 first-hop
+manifest stay **byte-immutable** (hashes asserted by tests and by the verifier itself). A hash mismatch of either manifest, of
+`verify_code_freezes.py`, or of this verifier exits non-zero (the earlier standalone MLB verifier only *reported* a mismatch; that is fixed here
+and covered by a failing-exit test). The standalone `verify_mlb_input_safety_transition.py` is retired.
 
-After the owner merges, either (A) add a CI step running the new verifier, or (B) adopt the candidate manifest content into a reviewed edit of the stock
-verifier and Nov 18 manifest. Until then the stock step stays red for MLB; NBA (`8537ae4`, tied-period moneyline push, behavioural) is a separate owner decision,
-untouched here and still red under `--scope ALL`.
+Additional hops live in [`code_identity_transitions_20261125.json`](code_identity_transitions_20261125.json). The verifier exact-matches that
+document to a reviewed list and applies the hops in memory only. Registered hops:
+
+| Sport | From (Nov 18) | To | Introducing commit | Governance | Class | Evidence |
+|---|---|---|---|---|---|---|
+| MLB | `3f630532` | `30c6cb33` | `b73874a` | pr-446 | input-safety fail-closed loader | this record |
+| NBA | `da0c1503` | `b353de86` | `8537ae48` | pr-460 | behavioral 1H/1Q two-way ML tie-as-push | `grok-cbb/nba-push-accounting-transition-20261125@737dd2a3` (`code_identity_transitions_20261125_nba_candidate.json`) |
+
+Each hop is checked for: prior and approved blobs, first introducing commit, single-parent ancestry (the only parent holds the prior blob; for NBA that parent holds `da0c1503`), and a valid zero-release governance record. An unknown extra hop is refused.
+
+### Entry format for a further hop
+A new hop is one object in `candidates`. Required keys (exact):
+
+```
+sport, path,
+original_git_blob_sha1,                    # Nov 15 pin
+prior_approved_candidate_git_blob_sha1,    # previous hop's approved blob
+prior_first_introducing_commit,
+prior_change_pr,
+approved_candidate_git_blob_sha1,
+first_introducing_commit,
+change_pr,
+governance_record,                         # docs/governance/changes/pr-<N>.json
+change_class
+```
+
+Adding a hop is a reviewed change: append the object to this manifest **and** to `EXPECTED_ADDITIONAL_CANDIDATES` in `verify_versioned_transition.py`, then recompute `verify_versioned_transition_git_blob_sha1` in the manifest. Editing only one of the two is refused.
+
+The stock CI step `python research/freezes/verify_versioned_transition.py` is the single all-sport gate.
 
 ## 5. Governance
-Touches protected path `research/freezes/**`: the PR needs `docs/governance/changes/pr-<N>.json` once its number exists, and an exact-head independent review before the owner's merge.
+PR #535: `docs/governance/changes/pr-535.json`. Exact-head independent review is still required before the owner's merge (the recording act). Status stays PENDING_OWNER_MERGE, PAPER_0U, official_counted = 0, approved stake 0u.
