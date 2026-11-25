@@ -1,0 +1,107 @@
+board_name,dk_participant_name,dk_participant_id,espn_team_id,espn_location,espn_display_name,cbbd_norm_key,cbbd_verified,method
+Abilene Christian,Abilene Christian,41474,2000,Abilene Christian,Abilene Christian Wildcats,abilenechristian,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Akron,Akron,41425,2006,Akron,Akron Zips,akron,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Albany NY,Albany NY,42463,399,UAlbany,UAlbany Great Danes,albanyny,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Alcorn,Alcorn,43515,2016,Alcorn State,Alcorn State Braves,alcornstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Appalachian State,Appalachian State,41444,2026,App State,App State Mountaineers,appstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Arizona,Arizona,45351,12,Arizona,Arizona Wildcats,arizona,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Arizona State,Arizona State,42883,9,Arizona State,Arizona State Sun Devils,arizonastate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Arkansas State,Arkansas State,42673,2032,Arkansas State,Arkansas State Red Wolves,arkansasstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Arkansas-Pine Bluff,Arkansas-Pine Bluff,44717,2029,Arkansas-Pine Bluff,Arkansas-Pine Bluff Golden Lions,arkansaspinebluff,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+BYU,BYU,44811,252,BYU,BYU Cougars,byu,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Bellarmine,Bellarmine,521405,91,Bellarmine,Bellarmine Knights,bellarmine,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Belmont,Belmont,43477,2057,Belmont,Belmont Bruins,belmont,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Bethune-Cookman,Bethune-Cookman,45181,2065,Bethune-Cookman,Bethune-Cookman Wildcats,bethunecookman,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+CSU Bakersfield,CSU Bakersfield,45399,2934,Cal State Bakersfield,Cal State Bakersfield Roadrunners,csubakersfield,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+CSUN,CSUN,44653,2463,Cal State Northridge,Cal State Northridge Matadors,csun,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Charlotte,Charlotte,41965,2429,Charlotte,Charlotte 49ers,charlotte,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Clemson,,,228,Clemson,Clemson Tigers,clemson,0,ESPN_EXACT_NAME_SAME_TIP
+Colorado State,,,36,Colorado State,Colorado State Rams,coloradostate,0,ESPN_EXACT_NAME_SAME_TIP
+Columbia,Columbia,43348,171,Columbia,Columbia Lions,columbia,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Dartmouth,Dartmouth,41644,159,Dartmouth,Dartmouth Big Green,dartmouth,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Davidson,Davidson,41664,2166,Davidson,Davidson Wildcats,davidson,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Detroit Mercy,,,2174,Detroit Mercy,Detroit Mercy Titans,detroitmercy,0,ESPN_EXACT_NAME_SAME_TIP
+Duke,Duke,44551,150,Duke,Duke Blue Devils,duke,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Eastern Kentucky,Eastern Kentucky,44901,2198,Eastern Kentucky,Eastern Kentucky Colonels,easternkentucky,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Eastern Washington,Eastern Washington,42289,331,Eastern Washington,Eastern Washington Eagles,easternwashington,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+FIU,FIU,44920,2229,Florida International,Florida International Panthers,fiu,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Florida Gulf Coast,Florida Gulf Coast,41856,526,Florida Gulf Coast,Florida Gulf Coast Eagles,floridagulfcoast,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+George Mason,,,2244,George Mason,George Mason Patriots,georgemason,0,ESPN_EXACT_NAME_SAME_TIP
+Georgia State,Georgia State,41777,2247,Georgia State,Georgia State Panthers,georgiastate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Grambling,Grambling,42491,2755,Grambling,Grambling Tigers,grambling,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Hawaii,Hawaii,42888,62,Hawai'i,Hawai'i Rainbow Warriors,hawaii,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Holy Cross,Holy Cross,42558,107,Holy Cross,Holy Cross Crusaders,holycross,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Incarnate Word,Incarnate Word,878950,2916,Incarnate Word,Incarnate Word Cardinals,incarnateword,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Jackson State,Jackson State,42983,2296,Jackson State,Jackson State Tigers,jacksonstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Jacksonville State,Jacksonville State,42218,55,Jacksonville State,Jacksonville State Gamecocks,jacksonvillestate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+LSU,LSU,43998,99,LSU,LSU Tigers,lsu,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Liberty,Liberty,41459,2335,Liberty,Liberty Flames,liberty,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Lindenwood,Lindenwood,879269,2815,Lindenwood,Lindenwood Lions,lindenwood,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Long Beach State,Long Beach State,42848,299,Long Beach State,Long Beach State Beach,longbeachstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Longwood,,,2344,Longwood,Longwood Lancers,longwood,0,ESPN_EXACT_NAME_SAME_TIP
+Loyola Marymount,Loyola Marymount,43034,2351,Loyola Marymount,Loyola Marymount Lions,loyolamarymount,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Manhattan,Manhattan,43928,2363,Manhattan,Manhattan Jaspers,manhattan,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Marquette,Marquette,44018,269,Marquette,Marquette Golden Eagles,marquette,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Marshall,Marshall,44028,276,Marshall,Marshall Thundering Herd,marshall,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Memphis,Memphis,43053,235,Memphis,Memphis Tigers,memphis,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Miami OH,Miami OH,43311,193,Miami (OH),Miami (OH) RedHawks,miamioh,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Mississippi State,Mississippi State,42185,344,Mississippi State,Mississippi State Bulldogs,mississippistate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Mississippi Valley,Mississippi Valley,43149,2400,Mississippi Valley State,Mississippi Valley State Delta Devils,mississippivalley,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+NC State,NC State,42018,152,NC State,NC State Wolfpack,ncstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+NJIT,NJIT,42492,2885,NJIT,NJIT Highlanders,njit,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Nebraska,Nebraska,43139,158,Nebraska,Nebraska Cornhuskers,nebraska,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+New Mexico,New Mexico,44215,167,New Mexico,New Mexico Lobos,newmexico,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+New Orleans,New Orleans,44232,2443,LSU New Orleans,LSU New Orleans Privateers,neworleans,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Norfolk State,Norfolk State,43965,2450,Norfolk State,Norfolk State Spartans,norfolkstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+North Dakota,,,155,North Dakota,North Dakota Fighting Hawks,northdakota,0,ESPN_EXACT_NAME_SAME_TIP
+Northeastern,Northeastern,43218,111,Northeastern,Northeastern Huskies,northeastern,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Northern Colorado,,,2458,Northern Colorado,Northern Colorado Bears,northerncolorado,0,ESPN_EXACT_NAME_SAME_TIP
+Northern Illinois,Northern Illinois,43247,2459,Northern Illinois,Northern Illinois Huskies,northernillinois,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Northern Iowa,Northern Iowa,43276,2460,Northern Iowa,Northern Iowa Panthers,northerniowa,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Northern Kentucky,Northern Kentucky,42535,94,Northern Kentucky,Northern Kentucky Norse,northernkentucky,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Ohio,Ohio,44382,195,Ohio,Ohio Bobcats,ohio,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Oklahoma State,Oklahoma State,43141,197,Oklahoma State,Oklahoma State Cowboys,oklahomastate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Ole Miss,Ole Miss,43121,145,Ole Miss,Ole Miss Rebels,olemiss,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Omaha,Omaha,43093,2437,Omaha,Omaha Mavericks,omaha,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Pacific,Pacific,43658,279,Pacific,Pacific Tigers,pacific,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Penn State,Penn State,42201,213,Penn State,Penn State Nittany Lions,pennstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Pepperdine,Pepperdine,41378,2492,Pepperdine,Pepperdine Waves,pepperdine,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Portland State,Portland State,44488,2502,Portland State,Portland State Vikings,portlandstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Prairie View,Prairie View,42767,2504,Prairie View A&M,Prairie View A&M Panthers,prairieview,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Princeton,Princeton,42008,163,Princeton,Princeton Tigers,princeton,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Providence,Providence,41370,2507,Providence,Providence Friars,providence,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Rice,Rice,43304,242,Rice,Rice Owls,rice,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Richmond,Richmond,42030,257,Richmond,Richmond Spiders,richmond,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+SE Louisiana,,,2545,SE Louisiana,SE Louisiana Lions,selouisiana,0,ESPN_EXACT_NAME_SAME_TIP
+SIU Edwardsville,SIU Edwardsville,43647,2565,SIU Edwardsville,SIU Edwardsville Cougars,siuedwardsville,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+SMU,SMU,41637,2567,SMU,SMU Mustangs,smu,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Saint Bonaventure,Saint Bonaventure,44786,179,St. Bonaventure,St. Bonaventure Bonnies,stbonaventure,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Saint Peters,Saint Peters,44647,2612,Saint Peter's,Saint Peter's Peacocks,saintpeters,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Saint Thomas MN,Saint Thomas MN,598225,2900,St. Thomas,St. Thomas Tommies,saintthomasmn,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+South Carolina,South Carolina,42229,2579,South Carolina,South Carolina Gamecocks,southcarolina,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+South Dakota,South Dakota,44733,233,South Dakota,South Dakota Coyotes,southdakota,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+South Dakota State,South Dakota State,43733,2571,South Dakota State,South Dakota State Jackrabbits,southdakotastate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Southern University,Southern University,42867,2582,Southern,Southern Jaguars,southernuniversity,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Southern Utah,Southern Utah,44016,253,Southern Utah,Southern Utah Thunderbirds,southernutah,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Stony Brook,Stony Brook,41738,2619,Stony Brook,Stony Brook Seawolves,stonybrook,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Syracuse,Syracuse,42278,183,Syracuse,Syracuse Orange,syracuse,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Texas A&M,Texas A&M,44866,245,Texas A&M,Texas A&M Aggies,texasam,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Texas State,Texas State,42384,326,Texas State,Texas State Bobcats,texasstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+The Citadel,The Citadel,41626,2643,The Citadel,The Citadel Bulldogs,thecitadel,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Tulane,Tulane,44102,2655,Tulane,Tulane Green Wave,tulane,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+UC Davis,UC Davis,44568,302,UC Davis,UC Davis Aggies,ucdavis,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+UC Riverside,UC Riverside,44279,27,UC Riverside,UC Riverside Highlanders,ucriverside,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+UConn,UConn,41421,41,UConn,UConn Huskies,uconn,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+UNC Wilmington,UNC Wilmington,42593,350,UNC Wilmington,UNC Wilmington Seahawks,uncwilmington,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+USC,USC,44846,30,USC,USC Trojans,usc,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+USC Upstate,USC Upstate,42237,2908,South Carolina Upstate,South Carolina Upstate Spartans,uscupstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXPLICIT_ALIAS_SAME_TIP_SAME_OPPONENT
+Utah State,Utah State,44224,328,Utah State,Utah State Aggies,utahstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+VCU,,,2670,VCU,VCU Rams,vcu,0,ESPN_EXACT_NAME_SAME_TIP
+Virginia,Virginia,42373,258,Virginia,Virginia Cavaliers,virginia,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Wake Forest,Wake Forest,43016,154,Wake Forest,Wake Forest Demon Deacons,wakeforest,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Washington,,,264,Washington,Washington Huskies,washington,0,ESPN_EXACT_NAME_SAME_TIP
+Weber State,Weber State,44700,2692,Weber State,Weber State Wildcats,weberstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Wisconsin,Wisconsin,43620,275,Wisconsin,Wisconsin Badgers,wisconsin,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Wright State,Wright State,45152,2750,Wright State,Wright State Raiders,wrightstate,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Xavier,Xavier,44042,2752,Xavier,Xavier Musketeers,xavier,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
+Yale,Yale,42873,43,Yale,Yale Bulldogs,yale,0,DK_EVENT_PAGE_EXACT_NAME;ESPN_EXACT_NAME_SAME_TIP
