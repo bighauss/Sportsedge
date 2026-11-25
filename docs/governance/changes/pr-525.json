@@ -4,14 +4,16 @@
   "base_commit": "d7d608ca387cbcea04225d5253bb6331b10f145c",
   "protected_paths": [
     "models/cbb/cbb_run_it.py",
-    "models/cbb/test_cbb_run_it.py"
+    "models/cbb/test_cbb_run_it.py",
+    ".github/workflows/cbb-run-it.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Expose independent estimated EV, nine same-book diagnostic weights, historical capture times, both sides, and explicit validation state in rendered CBB report only.",
+  "change_summary": "Expose independent estimated EV, nine same-book diagnostic weights, historical capture times, both sides, and explicit validation state in rendered CBB report only. Bound Actions summary/log preview while retaining the complete artifact.",
   "assumptions": [
     "No change to model probabilities, pricing policy, frozen card or ledger.",
     "Same-book diagnostics are not independent external consensus; external hybrid remains blocked.",
-    "No live quote, validated positive EV, or staking claim."
+    "No live quote, validated positive EV, or staking claim.",
+    "The existing complete sanitized card artifact is authoritative; preview truncation is explicitly labeled."
   ],
   "agent_identity": "ChatGPT",
   "permissions": {
