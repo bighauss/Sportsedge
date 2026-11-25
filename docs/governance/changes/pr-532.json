@@ -1,0 +1,83 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 532,
+  "base_commit": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+  "protected_paths": [
+    ".github/workflows/cbb-dk.yml",
+    "models/cbb/dk/__init__.py",
+    "models/cbb/dk/__main__.py",
+    "models/cbb/dk/cli.py",
+    "models/cbb/dk/derived/2026-11-25/derived_board.csv",
+    "models/cbb/dk/derived/2026-11-25/rejection_ledger.csv",
+    "models/cbb/dk/derived/2026-11-25/report.json",
+    "models/cbb/dk/derived/2026-11-25/runner_board.csv",
+    "models/cbb/dk/derived/2026-11-25_strict_asof_1236/report.json",
+    "models/cbb/dk/evidence.py",
+    "models/cbb/dk/evidence/2026-11-25/dk_event_pages.jsonl",
+    "models/cbb/dk/evidence/2026-11-25/dk_sitemap_matches.json",
+    "models/cbb/dk/evidence/2026-11-25/espn_scoreboard_extract.json",
+    "models/cbb/dk/fetch_public.py",
+    "models/cbb/dk/reconcile.py",
+    "models/cbb/dk/schema.py",
+    "models/cbb/dk/test_dk_reconcile.py",
+    "models/cbb/lines/dk_event_crosswalk_2026-11-25.csv",
+    "models/cbb/lines/dk_team_crosswalk_2026-11-25.csv"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Add DraftKings event-ID verification, Nov 25 board reconciliation, rejection ledger, runner-board interface, public-page evidence and a dedicated offline CI workflow. Original boards, models, pricing, ledger and runner are unchanged. PAPER/0u, NON_COUNTED. Chronology repair after the owner's independent review (head 3e757d15): reconciliation at any as-of time uses only rows captured at or before it; supersession keys include the line for ladders/team totals/player rungs; same-instant duplicates and conflicts fail closed; identity evidence and the PR #530 correction carry explicit availability times and a strict or retrospective basis; runner board carries disposition and reasons and is loaded fail-closed. Census change on the Nov 25 board: SUPERSEDED 93 to 7 and HELD 135 to 221 (204 Saint Bonaventure @ Belmont transcript rows); ACCEPTED 244, REJECTED 530 and the 367-row runner board are unchanged.",
+  "assumptions": [
+    "Original boards under models/cbb/lines/board_2026-11-25_* are not modified. This PR only adds derived outputs, crosswalks, public evidence, docs, a governance manifest and .github/workflows/cbb-dk.yml.",
+    "Verified DK event IDs come from signed-out public event pages and confirm event identity only. Event-ID verification is not quote authentication. Authenticated quote rows on this board: 0. Market IDs are not recoverable from public pages.",
+    "ESPN scoreboard odds are an auxiliary research comparator only: not an admitted odds source, not used for pricing, and not quote authentication.",
+    "Owner ruling: Saint Bonaventure -4.5 / Belmont +4.5 is the accepted retrospective reading. The original issue #57 orientation hold is retained. This matchup is excluded from runner_board and must never enter a pregame card.",
+    "No model, pricing, calibration, ledger, runner or release change. PAPER/0u, official_counted=0, approved_stake_u=0, NON_COUNTED.",
+    "Chronology: later captures never influence an earlier replay. The committed Nov 25 outputs use the retrospective identity basis (later public event pages label each row LATER_PUBLIC_PAGE_CORROBORATION); the strict replay at 12:36:15Z accepts 0 rows because no event page had been retrieved yet."
+  ],
+  "agent_identity": "SportsEdge Constructions bot (grok-cbb/*)",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "DK event IDs verified on the Nov 25 PDF board (games)",
+    "before": null,
+    "unit": "games",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v models.cbb.dk.test_dk_reconcile",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "7fc5aaa9c60f8228992d8f5f0309a93c4e987c35",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v models.cbb.dk.test_dk_reconcile"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

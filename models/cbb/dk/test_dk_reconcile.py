@@ -1,0 +1,481 @@
+"""Tests for the DK board integration (offline; synthetic + committed Nov 25 evidence).
+
+Run from the repo root:  python -m unittest -v models.cbb.dk.test_dk_reconcile
+"""
+from __future__ import annotations
+import csv, hashlib, io, json, subprocess, sys, tempfile, unittest
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from models.cbb.dk import evidence as EV, reconcile as R, schema as S  # noqa: E402
+
+HDR = "sport,away,home,market,line,price_a,price_b,period,player,tip_utc,captured_utc,dk_event_id,source_pdf_time_ct,note"
+
+
+def page_html(eid, away, home, start, league="92483"):
+    state = {"pageData": {str(eid): {"data": {
+        "sportId": "2", "leagueId": league, "leagueName": "College Basketball (M)", "eventName": f"{away} @ {home}",
+        "eventStatus": "NOT_STARTED", "startEventDate": start, "eventSeoId": "x",
+        "participants": [{"id": "1", "name": home, "venueRole": "Home"}, {"id": "2", "name": away, "venueRole": "Away"}]}}}}
+    return f"<html><script>window.__INITIAL_STATE__ = {json.dumps(state)};</script></html>".encode()
+
+
+def rec(eid, away, home, start, league="92483", http="200"):
+    html = page_html(eid, away, home, start, league)
+    return EV.page_record(eid, f"https://sportsbook.draftkings.com/event/{eid}", "u", http, "2026-11-25T17:00:00Z", html)
+
+
+def write(tmp, name, text):
+    p = Path(tmp) / name; p.write_text(text, encoding="utf-8"); return p
+
+
+class EvidenceParsing(unittest.TestCase):
+    def test_parse_event_page(self):
+        p = EV.parse_event_page(page_html(9, "A", "B", "2026-11-25T16:00:00.0000000Z"), 9)
+        self.assertEqual(p["leagueId"], "92483")
+        self.assertEqual(EV.participants_by_role(p)["Away"]["name"], "A")
+        self.assertIsNone(EV.parse_event_page(b"<html>no state</html>", 9))
+        self.assertIsNone(EV.parse_event_page(page_html(9, "A", "B", "x"), 10))
+
+    def test_parse_utc_seven_digit_fraction(self):
+        self.assertEqual(EV.parse_utc("2026-11-25T16:01:08.0000000Z"), datetime(2026, 11, 25, 16, 1, 8, tzinfo=timezone.utc))
+        with self.assertRaises(ValueError):
+            EV.parse_utc("2026-11-25T16:01:08")
+
+
+class EventCrosswalk(unittest.TestCase):
+    G = [("A", "B", "2026-11-25T16:00:00Z")]
+
+    def test_verified_exact(self):
+        x = R.build_event_crosswalk(self.G, [rec(1, "A", "B", "2026-11-25T16:05:00.0000000Z")])[0]
+        self.assertEqual((x["state"], x["dk_event_id"]), (S.EID_VERIFIED, "1"))
+
+    def test_reversed_roles_not_verified(self):
+        x = R.build_event_crosswalk(self.G, [rec(1, "B", "A", "2026-11-25T16:00:00Z")])[0]
+        self.assertEqual(x["state"], S.EID_MISSING)
+
+    def test_tip_outside_tolerance(self):
+        x = R.build_event_crosswalk(self.G, [rec(1, "A", "B", "2026-11-25T17:00:00Z")])[0]
+        self.assertEqual(x["state"], S.EID_MISSING); self.assertIn("TIP_MISMATCH", x["reason"])
+
+    def test_wrong_league(self):
+        x = R.build_event_crosswalk(self.G, [rec(1, "A", "B", "2026-11-25T16:00:00Z", league="36647")])[0]
+        self.assertIn("NOT_NCAAB_MEN", x["reason"])
+
+    def test_two_candidates_is_missing(self):
+        x = R.build_event_crosswalk(self.G, [rec(1, "A", "B", "2026-11-25T16:00:00Z"), rec(2, "A", "B", "2026-11-25T16:00:00Z")])[0]
+        self.assertEqual(x["state"], S.EID_MISSING)
+
+    def test_404_never_binds(self):
+        r = EV.page_record(1, "u", "u", "404", "t", page_html(1, "A", "B", "2026-11-25T16:00:00Z"))
+        self.assertNotIn("page", r)
+        self.assertEqual(R.build_event_crosswalk(self.G, [r])[0]["state"], S.EID_MISSING)
+
+
+class Reconcile(unittest.TestCase):
+    def run_board(self, lines, transcript_lines=(), as_of=None, hold=frozenset(), corrected=None, basis=R.RETRO,
+                  xw_retrieved="2026-11-25T17:00:00Z", **kw):
+        with tempfile.TemporaryDirectory() as t:
+            o = write(t, "o.csv", HDR + "\n" + "\n".join(lines) + "\n")
+            c = write(t, "c.csv", HDR + "\n" + "\n".join(corrected or lines) + "\n")
+            tr = write(t, "t.csv", "sport,away,home,market,line,price_a,price_b,period,player,dk_event_id,tip_utc,captured_utc,source,note\n"
+                       + "\n".join(transcript_lines) + "\n")
+            rows, trunc = R.load_captures(o, c, tr)
+        xw = R.build_event_crosswalk([("A", "B", "2026-11-25T16:00:00Z")], [rec(7, "A", "B", "2026-11-25T16:00:00Z")])
+        for x in xw:
+            x["retrieved_utc"] = xw_retrieved
+        return R.reconcile(rows, trunc, xw, {}, [], as_of_utc=as_of, issue57_hold_games=hold, identity_basis=basis, **kw)
+
+    def L(self, market, line, pa, pb, period="FG", cap="2026-11-25T12:34:10Z", player="", note=""):
+        return f"CBB,A,B,{market},{line},{pa},{pb},{period},{player},2026-11-25T16:00:00Z,{cap},,6.34.10,{note}"
+
+    def test_accepts_consistent_main_markets_and_fills_id(self):
+        d, ledger, info = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110"), self.L("ML", "", "-165", "+140"),
+                                          self.L("TOTAL", "140.5", "-110", "-110"), self.L("ALT_TOTAL", "138.5", "-135", "+110")])
+        by = {x.market: x for x in d}
+        self.assertEqual(by["SPREAD"].disposition, S.ACCEPTED); self.assertEqual(by["SPREAD"].dk_event_id, "7")
+        self.assertEqual(by["TOTAL"].totals_order, "over_under")
+        self.assertEqual(by["SPREAD"].tip_ct, "2026-11-25 10:00 CT")
+        self.assertEqual(ledger, [])
+
+    def test_orientation_conflict_rejected(self):
+        d, ledger, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110"), self.L("ML", "", "+140", "-165")])
+        self.assertTrue(all("ORIENTATION_SPREAD_VS_ML_CONFLICT" in x.reason_codes for x in d))
+        self.assertTrue(all(x.disposition == S.REJECTED for x in d)); self.assertEqual(len(ledger), 2)
+
+    def test_totals_order_conflict_and_unverified(self):
+        d, _, _ = self.run_board([self.L("TOTAL", "140.5", "-110", "-110"), self.L("ALT_TOTAL", "138.5", "+110", "-135")])
+        self.assertTrue(all("TOTALS_ORDER_CONFLICT" in x.reason_codes for x in d))
+        d, _, _ = self.run_board([self.L("TOTAL", "140.5", "-110", "-110")])
+        self.assertEqual((d[0].disposition, d[0].reason_codes), (S.HELD, "TOTALS_ORDER_UNVERIFIED"))
+
+    def test_one_sided_milestone_and_bad_prices(self):
+        d, _, _ = self.run_board([self.L("PLAYER_POINTS_AT_LEAST", "16", "-120", "", player="X",
+                                         note="one-sided milestone; player team not established by screenshot"),
+                                  self.L("SPREAD", "-3.5", "-12", "-11"), self.L("SPREAD", "-3.25", "-110", "-110", period="1H")])
+        self.assertEqual(d[0].reason_codes, "ONE_SIDED_QUOTE;PLAYER_TEAM_NOT_ESTABLISHED")
+        self.assertIn("PRICE_INVALID_AMERICAN", d[1].reason_codes)
+        self.assertIn("LINE_INVALID", d[2].reason_codes)
+
+    def test_live_and_started_exclusion(self):
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110", cap="2026-11-25T16:00:00Z")])
+        self.assertIn("LIVE_AT_CAPTURE", d[0].reason_codes)
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110")], as_of=datetime(2026, 11, 25, 16, 30, tzinfo=timezone.utc))
+        self.assertIn("STARTED_BEFORE_AS_OF", d[0].reason_codes); self.assertEqual(d[0].disposition, S.REJECTED)
+
+    def test_supersession_and_hold(self):
+        tr = ['"CBB","A","B","SPREAD","-3.5","-110","-110","FG","","","2026-11-25T16:00:00Z","2026-11-25T11:30:00Z","op",""']
+        d, _, _ = self.run_board([self.L("SPREAD", "-4.5", "-110", "-110")], tr, hold=frozenset({("A", "B", "2026-11-25T16:00:00Z")}))
+        by = {x.capture_id: x for x in d}
+        self.assertEqual(by["transcript_0517_0534CT"].disposition, S.SUPERSEDED)
+        self.assertEqual(by["pdf_0636CT"].disposition, S.HELD)
+        self.assertIn("ISSUE57_ORIENTATION_HOLD", by["pdf_0636CT"].reason_codes)
+
+
+    def test_pregame_exclusion_even_without_hold(self):
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110")],
+                                 hold=frozenset())
+        # dated exclusion is only for the Nov 25 SBU@Belmont tip, not this synthetic game
+        self.assertEqual(R.runner_board(d)[0]["away"], "A")
+        held = []
+        for x in d:
+            x.away, x.home, x.tip_utc = "Saint Bonaventure", "Belmont", "2026-11-25T15:00:00Z"
+            x.disposition = S.ACCEPTED
+            x.reason_codes = ""
+            held.append(x)
+        self.assertEqual(R.runner_board(held), [])
+
+    def test_truncated_original_logged_and_corrected_used(self):
+        d, ledger, _ = self.run_board([self.L("TOTAL", "6", "-12", "-11", period="1H")],
+                                      corrected=[self.L("TOTAL", "63.5", "-120", "-110", period="1H")])
+        self.assertEqual(d[0].provenance, S.PROV_PDF_RETRANSCRIBED); self.assertEqual(d[0].totals_order, "over_under")
+        self.assertEqual(ledger[0]["reason_codes"], "LINE_TRUNCATED_SUPERSEDED_PR530")
+
+    def test_every_non_accepted_row_has_reason(self):
+        d, ledger, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110"), self.L("ML", "", "+140", "-165"),
+                                       self.L("BOTH_TEAM_TOTAL", "60.5", "-200", "+800")])
+        for x in d:
+            self.assertTrue(x.disposition == S.ACCEPTED or x.reason_codes)
+            for c in filter(None, x.reason_codes.split(";")):
+                self.assertIn(c, S.REASONS)
+            self.assertEqual((x.label, x.official_counted, x.approved_stake_u, x.authenticated), ("PAPER_0U", 0, 0, 0))
+
+
+T = lambda hhmmss: datetime.fromisoformat(f"2026-11-25T{hhmmss}+00:00")
+
+
+class Chronology(Reconcile):
+    """Owner review of PR #532: reconciliation at as_of may use only rows captured at or before as_of."""
+
+    def at(self, lines, as_of, **kw):
+        return self.run_board(lines, as_of=as_of, **kw)
+
+    @staticmethod
+    def snap(res):
+        d, ledger, info = res
+        return ([x.as_dict() for x in d], ledger, info)
+
+    def test_later_capture_cannot_supersede_earlier_row(self):
+        tr = ['"CBB","A","B","SPREAD","-3.5","-110","-110","FG","","","2026-11-25T16:00:00Z","2026-11-25T11:30:00Z","op",""']
+        late = [self.L("SPREAD", "-4.5", "-110", "-110")]            # captured 12:34:10
+        d, _, _ = self.run_board(late, tr, as_of=T("12:00:00"))
+        self.assertEqual([(x.capture_id, x.disposition) for x in d], [("transcript_0517_0534CT", S.ACCEPTED)])
+        d, _, _ = self.run_board(late, tr, as_of=T("12:40:00"))
+        self.assertEqual({x.capture_id: x.disposition for x in d},
+                         {"transcript_0517_0534CT": S.SUPERSEDED, "pdf_0636CT": S.ACCEPTED})
+
+    def test_future_rows_leave_no_trace(self):
+        base = [self.L("SPREAD", "-3.5", "-110", "-110", cap="2026-11-25T12:34:10Z"),
+                self.L("ML", "", "-165", "+140", cap="2026-11-25T12:34:10Z"),
+                self.L("TOTAL", "140.5", "-110", "-110", cap="2026-11-25T12:34:20Z")]
+        future = [self.L("ML", "", "+140", "-165", cap="2026-11-25T12:50:00Z"),               # would flip orientation + supersede
+                  self.L("ALT_TOTAL", "138.5", "+110", "-135", cap="2026-11-25T12:51:00Z"),    # would create TOTALS_ORDER_CONFLICT
+                  self.L("SPREAD", "-6.5", "-110", "-110", cap="2026-11-25T12:52:00Z")]        # would supersede the spread
+        for as_of in (T("12:34:10"), T("12:35:00"), T("12:49:59")):
+            for hold in (frozenset(), frozenset({("A", "B", "2026-11-25T16:00:00Z")})):
+                full = self.snap(self.run_board(base + future, as_of=as_of, hold=hold))
+                only = self.snap(self.run_board(base, as_of=as_of, hold=hold))
+                self.assertEqual(full, only, (as_of, bool(hold)))
+        # and the future rows do act once as_of reaches them
+        d, _, _ = self.run_board(base + future, as_of=T("12:55:00"))
+        self.assertTrue(any("ORIENTATION_SPREAD_VS_ML_CONFLICT" in x.reason_codes for x in d) or
+                        any("TOTALS_ORDER_CONFLICT" in x.reason_codes or "SUPERSEDED" in x.reason_codes for x in d))
+
+    def test_future_alt_total_cannot_flip_earlier_totals_order(self):
+        rows = [self.L("TOTAL", "140.5", "-110", "-110", cap="2026-11-25T12:34:10Z"),
+                self.L("ALT_TOTAL", "138.5", "+110", "-135", cap="2026-11-25T12:34:28Z")]
+        d, _, _ = self.run_board(rows, as_of=T("12:34:20"))
+        self.assertEqual([(x.market, x.disposition, x.reason_codes) for x in d], [("TOTAL", S.HELD, "TOTALS_ORDER_UNVERIFIED")])
+        d, _, _ = self.run_board(rows, as_of=T("12:34:28"))
+        self.assertTrue(all("TOTALS_ORDER_CONFLICT" in x.reason_codes for x in d))
+
+    def test_future_team_totals_cannot_flag_earlier_rows(self):
+        main = [self.L("SPREAD", "-3.5", "-110", "-110"), self.L("TOTAL", "140.5", "-110", "-110")]
+        tt = [self.L("TT_HOME", "90.5", "-110", "-110", cap="2026-11-25T12:36:15Z"),
+              self.L("TT_AWAY", "90.5", "-110", "-110", cap="2026-11-25T12:36:15Z")]    # inconsistent with main
+        a = self.snap(self.run_board(main + tt, as_of=T("12:35:00")))
+        b = self.snap(self.run_board(main, as_of=T("12:35:00")))
+        self.assertEqual(a, b)
+        d, _, _ = self.run_board(main + tt, as_of=T("12:36:15"))
+        self.assertTrue(all("TT_INCONSISTENT_WITH_MAIN" in x.reason_codes for x in d if x.market.startswith("TT_")))
+
+    def test_ladder_rungs_are_not_superseded_by_other_rungs(self):
+        rows = [self.L("ALT_TOTAL", "138.5", "-135", "+110", cap="2026-11-25T12:00:00Z"),
+                self.L("ALT_TOTAL", "142.5", "+120", "-145", cap="2026-11-25T12:30:00Z"),
+                self.L("ALT_TOTAL", "138.5", "-140", "+115", cap="2026-11-25T12:34:00Z"),   # same rung, newer price
+                self.L("TT_HOME", "70.5", "-110", "-110", cap="2026-11-25T12:00:00Z"),
+                self.L("TT_HOME", "71.5", "-110", "-110", cap="2026-11-25T12:30:00Z"),
+                self.L("PLAYER_POINTS_AT_LEAST", "10", "-300", "", player="X", cap="2026-11-25T12:00:00Z"),
+                self.L("PLAYER_POINTS_AT_LEAST", "15", "+100", "", player="X", cap="2026-11-25T12:30:00Z")]
+        d, _, _ = self.run_board(rows, as_of=T("12:40:00"))
+        sup = sorted((x.market, x.line) for x in d if x.disposition == S.SUPERSEDED)
+        self.assertEqual(sup, [("ALT_TOTAL", "138.5")])
+        self.assertEqual(len([x for x in d if x.market == "ALT_TOTAL"]), 3)
+        # a main market moving line IS a supersession
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110", cap="2026-11-25T12:00:00Z"),
+                                  self.L("SPREAD", "-4.5", "-110", "-110", cap="2026-11-25T12:30:00Z")], as_of=T("12:40:00"))
+        self.assertEqual([x.disposition for x in d], [S.SUPERSEDED, S.ACCEPTED])
+
+    def test_same_time_conflicting_duplicates_fail_closed_and_are_preserved(self):
+        d, ledger, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110"), self.L("SPREAD", "-3.5", "-120", "+100")],
+                                      as_of=T("12:40:00"))
+        self.assertEqual(len(d), 2)
+        self.assertTrue(all(x.disposition == S.REJECTED and "CONFLICTING_DUPLICATE_QUOTE" in x.reason_codes for x in d))
+        self.assertEqual(len(ledger), 2)
+        # a conflicting move to a different line at the same instant is also a conflict for a main market
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110"), self.L("SPREAD", "-4.5", "-110", "-110")], as_of=T("12:40:00"))
+        self.assertTrue(all("CONFLICTING_DUPLICATE_QUOTE" in x.reason_codes for x in d))
+
+    def test_exact_duplicates_keep_one_and_preserve_the_rest(self):
+        d, ledger, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110"), self.L("SPREAD", "-3.5", "-110", "-110")],
+                                      as_of=T("12:40:00"))
+        self.assertEqual(sorted(x.disposition for x in d), [S.ACCEPTED, S.SUPERSEDED])
+        dup = [x for x in d if x.disposition == S.SUPERSEDED][0]
+        self.assertEqual(dup.reason_codes, "DUPLICATE_QUOTE_ROW")
+        self.assertEqual(len(ledger), 1)
+
+    def test_older_conflict_is_superseded_not_rejected_forever(self):
+        rows = [self.L("SPREAD", "-3.5", "-110", "-110", cap="2026-11-25T12:00:00Z"),
+                self.L("SPREAD", "-3.5", "-120", "+100", cap="2026-11-25T12:00:00Z"),
+                self.L("SPREAD", "-3.5", "-115", "-105", cap="2026-11-25T12:30:00Z")]
+        d, _, _ = self.run_board(rows, as_of=T("12:10:00"))
+        self.assertTrue(all("CONFLICTING_DUPLICATE_QUOTE" in x.reason_codes for x in d))
+        d, _, _ = self.run_board(rows, as_of=T("12:40:00"))
+        self.assertEqual(sorted(x.disposition for x in d), [S.ACCEPTED, S.SUPERSEDED, S.SUPERSEDED])
+
+    def test_unusable_clock_fails_closed_and_cannot_supersede(self):
+        rows = [self.L("SPREAD", "-3.5", "-110", "-110", cap="2026-11-25T12:00:00Z"),
+                self.L("SPREAD", "-9.5", "-110", "-110", cap="not-a-time")]
+        d, _, _ = self.run_board(rows, as_of=T("12:40:00"))
+        by = {x.line: x for x in d}
+        self.assertEqual(by["-3.5"].disposition, S.ACCEPTED)
+        self.assertEqual(by["-9.5"].disposition, S.REJECTED); self.assertIn("CAPTURE_CLOCK_INVALID", by["-9.5"].reason_codes)
+
+    def test_strict_identity_withholds_later_event_page(self):
+        row = [self.L("SPREAD", "-3.5", "-110", "-110")]
+        d, _, _ = self.run_board(row, as_of=T("12:40:00"), basis=R.STRICT)       # page retrieved 17:00Z
+        self.assertEqual((d[0].dk_event_id, d[0].disposition, d[0].identity_basis), ("", S.REJECTED, "NONE"))
+        self.assertIn("DK_EVENT_ID_NOT_VERIFIED_AS_OF", d[0].reason_codes)
+        d, _, _ = self.run_board(row, as_of=T("12:40:00"), basis=R.RETRO)
+        self.assertEqual((d[0].dk_event_id, d[0].disposition, d[0].identity_basis, d[0].replay_basis),
+                         ("7", S.ACCEPTED, "LATER_PUBLIC_PAGE_CORROBORATION", R.RETRO))
+        d, _, _ = self.run_board(row, as_of=T("12:40:00"), basis=R.STRICT, xw_retrieved="2026-11-25T12:00:00Z")
+        self.assertEqual((d[0].dk_event_id, d[0].disposition, d[0].identity_basis), ("7", S.ACCEPTED, "AS_OF"))
+        self.assertEqual(d[0].identity_available_utc, "2026-11-25T12:00:00Z")
+
+    def test_strict_output_ignores_later_identity_evidence(self):
+        row = [self.L("SPREAD", "-3.5", "-110", "-110")]
+        a = self.snap(self.run_board(row, as_of=T("12:40:00"), basis=R.STRICT, xw_retrieved="2026-11-25T17:00:00Z"))
+        b = self.snap(self.run_board(row, as_of=T("12:40:00"), basis=R.STRICT, xw_retrieved="2026-11-25T23:00:00Z"))
+        self.assertEqual(a, b)
+
+    def test_strict_correction_not_used_before_it_existed(self):
+        trunc_row = [self.L("TOTAL", "6", "-12", "-11", period="1H")]
+        fixed_row = [self.L("TOTAL", "63.5", "-120", "-110", period="1H")]
+        avail = T("13:08:56")
+        d, ledger, _ = self.run_board(trunc_row, as_of=T("12:40:00"), corrected=fixed_row, basis=R.STRICT,
+                                      xw_retrieved="2026-11-25T12:00:00Z", correction_available_utc=avail)
+        self.assertIn("UNCORRECTED_TRUNCATED_ROW_AS_OF", d[0].reason_codes); self.assertEqual(d[0].line, "6")
+        self.assertEqual(d[0].disposition, S.REJECTED); self.assertEqual(ledger[0]["reason_codes"], d[0].reason_codes)
+        d, ledger, _ = self.run_board(trunc_row, as_of=T("13:10:00"), corrected=fixed_row, basis=R.STRICT,
+                                      xw_retrieved="2026-11-25T12:00:00Z", correction_available_utc=avail)
+        self.assertEqual((d[0].line, d[0].provenance), ("63.5", S.PROV_PDF_RETRANSCRIBED))
+        self.assertEqual(d[0].quote_available_utc, "2026-11-25T13:08:56Z")
+
+    def test_default_as_of_is_latest_capture_clock(self):
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110")])
+        self.assertEqual(d[0].as_of_utc, "2026-11-25T12:34:10Z")
+
+    def test_duplicate_crosswalk_keys_fail_closed(self):
+        xw = R.build_event_crosswalk([("A", "B", "2026-11-25T16:00:00Z")], [rec(7, "A", "B", "2026-11-25T16:00:00Z")])
+        with self.assertRaises(ValueError):
+            R.reconcile([], [], xw + xw, {}, [], as_of_utc=T("12:00:00"))
+        with self.assertRaises(ValueError):
+            R.reconcile([], [], xw, {}, [{"board_name": "A"}, {"board_name": "A"}], as_of_utc=T("12:00:00"))
+
+    def test_runner_gate_is_fail_closed_and_carries_reasons(self):
+        d, _, _ = self.run_board([self.L("SPREAD", "-3.5", "-110", "-110"), self.L("TOTAL", "140.5", "-110", "-110"),
+                                  self.L("ML", "", "-165", "+140")], as_of=T("12:40:00"))
+        rb = R.runner_board(d)
+        self.assertEqual(sorted((r["market"], r["disposition"], r["reason_codes"]) for r in rb),
+                         [("ML", "ACCEPTED", ""), ("SPREAD", "ACCEPTED", ""), ("TOTAL", "HELD", "TOTALS_ORDER_UNVERIFIED")])
+        self.assertTrue(all(r["identity_basis"] and r["quote_available_utc"] and r["as_of_utc"] for r in rb))
+        bad = dict(rb[0], disposition="REJECTED")
+        self.assertFalse(R.admissible_for_runner(bad)[0])
+        self.assertFalse(R.admissible_for_runner(dict(rb[0], disposition="HELD", reason_codes="ISSUE57_ORIENTATION_HOLD"))[0])
+        self.assertFalse(R.admissible_for_runner(dict(rb[0], disposition="HELD", reason_codes="TOTALS_ORDER_UNVERIFIED", totals_order="over_under"))[0])
+        self.assertFalse(R.admissible_for_runner(dict(rb[0], away="Saint Bonaventure", home="Belmont", tip_utc="2026-11-25T15:00:00Z"))[0])
+        with tempfile.TemporaryDirectory() as t:
+            ok = Path(t) / "ok.csv"; R.write_csv(ok, R.RUNNER_COLUMNS, rb)
+            self.assertEqual(len(R.read_runner_board(ok)), 3)
+            tampered = Path(t) / "bad.csv"; R.write_csv(tampered, R.RUNNER_COLUMNS, rb + [dict(rb[0], disposition="REJECTED", reason_codes="PRICE_INVALID_AMERICAN")])
+            with self.assertRaises(ValueError):
+                R.read_runner_board(tampered)
+            legacy = Path(t) / "legacy.csv"; R.write_csv(legacy, ["sport", "away", "home"], [{"sport": "CBB", "away": "A", "home": "B"}])
+            with self.assertRaises(ValueError):
+                R.read_runner_board(legacy)
+
+
+class Nov25Chronology(unittest.TestCase):
+    """Real committed Nov 25 board: replaying at any as_of must not depend on later captures."""
+
+    @classmethod
+    def setUpClass(cls):
+        from models.cbb.dk import cli
+        p = cli.paths("2026-11-25")
+        cls.rows, cls.trunc = R.load_captures(p["pdf_original"], p["pdf_corrected"], p["transcript"])
+        cls.xw = R.read_csv(p["event_xw"]); cls.txw = R.read_csv(p["team_xw"])
+        cls.cli = cli
+
+    def run_rows(self, rows, trunc, as_of, basis):
+        hold = frozenset({("Saint Bonaventure", "Belmont", "2026-11-25T15:00:00Z")})
+        d, ledger, info = R.reconcile(rows, trunc, self.xw, {}, self.txw, as_of_utc=as_of, issue57_hold_games=hold,
+                                      identity_basis=basis, correction_available_utc=self.cli.PR530_CORRECTION_AVAILABLE_UTC)
+        return [x.as_dict() for x in d], ledger, info
+
+    def test_truncating_inputs_at_as_of_changes_nothing(self):
+        for as_of in (T("11:20:00"), T("11:34:30"), T("12:34:15"), T("12:35:00"), T("12:36:00"), T("12:36:15")):
+            keep = [r for r in self.rows if R._clock(r) <= as_of]
+            for basis in (R.STRICT, R.RETRO):
+                full = self.run_rows(self.rows, self.trunc, as_of, basis)
+                cut = self.run_rows(keep, self.trunc, as_of, basis)
+                self.assertEqual(full, cut, (as_of, basis))
+                self.assertTrue(all(R._clock({"captured_utc": x["captured_utc"]}) <= as_of for x in full[0]))
+
+    def test_row_counts_by_as_of_are_monotone_and_exact(self):
+        counts = {}
+        for as_of in (T("11:20:00"), T("11:34:30"), T("12:34:15"), T("12:36:15")):
+            counts[as_of] = len(self.run_rows(self.rows, self.trunc, as_of, R.RETRO)[0])
+            self.assertEqual(counts[as_of], sum(1 for r in self.rows if R._clock(r) <= as_of))
+        v = list(counts.values()); self.assertEqual(v, sorted(v)); self.assertEqual(v[-1], 1002); self.assertLess(v[0], v[-1])
+
+    def test_early_replay_does_not_supersede_transcript_by_later_pdf(self):
+        d, _, _ = self.run_rows(self.rows, self.trunc, T("11:40:00"), R.RETRO)
+        self.assertTrue(d and all(x["capture_id"].startswith("transcript") for x in d))
+        self.assertFalse(any("SUPERSEDED_BY_LATER_CAPTURE" in x["reason_codes"] for x in d))
+        late, _, _ = self.run_rows(self.rows, self.trunc, T("12:36:15"), R.RETRO)
+        self.assertTrue(any(x["capture_id"].startswith("transcript") and "SUPERSEDED_BY_LATER_CAPTURE" in x["reason_codes"] for x in late))
+
+    def test_future_pdf_cannot_inform_transcript_alt_ladder_or_orientation(self):
+        d, _, info = self.run_rows(self.rows, self.trunc, T("11:40:00"), R.RETRO)
+        self.assertFalse(any(k[0] == "pdf_0636CT" for dd in info.values() for k in dd))
+
+    def test_strict_before_pr530_uses_truncated_rows_and_logs_none(self):
+        d, ledger, _ = self.run_rows(self.rows, self.trunc, T("12:36:15"), R.STRICT)
+        unc = [x for x in d if "UNCORRECTED_TRUNCATED_ROW_AS_OF" in x["reason_codes"]]
+        self.assertEqual(len(unc), 20)
+        self.assertFalse(any(x["reason_codes"] == "LINE_TRUNCATED_SUPERSEDED_PR530" for x in ledger))
+        self.assertTrue(all(x["disposition"] == S.REJECTED for x in unc))
+        self.assertEqual(sum(1 for x in d if x["disposition"] == S.ACCEPTED), 0)   # no ID verified as of 12:36Z
+
+
+class TranscriptOrder(unittest.TestCase):
+    def test_markdown_explicit_over_price(self):
+        rows = [{"market": "TOTAL", "period": "FG", "line": "137.5", "price_a": "-112", "price_b": "-108"}]
+        md = "Saint Bonaventure: Spread -4.5, -110; Total O137.5, -112; Moneyline -205\nBelmont: Spread +4.5, -110; Total U137.5, -108"
+        self.assertTrue(R.transcript_explicit_totals_order(md, rows))
+        rows[0]["price_a"], rows[0]["price_b"] = "-108", "-112"
+        self.assertFalse(R.transcript_explicit_totals_order(md, rows))
+
+
+LINES = ROOT / "models/cbb/lines"
+ORIGINAL_BLOBS = {  # git blob SHA-1 of the originals on main 7fc5aaa9; this module must never change them
+    "board_2026-11-25_0636CT_pdf_capture.csv": "2e2d42ded809c8e34b569c9a1d9cc60a260399d7",
+}
+
+
+def git_blob(path):
+    b = Path(path).read_bytes()
+    return hashlib.sha1(b"blob %d\0" % len(b) + b).hexdigest()
+
+
+class CommittedNov25(unittest.TestCase):
+    def test_original_board_unchanged(self):
+        for name, blob in ORIGINAL_BLOBS.items():
+            self.assertEqual(git_blob(LINES / name), blob)
+
+    def test_reproduces_committed_outputs(self):
+        with tempfile.TemporaryDirectory() as t:
+            from models.cbb.dk import cli
+            self.assertEqual(cli.main(["reconcile", "--as-of", "2026-11-25T12:36:15Z", "--out-dir", t]), 0)
+            committed = ROOT / "models/cbb/dk/derived/2026-11-25"
+            for f in ("derived_board.csv", "runner_board.csv", "rejection_ledger.csv"):
+                self.assertEqual((Path(t) / f).read_bytes(), (committed / f).read_bytes(), f)
+            rep = json.loads((Path(t) / "report.json").read_text())
+        self.assertEqual(rep["rows_in"], 1002)
+        self.assertEqual(rep["event_ids"]["games"], 53)
+        self.assertEqual(rep["event_ids"]["verified"], 48)
+        self.assertEqual(rep["authenticated_rows"], 0)
+        self.assertEqual(rep["authenticated_quote_rows"], 0)
+        self.assertTrue(rep["event_id_verification_is_not_quote_authentication"])
+        self.assertEqual(rep["espn_odds_role"], "AUXILIARY_RESEARCH_COMPARATOR_ONLY")
+        self.assertIn("ACCEPTED_FOR_RETROSPECTIVE_RESEARCH",
+                      rep["owner_rulings"]["st_bonaventure_belmont_orientation"])
+        self.assertIn("must never enter a pregame card",
+                      rep["owner_rulings"]["st_bonaventure_belmont_hold"])
+        self.assertTrue(rep["transcript_totals_order_verified_from_markdown"])
+        self.assertEqual(sum(rep["dispositions"].values()), 1002)
+        import csv
+        with (committed / "runner_board.csv").open() as fh:
+            rb = list(csv.DictReader(fh))
+        self.assertFalse(any((r["away"], r["home"]) == ("Saint Bonaventure", "Belmont") for r in rb))
+
+    def test_committed_runner_board_passes_the_fail_closed_loader(self):
+        rb = R.read_runner_board(ROOT / "models/cbb/dk/derived/2026-11-25/runner_board.csv")
+        self.assertEqual(len(rb), 367)
+        self.assertTrue(all(r["replay_basis"] == R.RETRO and r["identity_basis"] == "LATER_PUBLIC_PAGE_CORROBORATION" for r in rb))
+        self.assertTrue(all(r["authenticated"] == "0" for r in rb))
+
+    def test_strict_report_reproduces_and_shows_no_usable_rows(self):
+        committed = ROOT / "models/cbb/dk/derived/2026-11-25_strict_asof_1236/report.json"
+        with tempfile.TemporaryDirectory() as t:
+            from models.cbb.dk import cli
+            self.assertEqual(cli.main(["reconcile", "--as-of", "2026-11-25T12:36:15Z", "--identity-basis", "strict", "--out-dir", t]), 0)
+            new = json.loads((Path(t) / "report.json").read_text())
+            old = json.loads(committed.read_text())
+        for r in (new, old):
+            r.pop("generated_utc")
+        self.assertEqual(new, old)
+        self.assertEqual(old["replay_basis"], "STRICT_AS_OF")
+        self.assertEqual(old["runner_board_rows"], 0)
+        self.assertEqual(old["dispositions"].get("ACCEPTED", 0), 0)
+        self.assertEqual(old["reason_code_counts"]["UNCORRECTED_TRUNCATED_ROW_AS_OF"], 20)
+
+    def test_crosswalk_ids_unique_and_evidenced(self):
+        xw = R.read_csv(LINES / "dk_event_crosswalk_2026-11-25.csv")
+        ids = [x["dk_event_id"] for x in xw if x["dk_event_id"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        for x in xw:
+            if x["state"] == S.EID_VERIFIED:
+                self.assertTrue(x["retrieved_utc"] and x["html_sha256"] and x["final_url"].endswith("/" + x["dk_event_id"]))
+            else:
+                self.assertTrue(x["reason"].startswith("DK_EVENT_ID_MISSING"))
+        sb = [x for x in xw if x["board_away"] == "Saint Bonaventure"][0]
+        self.assertEqual(sb["dk_event_id"], "35083406")
+
+
+if __name__ == "__main__":
+    unittest.main()

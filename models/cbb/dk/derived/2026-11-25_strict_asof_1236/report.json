@@ -1,0 +1,1672 @@
+{
+ "approved_stake_u": 0,
+ "as_of_utc": "2026-11-25T12:36:15Z",
+ "authenticated_quote_rows": 0,
+ "authenticated_rows": 0,
+ "by_capture": {
+  "pdf_0636CT": {
+   "REJECTED": 738
+  },
+  "transcript_0517_0534CT": {
+   "REJECTED": 257,
+   "SUPERSEDED": 7
+  }
+ },
+ "chronology": {
+  "espn_retrieved_utc": "2026-11-25T17:03:18Z",
+  "identity_basis_counts": {
+   "NONE": 1002
+  },
+  "identity_evidence_retrieved_utc_range": [
+   "2026-11-25T16:59:37Z",
+   "2026-11-25T17:03:01Z"
+  ],
+  "issue57_hold_input": [
+   "Saint Bonaventure@Belmont"
+  ],
+  "pr530_correction_available_utc": "2026-11-25T13:08:56Z",
+  "rows_after_as_of_dropped": 0,
+  "rows_with_unusable_clock": 0,
+  "rule": "Output depends only on rows with captured_utc <= as_of_utc. Later rows are dropped before supersession, duplicate detection, identity checks and holds, and leave no trace in the outputs."
+ },
+ "cross_capture_saint_bonaventure_belmont": [
+  {
+   "market": "ALT_TOTAL",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:28Z",
+    "line": "136.5",
+    "price_a": "-125",
+    "price_b": "-105"
+   },
+   "period": "FG",
+   "player": "",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:31:00Z",
+    "line": "136.5",
+    "price_a": "-130",
+    "price_b": "+100"
+   }
+  },
+  {
+   "market": "ML",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:10Z",
+    "line": "",
+    "price_a": "+170",
+    "price_b": "-205"
+   },
+   "period": "FG",
+   "player": "",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:34:00Z",
+    "line": "",
+    "price_a": "+170",
+    "price_b": "-205"
+   }
+  },
+  {
+   "market": "PLAYER_ASSISTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:08Z",
+    "line": "1",
+    "price_a": "-160",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ari Fulton",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:24:00Z",
+    "line": "1",
+    "price_a": "-160",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_ASSISTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:08Z",
+    "line": "3",
+    "price_a": "-145",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Benjamin Bill",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:24:00Z",
+    "line": "3",
+    "price_a": "-145",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_ASSISTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:08Z",
+    "line": "4",
+    "price_a": "-105",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ilia Ermakov",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:24:00Z",
+    "line": "4",
+    "price_a": "-105",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_ASSISTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:08Z",
+    "line": "5",
+    "price_a": "+110",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Taj Au-Duke",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:24:00Z",
+    "line": "5",
+    "price_a": "+110",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_ASSISTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:08Z",
+    "line": "4",
+    "price_a": "+120",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Zach Philipkoski",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:24:00Z",
+    "line": "4",
+    "price_a": "+120",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:31Z",
+    "line": "12",
+    "price_a": "-140",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ari Fulton",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:29:00Z",
+    "line": "12",
+    "price_a": "-125",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:31Z",
+    "line": "20",
+    "price_a": "+110",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Benjamin Bill",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:29:00Z",
+    "line": "20",
+    "price_a": "+110",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:31Z",
+    "line": "13",
+    "price_a": "-105",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ilia Ermakov",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:29:00Z",
+    "line": "13",
+    "price_a": "-105",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:31Z",
+    "line": "17",
+    "price_a": "-110",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Taj Au-Duke",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:29:00Z",
+    "line": "17",
+    "price_a": "-110",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:31Z",
+    "line": "15",
+    "price_a": "+105",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Zach Philipkoski",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:29:00Z",
+    "line": "15",
+    "price_a": "+105",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_POINTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:38Z",
+    "line": "12",
+    "price_a": "-110",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ari Fulton",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:18:00Z",
+    "line": "12",
+    "price_a": "+105",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_POINTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:38Z",
+    "line": "16",
+    "price_a": "-120",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Benjamin Bill",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:18:00Z",
+    "line": "16",
+    "price_a": "-120",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_POINTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:38Z",
+    "line": "10",
+    "price_a": "+115",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ilia Ermakov",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:18:00Z",
+    "line": "10",
+    "price_a": "+115",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_POINTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:38Z",
+    "line": "12",
+    "price_a": "-135",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Taj Au-Duke",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:18:00Z",
+    "line": "12",
+    "price_a": "-135",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_POINTS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:38Z",
+    "line": "11",
+    "price_a": "-115",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Zach Philipkoski",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:18:00Z",
+    "line": "11",
+    "price_a": "-115",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PRA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:16Z",
+    "line": "25",
+    "price_a": "-125",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Benjamin Bill",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:25:00Z",
+    "line": "25",
+    "price_a": "-125",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PRA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:16Z",
+    "line": "16",
+    "price_a": "-105",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ilia Ermakov",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:25:00Z",
+    "line": "16",
+    "price_a": "-105",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PRA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:16Z",
+    "line": "20",
+    "price_a": "+110",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Taj Au-Duke",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:25:00Z",
+    "line": "20",
+    "price_a": "+110",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PRA_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:16Z",
+    "line": "20",
+    "price_a": "+125",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Zach Philipkoski",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:25:00Z",
+    "line": "20",
+    "price_a": "+130",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PR_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:22Z",
+    "line": "22",
+    "price_a": "-130",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Benjamin Bill",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:27:00Z",
+    "line": "22",
+    "price_a": "-130",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PR_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:22Z",
+    "line": "12",
+    "price_a": "-125",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ilia Ermakov",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:27:00Z",
+    "line": "12",
+    "price_a": "-125",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PR_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:22Z",
+    "line": "15",
+    "price_a": "-110",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Taj Au-Duke",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:27:00Z",
+    "line": "15",
+    "price_a": "-110",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_PR_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:22Z",
+    "line": "15",
+    "price_a": "-125",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Zach Philipkoski",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:27:00Z",
+    "line": "15",
+    "price_a": "-125",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_REBOUNDS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:00Z",
+    "line": "7",
+    "price_a": "+120",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ari Fulton",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:22:00Z",
+    "line": "7",
+    "price_a": "+125",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_REBOUNDS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:00Z",
+    "line": "7",
+    "price_a": "+100",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Benjamin Bill",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:22:00Z",
+    "line": "7",
+    "price_a": "+100",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_REBOUNDS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:00Z",
+    "line": "4",
+    "price_a": "+155",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ilia Ermakov",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:22:00Z",
+    "line": "4",
+    "price_a": "+155",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_REBOUNDS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:00Z",
+    "line": "3",
+    "price_a": "+120",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Taj Au-Duke",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:22:00Z",
+    "line": "3",
+    "price_a": "+120",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_REBOUNDS_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:35:00Z",
+    "line": "5",
+    "price_a": "+110",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Zach Philipkoski",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:22:00Z",
+    "line": "5",
+    "price_a": "+110",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_THREES_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:48Z",
+    "line": "2",
+    "price_a": "-135",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ari Fulton",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:21:00Z",
+    "line": "2",
+    "price_a": "-140",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_THREES_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:48Z",
+    "line": "2",
+    "price_a": "-115",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Ilia Ermakov",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:21:00Z",
+    "line": "2",
+    "price_a": "-115",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_THREES_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:48Z",
+    "line": "1",
+    "price_a": "+100",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Taj Au-Duke",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:21:00Z",
+    "line": "1",
+    "price_a": "+100",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "PLAYER_THREES_AT_LEAST",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:48Z",
+    "line": "2",
+    "price_a": "-120",
+    "price_b": ""
+   },
+   "period": "FG",
+   "player": "Zach Philipkoski",
+   "same_line": true,
+   "same_prices": true,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:21:00Z",
+    "line": "2",
+    "price_a": "-120",
+    "price_b": ""
+   }
+  },
+  {
+   "market": "SPREAD",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:10Z",
+    "line": "+4.5",
+    "price_a": "-115",
+    "price_b": "-105"
+   },
+   "period": "FG",
+   "player": "",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:34:00Z",
+    "line": "4.5",
+    "price_a": "-110",
+    "price_b": "-110"
+   }
+  },
+  {
+   "market": "TOTAL",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:34:10Z",
+    "line": "137.5",
+    "price_a": "-108",
+    "price_b": "-112"
+   },
+   "period": "FG",
+   "player": "",
+   "same_line": true,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:34:00Z",
+    "line": "137.5",
+    "price_a": "-112",
+    "price_b": "-108"
+   }
+  },
+  {
+   "market": "TT_AWAY",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:36:15Z",
+    "line": "70.5",
+    "price_a": "-125",
+    "price_b": "-105"
+   },
+   "period": "FG",
+   "player": "",
+   "same_line": false,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:32:00Z",
+    "line": "81.5",
+    "price_a": "+436",
+    "price_b": "-760"
+   }
+  },
+  {
+   "market": "TT_HOME",
+   "pdf_0636CT": {
+    "captured_utc": "2026-11-25T12:36:15Z",
+    "line": "66.5",
+    "price_a": "-110",
+    "price_b": "-120"
+   },
+   "period": "FG",
+   "player": "",
+   "same_line": false,
+   "same_prices": false,
+   "transcript_0517_0534CT": {
+    "captured_utc": "2026-11-25T11:32:00Z",
+    "line": "76.5",
+    "price_a": "+423",
+    "price_b": "-730"
+   }
+  }
+ ],
+ "date": "2026-11-25",
+ "dispositions": {
+  "REJECTED": 995,
+  "SUPERSEDED": 7
+ },
+ "espn_current_feed_orientation": [
+  {
+   "board_home_line": "+4.5",
+   "espn": null,
+   "game": "Saint Bonaventure @ Belmont",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-7.5",
+   "espn": null,
+   "game": "Northern Iowa @ Charlotte",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-4.5",
+   "espn": null,
+   "game": "Rice @ Ohio",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+5.5",
+   "espn": null,
+   "game": "Virginia @ Marquette",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-5.5",
+   "espn": null,
+   "game": "Yale @ Wright State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+5.5",
+   "espn": null,
+   "game": "Northern Colorado @ Detroit Mercy",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-14.5",
+   "espn": null,
+   "game": "Eastern Kentucky @ Miami OH",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-10.5",
+   "espn": null,
+   "game": "Lindenwood @ Stony Brook",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-1.5",
+   "espn": null,
+   "game": "Southern Utah @ Long Beach State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-8.5",
+   "espn": null,
+   "game": "Tulane @ Davidson",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-4.5",
+   "espn": null,
+   "game": "Arizona State @ LSU",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-14.5",
+   "espn": null,
+   "game": "Saint Peters @ Columbia",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-7.5",
+   "espn": null,
+   "game": "Abilene Christian @ South Dakota State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-21.5",
+   "espn": null,
+   "game": "Arkansas-Pine Bluff @ South Dakota",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-1.5",
+   "espn": null,
+   "game": "Manhattan @ NJIT",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-5.5",
+   "espn": null,
+   "game": "Ole Miss @ Arizona",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+5.5",
+   "espn": null,
+   "game": "Texas A&M @ Xavier",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+6.5",
+   "espn": null,
+   "game": "Akron @ Appalachian State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-34.5",
+   "espn": null,
+   "game": "Jackson State @ Oklahoma State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+1.5",
+   "espn": null,
+   "game": "SE Louisiana @ North Dakota",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-1.5",
+   "espn": null,
+   "game": "Arkansas State @ FIU",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-15.5",
+   "espn": null,
+   "game": "Prairie View @ Marshall",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-3.5",
+   "espn": null,
+   "game": "Princeton @ Liberty",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+3.5",
+   "espn": null,
+   "game": "Georgia State @ Florida Gulf Coast",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-3.5",
+   "espn": null,
+   "game": "Grambling @ New Orleans",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-10.5",
+   "espn": null,
+   "game": "South Carolina @ USC",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+3.5",
+   "espn": null,
+   "game": "Memphis @ Penn State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-11.5",
+   "espn": null,
+   "game": "Holy Cross @ Dartmouth",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-35.5",
+   "espn": null,
+   "game": "Southern University @ Nebraska",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-23.5",
+   "espn": null,
+   "game": "Alcorn @ Texas State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-2.5",
+   "espn": null,
+   "game": "Portland State @ UC Riverside",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+3.5",
+   "espn": null,
+   "game": "BYU @ Providence",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-11.5",
+   "espn": null,
+   "game": "Bethune-Cookman @ Richmond",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-26.5",
+   "espn": null,
+   "game": "Albany NY @ Syracuse",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+2.5",
+   "espn": null,
+   "game": "CSUN @ Weber State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+2.5",
+   "espn": null,
+   "game": "UConn @ Duke",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-4.5",
+   "espn": null,
+   "game": "SMU @ Utah State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-6.5",
+   "espn": null,
+   "game": "Bellarmine @ Northern Kentucky",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-6.5",
+   "espn": null,
+   "game": "Saint Thomas MN @ UNC Wilmington",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-15.5",
+   "espn": null,
+   "game": "Longwood @ George Mason",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-3.5",
+   "espn": null,
+   "game": "USC Upstate @ The Citadel",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-19.5",
+   "espn": null,
+   "game": "Northeastern @ Wisconsin",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+3.5",
+   "espn": null,
+   "game": "Northern Illinois @ SIU Edwardsville",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-28.5",
+   "espn": null,
+   "game": "Norfolk State @ NC State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-4.5",
+   "espn": null,
+   "game": "Wake Forest @ Mississippi State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-10.5",
+   "espn": null,
+   "game": "CSU Bakersfield @ Pepperdine",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-6.5",
+   "espn": null,
+   "game": "Omaha @ UC Davis",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-7.5",
+   "espn": null,
+   "game": "Eastern Washington @ Loyola Marymount",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-36.5",
+   "espn": null,
+   "game": "Mississippi Valley @ New Mexico",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-3.5",
+   "espn": null,
+   "game": "Washington @ VCU",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+5.5",
+   "espn": null,
+   "game": "Pacific @ Jacksonville State",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "-16.5",
+   "espn": null,
+   "game": "Incarnate Word @ Hawaii",
+   "verdict": "NO_FEED"
+  },
+  {
+   "board_home_line": "+2.5",
+   "espn": null,
+   "game": "Clemson @ Colorado State",
+   "verdict": "NO_FEED"
+  }
+ ],
+ "espn_matched_games": 0,
+ "espn_odds_role": "AUXILIARY_RESEARCH_COMPARATOR_ONLY",
+ "event_id_verification_is_not_quote_authentication": true,
+ "event_ids": {
+  "games": 53,
+  "missing": [
+   {
+    "game": "Northern Colorado @ Detroit Mercy",
+    "reason": "DK_EVENT_ID_MISSING: no public DK event page with exact away/home names (sitemap snapshot + 94 IDs probed in 35083400-35083992)",
+    "tip_utc": "2026-11-25T17:30:00Z"
+   },
+   {
+    "game": "SE Louisiana @ North Dakota",
+    "reason": "DK_EVENT_ID_MISSING: no public DK event page with exact away/home names (sitemap snapshot + 94 IDs probed in 35083400-35083992)",
+    "tip_utc": "2026-11-25T20:00:00Z"
+   },
+   {
+    "game": "Longwood @ George Mason",
+    "reason": "DK_EVENT_ID_MISSING: no public DK event page with exact away/home names (sitemap snapshot + 94 IDs probed in 35083400-35083992)",
+    "tip_utc": "2026-11-26T00:00:00Z"
+   },
+   {
+    "game": "Washington @ VCU",
+    "reason": "DK_EVENT_ID_MISSING: no public DK event page with exact away/home names (sitemap snapshot + 94 IDs probed in 35083400-35083992)",
+    "tip_utc": "2026-11-26T03:00:00Z"
+   },
+   {
+    "game": "Clemson @ Colorado State",
+    "reason": "DK_EVENT_ID_MISSING: no public DK event page with exact away/home names (sitemap snapshot + 94 IDs probed in 35083400-35083992)",
+    "tip_utc": "2026-11-26T05:30:00Z"
+   }
+  ],
+  "pdf_rows_with_board_id_on_main": 46,
+  "pdf_rows_with_verified_id": 0,
+  "rows_with_verified_id": 0,
+  "verified": 48
+ },
+ "generated_utc": "2026-11-25T17:49:18Z",
+ "identity_checks": {
+  "alt_spread": {
+   "pdf_0636CT | Abilene Christian | South Dakota State | FG": "AGREE",
+   "pdf_0636CT | Akron | Appalachian State | FG": "AGREE",
+   "pdf_0636CT | Albany NY | Syracuse | FG": "AGREE",
+   "pdf_0636CT | Alcorn | Texas State | FG": "AGREE",
+   "pdf_0636CT | Arizona State | LSU | FG": "AGREE",
+   "pdf_0636CT | Arkansas State | FIU | FG": "AGREE",
+   "pdf_0636CT | Arkansas-Pine Bluff | South Dakota | FG": "AGREE",
+   "pdf_0636CT | BYU | Providence | FG": "AGREE",
+   "pdf_0636CT | Bellarmine | Northern Kentucky | FG": "AGREE",
+   "pdf_0636CT | Bethune-Cookman | Richmond | FG": "AGREE",
+   "pdf_0636CT | CSUN | Weber State | FG": "AGREE",
+   "pdf_0636CT | Eastern Kentucky | Miami OH | FG": "AGREE",
+   "pdf_0636CT | Georgia State | Florida Gulf Coast | FG": "AGREE",
+   "pdf_0636CT | Grambling | New Orleans | FG": "AGREE",
+   "pdf_0636CT | Holy Cross | Dartmouth | FG": "AGREE",
+   "pdf_0636CT | Jackson State | Oklahoma State | FG": "AGREE",
+   "pdf_0636CT | Lindenwood | Stony Brook | FG": "AGREE",
+   "pdf_0636CT | Longwood | George Mason | FG": "AGREE",
+   "pdf_0636CT | Manhattan | NJIT | FG": "AGREE",
+   "pdf_0636CT | Memphis | Penn State | FG": "AGREE",
+   "pdf_0636CT | Northeastern | Wisconsin | FG": "AGREE",
+   "pdf_0636CT | Northern Colorado | Detroit Mercy | FG": "AGREE",
+   "pdf_0636CT | Northern Iowa | Charlotte | FG": "AGREE",
+   "pdf_0636CT | Ole Miss | Arizona | FG": "AGREE",
+   "pdf_0636CT | Portland State | UC Riverside | FG": "AGREE",
+   "pdf_0636CT | Prairie View | Marshall | FG": "AGREE",
+   "pdf_0636CT | Princeton | Liberty | FG": "AGREE",
+   "pdf_0636CT | Rice | Ohio | FG": "AGREE",
+   "pdf_0636CT | SE Louisiana | North Dakota | FG": "AGREE",
+   "pdf_0636CT | SMU | Utah State | FG": "AGREE",
+   "pdf_0636CT | Saint Bonaventure | Belmont | FG": "AGREE",
+   "pdf_0636CT | Saint Peters | Columbia | FG": "AGREE",
+   "pdf_0636CT | Saint Thomas MN | UNC Wilmington | FG": "AGREE",
+   "pdf_0636CT | South Carolina | USC | FG": "AGREE",
+   "pdf_0636CT | Southern University | Nebraska | FG": "AGREE",
+   "pdf_0636CT | Southern Utah | Long Beach State | FG": "AGREE",
+   "pdf_0636CT | Texas A&M | Xavier | FG": "AGREE",
+   "pdf_0636CT | Tulane | Davidson | FG": "AGREE",
+   "pdf_0636CT | UConn | Duke | FG": "AGREE",
+   "pdf_0636CT | USC Upstate | The Citadel | FG": "AGREE",
+   "pdf_0636CT | Virginia | Marquette | FG": "AGREE",
+   "pdf_0636CT | Yale | Wright State | FG": "AGREE",
+   "transcript_0517_0534CT | Saint Bonaventure | Belmont | FG": "AGREE"
+  },
+  "orientation": {
+   "pdf_0636CT | Abilene Christian | South Dakota State | 1H": "AGREE",
+   "pdf_0636CT | Abilene Christian | South Dakota State | FG": "AGREE",
+   "pdf_0636CT | Akron | Appalachian State | FG": "AGREE",
+   "pdf_0636CT | Albany NY | Syracuse | FG": "AGREE",
+   "pdf_0636CT | Alcorn | Texas State | FG": "AGREE",
+   "pdf_0636CT | Arizona State | LSU | FG": "AGREE",
+   "pdf_0636CT | Arkansas State | FIU | FG": "AGREE",
+   "pdf_0636CT | Arkansas-Pine Bluff | South Dakota | FG": "AGREE",
+   "pdf_0636CT | BYU | Providence | FG": "AGREE",
+   "pdf_0636CT | Bellarmine | Northern Kentucky | FG": "AGREE",
+   "pdf_0636CT | Bethune-Cookman | Richmond | FG": "AGREE",
+   "pdf_0636CT | CSU Bakersfield | Pepperdine | FG": "AGREE",
+   "pdf_0636CT | CSUN | Weber State | FG": "AGREE",
+   "pdf_0636CT | Clemson | Colorado State | 1H": "AGREE",
+   "pdf_0636CT | Clemson | Colorado State | FG": "AGREE",
+   "pdf_0636CT | Eastern Kentucky | Miami OH | FG": "AGREE",
+   "pdf_0636CT | Eastern Washington | Loyola Marymount | FG": "AGREE",
+   "pdf_0636CT | Georgia State | Florida Gulf Coast | FG": "AGREE",
+   "pdf_0636CT | Grambling | New Orleans | FG": "AGREE",
+   "pdf_0636CT | Holy Cross | Dartmouth | FG": "AGREE",
+   "pdf_0636CT | Incarnate Word | Hawaii | FG": "AGREE",
+   "pdf_0636CT | Lindenwood | Stony Brook | FG": "AGREE",
+   "pdf_0636CT | Longwood | George Mason | FG": "AGREE",
+   "pdf_0636CT | Manhattan | NJIT | FG": "AGREE",
+   "pdf_0636CT | Memphis | Penn State | 1H": "AGREE",
+   "pdf_0636CT | Memphis | Penn State | FG": "AGREE",
+   "pdf_0636CT | Norfolk State | NC State | FG": "AGREE",
+   "pdf_0636CT | Northeastern | Wisconsin | FG": "AGREE",
+   "pdf_0636CT | Northern Colorado | Detroit Mercy | 1H": "AGREE",
+   "pdf_0636CT | Northern Colorado | Detroit Mercy | FG": "AGREE",
+   "pdf_0636CT | Northern Illinois | SIU Edwardsville | 1H": "AGREE",
+   "pdf_0636CT | Northern Illinois | SIU Edwardsville | FG": "AGREE",
+   "pdf_0636CT | Northern Iowa | Charlotte | 1H": "AGREE",
+   "pdf_0636CT | Northern Iowa | Charlotte | FG": "AGREE",
+   "pdf_0636CT | Ole Miss | Arizona | FG": "AGREE",
+   "pdf_0636CT | Omaha | UC Davis | FG": "AGREE",
+   "pdf_0636CT | Pacific | Jacksonville State | 1H": "AGREE",
+   "pdf_0636CT | Pacific | Jacksonville State | FG": "AGREE",
+   "pdf_0636CT | Portland State | UC Riverside | FG": "AGREE",
+   "pdf_0636CT | Prairie View | Marshall | FG": "AGREE",
+   "pdf_0636CT | Princeton | Liberty | FG": "AGREE",
+   "pdf_0636CT | Rice | Ohio | 1H": "AGREE",
+   "pdf_0636CT | Rice | Ohio | FG": "AGREE",
+   "pdf_0636CT | SE Louisiana | North Dakota | 1H": "AGREE",
+   "pdf_0636CT | SE Louisiana | North Dakota | FG": "AGREE",
+   "pdf_0636CT | SMU | Utah State | 1H": "AGREE",
+   "pdf_0636CT | SMU | Utah State | FG": "AGREE",
+   "pdf_0636CT | Saint Bonaventure | Belmont | 1H": "AGREE",
+   "pdf_0636CT | Saint Bonaventure | Belmont | FG": "AGREE",
+   "pdf_0636CT | Saint Peters | Columbia | 1H": "AGREE",
+   "pdf_0636CT | Saint Peters | Columbia | FG": "AGREE",
+   "pdf_0636CT | Saint Thomas MN | UNC Wilmington | 1H": "AGREE",
+   "pdf_0636CT | Saint Thomas MN | UNC Wilmington | FG": "AGREE",
+   "pdf_0636CT | South Carolina | USC | FG": "AGREE",
+   "pdf_0636CT | Southern Utah | Long Beach State | 1H": "AGREE",
+   "pdf_0636CT | Southern Utah | Long Beach State | FG": "AGREE",
+   "pdf_0636CT | Texas A&M | Xavier | 1H": "AGREE",
+   "pdf_0636CT | Texas A&M | Xavier | FG": "AGREE",
+   "pdf_0636CT | Tulane | Davidson | 1H": "AGREE",
+   "pdf_0636CT | Tulane | Davidson | FG": "AGREE",
+   "pdf_0636CT | UConn | Duke | 1H": "AGREE",
+   "pdf_0636CT | UConn | Duke | FG": "AGREE",
+   "pdf_0636CT | USC Upstate | The Citadel | FG": "AGREE",
+   "pdf_0636CT | Virginia | Marquette | FG": "AGREE",
+   "pdf_0636CT | Wake Forest | Mississippi State | 1H": "AGREE",
+   "pdf_0636CT | Wake Forest | Mississippi State | FG": "AGREE",
+   "pdf_0636CT | Washington | VCU | 1H": "AGREE",
+   "pdf_0636CT | Washington | VCU | FG": "AGREE",
+   "pdf_0636CT | Yale | Wright State | 1H": "AGREE",
+   "pdf_0636CT | Yale | Wright State | FG": "AGREE",
+   "transcript_0517_0534CT | Saint Bonaventure | Belmont | FG": "AGREE"
+  },
+  "totals_order": {
+   "pdf_0636CT | Abilene Christian | South Dakota State | FG": "SUPPORTED",
+   "pdf_0636CT | Akron | Appalachian State | FG": "SUPPORTED",
+   "pdf_0636CT | Albany NY | Syracuse | FG": "SUPPORTED",
+   "pdf_0636CT | Alcorn | Texas State | FG": "CONFLICT",
+   "pdf_0636CT | Arizona State | LSU | FG": "SUPPORTED",
+   "pdf_0636CT | Arkansas State | FIU | FG": "SUPPORTED",
+   "pdf_0636CT | Arkansas-Pine Bluff | South Dakota | FG": "SUPPORTED",
+   "pdf_0636CT | BYU | Providence | FG": "SUPPORTED",
+   "pdf_0636CT | Bellarmine | Northern Kentucky | FG": "SUPPORTED",
+   "pdf_0636CT | Bethune-Cookman | Richmond | FG": "SUPPORTED",
+   "pdf_0636CT | CSUN | Weber State | FG": "SUPPORTED",
+   "pdf_0636CT | Eastern Kentucky | Miami OH | FG": "SUPPORTED",
+   "pdf_0636CT | Georgia State | Florida Gulf Coast | FG": "SUPPORTED",
+   "pdf_0636CT | Grambling | New Orleans | FG": "SUPPORTED",
+   "pdf_0636CT | Jackson State | Oklahoma State | FG": "SUPPORTED",
+   "pdf_0636CT | Lindenwood | Stony Brook | FG": "SUPPORTED",
+   "pdf_0636CT | Longwood | George Mason | FG": "SUPPORTED",
+   "pdf_0636CT | Manhattan | NJIT | FG": "SUPPORTED",
+   "pdf_0636CT | Memphis | Penn State | FG": "CONFLICT",
+   "pdf_0636CT | Northeastern | Wisconsin | FG": "SUPPORTED",
+   "pdf_0636CT | Northern Colorado | Detroit Mercy | FG": "SUPPORTED",
+   "pdf_0636CT | Northern Iowa | Charlotte | FG": "SUPPORTED",
+   "pdf_0636CT | Ole Miss | Arizona | FG": "SUPPORTED",
+   "pdf_0636CT | Portland State | UC Riverside | FG": "SUPPORTED",
+   "pdf_0636CT | Prairie View | Marshall | FG": "SUPPORTED",
+   "pdf_0636CT | Princeton | Liberty | FG": "SUPPORTED",
+   "pdf_0636CT | Rice | Ohio | FG": "SUPPORTED",
+   "pdf_0636CT | SE Louisiana | North Dakota | FG": "SUPPORTED",
+   "pdf_0636CT | SMU | Utah State | FG": "SUPPORTED",
+   "pdf_0636CT | Saint Bonaventure | Belmont | FG": "SUPPORTED",
+   "pdf_0636CT | Saint Peters | Columbia | FG": "SUPPORTED",
+   "pdf_0636CT | Saint Thomas MN | UNC Wilmington | FG": "SUPPORTED",
+   "pdf_0636CT | South Carolina | USC | FG": "SUPPORTED",
+   "pdf_0636CT | Southern University | Nebraska | FG": "SUPPORTED",
+   "pdf_0636CT | Southern Utah | Long Beach State | FG": "SUPPORTED",
+   "pdf_0636CT | Texas A&M | Xavier | FG": "SUPPORTED",
+   "pdf_0636CT | Tulane | Davidson | FG": "SUPPORTED",
+   "pdf_0636CT | UConn | Duke | FG": "SUPPORTED",
+   "pdf_0636CT | USC Upstate | The Citadel | FG": "SUPPORTED",
+   "pdf_0636CT | Virginia | Marquette | FG": "SUPPORTED",
+   "pdf_0636CT | Yale | Wright State | FG": "SUPPORTED",
+   "transcript_0517_0534CT | Saint Bonaventure | Belmont | FG": "SUPPORTED"
+  },
+  "tt": {
+   "pdf_0636CT | Abilene Christian | South Dakota State | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 60.0
+   },
+   "pdf_0636CT | Abilene Christian | South Dakota State | FG": {
+    "margin_diff": 1.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Akron | Appalachian State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Albany NY | Syracuse | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Alcorn | Texas State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Arizona State | LSU | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Arkansas State | FIU | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Arkansas-Pine Bluff | South Dakota | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | BYU | Providence | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Bellarmine | Northern Kentucky | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Bethune-Cookman | Richmond | FG": {
+    "margin_diff": 1.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | CSUN | Weber State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Eastern Kentucky | Miami OH | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Georgia State | Florida Gulf Coast | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Grambling | New Orleans | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Holy Cross | Dartmouth | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Jackson State | Oklahoma State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Lindenwood | Stony Brook | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Longwood | George Mason | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Manhattan | NJIT | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Memphis | Penn State | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 70.0
+   },
+   "pdf_0636CT | Memphis | Penn State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Norfolk State | NC State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Northeastern | Wisconsin | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Northern Colorado | Detroit Mercy | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 63.0
+   },
+   "pdf_0636CT | Northern Colorado | Detroit Mercy | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Northern Illinois | SIU Edwardsville | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 58.0
+   },
+   "pdf_0636CT | Northern Illinois | SIU Edwardsville | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Northern Iowa | Charlotte | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 62.0
+   },
+   "pdf_0636CT | Northern Iowa | Charlotte | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Ole Miss | Arizona | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Pacific | Jacksonville State | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 56.0
+   },
+   "pdf_0636CT | Portland State | UC Riverside | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Prairie View | Marshall | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Princeton | Liberty | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Rice | Ohio | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 66.0
+   },
+   "pdf_0636CT | Rice | Ohio | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | SE Louisiana | North Dakota | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 61.0
+   },
+   "pdf_0636CT | SE Louisiana | North Dakota | FG": {
+    "margin_diff": 1.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | SMU | Utah State | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 73.0
+   },
+   "pdf_0636CT | SMU | Utah State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Saint Bonaventure | Belmont | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 57.0
+   },
+   "pdf_0636CT | Saint Bonaventure | Belmont | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Saint Peters | Columbia | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 53.0
+   },
+   "pdf_0636CT | Saint Peters | Columbia | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Saint Thomas MN | UNC Wilmington | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 66.0
+   },
+   "pdf_0636CT | Saint Thomas MN | UNC Wilmington | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | South Carolina | USC | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Southern University | Nebraska | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Southern Utah | Long Beach State | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 64.0
+   },
+   "pdf_0636CT | Southern Utah | Long Beach State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Texas A&M | Xavier | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 72.0
+   },
+   "pdf_0636CT | Texas A&M | Xavier | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Tulane | Davidson | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 58.0
+   },
+   "pdf_0636CT | Tulane | Davidson | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | UConn | Duke | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 63.0
+   },
+   "pdf_0636CT | UConn | Duke | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | USC Upstate | The Citadel | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Virginia | Marquette | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Wake Forest | Mississippi State | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 63.0
+   },
+   "pdf_0636CT | Wake Forest | Mississippi State | FG": {
+    "margin_diff": 0.5,
+    "ok": true,
+    "sum_diff": 0.5
+   },
+   "pdf_0636CT | Washington | VCU | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 63.0
+   },
+   "pdf_0636CT | Yale | Wright State | 1H": {
+    "margin_diff": 0.5,
+    "ok": false,
+    "sum_diff": 57.0
+   },
+   "pdf_0636CT | Yale | Wright State | FG": {
+    "margin_diff": 1.5,
+    "ok": true,
+    "sum_diff": 0.5
+   }
+  }
+ },
+ "inputs": {
+  "espn": {
+   "path": "models/cbb/dk/evidence/2026-11-25/espn_scoreboard_extract.json",
+   "sha256": "95cd269d99411278f4d1d52609b3e77e99739b31d86da8f709e057dcc366da66"
+  },
+  "event_xw": {
+   "path": "models/cbb/lines/dk_event_crosswalk_2026-11-25.csv",
+   "sha256": "25d3b5cb31dd0a6807db01b885d47dfdb3a2e31014c122901aae4c025ab26442"
+  },
+  "pages": {
+   "path": "models/cbb/dk/evidence/2026-11-25/dk_event_pages.jsonl",
+   "sha256": "a20ab484136837188c1812a704822000d22cc28b4252761e491c2a202f486dc9"
+  },
+  "pdf_corrected": {
+   "path": "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture_h1_corrected.csv",
+   "sha256": "95aed16e8cba3da2390c72c1c71998045bae7d3f18375f2c07155383d6ea517b"
+  },
+  "pdf_original": {
+   "path": "models/cbb/lines/board_2026-11-25_0636CT_pdf_capture.csv",
+   "sha256": "4560829559fc449bbb01670bbf79ed1811249f54a995c18062292d01a2db671f"
+  },
+  "sitemap": {
+   "path": "models/cbb/dk/evidence/2026-11-25/dk_sitemap_matches.json",
+   "sha256": "835506d3da81d81d95d0f588f4372a5dcbb8eec696010d709ad6b424e8acbe02"
+  },
+  "team_xw": {
+   "path": "models/cbb/lines/dk_team_crosswalk_2026-11-25.csv",
+   "sha256": "6d21daa2d064a5f8556345d2a773afd9a08e113cb6fc95458876d68d93158795"
+  },
+  "transcript": {
+   "path": "models/cbb/lines/board_2026-11-25_0900CT_operator_transcript.csv",
+   "sha256": "b6d9f42056bc6b1f32030a3c3f413ab261c10f7f7cf850d2eeea49e207d08938"
+  },
+  "transcript_md": {
+   "path": "research/cbb/boards/2026-11-25_0900CT_muse_transcript.md",
+   "sha256": "49e27c3ab895836c209fdb477d634789e8d5a1ae806dd8f51bfac66a45c841d6"
+  }
+ },
+ "label": "PAPER_0U",
+ "neutral_games": [],
+ "official_counted": 0,
+ "original_truncated_rows": 0,
+ "owner_rulings": {
+  "espn_odds": "ESPN scoreboard odds (provider label as given by ESPN) are an auxiliary research comparator only: never an admitted odds source, never used for pricing, never treated as quote authentication.",
+  "event_verification_vs_quotes": "A verified DK event ID confirms public event identity (league, participants, tip). It does not authenticate quote prices, market IDs or capture provenance. Authenticated quote rows on this board: 0.",
+  "st_bonaventure_belmont_hold": "ISSUE57_ORIENTATION_HOLD is retained on every row of this game. The game is excluded from runner_board and must never enter a pregame card.",
+  "st_bonaventure_belmont_orientation": "ACCEPTED_FOR_RETROSPECTIVE_RESEARCH: board line and price_a are HOME, so SPREAD +4.5 / ML +170-205 means Saint Bonaventure -4.5 / -205 and Belmont +4.5 / +170."
+ },
+ "reason_code_counts": {
+  "DK_EVENT_ID_MISSING": 59,
+  "DK_EVENT_ID_NOT_VERIFIED_AS_OF": 943,
+  "ISSUE57_ORIENTATION_HOLD": 310,
+  "ONE_SIDED_QUOTE": 460,
+  "PLAYER_TEAM_NOT_ESTABLISHED": 310,
+  "PRICE_INVALID_AMERICAN": 20,
+  "SUPERSEDED_BY_LATER_CAPTURE": 39,
+  "TOTALS_ORDER_CONFLICT": 4,
+  "TOTALS_ORDER_UNVERIFIED": 183,
+  "TT_INCONSISTENT_WITH_MAIN": 38,
+  "UNCORRECTED_TRUNCATED_ROW_AS_OF": 20,
+  "UNSUPPORTED_MARKET": 21
+ },
+ "replay_basis": "STRICT_AS_OF",
+ "rows_in": 1002,
+ "runner_board_rows": 0,
+ "schema": "sportsedge-cbb-dk-derived-v1",
+ "transcript_totals_order_verified_from_markdown": true
+}
