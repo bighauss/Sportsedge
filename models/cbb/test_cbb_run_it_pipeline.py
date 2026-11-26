@@ -274,8 +274,12 @@ class PlayerResearchWiring(unittest.TestCase):
             before = json.loads((off / "pipeline_card.json").read_text())
             after = json.loads((on / "pipeline_card.json").read_text())
             self.assertTrue(before["priced"])
-            self.assertEqual(before["priced"], after["priced"])
-            self.assertEqual(before["nine_weight_grid"], after["nine_weight_grid"])
+            # Compare deterministic serialized bytes of the actual game-only fields.
+            # Full artifacts intentionally differ in research metadata and card digest.
+            canonical = lambda x: json.dumps(x, sort_keys=True, separators=(",", ":"),
+                                             allow_nan=False).encode("utf-8")
+            for field in ("priced", "nine_weight_grid", "games", "projections"):
+                self.assertEqual(canonical(before[field]), canonical(after[field]), field)
             self.assertEqual(summary["player_research_priced_sides"], 2)
             self.assertEqual({r["player_id"] for r in after["player_research"]["rows"]}, {"p1"})
             self.assertTrue(all(r["selected_for_card"] is False for r in after["player_research"]["rows"]))
@@ -283,9 +287,12 @@ class PlayerResearchWiring(unittest.TestCase):
                                 for r in after["rejections"]))
             self.assertEqual(P.grade(before, {"g1": {"home": 75, "away": 70}}),
                              P.grade(after, {"g1": {"home": 75, "away": 70}}))
-            for directory in (off, on):
-                grades = json.loads((directory / "grades.json").read_text())
+            grade_docs = [json.loads((directory / "grades.json").read_text()) for directory in (off, on)]
+            for grades in grade_docs:
+                self.assertTrue(grades["rows"])
                 self.assertTrue(all(not r["market"].startswith("PLAYER_") for r in grades["rows"]))
+            for field in ("rows", "summary"):
+                self.assertEqual(canonical(grade_docs[0][field]), canonical(grade_docs[1][field]), field)
 
 
 class HalvesWiring(unittest.TestCase):
