@@ -15,6 +15,7 @@ import contextlib
 import csv
 import math
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,9 +51,16 @@ def prop_push(spec, mean, line, seed):
 
 
 def _is_game_line(market):
-    head, _, rest = str(market).upper().partition("_")
-    base = rest if rest and head in nfl_wpl.PERIODS else str(market).upper()
-    return base in nfl_wpl.BASES
+    """Exactly the frozen NFL game-line catalog, including full-game binary outcomes."""
+    pre, base = v5.split_market("NFL", str(market).upper())
+    if base in nfl_wpl.BASES:
+        return True
+    if pre:
+        return False
+    if base in {"OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW"}:
+        return True
+    match = re.fullmatch(r"(?:HOME|AWAY)_BY_([1-9][0-9]{0,2})_([1-9][0-9]{0,2})", base)
+    return bool(match and int(match[1]) <= int(match[2]))
 
 
 def _exact_g(line):
