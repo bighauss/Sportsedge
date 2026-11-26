@@ -15,6 +15,7 @@ import test_run_nfl as base  # noqa: E402
 GAME_BASES = {"ML", "SPREAD", "TOTAL", "HOME_TT", "AWAY_TT"}
 PERIOD_PREFIXES = {"1Q", "2Q", "3Q", "4Q", "1H", "2H"}
 TD_NAMES = {"ATD": "Anytime TD", "FTD": "First TD", "TD2": "2+ TDs"}
+HEADER = "sport,home,away,market,line,price_a,price_b\n"
 PROPS = [dict(player="WR1", team="HOM", market="REC_YDS", line=59.5, price_a=-110, price_b=-115, proj=70),
          dict(player="QB1", team="HOM", market="PASS_YDS", line=249.5, price_a=-110, price_b=-110, proj=262),
          dict(player="RB1", team="HOM", market="RUSH_YDS", line=79.5, price_a=-105, price_b=-125, proj=85),
@@ -61,11 +62,15 @@ def read_rows(wd):
         return list(csv.DictReader(f))
 
 
-def write_board(lines):
+def write_raw(text):
     p = os.path.join(tempfile.mkdtemp(), "b.csv")
     with open(p, "w", newline="") as f:
-        f.write("sport,home,away,market,line,price_a,price_b\n" + "".join(l + "\n" for l in lines))
+        f.write(text)
     return p
+
+
+def write_board(lines):
+    return write_raw(HEADER + "".join(l + "\n" for l in lines))
 
 
 class Cli(unittest.TestCase):
@@ -119,18 +124,32 @@ class Cli(unittest.TestCase):
             if x["wpl_status"] != "CAPTURED":
                 self.assertIn("simulator W/P/L unavailable", x["held"])
 
-    def test_board_mixing_valid_and_noncanonical_lines_is_rejected_before_pricing(self):
-        board = write_board(["NFL,A,B,TOTAL,44,-110,-110", "NFL,A,B,TOTAL,44.00001,-110,-110"])
-        wd, r = run_cli(board)
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("non-canonical line", r.stderr)
-        self.assertEqual(glob.glob(os.path.join(wd, "picks_nfl_*.csv")), [])
+    def test_malformed_inputs_stop_before_frozen_v5_ever_reads_them(self):
+        cases = [
+            ("odds 1+10 would become +110", HEADER + "NFL,A,B,TOTAL,44,1+10,-110\n", "invalid American odds"),
+            ("odds 110.5", HEADER + "NFL,A,B,TOTAL,44,110.5,-110\n", "invalid American odds"),
+            ("odds 99", HEADER + "NFL,A,B,TOTAL,44,99,-110\n", "invalid American odds"),
+            ("line 4+4 would become 44", HEADER + "NFL,A,B,TOTAL,4+4,-110,-110\n", "non-canonical line"),
+            ("line 44.00001", HEADER + "NFL,A,B,TOTAL,44,-110,-110\nNFL,A,B,TOTAL,44.00001,-110,-110\n", "non-canonical line"),
+            ("missing total line would default to 0", HEADER + "NFL,A,B,TOTAL,,-110,-110\n", "has no line"),
+            ("missing period spread line", HEADER + "NFL,A,B,1H_SPREAD,,-110,-110\n", "has no line"),
+            ("duplicate price column overwrites",
+             "sport,home,away,market,line,price_a,price_a,price_b\nNFL,A,B,TOTAL,44,-110,-120,-110\n", "duplicate column"),
+        ]
+        for name, text, expect in cases:
+            with self.subTest(name):
+                wd, r = run_cli(write_raw(text))
+                self.assertNotEqual(r.returncode, 0)
+                self.assertIn(expect, r.stderr)
+                self.assertEqual(glob.glob(os.path.join(wd, "picks_nfl_*.csv")), [])
 
-    def test_cli_rejects_invalid_odds_before_pricing(self):
-        wd, r = run_cli(write_board(["NFL,A,B,TOTAL,44,110.5,-110"]))
-        self.assertNotEqual(r.returncode, 0)
-        self.assertIn("invalid American odds", r.stderr)
-        self.assertEqual(glob.glob(os.path.join(wd, "picks_nfl_*.csv")), [])
+    def test_valid_moneyline_and_player_rows_without_a_line_are_not_rejected(self):
+        from importlib import util
+        spec = util.spec_from_file_location("run_nfl_wpl_under_test", os.path.join(HERE, "run_nfl_wpl.py"))
+        mod = util.module_from_spec(spec)
+        sys.path.insert(0, HERE)
+        spec.loader.exec_module(mod)
+        mod.validate_input(write_raw(HEADER + "NFL,A,B,ML,,-150,130\nNFL,A,B,ATD,,150,-190\nCBB,A,B,TOTAL,,50,x\n"))
 
 
 if __name__ == "__main__":
