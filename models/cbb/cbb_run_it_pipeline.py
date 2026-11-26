@@ -265,10 +265,13 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             rej("HALFTIME_ADJUSTED_IS_LIVE"); continue
         if q.period != "FG" and "halves" not in adapters:
             rej("PERIOD_NOT_IMPLEMENTED", f"{q.period}: models/cbb/halves adapter not landed"); continue
-        if q.market.startswith("PLAYER_") and "players" not in adapters:
+        # A loaded player module is not an integrated pricing/settlement path.
+        if q.market.startswith("PLAYER_"):
             note = str(meta["raw"].get("note") or meta["raw"].get("notes") or "")
             rej("PLAYER_MODEL_NOT_IMPLEMENTED", "player team not established" if "team not established" in note else "")
             continue
+        if q.player:
+            rej("UNSUPPORTED_MARKET", "game market carries player identity"); continue
         if meta["price_bad"]:
             rej("PRICE_INVALID"); continue
         if q.price_a is None or q.price_b is None:
@@ -547,6 +550,9 @@ def load_adapter_flags(requested, loaded=None):
         if name not in requested:
             status[name] = "OFF"
             continue
+        if name == "players":
+            status[name] = "PLAYER_MODEL_NOT_IMPLEMENTED"
+            continue
         obj = loaded.get(name)
         if isinstance(obj, str):
             status[name] = obj                      # failure reason from the loader
@@ -821,6 +827,12 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
     priced, rejects, parity, half_cache = [], [], [], {}
     challenger_proj = challenger_proj or {}
     for q, gid in accepted:
+        if q.market.startswith("PLAYER_"):
+            rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_MODEL_NOT_IMPLEMENTED",
+                                       "player pricing and settlement not wired", q.board_index, gid, q.provenance)); continue
+        if q.player:
+            rejects.append(C.Rejection("price", q.period, q.market, "UNSUPPORTED_MARKET",
+                                       "game market carries player identity", q.board_index, gid, q.provenance)); continue
         pj = projections.get(gid)
         if pj is None or pj.status != "PROJECTED":
             rejects.append(C.Rejection("price", q.period, q.market, "GAME_NOT_PROJECTED",
@@ -1063,7 +1075,7 @@ def coverage(quotes, cap_rejects, val_rejects, price_rejects, priced, adapters):
         elif p != "FG":
             model = "ACTIVE" if "halves" in adapters else "NOT_IMPLEMENTED:PERIOD_NOT_IMPLEMENTED"
         elif m.startswith("PLAYER_"):
-            model = "ACTIVE" if "players" in adapters else "NOT_IMPLEMENTED:PLAYER_MODEL_NOT_IMPLEMENTED"
+            model = "NOT_IMPLEMENTED:PLAYER_MODEL_NOT_IMPLEMENTED"
         else:
             model = "ACTIVE"
         rows = fam_rows.get(fam, 0)
