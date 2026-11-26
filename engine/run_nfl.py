@@ -13,6 +13,8 @@ Wraps engine v5 without changing it. NFL rows only:
   4. Rows with no valid two-sided no-vig price are never blended and never go on the
      blended card; they are listed separately as MODEL-ONLY.
   5. Monte Carlo noise - N_FIT 20,000 -> 100,000 for this run only (restored afterwards).
+  6. Stars - no EV-derived star ratings. Every row carries stars = 0 and the label
+     'N/A — uncalibrated' until a validated calibration exists.
 Every held row is listed with its reason at 0u. Every exported row carries row_id, quote_id and
 selected_for_card (true only for rows on the final research card; approved_stake_u stays 0 regardless). Non-NFL rows pass through with v5 numbers.
 
@@ -34,6 +36,7 @@ GAP_PTS = 6.0
 P_RATIO_HI, P_RATIO_LO, P_ABS = 1.5, 0.67, 0.12
 N_FIT = 100000
 N_GAP = 40000
+STARS_LABEL = "N/A \u2014 uncalibrated"
 
 
 def load_nfl_lines(path):
@@ -117,6 +120,7 @@ def guard(o, gaps):
     """Add blend_p / model_ev / held / status to one priced side; EV becomes the blended EV."""
     o["model_ev"], o["blend_p"], o["held"], o["status"] = o["ev"], o["model_p"], "", "v5"
     o["approved_stake_u"] = 0
+    o["stars"], o["stars_label"] = 0, STARS_LABEL      # no EV-derived stars: calibration not validated
     if o["sport"] != "NFL":
         return o
     mp, fp = o["model_p"], o["market_p"]
@@ -136,7 +140,6 @@ def guard(o, gaps):
         o["blend_p"] = p
         o["ev"] = s * (p * pay - (1 - p))
         o["score"] = v5.score(o["ev"])
-        o["stars"] = v5.stars(o["score"])
         if mp > P_RATIO_HI * fp or mp < P_RATIO_LO * fp or abs(mp - fp) > P_ABS:
             reasons.append(f"model {mp * 100:.1f}% vs market {fp * 100:.1f}% (prob guard)")
     market = o["bet_type"].split("|")[0]
@@ -215,7 +218,7 @@ def table(rows, held=False):
         stake = f" 0u - {o['held']} |" if held else ""
         print(f"| {i} | {o['sport']} {o['game']} | {o['pick']}{more} | {o['price']:+d} | "
               f"{o['model_p'] * 100:.1f}% | {o['blend_p'] * 100:.1f}% | {mk} | {o['ev'] * 100:+.1f}% | "
-              f"{'*' * o['stars']} |{stake}")
+              f"{STARS_LABEL} |{stake}")
 
 
 def main(path):
