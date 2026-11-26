@@ -329,6 +329,14 @@ class QuoteIdentity(unittest.TestCase):
         a = self.raw(player="P", team="DET")
         self.assertEqual(cm.raw_identity(a, 0)[2], "SOURCE_FIELDS_INCOMPLETE")
         self.assertEqual(cm.raw_identity(dict(a, player_id="p1"), 0)[2], "SOURCE_FIELDS_PRESENT")
+        with cm.capturing() as calls:
+            w, l = priced(board_row(), v5.wl, D)
+        o = cm.attach([out_row(board_row(), 0, w, l)], calls)[0]
+        o["held"] = ""
+        run_nfl.assign_quote_ids([o])
+        self.assertIn("raw quote source identity incomplete", o["held"])
+        self.assertTrue(o["quote_id"])
+        self.assertFalse(o["selected_for_card"])
 
 
 
