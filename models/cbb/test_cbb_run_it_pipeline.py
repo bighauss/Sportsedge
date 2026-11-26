@@ -127,6 +127,40 @@ class ChallengerWiring(unittest.TestCase):
         self.assertEqual(act, {"fullgame"})
 
 
+class PlayerFailClosed(unittest.TestCase):
+    def test_loaded_player_adapter_cannot_claim_active(self):
+        status, active = P.load_adapter_flags({"players"}, {"players": object()})
+        self.assertEqual(status["players"], "PLAYER_MODEL_NOT_IMPLEMENTED")
+        self.assertNotIn("players", active)
+
+    def test_active_flag_cannot_admit_player_into_game_pricer(self):
+        from dataclasses import replace
+        q = replace(quote("PLAYER_PTS_OU", 19.5, -110, -110), player="P1")
+        meta = {"raw": {}, "price_bad": False, "line_bad": False, "order": "over_under"}
+        accepted, rejects = P.validate([(q, meta)], [], "2026-11-25T13:00:00Z",
+                                       totals_order_verified=True, match=None, adapters={"players"})
+        self.assertEqual(accepted, [])
+        self.assertEqual([r.reason_code for r in rejects], ["PLAYER_MODEL_NOT_IMPLEMENTED"])
+        priced, rejects, parity = P.price([(q, "g1")], {"g1": proj()}, {}, 0.25, CFG)
+        self.assertEqual((priced, parity), ([], []))
+        self.assertEqual([r.reason_code for r in rejects], ["PLAYER_MODEL_NOT_IMPLEMENTED"])
+        coverage, _ = P.coverage([(q, meta)], [], [], rejects, [], {"players"})
+        row = next(r for r in coverage if r["market"] == q.market and r["period"] == q.period)
+        self.assertEqual(row["status"], "NOT_IMPLEMENTED:PLAYER_MODEL_NOT_IMPLEMENTED")
+
+    def test_game_market_with_player_is_rejected_at_both_boundaries(self):
+        from dataclasses import replace
+        q = replace(quote("TOTAL", 144.5, -110, -110), player="P1")
+        meta = {"raw": {}, "price_bad": False, "line_bad": False, "order": "over_under"}
+        accepted, rejects = P.validate([(q, meta)], [], "2026-11-25T13:00:00Z",
+                                       totals_order_verified=True, match=None, adapters=set())
+        self.assertEqual(accepted, [])
+        self.assertEqual([r.reason_code for r in rejects], ["UNSUPPORTED_MARKET"])
+        priced, rejects, _ = P.price([(q, "g1")], {"g1": proj()}, {}, 0.25, CFG)
+        self.assertEqual(priced, [])
+        self.assertEqual([r.reason_code for r in rejects], ["UNSUPPORTED_MARKET"])
+
+
 class HalvesWiring(unittest.TestCase):
     def test_half_market_priced_by_halves_adapter(self):
         calls = []

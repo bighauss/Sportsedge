@@ -44,6 +44,7 @@ sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT))
 import contracts as C                         # noqa: E402
 import cbb_pricing as PR                      # noqa: E402
 import cbbd_native_score_model as NM          # noqa: E402
+import cbb_numeric as NUM                      # noqa: E402
 
 CT = ZoneInfo("America/Chicago")
 PIPELINE_VERSION = "cbb-run-it-pipeline-v1"
@@ -174,22 +175,11 @@ class AuthenticatedDkCapture:
 
 
 def _int_price(v):
-    try:
-        s = str(v).strip().replace("+", "")
-        if not s:
-            return None
-        p = int(float(s))
-        return p if abs(p) >= 100 and float(s).is_integer() else "BAD"
-    except (TypeError, ValueError):
-        return "BAD"
+    return NUM.strict_price(v)      # None | int | "BAD"; never raises
 
 
 def _num(v):
-    try:
-        s = str(v).strip()
-        return float(s) if s else None
-    except (TypeError, ValueError):
-        return "BAD"
+    return NUM.strict_line(v)       # None | finite float | "BAD"; never raises
 
 
 SIDES = {"SPREAD": ("home", "away"), "ALT_SPREAD": ("home", "away"), "ML": ("home", "away")}
@@ -275,10 +265,13 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             rej("HALFTIME_ADJUSTED_IS_LIVE"); continue
         if q.period != "FG" and "halves" not in adapters:
             rej("PERIOD_NOT_IMPLEMENTED", f"{q.period}: models/cbb/halves adapter not landed"); continue
-        if q.market.startswith("PLAYER_") and "players" not in adapters:
+        # A loaded player module is not an integrated pricing/settlement path.
+        if q.market.startswith("PLAYER_"):
             note = str(meta["raw"].get("note") or meta["raw"].get("notes") or "")
             rej("PLAYER_MODEL_NOT_IMPLEMENTED", "player team not established" if "team not established" in note else "")
             continue
+        if q.player:
+            rej("UNSUPPORTED_MARKET", "game market carries player identity"); continue
         if meta["price_bad"]:
             rej("PRICE_INVALID"); continue
         if q.price_a is None or q.price_b is None:
@@ -322,7 +315,7 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         if q.dk_event_id and (len(ev_games[q.dk_event_id]) > 1 or len(game_evs[gid]) > 1):
             rejects.append(C.Rejection("validate", q.period, q.market, "DK_EVENT_ID_CONFLICT", "",
                                        q.board_index, f"{q.away} @ {q.home}", q.provenance)); continue
-        keyed[(gid, q.period, q.market, q.line)].append(q)
+        keyed[NUM.semantic_identity(gid, q.period, q.market, q.line, q.player)].append(q)
     for key, qs in keyed.items():
         if len({(q.price_a, q.price_b) for q in qs}) > 1:
             for q in qs:
@@ -556,6 +549,9 @@ def load_adapter_flags(requested, loaded=None):
     for name in ("fullgame", "halves", "players"):
         if name not in requested:
             status[name] = "OFF"
+            continue
+        if name == "players":
+            status[name] = "PLAYER_MODEL_NOT_IMPLEMENTED"
             continue
         obj = loaded.get(name)
         if isinstance(obj, str):
@@ -831,6 +827,12 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
     priced, rejects, parity, half_cache = [], [], [], {}
     challenger_proj = challenger_proj or {}
     for q, gid in accepted:
+        if q.market.startswith("PLAYER_"):
+            rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_MODEL_NOT_IMPLEMENTED",
+                                       "player pricing and settlement not wired", q.board_index, gid, q.provenance)); continue
+        if q.player:
+            rejects.append(C.Rejection("price", q.period, q.market, "UNSUPPORTED_MARKET",
+                                       "game market carries player identity", q.board_index, gid, q.provenance)); continue
         pj = projections.get(gid)
         if pj is None or pj.status != "PROJECTED":
             rejects.append(C.Rejection("price", q.period, q.market, "GAME_NOT_PROJECTED",
@@ -1073,7 +1075,7 @@ def coverage(quotes, cap_rejects, val_rejects, price_rejects, priced, adapters):
         elif p != "FG":
             model = "ACTIVE" if "halves" in adapters else "NOT_IMPLEMENTED:PERIOD_NOT_IMPLEMENTED"
         elif m.startswith("PLAYER_"):
-            model = "ACTIVE" if "players" in adapters else "NOT_IMPLEMENTED:PLAYER_MODEL_NOT_IMPLEMENTED"
+            model = "NOT_IMPLEMENTED:PLAYER_MODEL_NOT_IMPLEMENTED"
         else:
             model = "ACTIVE"
         rows = fam_rows.get(fam, 0)
