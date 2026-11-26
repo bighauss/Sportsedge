@@ -242,5 +242,55 @@ class RealChallenger(unittest.TestCase):
         self.assertEqual(self.ch.audit(0.1, -110, 0.55, 0.5), [])
 
 
+class QuoteIdentityGuards(unittest.TestCase):
+    def player_quote(self, i, name, player_id, price=-110, team_id="H"):
+        from dataclasses import replace
+        q = replace(quote("PLAYER_PTS_OU", 15.5, price, -110, i=i), player=name)
+        return q, {"raw": {"player_id": player_id, "player_team_id": team_id},
+                   "line_bad": False, "price_bad": False, "order": ""}
+
+    def validate(self, rows):
+        game = {"game_id": "g1", "tipoff_utc": "2026-11-25T20:00:00Z",
+                "home_team_id": "H", "away_team_id": "A"}
+        return P.validate(rows, [game], "2026-11-25T13:00:00Z",
+                          totals_order_verified=True, match=lambda *args: (game, None),
+                          adapters={"players"})
+
+    def test_distinct_athletes_same_threshold_keep_both(self):
+        for price in (-110, -125):
+            accepted, rejected = self.validate([
+                self.player_quote(0, "Same Name", "p1"),
+                self.player_quote(1, "Same Name", "p2", price),
+            ])
+            self.assertEqual(len(accepted), 2)
+            self.assertFalse(rejected)
+
+    def test_same_athlete_duplicate_and_conflict(self):
+        a = self.player_quote(0, "Player", "p1")
+        accepted, rejected = self.validate([a, self.player_quote(1, "Player", "p1")])
+        self.assertEqual(len(accepted), 1)
+        self.assertEqual([r.reason_code for r in rejected], ["DUPLICATE_QUOTE"])
+        accepted, rejected = self.validate([a, self.player_quote(1, "Player", "p1", -125)])
+        self.assertFalse(accepted)
+        self.assertEqual([r.reason_code for r in rejected], ["DUPLICATE_QUOTE"] * 2)
+
+    def test_missing_or_wrong_team_identity_withheld(self):
+        accepted, rejected = self.validate([
+            self.player_quote(0, "Player", ""),
+            self.player_quote(1, "Player", "p1", team_id="OTHER"),
+        ])
+        self.assertFalse(accepted)
+        self.assertEqual([r.reason_code for r in rejected], ["PLAYER_TEAM_UNKNOWN"] * 2)
+
+    def test_self_attested_manifest_never_authenticates(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "manifest.json"
+            for files in ([], [{"path": "unrelated.json", "sha256": "x", "bytes": 0}]):
+                p.write_text(json.dumps({"format": "DK_AUTH_CAPTURE_V1", "raw_files": files,
+                                         "rows_path": "board.csv", "rows_sha256": "x"}))
+                with self.assertRaisesRegex(ValueError, "DK_AUTH_INDEPENDENT_RECEIPT_VERIFIER_NOT_IMPLEMENTED"):
+                    P.AuthenticatedDkCapture(p).capture()
+
+
 if __name__ == "__main__":
     unittest.main()
