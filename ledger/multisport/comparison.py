@@ -104,15 +104,17 @@ def select_latest_pregame_runs(runs):
             raise IntegrityError(f"unsupported sport {sport!r}")
         cap_dt = _parse_utc(m["capture_utc"])
         start_dt = _parse_utc(m["start_utc"])
-        if cap_dt >= start_dt:
-            postgame_excluded += 1
-            continue
+        # Validate the event clock even for excluded late captures. Otherwise a
+        # conflicting early start could be discarded before exposing leakage.
         key = (sport, m["event_id"])
         if key in starts and starts[key] != start_dt:
             raise IntegrityError(
                 f"inconsistent start_utc for {sport} event {m['event_id']!r}: "
                 f"{starts[key].isoformat()} vs {start_dt.isoformat()}")
         starts[key] = start_dt
+        if cap_dt >= start_dt:
+            postgame_excluded += 1
+            continue
         capture_key = (key, cap_dt)
         if capture_key in seen_captures:
             raise IntegrityError(
