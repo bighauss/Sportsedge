@@ -164,5 +164,20 @@ class Cli(unittest.TestCase):
             mod.validate_input(write_raw(HEADER_P + "NFL,A,B,ATD,,,150,-190\n"))
 
 
+    def test_real_v5_special_game_markets_bind_simulator_mass(self):
+        markets = ("OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW",
+                   "HOME_BY_1_6", "AWAY_BY_7_13")
+        extra = [dict(market=m, price_a=150, price_b=-190) for m in markets]
+        wd, r = run_cli(os.path.abspath(base.board(base.game(24, 20, extra=extra))))
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        rows = [x for x in read_rows(wd) if x["bet_type"].split("|")[0] in markets]
+        self.assertEqual(collections.Counter(x["bet_type"].split("|")[0] for x in rows),
+                         collections.Counter({m: 2 for m in markets}))
+        for x in rows:
+            self.assertEqual(x["wpl_status"], "CAPTURED", (x["pick"], x["wpl_status"]))
+            self.assertAlmostEqual(sum(float(x[c]) for c in ("p_win", "p_push", "p_loss")), 1.0, places=9)
+            self.assertEqual(float(x["p_push"]), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
