@@ -226,6 +226,67 @@ class PlayerResearchWiring(unittest.TestCase):
             changed = replace(q, price_a=-120)
             self.assertEqual(ctx.price_rows([(changed, "g1")])[0]["rows"], [])
 
+            self.assertTrue(all(r["selected_for_card"] is False and r["wager_eligible"] is False
+                                for r in report["rows"]))
+            self.assertEqual(report["binding_evidence"], "CALLER_SUPPLIED_UNAUTHENTICATED")
+            self.assertEqual(report["sample_threshold_status"], "UNVALIDATED_RESEARCH_FLOOR")
+            with self.assertRaisesRegex(ValueError, "PLAYER_RESEARCH_RANK_ISOLATION"):
+                P.rank([(report["rows"][0], q)])
+            with self.assertRaisesRegex(ValueError, "PLAYER_RESEARCH_GRADE_ISOLATION"):
+                P.grade({"priced": report["rows"]}, {"g1": {"home": 75, "away": 70}})
+
+            # Full orchestration with real CSV, residual pricer, simulation, freeze
+            # and grade. Only source capture / game projection / match are synthetic.
+            from unittest import mock
+            import cbb_run_it as R
+            base = dict(sport="CBB", home="Home U", away="Away U", period="FG",
+                        tip_utc=tip, captured_utc="2026-11-25T12:00:00Z",
+                        price_a=-110, price_b=-110, totals_order="over_under")
+            board_rows = [dict(base, market="TOTAL", line=144.5, dk_event_id="123"),
+                          dict(base, market="PLAYER_PTS_OU", line=12.0, player="Same Name",
+                               dk_event_id="123", dk_market_id="market-0"),
+                          dict(base, market="PLAYER_PTS_OU", line=12.0, player="Same Name",
+                               dk_event_id="999", dk_market_id="market-1")]
+            bp = Path(tmp) / "board.csv"
+            with bp.open("w", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=sorted({k for r in board_rows for k in r}))
+                writer.writeheader()
+                writer.writerows(board_rows)
+            board_hash = P.sha_bytes(bp.read_bytes())
+            real_bindings = {i + 1: dict(b, board_sha256=board_hash,
+                                         dk_event_id=board_rows[i + 1]["dk_event_id"])
+                             for i, b in bindings.items()}
+            games = {"g1": dict(home="Home U", away="Away U", home_alt=["Home U"], away_alt=["Away U"],
+                                home_id="t", away_id="u", neutral=False, tip_utc=tip, completed=True,
+                                home_score=75, away_score=70)}
+            kwargs = dict(date_ct="2026-11-25", board=str(bp),
+                          board_captured_utc="2026-11-25T12:00:00Z", freeze_utc=freeze, season=2027,
+                          raw_dir=tmp, totals_order_verified=True, n_sims=1000, fetch=False,
+                          now=P.parse_z("2026-11-26T00:00:00Z"), grade_finals=True)
+            off, on = Path(tmp) / "off", Path(tmp) / "on"
+            with mock.patch.object(P, "espn_capture", return_value=[]), \
+                    mock.patch.object(P, "espn_games", return_value=(games, [])), \
+                    mock.patch.object(P, "public_replay_project", return_value=({"g1": proj()}, {}, b"fixture")), \
+                    mock.patch.object(R, "_match", side_effect=lambda slate, *args: (slate[0], None)):
+                P.run_public_replay(out_dir=off, **kwargs)
+                summary = P.run_public_replay(out_dir=on, adapters_requested=("players",),
+                                              player_bundle_path=p, player_bindings=real_bindings, **kwargs)
+            before = json.loads((off / "pipeline_card.json").read_text())
+            after = json.loads((on / "pipeline_card.json").read_text())
+            self.assertTrue(before["priced"])
+            self.assertEqual(before["priced"], after["priced"])
+            self.assertEqual(before["nine_weight_grid"], after["nine_weight_grid"])
+            self.assertEqual(summary["player_research_priced_sides"], 2)
+            self.assertEqual({r["player_id"] for r in after["player_research"]["rows"]}, {"p1"})
+            self.assertTrue(all(r["selected_for_card"] is False for r in after["player_research"]["rows"]))
+            self.assertTrue(any(r["reason_code"] == "PLAYER_TEAM_UNKNOWN" and r["board_index"] == 2
+                                for r in after["rejections"]))
+            self.assertEqual(P.grade(before, {"g1": {"home": 75, "away": 70}}),
+                             P.grade(after, {"g1": {"home": 75, "away": 70}}))
+            for directory in (off, on):
+                grades = json.loads((directory / "grades.json").read_text())
+                self.assertTrue(all(not r["market"].startswith("PLAYER_") for r in grades["rows"]))
+
 
 class HalvesWiring(unittest.TestCase):
     def test_half_market_priced_by_halves_adapter(self):
