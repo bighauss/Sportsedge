@@ -11,15 +11,10 @@ from typing import Optional
 class InvalidInput(ValueError):
     pass
 
-def _finite(v, label: str) -> float:
-    if isinstance(v, bool) or not isinstance(v, (int, float)):
-        raise InvalidInput(f"NON_NUMERIC_{label}")
-    if not math.isfinite(v):
-        raise InvalidInput(f"NON_FINITE_{label}")
-    return float(v)
-
 def from_simulator_counts(wins: int, pushes: int, total: int) -> tuple[float, float, float]:
     """Derive probabilities from raw simulator outcome counts. Conserves mass."""
+    if isinstance(wins, bool) or isinstance(pushes, bool) or isinstance(total, bool):
+        raise InvalidInput("BOOLEAN_COUNT")
     if total <= 0 or wins < 0 or pushes < 0 or wins + pushes > total:
         raise InvalidInput("INVALID_COUNTS")
     p_win = wins / total
