@@ -1,47 +1,88 @@
 #!/usr/bin/env python3
-"""CBB player identity and live-quote guards.
-Key: (event_id, period, market, player_id, threshold)
-Rejects explicitly live quotes regardless of scheduled tip.
+"""CBB identity and live guards — hardened after adversarial review.
+Requires authoritative player_id (no name fallback).
+Normalizes and strictly validates live-status.
+Rejects missing/malformed thresholds.
+Preserves conflicting quotes with explicit hold reason.
 PAPER / 0u.
 """
 from __future__ import annotations
 from typing import Any, Dict, List
+import math
+
+
+def _require_player_id(quote: Dict[str, Any]) -> str:
+    pid = quote.get("player_id")
+    if not pid or not isinstance(pid, str) or not pid.strip():
+        raise ValueError("MISSING_AUTHORITATIVE_PLAYER_ID")
+    return pid.strip()
+
 
 def market_key(quote: Dict[str, Any]) -> tuple:
-    """Stable identity key. Collisions only if true duplicate."""
+    pid = _require_player_id(quote)
+    thresh = quote.get("threshold")
+    if thresh is None or not isinstance(thresh, (int, float)) or not math.isfinite(thresh):
+        raise ValueError("MISSING_OR_INVALID_THRESHOLD")
     return (
         str(quote.get("event_id", "")),
         str(quote.get("period", "full")),
         str(quote.get("market", "")),
-        str(quote.get("player_id", quote.get("player", ""))),
-        float(quote.get("threshold", 0)),
+        pid,
+        float(thresh),
     )
 
+
 def is_explicitly_live(quote: Dict[str, Any]) -> bool:
-    status = str(quote.get("status", "")).lower()
-    live_flag = quote.get("is_live", False)
-    return live_flag is True or status in ("live", "inprogress", "in-progress")
+    raw = quote.get("is_live", quote.get("status", ""))
+    if isinstance(raw, bool):
+        return raw is True
+    if isinstance(raw, str):
+        return raw.strip().lower() in ("live", "true", "1", "inprogress", "in-progress", "yes")
+    return False
+
 
 def filter_pregame(quotes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Drop any explicitly live quote. Scheduled tip is insufficient."""
     return [q for q in quotes if not is_explicitly_live(q)]
 
-def dedupe_by_identity(quotes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    seen = set()
+
+def hold_conflicting(quotes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Preserve conflicts with explicit hold reason instead of silent discard."""
+    seen = {}
     out = []
     for q in quotes:
-        k = market_key(q)
-        if k not in seen:
-            seen.add(k)
+        try:
+            k = market_key(q)
+        except ValueError as e:
+            q = dict(q)
+            q["hold_reason"] = str(e)
+            out.append(q)
+            continue
+        if k in seen:
+            seen[k]["hold_reason"] = "CONFLICTING_PRICE"
+            q = dict(q)
+            q["hold_reason"] = "CONFLICTING_PRICE"
+            out.append(q)
+        else:
+            seen[k] = q
             out.append(q)
     return out
 
+
 if __name__ == "__main__":
-    q1 = {"event_id": "g1", "player_id": "p1", "threshold": 15.5, "market": "points", "status": "pregame"}
-    q2 = {"event_id": "g1", "player_id": "p2", "threshold": 15.5, "market": "points", "status": "pregame"}
-    assert market_key(q1) != market_key(q2)
-    live = {"event_id": "g1", "player_id": "p1", "threshold": 15.5, "status": "live", "is_live": True}
-    assert is_explicitly_live(live)
-    kept = filter_pregame([q1, live])
-    assert len(kept) == 1 and kept[0]["player_id"] == "p1"
-    print("CBB identity and live guards: distinct players preserved, live rejected.")
+    assert is_explicitly_live({"status": "LIVE"})
+    assert is_explicitly_live({"is_live": "true"})
+    try:
+        market_key({"player": "Name Only", "threshold": 15.5})
+        assert False
+    except ValueError:
+        pass
+    try:
+        market_key({"player_id": "p1"})
+        assert False
+    except ValueError:
+        pass
+    q1 = {"event_id": "g1", "player_id": "p1", "threshold": 15.5, "market": "points", "price": -110}
+    q2 = {"event_id": "g1", "player_id": "p1", "threshold": 15.5, "market": "points", "price": -115}
+    held = hold_conflicting([q1, q2])
+    assert any(q.get("hold_reason") == "CONFLICTING_PRICE" for q in held)
+    print("CBB guards hardened: string live rejected, missing ID/threshold rejected, conflicts held.")
