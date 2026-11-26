@@ -157,6 +157,12 @@ class SliceReproduction(unittest.TestCase):
         self.assertEqual(a, b)
 
 
+class FullCommittedCohort(unittest.TestCase):
+    def test_all_eight_seasons_reproduce_non_fg1_columns(self):
+        from . import full_cohort_replay
+        self.assertEqual(full_cohort_replay.main(), 0)
+
+
 @unittest.skipUnless(os.environ.get("CBB_RAW_ROOT"), "set CBB_RAW_ROOT to the raw parquet + odds cache dir")
 class FullRederivation(unittest.TestCase):
     def test_raw_sources_verify_and_rederive_identically(self):
