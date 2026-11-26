@@ -157,8 +157,9 @@ class Cli(unittest.TestCase):
         sys.path.insert(0, HERE)
         spec.loader.exec_module(mod)
         mod.validate_input(write_raw(HEADER_P + "NFL,A,B,ML,,,-150,130\nNFL,A,B,ATD,WR1,,150,-190\n"
-                                     "NFL,A,B,PASS_YDS,QB1,249.5,-110,-110\nNFL,A,B,1H_SPREAD,,-3.5,-110,-110\n"
-                                     "CBB,A,B,TOTAL,,,50,x\n"))
+                                     "NFL,A,B,PASS_YDS,QB1,249.5,-110,-110\nNFL,A,B,1H_SPREAD,,-3.5,-110,-110\n"))
+        with self.assertRaisesRegex(ValueError, "not an NFL row"):
+            mod.validate_input(write_raw(HEADER_P + "CBB,A,B,TOTAL,,,50,x\n"))
         with self.assertRaises(ValueError):
             mod.validate_input(write_raw(HEADER_P + "NFL,A,B,ATD,,,150,-190\n"))
 
