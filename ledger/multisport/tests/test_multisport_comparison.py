@@ -120,6 +120,21 @@ class MultiSportFrameworkTests(unittest.TestCase):
         with self.assertRaises(IntegrityError):
             evaluate_multisport([a, b], "baseline")
 
+    def test_late_capture_cannot_hide_inconsistent_event_start(self):
+        # The 01:30 quote is late under the first manifest and pregame
+        # under the second. Both input orders must reject the clock conflict.
+        row = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.5,
+                    price=-110, model_p=0.8, market_p=0.5, blend_p=0.6, approved_stake_u=0)]
+        finals = dict(away="CIN", home="WAS", away_score=10, home_score=20)
+        late = _make_run("r_late", "NFL", "CIN@WAS", "2026-11-24T01:30:00Z",
+                         "2026-11-24T01:00:00Z", row, finals)
+        apparently_pregame = _make_run("r_other", "NFL", "CIN@WAS", "2026-11-24T01:30:00Z",
+                                       "2026-11-24T02:00:00Z", row, finals)
+        for runs in ([late, apparently_pregame], [apparently_pregame, late]):
+            with self.subTest(order=[r["manifest"]["run_id"] for r in runs]):
+                with self.assertRaisesRegex(IntegrityError, "inconsistent start_utc"):
+                    evaluate_multisport(runs, "baseline")
+
     def test_push_counts_in_all_quote_roi_at_zero(self):
         rows = [dict(quote_id="q1", market="spread", pick="WAS", player=None, line=-3.0, price=-110,
                      model_p=0.8, market_p=0.5, blend_p=0.6,
