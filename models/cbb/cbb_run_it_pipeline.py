@@ -44,6 +44,7 @@ sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT))
 import contracts as C                         # noqa: E402
 import cbb_pricing as PR                      # noqa: E402
 import cbbd_native_score_model as NM          # noqa: E402
+import cbb_numeric as NUM                      # noqa: E402
 
 CT = ZoneInfo("America/Chicago")
 PIPELINE_VERSION = "cbb-run-it-pipeline-v1"
@@ -174,22 +175,11 @@ class AuthenticatedDkCapture:
 
 
 def _int_price(v):
-    try:
-        s = str(v).strip().replace("+", "")
-        if not s:
-            return None
-        p = int(float(s))
-        return p if abs(p) >= 100 and float(s).is_integer() else "BAD"
-    except (TypeError, ValueError):
-        return "BAD"
+    return NUM.strict_price(v)      # None | int | "BAD"; never raises
 
 
 def _num(v):
-    try:
-        s = str(v).strip()
-        return float(s) if s else None
-    except (TypeError, ValueError):
-        return "BAD"
+    return NUM.strict_line(v)       # None | finite float | "BAD"; never raises
 
 
 SIDES = {"SPREAD": ("home", "away"), "ALT_SPREAD": ("home", "away"), "ML": ("home", "away")}
@@ -322,7 +312,7 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         if q.dk_event_id and (len(ev_games[q.dk_event_id]) > 1 or len(game_evs[gid]) > 1):
             rejects.append(C.Rejection("validate", q.period, q.market, "DK_EVENT_ID_CONFLICT", "",
                                        q.board_index, f"{q.away} @ {q.home}", q.provenance)); continue
-        keyed[(gid, q.period, q.market, q.line)].append(q)
+        keyed[NUM.semantic_identity(gid, q.period, q.market, q.line, q.player)].append(q)
     for key, qs in keyed.items():
         if len({(q.price_a, q.price_b) for q in qs}) > 1:
             for q in qs:
