@@ -10,14 +10,15 @@ import nfl_provenance as P  # noqa: E402
 
 H = "sport,home,away,home_proj,away_proj,proj_provenance,player,team,proj,market,line,price_a,price_b,sgp,side\n"
 V = "PIT_VERIFIED"
+KEY = "test-key"
 
 
 def game(hp="27", ap="20", tag=V):
     return ["NFL,A,B,%s,%s,%s,,,,TOTAL,44.5,-110,-110,," % (hp, ap, tag), "NFL,A,B,,,,,,,SPREAD,-3.5,-110,-110,,"]
 
 
-def prop(player="P1", market="REC_YDS", proj="70", tag=V, line="59.5", sgp="", side=""):
-    return "NFL,A,B,,,%s,%s,A,%s,%s,%s,-110,-110,%s,%s" % (tag, player, proj, market, line, sgp, side)
+def prop(player="P1", market="REC_YDS", proj="70", tag=V, line="59.5", sgp="", side="", team="A"):
+    return "NFL,A,B,,,%s,%s,%s,%s,%s,%s,-110,-110,%s,%s" % (tag, player, team, proj, market, line, sgp, side)
 
 
 def td(player="P1", share="0.3", tag=V):
@@ -27,11 +28,27 @@ def td(player="P1", share="0.3", tag=V):
 SGP = "NFL,A,B,,,,,,,SGP,,600,,S1,"
 
 
-def run(*rows):
+def entry(subject, values, key=KEY, **kw):
+    e = dict(subject=subject, values=values, model_version="m1", input_hash="h" * 8,
+             forecast_ts="2026-11-26T14:00:00+00:00", kickoff_ts="2026-11-26T18:00:00+00:00")
+    e.update(kw)
+    e["sig"] = P.sign(e, key)
+    return e
+
+
+def manifest(*entries):
+    return {e["subject"]: e for e in entries}
+
+
+FULL = manifest(entry("game|A|B", ["27.0", "20.0"]), entry("prop|A|B|P1|REC_YDS", ["70.0"]),
+                entry("prop|A|B|P1|ATD", ["0.3"]), entry("prop|A|B|P2|REC_YDS", ["70.0"]))
+
+
+def run(*rows, ev=FULL, key=KEY):
     p = os.path.join(tempfile.mkdtemp(), "b.csv")
     with open(p, "w", newline="") as f:
         f.write(H + "\n".join(rows) + "\n")
-    return P.classify(p)
+    return P.classify(p, ev, key)
 
 
 def cls(res, market, player="", sgp=""):
@@ -75,25 +92,19 @@ class Provenance(unittest.TestCase):
         self.assertEqual(cls(run(*game(), td(share="", tag="")), "ATD", "P1"), P.AMBIGUOUS)
 
     def test_sgp_all_verified_legs_is_verified(self):
-        self.assertEqual(cls(run(*game(), prop(sgp="S1", side="A"), SGP), "SGP", "", "S1"), P.VERIFIED)
+        r = run(*game(), prop(sgp="S1", side="A"), prop("P2", sgp="S1", side="B"), SGP)
+        self.assertEqual(cls(r, "SGP", "", "S1"), P.VERIFIED)
 
     def test_sgp_with_anchored_player_leg_is_held(self):
-        r = run(*game(), prop(proj="", tag="", sgp="S1", side="A"), SGP)
+        legs = (prop(sgp="S1", side="A"), prop("P2", proj="", tag="", sgp="S1", side="B"), SGP)
+        r = run(*game(), *legs)
         self.assertEqual(cls(r, "SGP", "", "S1"), P.MIXED)
-        r2 = run(*game("", "", ""), prop(proj="", tag="", sgp="S1", side="A"), SGP)
-        self.assertEqual(cls(r2, "SGP", "", "S1"), P.ANCHOR)
         self.assertFalse(P.eligible(cls(r, "SGP", "", "S1")))
+        self.assertEqual(cls(run(*game("", "", ""), *legs), "SGP", "", "S1"), P.MIXED)
 
-    def test_sgp_over_anchored_game_with_verified_leg_is_mixed(self):
-        r = run(*game("", "", ""), prop(sgp="S1", side="A"), SGP)
+    def test_sgp_over_anchored_game_with_verified_legs_is_mixed(self):
+        r = run(*game("", "", ""), prop(sgp="S1", side="A"), prop("P2", sgp="S1", side="B"), SGP)
         self.assertEqual(cls(r, "SGP", "", "S1"), P.MIXED)
-
-    def test_sgp_independent_game_anchored_leg_verified_leg_is_mixed(self):
-        r = run(*game(), prop(sgp="S1", side="A"), prop("P2", proj="", tag="", sgp="S1", side="A"), SGP)
-        self.assertEqual(cls(r, "SGP", "", "S1"), P.MIXED)
-
-    def test_sgp_without_legs_is_ambiguous(self):
-        self.assertEqual(cls(run(*game(), SGP.replace("S1", "S9")), "SGP", "", "S9"), P.AMBIGUOUS)
 
     def test_duplicate_quote_with_different_provenance_is_ambiguous(self):
         rows = game() + [prop(), prop(tag="UNVERIFIED")]
@@ -102,6 +113,86 @@ class Provenance(unittest.TestCase):
     def test_row_order_does_not_change_classification(self):
         rows = game() + [prop(), td()]
         self.assertEqual(run(*rows), run(*reversed(rows)))
+
+
+class Adversarial(unittest.TestCase):
+    """The eight inputs an independent audit found wrongly eligible, plus evidence binding."""
+
+    def test_self_asserted_tag_without_evidence_is_held(self):
+        for ev, key in ((None, None), ({}, KEY), (FULL, None), (FULL, "other-key")):
+            r = run(*game(), ev=ev, key=key)
+            self.assertEqual(cls(r, "TOTAL"), P.UNVERIFIED)
+        self.assertIn("without proof", run(*game(), ev=None)[("B @ A", "TOTAL", "", "")][1])
+
+    def test_tampered_or_mismatched_or_incomplete_evidence_is_held(self):
+        bad = {
+            "tampered values": dict(entry("game|A|B", ["27.0", "20.0"]), values=["30.0", "20.0"]),
+            "board differs": entry("game|A|B", ["28.0", "20.0"]),
+            "no model version": entry("game|A|B", ["27.0", "20.0"], model_version=""),
+            "no input hash": entry("game|A|B", ["27.0", "20.0"], input_hash=""),
+            "forecast after kickoff": entry("game|A|B", ["27.0", "20.0"], forecast_ts="2026-11-26T19:00:00+00:00"),
+            "forecast at kickoff": entry("game|A|B", ["27.0", "20.0"], forecast_ts="2026-11-26T18:00:00+00:00"),
+            "naive timestamp": entry("game|A|B", ["27.0", "20.0"], forecast_ts="2026-11-26T14:00:00"),
+            "garbage timestamp": entry("game|A|B", ["27.0", "20.0"], kickoff_ts="soon"),
+        }
+        for name, e in bad.items():
+            with self.subTest(name):
+                self.assertEqual(cls(run(*game(), ev=manifest(e)), "TOTAL"), P.UNVERIFIED)
+
+    def test_valid_evidence_with_no_tag_is_still_unverified(self):
+        self.assertEqual(cls(run(*game(tag="")), "TOTAL"), P.UNVERIFIED)
+
+    def test_nonfinite_team_projection_is_invalid(self):
+        for bad in ("nan", "inf", "-inf", "1e999"):
+            with self.subTest(bad):
+                r = run(*game(hp=bad))
+                self.assertEqual(cls(r, "TOTAL"), P.INVALID)
+                self.assertFalse(P.eligible(cls(r, "TOTAL")))
+
+    def test_team_projection_out_of_range_is_invalid(self):
+        self.assertEqual(cls(run(*game(hp="-3")), "TOTAL"), P.INVALID)
+        self.assertEqual(cls(run(*game(hp="400")), "TOTAL"), P.INVALID)
+
+    def test_nonfinite_or_negative_player_mean_is_invalid(self):
+        for bad in ("inf", "nan", "-5", "99999"):
+            with self.subTest(bad):
+                self.assertEqual(cls(run(*game(), prop(proj=bad)), "REC_YDS", "P1"), P.INVALID)
+
+    def test_td_share_outside_zero_one_is_invalid(self):
+        for bad in ("1.5", "-0.1", "nan"):
+            with self.subTest(bad):
+                self.assertEqual(cls(run(*game(), td(share=bad)), "ATD", "P1"), P.INVALID)
+
+    def test_player_on_two_teams_or_unknown_team_is_invalid(self):
+        r = run(*game(), prop(team="A"), prop(market="RUSH_YDS", team="B"))
+        self.assertEqual(cls(r, "REC_YDS", "P1"), P.INVALID)
+        self.assertEqual(cls(run(*game(), prop(team="ZZZ")), "REC_YDS", "P1"), P.INVALID)
+
+    def test_one_leg_and_zero_leg_sgp_is_invalid(self):
+        one = run(*game(), prop(sgp="S1", side="A"), SGP)
+        self.assertEqual(cls(one, "SGP", "", "S1"), P.INVALID)
+        self.assertEqual(cls(one, "REC_YDS", "P1", "S1"), P.INVALID)
+        self.assertEqual(cls(run(*game(), SGP), "SGP", "", "S1"), P.INVALID)
+
+    def test_invalid_sgp_side_is_invalid(self):
+        for side in ("", "C", "a", "HOME"):
+            with self.subTest(side):
+                r = run(*game(), prop(sgp="S1", side=side), prop("P2", sgp="S1", side="B"), SGP)
+                self.assertEqual(cls(r, "SGP", "", "S1"), P.INVALID)
+
+    def test_sgp_id_spanning_two_games_is_invalid(self):
+        other = "NFL,C,D,,,,P9,C,70,REC_YDS,59.5,-110,-110,S1,A"
+        r = run(*game(), prop(sgp="S1", side="A"), prop("P2", sgp="S1", side="B"), other, SGP)
+        self.assertEqual(cls(r, "SGP", "", "S1"), P.INVALID)
+
+    def test_same_team_both_sides_of_one_game_is_invalid(self):
+        p = os.path.join(tempfile.mkdtemp(), "b.csv")
+        with open(p, "w") as f:
+            f.write(H + "NFL,A,A,27,20,%s,,,,TOTAL,44.5,-110,-110,,\n" % V)
+        self.assertEqual(P.classify(p, FULL, KEY)[("A @ A", "TOTAL", "", "")][0], P.INVALID)
+
+    def test_negative_control_verified_tag_but_no_game_projection_is_anchor(self):
+        self.assertEqual(cls(run(*game("", "", V)), "TOTAL"), P.ANCHOR)
 
 
 if __name__ == "__main__":
