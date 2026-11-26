@@ -57,5 +57,31 @@ class Validator(unittest.TestCase):
         self.rejects("carries player", "NFL,A,B,SPREAD,Bob,-3.5,-110,-110,,")
 
 
+    def test_nfl_only_distinct_teams_and_exact_csv_width(self):
+        for message, row in (
+            ("no away team", "NFL,A,,TOTAL,,44.5,-110,-110,,"),
+            ("distinct teams", "NFL,A,a,TOTAL,,44.5,-110,-110,,"),
+            ("not an NFL row", "CBB,A,B,TOTAL,,144.5,-110,-110,,"),
+            ("cells for", "NFL,A,B,TOTAL,,44.5,-110,-110,"),
+            ("cells for", "NFL,A,B,TOTAL,,44.5,-110,-110,,,"),
+        ):
+            with self.subTest(row=row):
+                self.rejects(message, row)
+        self.rejects("not an NFL row", "NFL,A,B,TOTAL,,44.5,-110,-110,,",
+                     "CBB,A,B,TOTAL,,144.5,-110,-110,,")
+        self.rejects("no NFL rows")
+        self.accepts("NFL,A,B,TOTAL,,44.5,-110,-110,,")
+
+    def test_live_score_fields_are_not_pregame(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "board.csv")
+            for suffix in ("0,,", ",0,", ",,0", ",,12.5"):
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write("sport,home,away,market,line,price_a,price_b,home_score,away_score,remaining\n"
+                            "NFL,A,B,TOTAL,44.5,-110,-110," + suffix + "\n")
+                with self.assertRaisesRegex(ValueError, "pregame-only"):
+                    W.validate_input(p)
+
+
 if __name__ == "__main__":
     unittest.main()
