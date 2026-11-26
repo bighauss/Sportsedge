@@ -6,9 +6,10 @@ is real v5 pricing code (module in CALLSITE_MODULES, not a lambda/genexpr such a
 v5.anchor() are excluded. An output row binds to a call only through (sport, game, bet_type, player, price) AND the
 pick label v5 prints: v5.game_labels for game lines, "{player} {TD_NAMES[stat]}" / "{player} No {TD_NAMES[stat]}" for
 touchdown markets, "{player} Over|Under {line:g} {Stat Name}" for other props. The mass must also reproduce the row's
-model_p and ev exactly. Missing identity, no match, several different masses, a line that %g cannot represent exactly
-(game lines and props alike), or a numeric mismatch give UNAVAILABLE and the guard HOLDS the row. Frozen v5 is
-untouched.
+model_p and ev exactly. Missing identity, no match, several different masses, a line that %g cannot represent exactly,
+or a numeric mismatch give UNAVAILABLE and the guard HOLDS the row. validate_board() additionally REJECTS the whole
+board before pricing when any NFL line is not exactly representable by %g, so a valid and an invalid line can never
+share a printed label. Frozen v5 is untouched.
 """
 import contextlib
 import csv
@@ -239,8 +240,9 @@ def priced_guard(orig_guard, o, gaps):
 
 
 def validate_board(path):
-    """Reject non-integer / sub-100 American odds on NFL rows BEFORE v5 truncates them with int()."""
-    bad = []
+    """Reject, BEFORE v5 runs, any NFL row with invalid American odds (v5 truncates them with int()) or a line
+    that %g cannot represent exactly (two lines such as 44 and 44.00001 would print as the same label)."""
+    bad, bad_lines = [], []
     with open(path, newline="", encoding="utf-8-sig") as f:
         for i, raw in enumerate(csv.DictReader(f), start=2):
             r = {k.strip().lower(): (v or "").strip() for k, v in raw.items() if k}
@@ -254,8 +256,17 @@ def validate_board(path):
                         v = None
                     if nfl_wpl.valid_american(v) is None:
                         bad.append("line %d %s=%r" % (i, col, r[col]))
+            if r.get("line"):
+                try:
+                    ln = v5.num(r["line"])
+                except ValueError:
+                    ln = None
+                if ln is None or not _exact_g(ln):
+                    bad_lines.append("line %d line=%r" % (i, r["line"]))
     if bad:
         raise ValueError("invalid American odds on NFL rows: " + "; ".join(bad[:20]))
+    if bad_lines:
+        raise ValueError("non-canonical line on NFL rows: " + "; ".join(bad_lines[:20]))
 
 
 @contextlib.contextmanager
