@@ -390,6 +390,16 @@ class PlayerResearchContext:
         g = self.games.get(gid)
         if b is None or g is None:
             raise ValueError("PLAYER_BINDING_MISSING")
+        if (q.period, q.market) not in C.MARKET_CATALOG or not q.market.startswith("PLAYER_"):
+            raise ValueError("PLAYER_CONTRACT_UNSUPPORTED")
+        sides = ("yes", "no") if q.market.endswith("_AT_LEAST") else ("over", "under")
+        if (q.side_a, q.side_b) != sides:
+            raise ValueError("PLAYER_CONTRACT_SIDE_MISMATCH")
+        if (type(q.price_a) is not int or type(q.price_b) is not int or
+                NUM.strict_price(q.price_a) != q.price_a or NUM.strict_price(q.price_b) != q.price_b):
+            raise ValueError("PLAYER_PRICE_INVALID")
+        if (type(q.line) not in (int, float) or NUM.strict_line(q.line) != q.line or q.line < 0):
+            raise ValueError("PLAYER_LINE_INVALID")
         required = (q.player, q.dk_event_id, q.dk_market_id, q.source_sha256, q.tip_utc, q.captured_utc)
         if not all(isinstance(x, str) and x.strip() for x in required):
             raise ValueError("PLAYER_QUOTE_IDENTITY_MISSING")
@@ -422,9 +432,10 @@ class PlayerResearchContext:
                 if not all(math.isfinite(p) and 0 <= p <= 1 for p in (pa, pp, pb)) or abs(pa + pp + pb - 1) > 1e-9:
                     raise ValueError("PLAYER_PROBABILITY_INVALID")
                 ma, mb, _ = NM.no_vig(q.price_a, q.price_b)
+                pair = []
                 for side, win, loss, mp, odds in ((q.side_a, pa, pb, ma, q.price_a),
                                                    (q.side_b, pb, pa, mb, q.price_b)):
-                    rows.append({"game_id": gid, "team_id": b["team_id"], "player_id": b["player_id"],
+                    pair.append({"game_id": gid, "team_id": b["team_id"], "player_id": b["player_id"],
                                  "player": q.player, "identity_namespace": "ESPN",
                                  "board_index": q.board_index, "board_sha256": q.source_sha256,
                                  "dk_event_id": q.dk_event_id, "dk_market_id": q.dk_market_id,
@@ -439,6 +450,7 @@ class PlayerResearchContext:
                                  "settlement_status": "UNVALIDATED_PARTICIPATION_CONDITIONAL",
                                  "label": C.PAPER_0U, "counted": C.NON_COUNTED, "approved_stake_u": 0,
                                  "stars": C.STARS_UNCALIBRATED})
+                rows.extend(pair)
             except (KeyError, TypeError, ValueError, OverflowError, ArithmeticError) as exc:
                 rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_MODEL_NOT_IMPLEMENTED",
                                            str(exc), q.board_index, gid, q.provenance))
