@@ -1,12 +1,13 @@
 """Priced W/P/L capture for NFL RUN IT without modifying frozen v5 (research, PAPER/0u).
 
 While one v5.run executes, v5.wl / stat_probs / td_probs are wrapped (restored on every exit path). Each priced call
-records its exact outcome mass and the SELECTION IDENTITY read from the calling frame: the board-row dict v5 is
-pricing. Calls inside v5.anchor() (fitting) are excluded. An output row binds to a call only through
-(sport, game, bet_type, player, price) AND the pick label v5 prints for that row: v5.game_labels for game lines,
-"{player} Over|Under {line:g} {Stat Name}" for props (v5 lines 695-710). The captured mass must also reproduce the
-row's model_p and ev exactly. Missing identity, no match, several different masses, or a numeric mismatch give
-UNAVAILABLE and the guard HOLDS the row. Frozen v5 is untouched.
+records its exact outcome mass and the SELECTION IDENTITY read from the calling frame, accepted only when that frame
+is real v5 pricing code (module in CALLSITE_MODULES, not a lambda/genexpr such as the fitting bisect). Calls inside
+v5.anchor() are excluded. An output row binds to a call only through (sport, game, bet_type, player, price) AND the
+pick label v5 prints: v5.game_labels for game lines, "{player} {TD_NAMES[stat]}" / "{player} No {TD_NAMES[stat]}" for
+touchdown markets, "{player} Over|Under {line:g} {Stat Name}" for other props. The mass must also reproduce the row's
+model_p and ev exactly. Missing identity, no match, several different masses, a line that %g cannot represent exactly,
+or a numeric mismatch give UNAVAILABLE and the guard HOLDS the row. Frozen v5 is untouched.
 """
 import contextlib
 import csv
@@ -21,6 +22,7 @@ import nfl_wpl  # noqa: E402
 
 TOL = 1e-9
 ID_KEYS = {"market", "price_a", "price_b", "home"}
+CALLSITE_MODULES = {v5.__name__}
 UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_binding=None)
 
 
@@ -52,14 +54,21 @@ def _is_game_line(market):
 
 
 def _labels(i):
-    """Pick labels (side 0, side 1) exactly as v5 prints them; None when they cannot be derived."""
+    """Pick labels (side 0, side 1) exactly as v5 prints them; None when they cannot be derived exactly."""
     try:
-        if _is_game_line(i.get("market", "")):
+        market, player = i.get("market", ""), i.get("player")
+        if _is_game_line(market):
             return tuple(v5.game_labels(i["sport"], i))
-        player, line = i.get("player"), i.get("line")
-        if not player or not nfl_wpl._is_real(line):
+        if not player:
             return None
-        name = str(i.get("stat") or i["market"]).replace("_", " ").title()
+        stat = str(i.get("stat") or market)
+        td = getattr(v5, "TD_NAMES", None)
+        if isinstance(td, dict) and stat in td:
+            return ("%s %s" % (player, td[stat]), "%s No %s" % (player, td[stat]))
+        line = i.get("line")
+        if not nfl_wpl._is_real(line) or float("%g" % line) != float(line):
+            return None
+        name = stat.replace("_", " ").title()
         return ("%s Over %g %s" % (player, line, name), "%s Under %g %s" % (player, line, name))
     except Exception:
         return None
@@ -68,9 +77,12 @@ def _labels(i):
 def _identity():
     """Board row v5 is pricing, from the frame that called the wrapper (0 here, 1 wrapper, 2 caller)."""
     try:
-        loc = sys._getframe(2).f_locals
+        frame = sys._getframe(2)
     except ValueError:
         return None
+    if frame.f_code.co_name.startswith("<") or frame.f_globals.get("__name__") not in CALLSITE_MODULES:
+        return None
+    loc = frame.f_locals
     cands = {k: v for k, v in loc.items() if isinstance(v, dict) and ID_KEYS <= set(v)}
     r = cands.get("r") if "r" in cands else (next(iter(cands.values())) if len(cands) == 1 else None)
     if r is None:
