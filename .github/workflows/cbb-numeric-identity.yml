@@ -1,0 +1,36 @@
+name: CBB numeric and identity guards (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'models/cbb/cbb_numeric.py'
+      - 'models/cbb/test_cbb_numeric.py'
+      - '.github/workflows/cbb-numeric-identity.yml'
+  push:
+    branches: ['perplexity/cbb-identity-20261126']
+    paths:
+      - 'models/cbb/cbb_numeric.py'
+      - 'models/cbb/test_cbb_numeric.py'
+      - '.github/workflows/cbb-numeric-identity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  numeric-identity:
+    name: strict parsers and quote identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m py_compile models/cbb/cbb_numeric.py models/cbb/test_cbb_numeric.py
+      - name: Run strict numeric and identity tests (no provider access, no secrets)
+        working-directory: models/cbb
+        run: python -m unittest -v test_cbb_numeric
