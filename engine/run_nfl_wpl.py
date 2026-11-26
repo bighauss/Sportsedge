@@ -46,12 +46,7 @@ def player_markets():
 
 
 def game_market_ok(market):
-    pre, base = v5.split_market("NFL", market)
-    if base in PERIOD_OK:
-        return True
-    if pre:
-        return False
-    return base in FULL_GAME_ONLY or base == "SGP" or base.startswith(("HOME_BY_", "AWAY_BY_"))
+    return market == "SGP" or nfl_wpl_capture._is_game_line(market)
 
 
 def validate_input(path):
