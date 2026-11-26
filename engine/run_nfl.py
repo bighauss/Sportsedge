@@ -200,6 +200,8 @@ def assign_quote_ids(rows):
                 o["held"] = "; ".join(filter(None, (o.get("held"), "duplicate raw quote identity (all copies held)")))
             elif not o["quote_id"]:
                 o["held"] = "; ".join(filter(None, (o.get("held"), "raw quote identity unavailable")))
+            elif o["quote_identity_status"] == "SOURCE_FIELDS_INCOMPLETE":
+                o["held"] = "; ".join(filter(None, (o.get("held"), "raw quote source identity incomplete")))
         else:
             o["quote_id"] = hashlib.sha256("|".join(str(o.get(k, "")) for k in (
                 "sport", "game", "bet_type", "player", "pick", "price")).encode() + f"|{i}".encode()).hexdigest()[:16]
