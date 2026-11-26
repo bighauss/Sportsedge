@@ -179,5 +179,25 @@ class Cli(unittest.TestCase):
             self.assertEqual(float(x["p_push"]), 0.0)
 
 
+    def test_canonical_cli_exports_audit_for_unpriced_offers(self):
+        import hashlib
+        import json
+        text = HEADER_P + "NFL,A,B,TOTAL,,44.5,-110,-110\nNFL,A,B,REC_YDS,WR1,59.5,150,\n"
+        p = write_raw(text)
+        wd, r = run_cli(p)
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        files = glob.glob(os.path.join(wd, "coverage_nfl_*.json"))
+        self.assertEqual(len(files), 1)
+        with open(files[0], encoding="utf-8") as f:
+            report = json.load(f)
+        with open(p, "rb") as f:
+            self.assertEqual(report["board_sha256"], hashlib.sha256(f.read()).hexdigest())
+        self.assertEqual(report["offered_side_count"], 3)
+        self.assertEqual(sum(report["status_counts"].values()), 3)
+        self.assertEqual(report["families"]["REC_YDS"]["offered"], 1)
+        self.assertEqual(report["families"]["REC_YDS"]["NO_BOUND_OUTPUT"], 1)
+        self.assertEqual(report["approved_stake_u"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
