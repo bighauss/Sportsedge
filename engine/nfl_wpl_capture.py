@@ -1,16 +1,12 @@
-"""Priced W/P/L integration for NFL RUN IT without modifying frozen v5 (research, PAPER/0u).
+"""Priced W/P/L capture for NFL RUN IT without modifying frozen v5 (research, PAPER/0u).
 
-While one v5.run executes, v5.wl / stat_probs / td_probs are wrapped (and restored on every exit path). Each priced
-call records (a) the exact outcome mass it produced (integer counts for wl; exactly reproduced push mass for props)
-and (b) the SELECTION IDENTITY read from the calling frame at pricing time: the board-row dict v5 is pricing
-(sport, home, away, market, line, player, sgp, price_a, price_b). Calls made inside v5.anchor() (fitting) are excluded.
-
-A priced output row binds to a call only through that identity: (sport, game, bet_type, player, price) plus the
-pick label for game lines (v5.game_labels on the same row). The captured (win, loss) must then also reproduce the
-row's own model_p and ev bit-for-bit. Numeric agreement alone is never provenance. Missing identity, no identity
-match, several different masses for one identity, or a numeric mismatch all give UNAVAILABLE and the guard HOLDS
-the row. Frozen v5 is untouched. Run in a dedicated process; installed() restores every patched name and holds
-run_nfl's v5 lock.
+While one v5.run executes, v5.wl / stat_probs / td_probs are wrapped (restored on every exit path). Each priced call
+records its exact outcome mass and the SELECTION IDENTITY read from the calling frame: the board-row dict v5 is
+pricing. Calls inside v5.anchor() (fitting) are excluded. An output row binds to a call only through
+(sport, game, bet_type, player, price) AND the pick label v5 prints for that row: v5.game_labels for game lines,
+"{player} Over|Under {line:g} {Stat Name}" for props (v5 lines 695-710). The captured mass must also reproduce the
+row's model_p and ev exactly. Missing identity, no match, several different masses, or a numeric mismatch give
+UNAVAILABLE and the guard HOLDS the row. Frozen v5 is untouched.
 """
 import contextlib
 import csv
@@ -49,8 +45,28 @@ def prop_push(spec, mean, line, seed):
         return None
 
 
+def _is_game_line(market):
+    head, _, rest = str(market).upper().partition("_")
+    base = rest if rest and head in nfl_wpl.PERIODS else str(market).upper()
+    return base in nfl_wpl.BASES
+
+
+def _labels(i):
+    """Pick labels (side 0, side 1) exactly as v5 prints them; None when they cannot be derived."""
+    try:
+        if _is_game_line(i.get("market", "")):
+            return tuple(v5.game_labels(i["sport"], i))
+        player, line = i.get("player"), i.get("line")
+        if not player or not nfl_wpl._is_real(line):
+            return None
+        name = str(i.get("stat") or i["market"]).replace("_", " ").title()
+        return ("%s Over %g %s" % (player, line, name), "%s Under %g %s" % (player, line, name))
+    except Exception:
+        return None
+
+
 def _identity():
-    """Board row v5 is pricing, read from the frame that called the wrapper (frame 0 here, 1 wrapper, 2 caller)."""
+    """Board row v5 is pricing, from the frame that called the wrapper (0 here, 1 wrapper, 2 caller)."""
     try:
         loc = sys._getframe(2).f_locals
     except ValueError:
@@ -61,10 +77,7 @@ def _identity():
         return None
     ident = dict(r)
     ident["sport"] = str(ident.get("sport") or loc.get("sport") or "")
-    try:
-        ident["labels"] = tuple(v5.game_labels(ident["sport"], ident))
-    except Exception:
-        ident["labels"] = None
+    ident["labels"] = _labels(ident)
     return ident
 
 
@@ -127,23 +140,17 @@ def _side(o):
     return s if s in (0, 1) else None
 
 
-def _is_game_line(market):
-    head, _, rest = str(market).upper().partition("_")
-    base = rest if rest and head in nfl_wpl.PERIODS else str(market).upper()
-    return base in nfl_wpl.BASES
-
-
 def _reproduces(w, l, side, price, o):
     a, b = (w, l) if side == 0 else (l, w)
     return v5.cond(a, b) == o.get("model_p") and a * v5.payout(int(price)) - b == o.get("ev")
 
 
 def _selection_index(calls):
-    """(sport, game, bet_type, player, price) -> [(pick_or_None, side, call)] from captured pricing identities."""
+    """(sport, game, bet_type, player, price, pick) -> [(side, call)]; calls without derivable labels are skipped."""
     index = {}
     for c in calls:
         i = c.get("ident")
-        if not i:
+        if not i or not i.get("labels"):
             continue
         game = "%s @ %s" % (i.get("away", ""), i.get("home", ""))
         for side, col in ((0, "price_a"), (1, "price_b")):
@@ -151,9 +158,8 @@ def _selection_index(calls):
             if not nfl_wpl._is_real(price) or price == 0:
                 continue
             bt = "%s|%d|%s" % (i.get("market", ""), side, i.get("sgp", "") or "")
-            pick = i["labels"][side] if i.get("labels") and _is_game_line(i.get("market", "")) else None
-            key = (i["sport"], game, bt, i.get("player", "") or "", int(price))
-            index.setdefault(key, []).append((pick, side, c))
+            key = (i["sport"], game, bt, i.get("player", "") or "", int(price), i["labels"][side])
+            index.setdefault(key, []).append((side, c))
     return index
 
 
@@ -166,17 +172,11 @@ def attach(rows, calls):
         if side is None or not nfl_wpl._is_real(price):
             o["wpl_status"] = "UNAVAILABLE: row side/price invalid"
             continue
-        key = (o.get("sport"), o.get("game"), o.get("bet_type"), o.get("player", "") or "", int(price))
-        cands = [(p, s, c) for (p, s, c) in index.get(key, []) if s == side and (p is None or p == o.get("pick"))]
+        key = (o.get("sport"), o.get("game"), o.get("bet_type"), o.get("player", "") or "", int(price), o.get("pick"))
+        cands = [c for s, c in index.get(key, []) if s == side]
         if not cands:
             continue
-        if not _is_game_line(str(o.get("bet_type", "")).split("|")[0]):
-            # props: pick labels are not reproducible here, so identity narrows and exact numerics must pick one
-            cands = [t for t in cands if _reproduces(t[2]["w"], t[2]["l"], side, price, o)]
-            if not cands:
-                o["wpl_status"] = "UNAVAILABLE: identity-bound mass does not reproduce the row's model_p/ev"
-                continue
-        masses = {(c["w"], c["l"], c["push"]) for _, _, c in cands}
+        masses = {(c["w"], c["l"], c["push"]) for c in cands}
         if len(masses) != 1:
             o["wpl_status"] = "UNAVAILABLE: %d different outcome masses for one selection identity" % len(masses)
             continue
@@ -186,13 +186,13 @@ def attach(rows, calls):
             o["wpl_status"] = "UNAVAILABLE: identity-bound mass does not reproduce the row's model_p/ev"
             continue
         if push is None:
-            o["wpl_status"] = "UNAVAILABLE: push mass not provable (%s)" % cands[0][2]["kind"]
+            o["wpl_status"] = "UNAVAILABLE: push mass not provable (%s)" % cands[0]["kind"]
             continue
         if min(a, push, b) < 0.0 or not all(math.isfinite(x) for x in (a, push, b)) or abs(a + push + b - 1.0) > 1e-9:
             o["wpl_status"] = "UNAVAILABLE: mass invalid or not normalised"
             continue
         o.update(p_win=a, p_push=push, p_loss=b, wpl_status="CAPTURED",
-                 wpl_source=",".join(sorted({c["src"] for _, _, c in cands})), wpl_binding="selection_identity")
+                 wpl_source=",".join(sorted({c["src"] for c in cands})), wpl_binding="selection_identity")
     return rows
 
 

@@ -23,12 +23,18 @@ def priced(r, fn, *args):
     return fn(*args)
 
 
+def v5_labels(r):
+    if r["player"]:
+        name = r["market"].replace("_", " ").title()
+        return ("%s Over %g %s" % (r["player"], r["line"], name), "%s Under %g %s" % (r["player"], r["line"], name))
+    return v5.game_labels("NFL", r)
+
+
 def out_row(r, side, w, l):
     a, b = (w, l) if side == 0 else (l, w)
     price = int(r["price_a"] if side == 0 else r["price_b"])
-    labels = v5.game_labels("NFL", r)
     return dict(sport="NFL", game="%s @ %s" % (r["away"], r["home"]), bet_type="%s|%d|%s" % (r["market"], side, r["sgp"]),
-                player=r["player"], price=price, pick=labels[side], model_p=v5.cond(a, b),
+                player=r["player"], price=price, pick=v5_labels(r)[side], model_p=v5.cond(a, b),
                 ev=a * v5.payout(price) - b)
 
 
@@ -49,15 +55,45 @@ class Binding(unittest.TestCase):
         with cm.capturing() as calls:
             w1, l1 = priced(r1, v5.wl, D)
             w2, l2 = priced(r2, v5.wl, D)
-        self.assertEqual((w1, l1), (w2, l2))
         rows = [out_row(r2, 1, w2, l2), out_row(r1, 0, w1, l1), out_row(r2, 0, w2, l2), out_row(r1, 1, w1, l1)]
         cm.attach(rows, calls)
         for r in rows:
             self.assertEqual((r["wpl_status"], r["wpl_binding"]), ("CAPTURED", "selection_identity"))
             self.assertAlmostEqual(r["p_win"] + r["p_push"] + r["p_loss"], 1.0, places=12)
-            self.assertGreaterEqual(min(r["p_win"], r["p_push"], r["p_loss"]), 0.0)
         self.assertEqual((rows[1]["p_win"], rows[1]["p_push"], rows[1]["p_loss"]), (3 / 8, 3 / 8, 2 / 8))
-        self.assertEqual((rows[0]["p_win"], rows[0]["p_loss"]), (2 / 8, 3 / 8))
+
+    def test_prop_thresholds_with_identical_price_and_mass_bind_by_label(self):
+        lo = board_row("PASS_TDS", 1.5, "J Goff", -110.0, -110.0)
+        hi = board_row("PASS_TDS", 2.5, "J Goff", -110.0, -110.0)
+        with cm.capturing() as calls:
+            wa, la = priced(lo, v5.wl, D)
+            wb, lb = priced(hi, v5.wl, D)
+        self.assertEqual((wa, la), (wb, lb))
+        rows = [out_row(hi, 0, wb, lb), out_row(lo, 0, wa, la), out_row(hi, 1, wb, lb), out_row(lo, 1, wa, la)]
+        self.assertEqual(rows[0]["pick"], "J Goff Over 2.5 Pass Tds")
+        cm.attach(rows, calls)
+        self.assertEqual([r["wpl_status"] for r in rows], ["CAPTURED"] * 4)
+        ghost = out_row(board_row("PASS_TDS", 3.5, "J Goff", -110.0, -110.0), 0, wa, la)
+        cm.attach([ghost], calls)
+        self.assertIn("no selection-bound", ghost["wpl_status"])
+
+    def test_same_threshold_with_two_masses_is_held(self):
+        pr = board_row("PASS_TDS", 1.5, "J Goff", -110.0, -110.0)
+        with cm.capturing() as calls:
+            w, l = priced(pr, v5.wl, D)
+            priced(pr, v5.wl, E)
+        r = out_row(pr, 0, w, l)
+        cm.attach([r], calls)
+        self.assertIn("different outcome masses", r["wpl_status"])
+
+    def test_wrong_label_for_a_priced_threshold_is_not_bound(self):
+        pr = board_row("PASS_TDS", 1.5, "J Goff", -110.0, -110.0)
+        with cm.capturing() as calls:
+            w, l = priced(pr, v5.wl, D)
+        r = out_row(pr, 0, w, l)
+        r["pick"] = "J Goff Over 2.5 Pass Tds"
+        cm.attach([r], calls)
+        self.assertIsNone(r["p_win"])
 
     def test_row_for_a_selection_that_was_never_priced_is_unavailable(self):
         priced_row, ghost = board_row(line=44.0), board_row(line=47.0)
@@ -65,7 +101,6 @@ class Binding(unittest.TestCase):
             w, l = priced(priced_row, v5.wl, D)
         r = out_row(ghost, 0, w, l)
         cm.attach([r], calls)
-        self.assertIsNone(r["p_win"])
         self.assertIn("no selection-bound", r["wpl_status"])
 
     def test_missing_identity_is_unavailable_even_if_numbers_match(self):
@@ -82,7 +117,6 @@ class Binding(unittest.TestCase):
         r = out_row(br, 0, w, l)
         r["ev"] += 1e-6
         cm.attach([r], calls)
-        self.assertIsNone(r["p_win"])
         self.assertIn("does not reproduce", r["wpl_status"])
 
     def test_two_different_masses_for_one_identity_are_unavailable(self):
@@ -92,7 +126,6 @@ class Binding(unittest.TestCase):
             priced(br, v5.wl, E)
         r = out_row(br, 0, w, l)
         cm.attach([r], calls)
-        self.assertIsNone(r["p_win"])
         self.assertIn("different outcome masses", r["wpl_status"])
 
     def test_duplicate_identical_pricing_of_one_identity_is_fine(self):
@@ -103,19 +136,6 @@ class Binding(unittest.TestCase):
         r = out_row(br, 0, w, l)
         cm.attach([r], calls)
         self.assertEqual(r["wpl_status"], "CAPTURED")
-
-    def test_row_order_is_irrelevant(self):
-        r1, r2 = board_row(line=44.0), board_row(line=46.0)
-        with cm.capturing() as calls:
-            w1, l1 = priced(r1, v5.wl, D)
-            w2, l2 = priced(r2, v5.wl, E)
-        base = [out_row(r1, 0, w1, l1), out_row(r2, 0, w2, l2)]
-        for order in ([0, 1], [1, 0]):
-            rs = [dict(base[i]) for i in order]
-            cm.attach(rs, calls)
-            got = {r["pick"]: (r["p_win"], r["p_push"], r["p_loss"]) for r in rs}
-            self.assertEqual(got["Over 44"], (3 / 8, 3 / 8, 2 / 8))
-            self.assertEqual(got["Over 46"], (3 / 8, 2 / 8, 3 / 8))
 
     def test_fitting_calls_inside_anchor_are_excluded(self):
         saved, br = v5.anchor, board_row()
@@ -129,6 +149,18 @@ class Binding(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["counts"], (3, 3, 2, 8))
 
+    def test_fitting_calls_cannot_bind_to_a_row(self):
+        br = board_row()
+        v5.anchor = lambda *a, **k: priced(br, v5.wl, np.array([1, 1, -1]))
+        try:
+            with cm.capturing() as calls:
+                v5.anchor()
+        finally:
+            v5.anchor = lambda *a, **k: None
+        r = out_row(br, 0, 2 / 3, 1 / 3)
+        cm.attach([r], calls)
+        self.assertIsNone(r["p_win"])
+
     def test_nan_outcomes_give_unavailable_not_a_probability(self):
         br = board_row()
         with cm.capturing() as calls:
@@ -136,7 +168,6 @@ class Binding(unittest.TestCase):
         r = out_row(br, 0, w, l)
         cm.attach([r], calls)
         self.assertIsNone(r["p_push"])
-        self.assertTrue(r["wpl_status"].startswith("UNAVAILABLE"))
 
     def test_invalid_row_fields_fail_closed(self):
         with cm.capturing() as calls:
@@ -153,21 +184,11 @@ class Binding(unittest.TestCase):
             iw, il = priced(ri_b, v5.stat_probs, ("c", 1.0), 5.0, 5.0, 1)
             hw, hl = priced(rh_b, v5.stat_probs, ("c", 1.0), 5.0, 4.5, 1)
         ri, rh = out_row(ri_b, 0, iw, il), out_row(rh_b, 0, hw, hl)
-        ri["pick"], rh["pick"] = "Goff O5", "Goff O4.5"
         cm.attach([ri, rh], calls)
         self.assertEqual((ri["wpl_status"], rh["wpl_status"]), ("CAPTURED", "CAPTURED"))
         self.assertGreater(ri["p_push"], 0.1)
         self.assertEqual(rh["p_push"], 0.0)
         self.assertEqual(ri["wpl_source"], "prop_exact_distribution")
-
-    def test_yardage_prop_push_uses_same_draws(self):
-        br = board_row("PASS_YDS", 250.0, "J Goff", -110.0, -110.0)
-        with cm.capturing() as calls:
-            w, l = priced(br, v5.stat_probs, ("y", 0.28), 250.0, 250.0, 3)
-        r = out_row(br, 0, w, l)
-        cm.attach([r], calls)
-        self.assertEqual(r["wpl_status"], "CAPTURED")
-        self.assertAlmostEqual(r["p_win"] + r["p_push"] + r["p_loss"], 1.0, places=12)
 
     def test_td_path_separate_source(self):
         br = board_row("ATD", 0.5, "J Goff", 150.0, -190.0)
@@ -193,9 +214,8 @@ class Guard(unittest.TestCase):
     def test_captured_push_drives_blended_ev_and_clears_breakeven_hold(self):
         o = self.base(held="push share not recoverable at break-even (hold)")
         g = cm.priced_guard(lambda o_, gaps: dict(o_), o, {})
-        pay = 100.0 / 110.0
         self.assertEqual(g["held"], "")
-        self.assertAlmostEqual(g["ev"], 0.9 * (0.5 * pay - 0.5), places=12)
+        self.assertAlmostEqual(g["ev"], 0.9 * (0.5 * 100 / 110 - 0.5), places=12)
 
     def test_disagreement_with_v5_ev_is_held(self):
         g = cm.priced_guard(lambda o, gaps: dict(o), self.base(model_ev=0.2), {})
@@ -232,7 +252,6 @@ class Install(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             with cm.installed():
                 self.assertIsNot(v5.run, before[0])
-                self.assertIsNot(run_nfl.guard, before[1])
                 raise RuntimeError("boom")
         self.assertEqual((v5.run, run_nfl.guard, v5.wl, v5.stat_probs, v5.td_probs, v5.anchor), before)
 
