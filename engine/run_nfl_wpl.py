@@ -151,6 +151,19 @@ def apply_provenance(o, prov):
 
 
 def main(path, manifest=None, key=None):
+    # All validation, simulation and coverage use one private immutable-by-convention
+    # snapshot, not multiple reads of a mutable source path.
+    import tempfile
+    from pathlib import Path
+    with run_nfl._V5_LOCK:
+        raw = Path(path).read_bytes()
+        with tempfile.TemporaryDirectory(prefix="nfl_board_snapshot_") as tmp:
+            snapshot = Path(tmp) / "board.csv"
+            snapshot.write_bytes(raw)
+            return _run_snapshot(str(snapshot), manifest, key)
+
+
+def _run_snapshot(path, manifest, key):
     validate_input(path)
     if manifest is None and os.environ.get(ENV_MANIFEST):
         manifest = nfl_provenance.load_manifest(os.environ[ENV_MANIFEST])
@@ -167,7 +180,7 @@ def main(path, manifest=None, key=None):
 
         run_nfl.guard = guard
         try:
-            return run_nfl.main(path)
+            return run_nfl.main(path, coverage=True)
         finally:
             run_nfl.guard = inner
 
