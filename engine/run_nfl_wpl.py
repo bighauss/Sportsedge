@@ -10,6 +10,13 @@ no market, or neither price; odds that are not exact signed integers (v5 would t
 projections, scores and 'remaining' that are not plain decimals ("4+4" or "2+7" would become 44 / 27 because v5
 deletes every '+'); spread/total/team-total rows without a line (v5 would default it to 0); game-line rows carrying a
 player; player rows whose market v5 does not price, or stat props without a line; and unknown game-level markets.
+
+PROVENANCE (fail closed). After pricing, every NFL row is classified by engine/nfl_provenance.py from the board and the
+signed evidence supplied OUTSIDE the board (env SPORTSEDGE_EVIDENCE_MANIFEST = manifest JSON path,
+SPORTSEDGE_EVIDENCE_KEY = HMAC key; the key is never a CLI argument). Rows whose provenance is not VERIFIED_PIT
+(unverified projection, ANCHOR, MIXED, AMBIGUOUS, INVALID_INPUT, or no entry) are HELD at 0u with the class and reason, so
+a market-fitted or unproven number can never reach the card or the 'selected_for_card' marker. With no evidence supplied
+every row is held: an empty independent card is the intended default.
 """
 import csv
 import os
@@ -17,6 +24,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import nfl_provenance  # noqa: E402
 import nfl_wpl_capture  # noqa: E402
 import run_nfl  # noqa: E402
 import sportsedge_v5 as v5  # noqa: E402
@@ -29,6 +37,7 @@ NEEDS_LINE = {"SPREAD", "TOTAL", "HOME_TT", "AWAY_TT"}
 PERIOD_OK = NEEDS_LINE | {"ML"}                                   # allowed with a period prefix
 FULL_GAME_ONLY = {"OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW"}  # v5 prices these only without a prefix
 REQUIRED_COLUMNS = ("sport", "home", "market")
+ENV_MANIFEST, ENV_KEY = "SPORTSEDGE_EVIDENCE_MANIFEST", "SPORTSEDGE_EVIDENCE_KEY"
 
 
 def player_markets():
@@ -110,10 +119,47 @@ def validate_input(path):
         raise ValueError("non-canonical line on NFL rows: " + "; ".join(lines[:20]))
 
 
-def main(path):
+def apply_provenance(o, prov):
+    """Annotate one priced NFL row with its provenance class and HOLD it unless every dependency is VERIFIED_PIT.
+    prov is classify()'s mapping, or None when classification itself failed (every row is then held)."""
+    if o.get("sport") != "NFL":
+        return o
+    parts = str(o.get("bet_type", "")).split("|")
+    market, sgp = parts[0], (parts[2] if len(parts) > 2 else "")
+    game = str(o.get("game", "")).replace(" (LIVE)", "")
+    if prov is None:
+        cls, why = nfl_provenance.AMBIGUOUS, "provenance classification failed"
+    else:
+        cls, why = prov.get((game, market, o.get("player", "") or "", sgp),
+                            (nfl_provenance.AMBIGUOUS, "no provenance entry for this row"))
+    o["provenance"], o["provenance_reason"] = cls, why
+    if not nfl_provenance.eligible(cls):
+        reasons = [x for x in str(o.get("held", "")).split("; ") if x]
+        reasons.append("provenance %s: not an independent verified forecast%s" % (cls, " (%s)" % why if why else ""))
+        o["held"] = "; ".join(reasons)
+    return o
+
+
+def main(path, manifest=None, key=None):
     validate_input(path)
+    if manifest is None and os.environ.get(ENV_MANIFEST):
+        manifest = nfl_provenance.load_manifest(os.environ[ENV_MANIFEST])
+    key = key or os.environ.get(ENV_KEY)
+    try:
+        prov = nfl_provenance.classify(path, manifest, key)
+    except Exception:                                   # fail closed: every row held
+        prov = None
     with nfl_wpl_capture.installed():
-        return run_nfl.main(path)
+        inner = run_nfl.guard
+
+        def guard(o, gaps):
+            return apply_provenance(inner(o, gaps), prov)
+
+        run_nfl.guard = guard
+        try:
+            return run_nfl.main(path)
+        finally:
+            run_nfl.guard = inner
 
 
 if __name__ == "__main__":
