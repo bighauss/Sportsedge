@@ -13,6 +13,8 @@ share a printed label. Frozen v5 is untouched.
 """
 import contextlib
 import csv
+import hashlib
+import json
 import math
 import os
 import re
@@ -26,7 +28,8 @@ import nfl_wpl  # noqa: E402
 TOL = 1e-9
 ID_KEYS = {"market", "price_a", "price_b", "home"}
 CALLSITE_MODULES = {v5.__name__}
-UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_binding=None)
+UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_binding=None,
+               raw_quote_id=None, selection_id=None, quote_identity_status="UNBOUND")
 
 
 def prop_push(spec, mean, line, seed):
@@ -192,6 +195,38 @@ def _selection_index(calls):
     return index
 
 
+def _digest(fields):
+    return hashlib.sha256(json.dumps(fields, ensure_ascii=True, separators=(",", ":"),
+                                    allow_nan=False).encode("utf-8")).hexdigest()
+
+
+def raw_identity(i, side):
+    """Content-addressed identity from the exact captured simulator board row, not emission order.
+    Missing source identifiers stay diagnostic: a digest is not an authentication receipt.
+    """
+    def val(k):
+        return str(i.get(k) or "").strip()
+
+    def numeric(k):
+        x = i.get(k)
+        return float(x) if x is not None else None
+
+    event = val("event_id")
+    book = val("book")
+    capture = val("captured_utc") or val("capture_ts")
+    player_id = val("player_id")
+    selection = ["NFL_SELECTION_V1", val("sport"), event, val("kickoff_utc"),
+                 val("home"), val("away"), val("market"), val("player"), player_id,
+                 val("team"), numeric("line"), val("sgp"), val("side"), side]
+    selection_id = _digest(selection)
+    quote_id = _digest(["NFL_QUOTE_V1", selection_id, book, capture, val("source"),
+                        val("market_id"), val("selection_id_a"), val("selection_id_b"),
+                        numeric("price_a"), numeric("price_b")])
+    complete = bool(event and val("kickoff_utc") and book and capture
+                    and (not val("player") or (player_id and val("team"))))
+    return selection_id, quote_id, "SOURCE_FIELDS_PRESENT" if complete else "SOURCE_FIELDS_INCOMPLETE"
+
+
 def attach(rows, calls):
     """Bind each priced row to captured outcome mass through selection identity, then verify numerically."""
     index = _selection_index(calls)
@@ -205,6 +240,12 @@ def attach(rows, calls):
         cands = [c for s, c in index.get(key, []) if s == side]
         if not cands:
             continue
+        identities = {raw_identity(c["ident"], side) for c in cands}
+        if len(identities) != 1:
+            o["quote_identity_status"] = "AMBIGUOUS"
+            o["wpl_status"] = "UNAVAILABLE: distinct source quotes share one v5 output label"
+            continue
+        o["selection_id"], o["raw_quote_id"], o["quote_identity_status"] = next(iter(identities))
         masses = {(c["w"], c["l"], c["push"]) for c in cands}
         if len(masses) != 1:
             o["wpl_status"] = "UNAVAILABLE: %d different outcome masses for one selection identity" % len(masses)
