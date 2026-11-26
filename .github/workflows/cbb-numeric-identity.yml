@@ -5,12 +5,18 @@ on:
     paths:
       - 'models/cbb/cbb_numeric.py'
       - 'models/cbb/test_cbb_numeric.py'
+      - 'models/cbb/cbb_run_it_pipeline.py'
+      - 'tools/cbb_apply_runner_patch.py'
+      - 'tools/test_cbb_apply_runner_patch.py'
       - '.github/workflows/cbb-numeric-identity.yml'
   push:
     branches: ['perplexity/cbb-identity-20261126']
     paths:
       - 'models/cbb/cbb_numeric.py'
       - 'models/cbb/test_cbb_numeric.py'
+      - 'models/cbb/cbb_run_it_pipeline.py'
+      - 'tools/cbb_apply_runner_patch.py'
+      - 'tools/test_cbb_apply_runner_patch.py'
       - '.github/workflows/cbb-numeric-identity.yml'
 
 permissions:
@@ -18,7 +24,7 @@ permissions:
 
 jobs:
   numeric-identity:
-    name: strict parsers and quote identity
+    name: strict parsers, quote identity, runner patch
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -30,7 +36,12 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile
-        run: python -m py_compile models/cbb/cbb_numeric.py models/cbb/test_cbb_numeric.py
+        run: python -m py_compile models/cbb/cbb_numeric.py models/cbb/test_cbb_numeric.py tools/cbb_apply_runner_patch.py tools/test_cbb_apply_runner_patch.py
       - name: Run strict numeric and identity tests (no provider access, no secrets)
         working-directory: models/cbb
         run: python -m unittest -v test_cbb_numeric
+      - name: Run runner-patch tests
+        working-directory: tools
+        run: python -m unittest -v test_cbb_apply_runner_patch
+      - name: Runner patch dry run against the REAL pipeline file (exact-match check; writes nothing)
+        run: python tools/cbb_apply_runner_patch.py models/cbb/cbb_run_it_pipeline.py
