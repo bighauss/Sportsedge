@@ -83,5 +83,20 @@ class Validator(unittest.TestCase):
                     W.validate_input(p)
 
 
+    def test_winning_margin_bands_must_have_ordered_positive_integer_bounds(self):
+        for m in ("HOME_BY_1_6", "AWAY_BY_7_13", "HOME_BY_3_3"):
+            self.accepts("NFL,A,B,%s,,,300,,," % m)
+        for m in ("HOME_BY_ABC", "HOME_BY_6_1", "AWAY_BY_0_3",
+                  "HOME_BY_1_2_3", "AWAY_BY_-2_3", "1H_HOME_BY_1_6"):
+            with self.subTest(market=m):
+                self.rejects("unknown game-level market", "NFL,A,B,%s,,,300,,," % m)
+
+    def test_every_frozen_period_game_market_is_admitted(self):
+        for period in v5.PERIODS["NFL"]:
+            for market in ("ML", "SPREAD", "TOTAL", "HOME_TT", "AWAY_TT"):
+                line = "" if market == "ML" else "3.5"
+                self.accepts("NFL,A,B,%s_%s,,%s,-110,-110,," % (period, market, line))
+
+
 if __name__ == "__main__":
     unittest.main()
