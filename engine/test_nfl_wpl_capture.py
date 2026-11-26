@@ -340,6 +340,45 @@ class QuoteIdentity(unittest.TestCase):
 
 
 
+
+class Coverage(unittest.TestCase):
+    def test_denominator_includes_missing_duplicate_and_unbound_sides(self):
+        import hashlib
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "board.csv"
+            path.write_text("sport,home,away,market,line,price_a,price_b\n"
+                            "NFL,DET,CHI,TOTAL,44,-110,105\n"
+                            "NFL,DET,CHI,TOTAL,45,-110,105\n"
+                            "NFL,DET,CHI,TOTAL,45,-110,105\n"
+                            "NFL,DET,CHI,SGP,,600,\n", encoding="utf-8")
+            a = board_row()
+            with cm.capturing() as calls:
+                w, l = priced(a, v5.wl, D)
+            o = cm.attach([out_row(a, 0, w, l)], calls)[0]
+            o["held"] = "research hold"
+            report = cm.coverage_report(path, [o, dict(pick="unbound simulator row")])
+            self.assertEqual(report["board_sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(report["offered_side_count"], 7)
+            self.assertEqual(report["emitted_row_count"], 2)
+            self.assertEqual(report["unbound_output_count"], 1)
+            self.assertEqual(report["status_counts"]["DUPLICATE_OR_AMBIGUOUS"], 4)
+            self.assertEqual(report["status_counts"]["NO_BOUND_OUTPUT"], 2)
+            self.assertEqual(report["status_counts"]["PRICED_HELD"], 1)
+            self.assertEqual(sum(report["status_counts"].values()), 7)
+            self.assertEqual(report["families"]["SGP"]["offered"], 1)
+            self.assertEqual(report["families"]["1Q_HOME_TT"]["offered"], 0)
+            self.assertEqual(report["families"]["ATD"]["offered"], 0)
+            self.assertTrue(all(x["approved_stake_u"] == 0 for x in report["offered"]))
+
+    def test_no_simulator_output_does_not_erase_offered_market(self):
+        report = cm.coverage_report(tiny_board(), [])
+        self.assertEqual(report["offered_side_count"], 2)
+        self.assertEqual(report["status_counts"]["NO_BOUND_OUTPUT"], 2)
+        self.assertEqual(report["families"]["TOTAL"]["offered"], 2)
+        self.assertFalse(report["unbound_outputs"])
+
+
 class Guard(unittest.TestCase):
     def base(self, **kw):
         pay = 100.0 / 110.0
