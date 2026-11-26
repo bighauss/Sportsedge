@@ -23,7 +23,7 @@ def is_game_line(x):
 
 
 class Cli(unittest.TestCase):
-    def test_real_v5_cli_binds_every_game_line_row_and_holds_the_rest(self):
+    def test_real_v5_cli_binds_every_game_line_row_by_selection_identity(self):
         board = os.path.abspath(base.board(base.game(24, 20)))
         wd = tempfile.mkdtemp()
         r = subprocess.run([sys.executable, os.path.join(HERE, "run_nfl_wpl.py"), board], cwd=wd,
@@ -34,12 +34,13 @@ class Cli(unittest.TestCase):
         with open(files[0], newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
         self.assertTrue(rows)
-        for col in ("p_win", "p_push", "p_loss", "wpl_status", "wpl_source", "wpl_n_calls", "held", "bet_type", "player"):
+        for col in ("p_win", "p_push", "p_loss", "wpl_status", "wpl_source", "wpl_binding", "held", "bet_type", "player"):
             self.assertIn(col, rows[0])
         lines = [x for x in rows if is_game_line(x)]
         self.assertGreater(len(lines), 0)
         unbound = [(x["pick"], x["wpl_status"]) for x in lines if x["wpl_status"] != "CAPTURED"]
         self.assertEqual(unbound, [], "game-line rows not bound to simulator mass: %r" % unbound[:10])
+        self.assertTrue(all(x["wpl_binding"] == "selection_identity" for x in lines))
         for x in rows:
             if x["wpl_status"] == "CAPTURED":
                 p = [float(x[c]) for c in ("p_win", "p_push", "p_loss")]

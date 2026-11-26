@@ -1,14 +1,16 @@
 """Priced W/P/L integration for NFL RUN IT without modifying frozen v5 (research, PAPER/0u).
 
-While one v5.run executes, v5.wl / stat_probs / td_probs are wrapped (and restored on every exit path) to record
-the exact outcome mass each priced call used (integer counts for wl; an exactly reproduced push mass for props).
-Calls made inside v5.anchor() (fitting) are excluded.
+While one v5.run executes, v5.wl / stat_probs / td_probs are wrapped (and restored on every exit path). Each priced
+call records (a) the exact outcome mass it produced (integer counts for wl; exactly reproduced push mass for props)
+and (b) the SELECTION IDENTITY read from the calling frame at pricing time: the board-row dict v5 is pricing
+(sport, home, away, market, line, player, sgp, price_a, price_b). Calls made inside v5.anchor() (fitting) are excluded.
 
-Binding is ORDER-INDEPENDENT (v5 sorts its rows by EV): a priced row binds to the captured outcome set whose
-(win, loss) reproduce the row's own model_p and ev bit-for-bit for its side. Calls with identical (win, loss) carry
-identical push mass, so identical results cannot mis-assign mass; if matching calls disagree on push, or zero / several
-distinct outcome sets match, the row is UNAVAILABLE and the guard HOLDS it. Frozen v5 is untouched. Intended for a
-dedicated process (CLI); installed() restores every patched name and runs under run_nfl's v5 lock.
+A priced output row binds to a call only through that identity: (sport, game, bet_type, player, price) plus the
+pick label for game lines (v5.game_labels on the same row). The captured (win, loss) must then also reproduce the
+row's own model_p and ev bit-for-bit. Numeric agreement alone is never provenance. Missing identity, no identity
+match, several different masses for one identity, or a numeric mismatch all give UNAVAILABLE and the guard HOLDS
+the row. Frozen v5 is untouched. Run in a dedicated process; installed() restores every patched name and holds
+run_nfl's v5 lock.
 """
 import contextlib
 import csv
@@ -22,7 +24,8 @@ import sportsedge_v5 as v5  # noqa: E402
 import nfl_wpl  # noqa: E402
 
 TOL = 1e-9
-UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_n_calls=None)
+ID_KEYS = {"market", "price_a", "price_b", "home"}
+UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_binding=None)
 
 
 def prop_push(spec, mean, line, seed):
@@ -46,6 +49,25 @@ def prop_push(spec, mean, line, seed):
         return None
 
 
+def _identity():
+    """Board row v5 is pricing, read from the frame that called the wrapper (frame 0 here, 1 wrapper, 2 caller)."""
+    try:
+        loc = sys._getframe(2).f_locals
+    except ValueError:
+        return None
+    cands = {k: v for k, v in loc.items() if isinstance(v, dict) and ID_KEYS <= set(v)}
+    r = cands.get("r") if "r" in cands else (next(iter(cands.values())) if len(cands) == 1 else None)
+    if r is None:
+        return None
+    ident = dict(r)
+    ident["sport"] = str(ident.get("sport") or loc.get("sport") or "")
+    try:
+        ident["labels"] = tuple(v5.game_labels(ident["sport"], ident))
+    except Exception:
+        ident["labels"] = None
+    return ident
+
+
 @contextlib.contextmanager
 def capturing():
     calls, state = [], dict(depth=0)
@@ -66,7 +88,7 @@ def capturing():
             wins, push, loss = int((arr > 0).sum()), int((arr == 0).sum()), int((arr < 0).sum())
             ok = n > 0 and wins + push + loss == n and w == wins / n and l == loss / n
             calls.append(dict(kind="wl", src="simulator_counts", w=w, l=l, push=(push / n if ok else None),
-                              counts=(wins, push, loss, n) if ok else None))
+                              counts=(wins, push, loss, n) if ok else None, ident=_identity()))
         return w, l
 
     def stat_probs(spec, mean, line, seed):
@@ -78,14 +100,16 @@ def capturing():
                 resid = 1.0 - w - l - r[0]
                 if r[0] >= 0.0 and -TOL <= resid <= 1e-6:
                     push = r[0]
-            calls.append(dict(kind="stat", src="prop_exact_distribution", w=w, l=l, push=push, counts=None))
+            calls.append(dict(kind="stat", src="prop_exact_distribution", w=w, l=l, push=push, counts=None,
+                              ident=_identity()))
         return w, l
 
     def td_probs(S, market, share, is_home):
         w, l = orig[2](S, market, share, is_home)
         if state["depth"] == 0:
             ok = abs(w + l - 1.0) <= 1e-12 and w >= 0.0 and l >= 0.0
-            calls.append(dict(kind="td", src="td_closed_form", w=w, l=l, push=0.0 if ok else None, counts=None))
+            calls.append(dict(kind="td", src="td_closed_form", w=w, l=l, push=0.0 if ok else None, counts=None,
+                              ident=_identity()))
         return w, l
 
     v5.wl, v5.stat_probs, v5.td_probs, v5.anchor = wl, stat_probs, td_probs, anchor
@@ -103,37 +127,72 @@ def _side(o):
     return s if s in (0, 1) else None
 
 
-def attach(rows, calls):
-    """Bind each row to captured outcome mass by exact numeric reproduction, independent of row/call order."""
+def _is_game_line(market):
+    head, _, rest = str(market).upper().partition("_")
+    base = rest if rest and head in nfl_wpl.PERIODS else str(market).upper()
+    return base in nfl_wpl.BASES
+
+
+def _reproduces(w, l, side, price, o):
+    a, b = (w, l) if side == 0 else (l, w)
+    return v5.cond(a, b) == o.get("model_p") and a * v5.payout(int(price)) - b == o.get("ev")
+
+
+def _selection_index(calls):
+    """(sport, game, bet_type, player, price) -> [(pick_or_None, side, call)] from captured pricing identities."""
     index = {}
     for c in calls:
-        index.setdefault((c["w"], c["l"]), []).append(c)
+        i = c.get("ident")
+        if not i:
+            continue
+        game = "%s @ %s" % (i.get("away", ""), i.get("home", ""))
+        for side, col in ((0, "price_a"), (1, "price_b")):
+            price = i.get(col)
+            if not nfl_wpl._is_real(price) or price == 0:
+                continue
+            bt = "%s|%d|%s" % (i.get("market", ""), side, i.get("sgp", "") or "")
+            pick = i["labels"][side] if i.get("labels") and _is_game_line(i.get("market", "")) else None
+            key = (i["sport"], game, bt, i.get("player", "") or "", int(price))
+            index.setdefault(key, []).append((pick, side, c))
+    return index
+
+
+def attach(rows, calls):
+    """Bind each priced row to captured outcome mass through selection identity, then verify numerically."""
+    index = _selection_index(calls)
     for o in rows:
-        o.update(UNAVAIL, wpl_status="UNAVAILABLE: no matching simulator call")
+        o.update(UNAVAIL, wpl_status="UNAVAILABLE: no selection-bound simulator call")
         side, price = _side(o), o.get("price")
         if side is None or not nfl_wpl._is_real(price):
             o["wpl_status"] = "UNAVAILABLE: row side/price invalid"
             continue
-        pay = v5.payout(int(price))
-        hits = []
-        for (w, l), cs in index.items():
-            a, b = (w, l) if side == 0 else (l, w)
-            if v5.cond(a, b) == o.get("model_p") and a * pay - b == o.get("ev"):
-                hits.append((a, b, cs))
-        if len(hits) != 1:
-            o["wpl_status"] = "UNAVAILABLE: %d distinct outcome sets match" % len(hits)
+        key = (o.get("sport"), o.get("game"), o.get("bet_type"), o.get("player", "") or "", int(price))
+        cands = [(p, s, c) for (p, s, c) in index.get(key, []) if s == side and (p is None or p == o.get("pick"))]
+        if not cands:
             continue
-        a, b, cs = hits[0]
-        pushes = {c["push"] for c in cs}
-        if None in pushes or len(pushes) != 1:
-            o["wpl_status"] = "UNAVAILABLE: push mass unprovable or inconsistent across matching calls"
+        if not _is_game_line(str(o.get("bet_type", "")).split("|")[0]):
+            # props: pick labels are not reproducible here, so identity narrows and exact numerics must pick one
+            cands = [t for t in cands if _reproduces(t[2]["w"], t[2]["l"], side, price, o)]
+            if not cands:
+                o["wpl_status"] = "UNAVAILABLE: identity-bound mass does not reproduce the row's model_p/ev"
+                continue
+        masses = {(c["w"], c["l"], c["push"]) for _, _, c in cands}
+        if len(masses) != 1:
+            o["wpl_status"] = "UNAVAILABLE: %d different outcome masses for one selection identity" % len(masses)
             continue
-        pp = pushes.pop()
-        if min(a, pp, b) < 0.0 or not all(math.isfinite(x) for x in (a, pp, b)) or abs(a + pp + b - 1.0) > 1e-9:
+        w, l, push = masses.pop()
+        a, b = (w, l) if side == 0 else (l, w)
+        if not _reproduces(w, l, side, price, o):
+            o["wpl_status"] = "UNAVAILABLE: identity-bound mass does not reproduce the row's model_p/ev"
+            continue
+        if push is None:
+            o["wpl_status"] = "UNAVAILABLE: push mass not provable (%s)" % cands[0][2]["kind"]
+            continue
+        if min(a, push, b) < 0.0 or not all(math.isfinite(x) for x in (a, push, b)) or abs(a + push + b - 1.0) > 1e-9:
             o["wpl_status"] = "UNAVAILABLE: mass invalid or not normalised"
             continue
-        o.update(p_win=a, p_push=pp, p_loss=b, wpl_status="CAPTURED",
-                 wpl_source=",".join(sorted({c["src"] for c in cs})), wpl_n_calls=len(cs))
+        o.update(p_win=a, p_push=push, p_loss=b, wpl_status="CAPTURED",
+                 wpl_source=",".join(sorted({c["src"] for _, _, c in cands})), wpl_binding="selection_identity")
     return rows
 
 
