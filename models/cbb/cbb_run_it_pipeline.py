@@ -250,11 +250,11 @@ OU_MARKETS = ("TOTAL", "ALT_TOTAL", "TT_HOME", "TT_AWAY")
 
 
 def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, adapters,
-             max_quote_age_hours=24.0, as_of_utc=None):
+             max_quote_age_hours=24.0, as_of_utc=None, player_context=None):
     """Gate every quote. Returns (accepted [(quote, game_id)], rejections)."""
     accepted, rejects, realigned = [], [], []
     freeze = parse_z(freeze_utc)
-    pre = []
+    pre, player_ids = [], {}
     for q, meta in quotes:
         def rej(code, detail=""):
             rejects.append(C.Rejection("validate", q.period, q.market, code, detail, q.board_index,
@@ -266,12 +266,15 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         if q.period != "FG" and "halves" not in adapters:
             rej("PERIOD_NOT_IMPLEMENTED", f"{q.period}: models/cbb/halves adapter not landed"); continue
         # A loaded player module is not an integrated pricing/settlement path.
-        if q.market.startswith("PLAYER_"):
+        is_player = q.market.startswith("PLAYER_")
+        if is_player and player_context is None:
             note = str(meta["raw"].get("note") or meta["raw"].get("notes") or "")
             rej("PLAYER_MODEL_NOT_IMPLEMENTED", "player team not established" if "team not established" in note else "")
             continue
-        if q.player:
+        if q.player and not is_player:
             rej("UNSUPPORTED_MARKET", "game market carries player identity"); continue
+        if is_player and (q.period != "FG" or meta["order"] != ("yes_no" if q.market.endswith("_AT_LEAST") else "over_under")):
+            rej("TOTALS_ORDER_UNVERIFIED", "explicit player price order required"); continue
         if meta["price_bad"]:
             rej("PRICE_INVALID"); continue
         if q.price_a is None or q.price_b is None:
@@ -305,6 +308,12 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             rej("STARTED_BEFORE_AS_OF", f"tip {g['tipoff_utc']} <= as-of {as_of_utc}"); continue
         if q.market in LADDERS and not q.dk_event_id:
             rej("MISSING_DK_EVENT_ID", "ladder/team-total rows require a DK event id"); continue
+        if is_player:
+            try:
+                b = player_context.bind(q, g["game_id"])
+                player_ids[q.board_index] = b["player_id"]
+            except (KeyError, TypeError, ValueError) as exc:
+                rej("PLAYER_TEAM_UNKNOWN", str(exc)); continue
         pre.append((q, g["game_id"]))
     ev_games, game_evs = defaultdict(set), defaultdict(set)
     for q, gid in pre:
@@ -315,7 +324,8 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         if q.dk_event_id and (len(ev_games[q.dk_event_id]) > 1 or len(game_evs[gid]) > 1):
             rejects.append(C.Rejection("validate", q.period, q.market, "DK_EVENT_ID_CONFLICT", "",
                                        q.board_index, f"{q.away} @ {q.home}", q.provenance)); continue
-        keyed[NUM.semantic_identity(gid, q.period, q.market, q.line, q.player)].append(q)
+        keyed[NUM.semantic_identity(gid, q.period, q.market, q.line, q.player,
+                                    player_id=player_ids.get(q.board_index))].append(q)
     for key, qs in keyed.items():
         if len({(q.price_a, q.price_b) for q in qs}) > 1:
             for q in qs:
@@ -348,6 +358,115 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         out.append((q, gid))
     validate.last_neutral_total_realignments = realigned
     return out, rejects
+
+
+class PlayerResearchContext:
+    """Explicit, caller-supplied ESPN research bindings. Never establishes provider authenticity.
+
+    Each binding is tied to one original board row, its bytes and full quote terms,
+    plus an ESPN event/team/player target in the independently prepared bundle.
+    The normal ranked card remains separate; availability and settlement are unvalidated.
+    """
+    def __init__(self, bundle_path, bindings, games, freeze_utc):
+        from cbb_player_residual_pricing import PlayerBundle
+        self.bundle = PlayerBundle(bundle_path, freeze_utc)
+        if self.bundle.identity_namespace != "ESPN":
+            raise ValueError("PLAYER_RESEARCH_REQUIRES_ESPN_IDS")
+        if not isinstance(bindings, dict) or any(type(i) is not int or not isinstance(b, dict)
+                                                for i, b in bindings.items()):
+            raise ValueError("PLAYER_BINDING_SCHEMA")
+        self.bindings = json.loads(json.dumps(bindings))
+        self.binding_sha256 = digest(self.bindings)
+        # Content identity is not an authenticated crosswalk or roster receipt.
+        self.binding_evidence = "CALLER_SUPPLIED_UNAUTHENTICATED"
+        self.games = games
+        self.freeze = parse_z(freeze_utc)
+        teams = defaultdict(set)
+        for b in self.bindings.values():
+            teams[(b.get("game_id"), b.get("player_id"))].add(b.get("team_id"))
+        if any(len(v) != 1 for v in teams.values()):
+            raise ValueError("PLAYER_BINDING_TEAM_CONFLICT")
+
+    def bind(self, q, gid):
+        b = self.bindings.get(str(q.board_index))
+        g = self.games.get(gid)
+        if b is None or g is None:
+            raise ValueError("PLAYER_BINDING_MISSING")
+        if (q.period, q.market) not in C.MARKET_CATALOG or not q.market.startswith("PLAYER_"):
+            raise ValueError("PLAYER_CONTRACT_UNSUPPORTED")
+        sides = ("yes", "no") if q.market.endswith("_AT_LEAST") else ("over", "under")
+        if (q.side_a, q.side_b) != sides:
+            raise ValueError("PLAYER_CONTRACT_SIDE_MISMATCH")
+        if (type(q.price_a) is not int or type(q.price_b) is not int or
+                NUM.strict_price(q.price_a) != q.price_a or NUM.strict_price(q.price_b) != q.price_b):
+            raise ValueError("PLAYER_PRICE_INVALID")
+        if (type(q.line) not in (int, float) or NUM.strict_line(q.line) != q.line or q.line < 0):
+            raise ValueError("PLAYER_LINE_INVALID")
+        required = (q.player, q.dk_event_id, q.dk_market_id, q.source_sha256, q.tip_utc, q.captured_utc)
+        if not all(isinstance(x, str) and x.strip() for x in required):
+            raise ValueError("PLAYER_QUOTE_IDENTITY_MISSING")
+        expected = {"game_id": gid, "board_sha256": q.source_sha256, "dk_event_id": q.dk_event_id,
+                    "dk_market_id": q.dk_market_id, "player_name": q.player, "market": q.market,
+                    "line": q.line, "price_a": q.price_a, "price_b": q.price_b,
+                    "side_a": q.side_a, "side_b": q.side_b}
+        if any(b.get(k) != v for k, v in expected.items()):
+            raise ValueError("PLAYER_BINDING_QUOTE_MISMATCH")
+        if (g.id_source != "ESPN_PUBLIC_REPLAY" or b.get("namespace") != "ESPN" or
+                (g.dk_event_id is not None and g.dk_event_id != q.dk_event_id) or
+                any(other.game_id != gid and other.dk_event_id == q.dk_event_id for other in self.games.values())):
+            raise ValueError("PLAYER_BINDING_EVENT_MISMATCH")
+        if (not isinstance(b.get("player_id"), str) or not b["player_id"].strip() or
+                not isinstance(b.get("team_id"), str) or not b["team_id"].strip() or
+                b["team_id"] not in (g.home_team_id, g.away_team_id)):
+            raise ValueError("PLAYER_BINDING_TEAM_OR_ID_MISMATCH")
+        if (q.period != "FG" or q.live or parse_z(q.tip_utc) != parse_z(g.tipoff_utc) or
+                not parse_z(q.captured_utc) <= self.freeze < parse_z(g.tipoff_utc)):
+            raise ValueError("PLAYER_BINDING_CLOCK_MISMATCH")
+        if (gid, b["team_id"], b["player_id"]) not in self.bundle.targets:
+            raise ValueError("PLAYER_FORECAST_MISSING")
+        return b
+
+    def price_rows(self, accepted):
+        rows, rejects = [], []
+        for q, gid in accepted:
+            try:
+                b = self.bind(q, gid)
+                pa, pp, pb = self.bundle.probs(gid, b["team_id"], b["player_id"], q.tip_utc, q.market, q.line)
+                if not all(math.isfinite(p) and 0 <= p <= 1 for p in (pa, pp, pb)) or abs(pa + pp + pb - 1) > 1e-9:
+                    raise ValueError("PLAYER_PROBABILITY_INVALID")
+                ma, mb, _ = NM.no_vig(q.price_a, q.price_b)
+                pair = []
+                for side, win, loss, mp, odds in ((q.side_a, pa, pb, ma, q.price_a),
+                                                   (q.side_b, pb, pa, mb, q.price_b)):
+                    pair.append({"game_id": gid, "team_id": b["team_id"], "player_id": b["player_id"],
+                                 "player": q.player, "identity_namespace": "ESPN",
+                                 "board_index": q.board_index, "board_sha256": q.source_sha256,
+                                 "dk_event_id": q.dk_event_id, "dk_market_id": q.dk_market_id,
+                                 "captured_utc": q.captured_utc, "tip_utc": q.tip_utc, "market": q.market,
+                                 "period": q.period, "line": q.line, "side": side, "price": odds,
+                                 "p_win_given_participation": win, "p_push_given_participation": pp,
+                                 "p_loss_given_participation": loss, "market_novig": mp,
+                                 "conditional_ev": NM.ev_per_unit(win, pp, odds),
+                                 "fair_american_given_participation": fair_american(win, pp),
+                                 "samples": self.bundle.cache[(gid, b["team_id"], b["player_id"])]["samples"],
+                                 "provenance": q.provenance, "evidence_status": "UNVERIFIED_RESEARCH_INPUTS",
+                                 "binding_evidence": self.binding_evidence,
+                                 "selected_for_card": False, "wager_eligible": False,
+                                 "sample_threshold_status": "UNVALIDATED_RESEARCH_FLOOR",
+                                 "settlement_status": "UNVALIDATED_PARTICIPATION_CONDITIONAL",
+                                 "label": C.PAPER_0U, "counted": C.NON_COUNTED, "approved_stake_u": 0,
+                                 "stars": C.STARS_UNCALIBRATED})
+                rows.extend(pair)
+            except (KeyError, TypeError, ValueError, OverflowError, ArithmeticError) as exc:
+                rejects.append(C.Rejection("price", q.period, q.market, "PLAYER_MODEL_NOT_IMPLEMENTED",
+                                           str(exc), q.board_index, gid, q.provenance))
+        return {"status": "RESEARCH_CONDITIONAL_PARTICIPATION", "label": C.PAPER_0U,
+                "counted": C.NON_COUNTED, "approved_stake_u": 0,
+                "bundle_sha256": self.bundle.sha256, "binding_sha256": self.binding_sha256,
+                "evidence_status": "UNVERIFIED_RESEARCH_INPUTS",
+                "binding_evidence": self.binding_evidence,
+                "sample_threshold_status": "UNVALIDATED_RESEARCH_FLOOR",
+                "rows": rows}, rejects
 
 
 # ====================================================================== project adapters
@@ -903,6 +1022,10 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
 
 
 def rank(priced):
+    priced = list(priced)
+    if any(not isinstance(r, C.PricedMarket) or r.market.startswith("PLAYER_") or q.market.startswith("PLAYER_")
+           for r, q in priced):
+        raise ValueError("PLAYER_RESEARCH_RANK_ISOLATION")
     return sorted(priced, key=lambda x: (-x[0].ev_model, x[0].game_id, x[0].market, x[0].side))
 
 
@@ -939,6 +1062,8 @@ def grade(frozen, finals, close_quotes=None):
     Every side also feeds calibration (push outcomes excluded)."""
     groups = defaultdict(list)
     for r in frozen["priced"]:
+        if r["market"].startswith("PLAYER_"):
+            raise ValueError("PLAYER_RESEARCH_GRADE_ISOLATION")
         groups[(r["game_id"], r["period"], r["market"], _home_line(r))].append(r)
     grades, cal = [], []
     for key, sides in sorted(groups.items(), key=lambda kv: str(kv[0])):
@@ -1312,7 +1437,8 @@ def _slate_rows_from_espn(games, ids, short=False):
 def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season, raw_dir, out_dir,
                       totals_order_verified, n_sims=20000, seed=20261125, grade_finals=True,
                       adapters_requested=(), provenance=None, fetch=True, refresh_finals=False, now=None,
-                      team_crosswalk=None, halves_path=None, fullgame_root=None, challenger_inputs=None):
+                      team_crosswalk=None, halves_path=None, fullgame_root=None, challenger_inputs=None,
+                      player_bundle_path=None, player_bindings=None):
     """Whole pipeline in one call on public ESPN inputs (research replay; never production)."""
     import cbb_run_it as R
     now = now or datetime.now(timezone.utc)
@@ -1349,6 +1475,13 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     gm = {gid: C.GameRow(gid, season, games[gid]["tip_utc"], ct_time(games[gid]["tip_utc"]), games[gid]["home"] or "",
                          games[gid]["away"] or "", games[gid]["home_id"], games[gid]["away_id"], games[gid]["neutral"],
                          "UNVERIFIED_SINGLE_SOURCE_ESPN", id_source="ESPN_PUBLIC_REPLAY") for gid in slate_ids}
+    player_context = None
+    if "players" in req and player_bundle_path is not None and player_bindings is not None:
+        try:
+            player_context = PlayerResearchContext(player_bundle_path, player_bindings, gm, freeze_utc)
+            adapter_status["players"] = "RESEARCH_CONDITIONAL_PARTICIPATION"
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            adapter_status["players"] = f"LOAD_FAILED:{type(exc).__name__}:{exc}"
     # ---- validate: exact normalized names (runner aliases), ESPN location then ESPN short name
     # matching uses EVERY game on the date so a started game's quotes get STARTED_BEFORE_AS_OF, not NO_GAME_MATCH
     s1, s2 = _slate_rows_from_espn(games, day_ids), _slate_rows_from_espn(games, day_ids, short=True)
@@ -1380,11 +1513,21 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
                     match_census["DK_TEAM_CROSSWALK_ESPN_ID"] += 1
                     return next(r for r in s1 if r["game_id"] == gid), None
         return None, why
-    accepted, val_rejects = validate(quotes, s1, freeze_utc, totals_order_verified=totals_order_verified,
+    # Validate the standard card independently: a malformed research quote cannot
+    # suppress valid game markets via a conflicting DK event or duplicate key.
+    game_quotes = [(q, m) for q, m in quotes if not q.market.startswith("PLAYER_")]
+    player_quotes = [(q, m) for q, m in quotes if q.market.startswith("PLAYER_")]
+    accepted, val_rejects = validate(game_quotes, s1, freeze_utc, totals_order_verified=totals_order_verified,
                                      match=match, adapters=active, as_of_utc=utcz(freeze))
+    game_realignments = list(validate.last_neutral_total_realignments)
     for q, gid in accepted:
         if q.dk_event_id and gm[gid].dk_event_id is None:
             gm[gid] = replace(gm[gid], dk_event_id=q.dk_event_id)
+    player_accepted, player_validation_rejects = validate(
+        player_quotes, s1, freeze_utc, totals_order_verified=totals_order_verified,
+        match=match, adapters=active, as_of_utc=utcz(freeze), player_context=player_context)
+    val_rejects.extend(player_validation_rejects)
+    validate.last_neutral_total_realignments = game_realignments
     # ---- project: independent first (reads no quotes), then market and hybrid views
     projections, leakage, ratings_body = public_replay_project(games, slate_ids, season, freeze_utc, cfg)
     # Ensure every slate game has a Projection so later stages do not KeyError.
@@ -1404,6 +1547,10 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
     # ---- price / rank
     priced, price_rejects, parity = price(accepted, projections, sims, w, cfg, halves=halves,
                                           challenger=challenger, challenger_proj=ch_proj)
+    player_report = None
+    if player_context is not None:
+        player_report, player_rejects = player_context.price_rows(player_accepted)
+        price_rejects.extend(player_rejects)
     priced = [(replace(r, stars=stars_for(r, None)), q) for r, q in priced]
     ranked = rank(priced)
     rejects = cap_rejects + val_rejects + price_rejects
@@ -1431,6 +1578,8 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
                                    [round(PR.blend(r.prob_model, r.prob_market_novig, wt, push=r.prob_push), 5)
                                     for wt in C.CANONICAL_BLEND_WEIGHTS] for r, _ in ranked],
               "rejections": [C.row_dict(r) for r in rejects], "adapters": adapter_status}
+    if player_report is not None:
+        frozen["player_research"] = player_report
     frozen["card_sha256"] = digest(frozen)
     (out / "pipeline_card.json").write_text(json.dumps(frozen, indent=1, sort_keys=True))
     log = out / "freeze_log.jsonl"
@@ -1478,6 +1627,9 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
                            "ev_audit": "fullgame.pricing.ev_audit per side (flag only, no caps); identical rule to "
                                        "cbb_pricing.ev_sanity_audit, which takes the production card shape",
                            "meta": challenger.meta}
+    if player_report is not None:
+        a["player_research"] = {"status": player_report["status"], "priced_sides": len(player_report["rows"]),
+                                "bundle_sha256": player_report["bundle_sha256"], "ranked_card": False}
     a["match_census"] = dict(match_census)
     a["neutral_total_realignments"] = list(getattr(validate, "last_neutral_total_realignments", []))
     a["dk_auth_capture_requirements"] = AUTH_CAPTURE_REQUIREMENTS
@@ -1516,6 +1668,8 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
                "ev_gt_30": a["ev_gt_30"]["count"], "graded": gsum["ALL"] if gsum else None,
                "results_census": gsum["results"] if gsum else None, "card_sha256": frozen["card_sha256"],
                "label": C.PAPER_0U, "counted": C.NON_COUNTED}
+    if player_report is not None:
+        summary["player_research_priced_sides"] = len(player_report["rows"])
     (out / "run_summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
     return summary
 

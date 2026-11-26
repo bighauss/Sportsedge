@@ -161,6 +161,140 @@ class PlayerFailClosed(unittest.TestCase):
         self.assertEqual([r.reason_code for r in rejects], ["UNSUPPORTED_MARKET"])
 
 
+class PlayerResearchWiring(unittest.TestCase):
+    def test_real_residual_bundle_separates_same_named_players_and_holds_bad_bindings(self):
+        from dataclasses import replace
+        means = {"PTS": 12, "REB": 5, "AST": 3, "3PM": 2}
+        freeze = "2026-11-25T13:00:00Z"
+        tip = "2026-11-25T20:00:00Z"
+        g = C.GameRow("g1", 2027, tip, "2 PM CT", "Home U", "Away U", "t", "u", False,
+                      "UNVERIFIED_SINGLE_SOURCE_ESPN", dk_event_id="123", id_source="ESPN_PUBLIC_REPLAY")
+        targets, history, quotes, bindings = [], [], [], {}
+        for i, pid in enumerate(("p1", "p2")):
+            target = dict(event_id="g1", team_id="t", player_id=pid, tip_utc=tip,
+                          frozen_utc="2026-11-25T10:00:00Z", means=means, model_version="v1")
+            targets.append(target)
+            for day in range(1, 21):
+                past = dict(target, event_id=str(day), tip_utc=f"2026-11-{day:02d}T20:00:00Z",
+                            frozen_utc=f"2026-11-{day:02d}T10:00:00Z")
+                actual = dict(means, PTS=12 if day <= 10 else (15 if i == 0 else 9))
+                history.append(dict(forecast=past, observed_final_utc=f"2026-11-{day:02d}T23:00:00Z",
+                                    actual=actual, participated=True))
+            q = replace(quote("PLAYER_PTS_OU", 12.0, -110, -110, i=i), player="Same Name",
+                        dk_market_id=f"market-{i}", source_sha256="a" * 64)
+            quotes.append((q, {"raw": {}, "price_bad": False, "line_bad": False, "order": "over_under"}))
+            bindings[i] = dict(game_id="g1", board_sha256=q.source_sha256, dk_event_id=q.dk_event_id,
+                               dk_market_id=q.dk_market_id, player_name=q.player, market=q.market, line=q.line,
+                               price_a=q.price_a, price_b=q.price_b, side_a=q.side_a, side_b=q.side_b,
+                               namespace="ESPN", team_id="t", player_id=pid)
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "bundle.json"
+            p.write_text(json.dumps(dict(schema="CBB_PLAYER_RESIDUAL_BUNDLE_V1", identity_namespace="ESPN",
+                                         evidence_class="SYNTHETIC", targets=targets, history=history)))
+            ctx = P.PlayerResearchContext(p, bindings, {"g1": g}, freeze)
+            slate = [{"game_id": "g1", "tipoff_utc": tip}]
+            match = lambda *args: (slate[0], None)
+            accepted, rejects = P.validate(quotes, slate, freeze, totals_order_verified=False,
+                                           match=match, adapters=set(), as_of_utc=freeze, player_context=ctx)
+            self.assertFalse(rejects)
+            self.assertEqual(len(accepted), 2)
+            report, rejects = ctx.price_rows(accepted)
+            self.assertFalse(rejects)
+            self.assertEqual(len(report["rows"]), 4)
+            over = {r["player_id"]: r for r in report["rows"] if r["side"] == "over"}
+            self.assertEqual(over["p1"]["p_win_given_participation"], 0.5)
+            self.assertEqual(over["p2"]["p_win_given_participation"], 0.0)
+            self.assertTrue(all(r["p_push_given_participation"] == 0.5 for r in report["rows"]))
+            self.assertTrue(all(r["samples"] == 20 and r["approved_stake_u"] == 0 and
+                                r["counted"] == C.NON_COUNTED for r in report["rows"]))
+            self.assertEqual(report["evidence_status"], "UNVERIFIED_RESEARCH_INPUTS")
+            normal, _ = P.validate(quotes, slate, freeze, totals_order_verified=True, match=match, adapters={"players"})
+            self.assertEqual(normal, [])
+            self.assertEqual(P.price(accepted, {}, {}, 0.25, CFG)[0], [])
+            wrong = dict(bindings)
+            wrong[0] = dict(wrong[0], team_id="u")
+            other = P.PlayerResearchContext(p, wrong, {"g1": g}, freeze)
+            rejected, why = P.validate([quotes[0]], slate, freeze, totals_order_verified=True,
+                                       match=match, adapters=set(), player_context=other)
+            self.assertEqual(rejected, [])
+            self.assertEqual(why[0].reason_code, "PLAYER_TEAM_UNKNOWN")
+            q, meta = quotes[0]
+            rejected, why = P.validate([(q, dict(meta, order=""))], slate, freeze, totals_order_verified=True,
+                                       match=match, adapters=set(), player_context=ctx)
+            self.assertEqual(rejected, [])
+            self.assertEqual(why[0].reason_code, "TOTALS_ORDER_UNVERIFIED")
+            changed = replace(q, price_a=-120)
+            self.assertEqual(ctx.price_rows([(changed, "g1")])[0]["rows"], [])
+
+            self.assertTrue(all(r["selected_for_card"] is False and r["wager_eligible"] is False
+                                for r in report["rows"]))
+            self.assertEqual(report["binding_evidence"], "CALLER_SUPPLIED_UNAUTHENTICATED")
+            self.assertEqual(report["sample_threshold_status"], "UNVALIDATED_RESEARCH_FLOOR")
+            with self.assertRaisesRegex(ValueError, "PLAYER_RESEARCH_RANK_ISOLATION"):
+                P.rank([(report["rows"][0], q)])
+            with self.assertRaisesRegex(ValueError, "PLAYER_RESEARCH_GRADE_ISOLATION"):
+                P.grade({"priced": report["rows"]}, {"g1": {"home": 75, "away": 70}})
+
+            # Full orchestration with real CSV, residual pricer, simulation, freeze
+            # and grade. Only source capture / game projection / match are synthetic.
+            from unittest import mock
+            import cbb_run_it as R
+            base = dict(sport="CBB", home="Home U", away="Away U", period="FG",
+                        tip_utc=tip, captured_utc="2026-11-25T12:00:00Z",
+                        price_a=-110, price_b=-110, totals_order="over_under")
+            board_rows = [dict(base, market="TOTAL", line=144.5, dk_event_id="123"),
+                          dict(base, market="PLAYER_PTS_OU", line=12.0, player="Same Name",
+                               dk_event_id="123", dk_market_id="market-0"),
+                          dict(base, market="PLAYER_PTS_OU", line=12.0, player="Same Name",
+                               dk_event_id="999", dk_market_id="market-1")]
+            bp = Path(tmp) / "board.csv"
+            with bp.open("w", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=sorted({k for r in board_rows for k in r}))
+                writer.writeheader()
+                writer.writerows(board_rows)
+            board_hash = P.sha_bytes(bp.read_bytes())
+            real_bindings = {i + 1: dict(b, board_sha256=board_hash,
+                                         dk_event_id=board_rows[i + 1]["dk_event_id"])
+                             for i, b in bindings.items()}
+            games = {"g1": dict(home="Home U", away="Away U", home_alt=["Home U"], away_alt=["Away U"],
+                                home_id="t", away_id="u", neutral=False, tip_utc=tip, completed=True,
+                                home_score=75, away_score=70)}
+            kwargs = dict(date_ct="2026-11-25", board=str(bp),
+                          board_captured_utc="2026-11-25T12:00:00Z", freeze_utc=freeze, season=2027,
+                          raw_dir=tmp, totals_order_verified=True, n_sims=1000, fetch=False,
+                          now=P.parse_z("2026-11-26T00:00:00Z"), grade_finals=True)
+            off, on = Path(tmp) / "off", Path(tmp) / "on"
+            with mock.patch.object(P, "espn_capture", return_value=[]), \
+                    mock.patch.object(P, "espn_games", return_value=(games, [])), \
+                    mock.patch.object(P, "public_replay_project", return_value=({"g1": proj()}, {}, b"fixture")), \
+                    mock.patch.object(R, "_match", side_effect=lambda slate, *args: (slate[0], None)):
+                P.run_public_replay(out_dir=off, **kwargs)
+                summary = P.run_public_replay(out_dir=on, adapters_requested=("players",),
+                                              player_bundle_path=p, player_bindings=real_bindings, **kwargs)
+            before = json.loads((off / "pipeline_card.json").read_text())
+            after = json.loads((on / "pipeline_card.json").read_text())
+            self.assertTrue(before["priced"])
+            # Compare deterministic serialized bytes of the actual game-only fields.
+            # Full artifacts intentionally differ in research metadata and card digest.
+            canonical = lambda x: json.dumps(x, sort_keys=True, separators=(",", ":"),
+                                             allow_nan=False).encode("utf-8")
+            for field in ("priced", "nine_weight_grid", "games", "projections"):
+                self.assertEqual(canonical(before[field]), canonical(after[field]), field)
+            self.assertEqual(summary["player_research_priced_sides"], 2)
+            self.assertEqual({r["player_id"] for r in after["player_research"]["rows"]}, {"p1"})
+            self.assertTrue(all(r["selected_for_card"] is False for r in after["player_research"]["rows"]))
+            self.assertTrue(any(r["reason_code"] == "PLAYER_TEAM_UNKNOWN" and r["board_index"] == 2
+                                for r in after["rejections"]))
+            self.assertEqual(P.grade(before, {"g1": {"home": 75, "away": 70}}),
+                             P.grade(after, {"g1": {"home": 75, "away": 70}}))
+            grade_docs = [json.loads((directory / "grades.json").read_text()) for directory in (off, on)]
+            for grades in grade_docs:
+                self.assertTrue(grades["rows"])
+                self.assertTrue(all(not r["market"].startswith("PLAYER_") for r in grades["rows"]))
+            for field in ("rows", "summary"):
+                self.assertEqual(canonical(grade_docs[0][field]), canonical(grade_docs[1][field]), field)
+
+
 class HalvesWiring(unittest.TestCase):
     def test_half_market_priced_by_halves_adapter(self):
         calls = []
