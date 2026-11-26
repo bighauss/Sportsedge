@@ -161,6 +161,72 @@ class PlayerFailClosed(unittest.TestCase):
         self.assertEqual([r.reason_code for r in rejects], ["UNSUPPORTED_MARKET"])
 
 
+class PlayerResearchWiring(unittest.TestCase):
+    def test_real_residual_bundle_separates_same_named_players_and_holds_bad_bindings(self):
+        from dataclasses import replace
+        means = {"PTS": 12, "REB": 5, "AST": 3, "3PM": 2}
+        freeze = "2026-11-25T13:00:00Z"
+        tip = "2026-11-25T20:00:00Z"
+        g = C.GameRow("g1", 2027, tip, "2 PM CT", "Home U", "Away U", "t", "u", False,
+                      "UNVERIFIED_SINGLE_SOURCE_ESPN", dk_event_id="123", id_source="ESPN_PUBLIC_REPLAY")
+        targets, history, quotes, bindings = [], [], [], {}
+        for i, pid in enumerate(("p1", "p2")):
+            target = dict(event_id="g1", team_id="t", player_id=pid, tip_utc=tip,
+                          frozen_utc="2026-11-25T10:00:00Z", means=means, model_version="v1")
+            targets.append(target)
+            for day in range(1, 21):
+                past = dict(target, event_id=str(day), tip_utc=f"2026-11-{day:02d}T20:00:00Z",
+                            frozen_utc=f"2026-11-{day:02d}T10:00:00Z")
+                actual = dict(means, PTS=12 if day <= 10 else (15 if i == 0 else 9))
+                history.append(dict(forecast=past, observed_final_utc=f"2026-11-{day:02d}T23:00:00Z",
+                                    actual=actual, participated=True))
+            q = replace(quote("PLAYER_PTS_OU", 12.0, -110, -110, i=i), player="Same Name",
+                        dk_market_id=f"market-{i}", source_sha256="a" * 64)
+            quotes.append((q, {"raw": {}, "price_bad": False, "line_bad": False, "order": "over_under"}))
+            bindings[i] = dict(game_id="g1", board_sha256=q.source_sha256, dk_event_id=q.dk_event_id,
+                               dk_market_id=q.dk_market_id, player_name=q.player, market=q.market, line=q.line,
+                               price_a=q.price_a, price_b=q.price_b, side_a=q.side_a, side_b=q.side_b,
+                               namespace="ESPN", team_id="t", player_id=pid)
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "bundle.json"
+            p.write_text(json.dumps(dict(schema="CBB_PLAYER_RESIDUAL_BUNDLE_V1", identity_namespace="ESPN",
+                                         evidence_class="SYNTHETIC", targets=targets, history=history)))
+            ctx = P.PlayerResearchContext(p, bindings, {"g1": g}, freeze)
+            slate = [{"game_id": "g1", "tipoff_utc": tip}]
+            match = lambda *args: (slate[0], None)
+            accepted, rejects = P.validate(quotes, slate, freeze, totals_order_verified=False,
+                                           match=match, adapters=set(), as_of_utc=freeze, player_context=ctx)
+            self.assertFalse(rejects)
+            self.assertEqual(len(accepted), 2)
+            report, rejects = ctx.price_rows(accepted)
+            self.assertFalse(rejects)
+            self.assertEqual(len(report["rows"]), 4)
+            over = {r["player_id"]: r for r in report["rows"] if r["side"] == "over"}
+            self.assertEqual(over["p1"]["p_win_given_participation"], 0.5)
+            self.assertEqual(over["p2"]["p_win_given_participation"], 0.0)
+            self.assertTrue(all(r["p_push_given_participation"] == 0.5 for r in report["rows"]))
+            self.assertTrue(all(r["samples"] == 20 and r["approved_stake_u"] == 0 and
+                                r["counted"] == C.NON_COUNTED for r in report["rows"]))
+            self.assertEqual(report["evidence_status"], "UNVERIFIED_RESEARCH_INPUTS")
+            normal, _ = P.validate(quotes, slate, freeze, totals_order_verified=True, match=match, adapters={"players"})
+            self.assertEqual(normal, [])
+            self.assertEqual(P.price(accepted, {}, {}, 0.25, CFG)[0], [])
+            wrong = dict(bindings)
+            wrong[0] = dict(wrong[0], team_id="u")
+            other = P.PlayerResearchContext(p, wrong, {"g1": g}, freeze)
+            rejected, why = P.validate([quotes[0]], slate, freeze, totals_order_verified=True,
+                                       match=match, adapters=set(), player_context=other)
+            self.assertEqual(rejected, [])
+            self.assertEqual(why[0].reason_code, "PLAYER_TEAM_UNKNOWN")
+            q, meta = quotes[0]
+            rejected, why = P.validate([(q, dict(meta, order=""))], slate, freeze, totals_order_verified=True,
+                                       match=match, adapters=set(), player_context=ctx)
+            self.assertEqual(rejected, [])
+            self.assertEqual(why[0].reason_code, "TOTALS_ORDER_UNVERIFIED")
+            changed = replace(q, price_a=-120)
+            self.assertEqual(ctx.price_rows([(changed, "g1")])[0]["rows"], [])
+
+
 class HalvesWiring(unittest.TestCase):
     def test_half_market_priced_by_halves_adapter(self):
         calls = []
