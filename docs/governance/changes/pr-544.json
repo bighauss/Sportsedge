@@ -1,0 +1,63 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 544,
+  "base_commit": "fcf2ceaa3885d5f2725138511b084252656df639",
+  "protected_paths": [
+    ".github/workflows/nfl-run-it-guards.yml"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Stacked on PR 472. Remove EV-derived star ratings from the NFL run-it runner and every exported artifact, run frozen v5 in a serialized scratch directory so its legacy picks.csv cannot leak or overwrite files, guarantee restoration of v5.N_FIT, working directory and scratch cleanup on failure, and extend the existing NFL hosted workflow to execute the new regression modules. No pricing, blend, hold, selection or v5 behavior changes.",
+  "assumptions": [
+    "Passing CI shows the synthetic regression suite executes; it does not validate predictive accuracy, calibration, odds, or profitability.",
+    "Stars remain unavailable until a validated calibration exists; every row is PAPER/0u and NON_COUNTED.",
+    "Serialization is per-process only; separate processes are isolated by their own working directories.",
+    "engine/sportsedge_v5.py is frozen and unchanged."
+  ],
+  "agent_identity": "Perplexity AI",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "Dedicated engine/test_run_nfl*.py GitHub Actions check",
+    "before": null,
+    "unit": "CI workflow",
+    "source_state": "UNKNOWN"
+  },
+  "golden": {
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest -v engine.test_run_nfl engine.test_run_nfl_stars engine.test_run_nfl_artifacts engine.test_run_nfl_isolation",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "fcf2ceaa3885d5f2725138511b084252656df639",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest -v engine.test_run_nfl"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}

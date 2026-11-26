@@ -13,6 +13,16 @@ Wraps engine v5 without changing it. NFL rows only:
   4. Rows with no valid two-sided no-vig price are never blended and never go on the
      blended card; they are listed separately as MODEL-ONLY.
   5. Monte Carlo noise - N_FIT 20,000 -> 100,000 for this run only (restored afterwards).
+  6. Stars - no EV-derived star ratings. Every row carries stars = 0 and the label
+     'N/A — uncalibrated' until a validated calibration exists.
+  7. Artifacts - frozen v5 is executed inside a throwaway scratch directory, so any legacy
+     file it writes (for example picks.csv with EV-derived stars) can neither leak nor overwrite
+     a file in the caller's directory. The only artifact written is the create-only picks_nfl_*.csv.
+  8. Exception safety - the working directory and v5.N_FIT are process-wide, so v5 execution is
+     serialized under a lock; N_FIT, the working directory and the scratch directory are restored
+     on every exit path, including failures while creating the scratch directory. A relative
+     board path is resolved, and the final CSV is written, while holding the same lock, so a
+     concurrent run can neither misresolve a path nor write into another run's scratch directory.
 Every held row is listed with its reason at 0u. Every exported row carries row_id, quote_id and
 selected_for_card (true only for rows on the final research card; approved_stake_u stays 0 regardless). Non-NFL rows pass through with v5 numbers.
 
@@ -23,7 +33,10 @@ import csv
 import hashlib
 import io
 import os
+import shutil
 import sys
+import tempfile
+import threading
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +47,8 @@ GAP_PTS = 6.0
 P_RATIO_HI, P_RATIO_LO, P_ABS = 1.5, 0.67, 0.12
 N_FIT = 100000
 N_GAP = 40000
+STARS_LABEL = "N/A \u2014 uncalibrated"
+_V5_LOCK = threading.RLock()
 
 
 def load_nfl_lines(path):
@@ -117,6 +132,7 @@ def guard(o, gaps):
     """Add blend_p / model_ev / held / status to one priced side; EV becomes the blended EV."""
     o["model_ev"], o["blend_p"], o["held"], o["status"] = o["ev"], o["model_p"], "", "v5"
     o["approved_stake_u"] = 0
+    o["stars"], o["stars_label"] = 0, STARS_LABEL      # no EV-derived stars: calibration not validated
     if o["sport"] != "NFL":
         return o
     mp, fp = o["model_p"], o["market_p"]
@@ -136,7 +152,6 @@ def guard(o, gaps):
         o["blend_p"] = p
         o["ev"] = s * (p * pay - (1 - p))
         o["score"] = v5.score(o["ev"])
-        o["stars"] = v5.stars(o["score"])
         if mp > P_RATIO_HI * fp or mp < P_RATIO_LO * fp or abs(mp - fp) > P_ABS:
             reasons.append(f"model {mp * 100:.1f}% vs market {fp * 100:.1f}% (prob guard)")
     market = o["bet_type"].split("|")[0]
@@ -168,16 +183,26 @@ def best_per_group(rows):
 
 
 def build(path):
-    path = os.path.abspath(path)
-    old = v5.N_FIT
-    v5.N_FIT = N_FIT
-    try:
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            out = v5.run(path)
-        gaps = projection_gaps(load_nfl_lines(path))
-    finally:
-        v5.N_FIT = old
+    with _V5_LOCK:                                   # cwd and v5.N_FIT are process-wide state
+        path = os.path.abspath(path)                 # resolved against the caller's cwd, under the lock
+        old = v5.N_FIT
+        cwd = os.getcwd()
+        scratch = None
+        try:
+            scratch = tempfile.mkdtemp(prefix="run_nfl_v5_scratch_")
+            os.chdir(scratch)                        # frozen v5 may write legacy files relative to cwd
+            v5.N_FIT = N_FIT
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                out = v5.run(path)
+            gaps = projection_gaps(load_nfl_lines(path))
+        finally:
+            v5.N_FIT = old
+            try:
+                os.chdir(cwd)
+            finally:
+                if scratch is not None:
+                    shutil.rmtree(scratch, ignore_errors=True)
     notes = buf.getvalue().split("CARD (")[0].rstrip()
     out = [guard(o, gaps) for o in out]
     for i, o in enumerate(out):                      # stable identity: v5 emission order + quote content
@@ -215,10 +240,10 @@ def table(rows, held=False):
         stake = f" 0u - {o['held']} |" if held else ""
         print(f"| {i} | {o['sport']} {o['game']} | {o['pick']}{more} | {o['price']:+d} | "
               f"{o['model_p'] * 100:.1f}% | {o['blend_p'] * 100:.1f}% | {mk} | {o['ev'] * 100:+.1f}% | "
-              f"{'*' * o['stars']} |{stake}")
+              f"{STARS_LABEL} |{stake}")
 
 
-def main(path):
+def _main_locked(path):
     r = build(path)
     print(r["notes"], "\n")
     seen = set()
@@ -241,12 +266,17 @@ def main(path):
         table(r["held"], held=True)
     import datetime
     name = "picks_nfl_" + datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + ".csv"
-    with open(name, "x", newline="") as f:                     # create-only, never overwrite
+    with open(name, "x", newline="", encoding="utf-8") as f:  # create-only, never overwrite
         keys = list(r["out"][0].keys()) if r["out"] else ["pick"]
         w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
         w.writeheader()
         w.writerows(r["out"])
     print(f"\nAll priced sides saved to {name} (research only; approved_stake_u = 0 on every row)")
+
+
+def main(path):
+    with _V5_LOCK:                                   # the relative output name needs a stable cwd
+        return _main_locked(path)
 
 
 if __name__ == "__main__":
