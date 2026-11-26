@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -50,8 +51,48 @@ class Apply(unittest.TestCase):
 
     def test_live_suffix_and_sgp_and_player_keys(self):
         p = {("AWY @ HOM", "SGP", "", "S1"): (P.VERIFIED, ""), ("AWY @ HOM", "REC_YDS", "P1", ""): (P.ANCHOR, "")}
-        self.assertEqual(W.apply_provenance(row(game="AWY @ HOM (LIVE)", bet_type="SGP|0|S1"), p)["held"], "")
+        self.assertIn("LIVE_GAME", W.apply_provenance(row(game="AWY @ HOM (LIVE)", bet_type="SGP|0|S1"), p)["held"])
         self.assertIn("ANCHOR", W.apply_provenance(row(bet_type="REC_YDS|0|", player="P1"), p)["held"])
+
+    def test_snapshot_survives_original_board_mutation(self):
+        path = board("PIT_VERIFIED")
+        with open(path, "rb") as src:
+            original = src.read()
+        seen = []
+
+        def classify(snapshot, manifest, key):
+            self.assertNotEqual(snapshot, path)
+            with open(path, "wb") as dst:
+                dst.write(b"changed after validation")
+            with open(snapshot, "rb") as src:
+                self.assertEqual(src.read(), original)
+            seen.append(snapshot)
+            return {}
+
+        def run(snapshot):
+            self.assertEqual(snapshot, seen[0])
+            with open(snapshot, "rb") as src:
+                self.assertEqual(src.read(), original)
+            return "completed"
+
+        with mock.patch.object(P, "classify", side_effect=classify), mock.patch.object(W.run_nfl, "main", side_effect=run):
+            self.assertEqual(W.main(path, manifest={}, key=KEY), "completed")
+        self.assertFalse(os.path.exists(seen[0]))
+
+    def test_unreadable_manifest_holds_instead_of_escaping(self):
+        path = board("PIT_VERIFIED")
+
+        def run(snapshot):
+            return W.run_nfl.guard(row(model_p=0.5, market_p=0.5, price=-110, ev=-0.05,
+                                      mode="PROJECTION", pick="Over 44.5", stars=0), {})
+
+        with mock.patch.dict(os.environ, {MAN_ENV: path + ".missing", KEY_ENV: KEY}), \
+                mock.patch.object(W.nfl_wpl_capture, "installed", return_value=__import__("contextlib").nullcontext()), \
+                mock.patch.object(W.run_nfl, "guard", side_effect=lambda o, gaps: o), \
+                mock.patch.object(W.run_nfl, "main", side_effect=run):
+            result = W.main(path)
+        self.assertEqual(result["provenance"], P.AMBIGUOUS)
+        self.assertIn("classification failed", result["held"])
 
     def test_non_nfl_rows_untouched(self):
         o = row(sport="CBB")
@@ -107,8 +148,12 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(x["provenance"], P.VERIFIED, x["pick"])
             self.assertNotIn("provenance", x["held"])
         r2, rows2 = run_cli(board("PIT_VERIFIED", hp="25"), {KEY_ENV: KEY, MAN_ENV: mp})   # board differs from evidence
+        self.assertEqual(r2.returncode, 0, r2.stderr[-2000:])
+        self.assertTrue(rows2)
         self.assertTrue(all(x["provenance"] == P.UNVERIFIED and "provenance" in x["held"] for x in rows2))
         r3, rows3 = run_cli(board("PIT_VERIFIED"), {KEY_ENV: "wrong-key", MAN_ENV: mp})
+        self.assertEqual(r3.returncode, 0, r3.stderr[-2000:])
+        self.assertTrue(rows3)
         self.assertTrue(all(x["provenance"] == P.UNVERIFIED for x in rows3))
 
 
