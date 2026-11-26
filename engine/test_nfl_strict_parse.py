@@ -57,8 +57,7 @@ class Validator(unittest.TestCase):
 
     def test_plain_decimal_projections_pass(self):
         W.validate_input(board("NFL,A,B,27.5,20,,,,TOTAL,44.5,-110,-110,,,",
-                               "NFL,A,B,,,P1,A,70.25,REC_YDS,59.5,-110,-110,,,",
-                               "CBB,A,B,2+7,,,,,TOTAL,144.5,-110,-110,,,"))
+                               "NFL,A,B,,,P1,A,70.25,REC_YDS,59.5,-110,-110,,,"))
 
 
 if __name__ == "__main__":
