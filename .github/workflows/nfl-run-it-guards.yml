@@ -13,6 +13,7 @@ on:
       - 'engine/test_run_nfl_isolation.py'
       - 'engine/test_nfl_wpl.py'
       - 'engine/test_nfl_wpl_capture.py'
+      - 'engine/test_run_nfl_wpl_cli.py'
       - 'engine/sportsedge_v5.py'
       - '.github/workflows/nfl-run-it-guards.yml'
       - 'docs/governance/changes/pr-*.json'
@@ -29,6 +30,7 @@ on:
       - 'engine/test_run_nfl_isolation.py'
       - 'engine/test_nfl_wpl.py'
       - 'engine/test_nfl_wpl_capture.py'
+      - 'engine/test_run_nfl_wpl_cli.py'
       - 'engine/sportsedge_v5.py'
       - '.github/workflows/nfl-run-it-guards.yml'
 
@@ -39,7 +41,7 @@ jobs:
   card-rules:
     name: 30/70 blend, hold, push and card-row guards
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,6 +54,6 @@ jobs:
       - name: Install pinned test dependency
         run: python -m pip install numpy==2.5.3
       - name: Check NFL wrapper and card tests compile
-        run: python -m py_compile engine/run_nfl.py engine/run_nfl_wpl.py engine/nfl_wpl.py engine/nfl_wpl_capture.py engine/test_run_nfl.py engine/test_run_nfl_stars.py engine/test_run_nfl_artifacts.py engine/test_run_nfl_isolation.py engine/test_nfl_wpl.py engine/test_nfl_wpl_capture.py
+        run: python -m py_compile engine/run_nfl.py engine/run_nfl_wpl.py engine/nfl_wpl.py engine/nfl_wpl_capture.py engine/test_run_nfl.py engine/test_run_nfl_stars.py engine/test_run_nfl_artifacts.py engine/test_run_nfl_isolation.py engine/test_nfl_wpl.py engine/test_nfl_wpl_capture.py engine/test_run_nfl_wpl_cli.py
       - name: Run full card-rule regression suite
-        run: python -m unittest -v engine.test_run_nfl engine.test_run_nfl_stars engine.test_run_nfl_artifacts engine.test_run_nfl_isolation engine.test_nfl_wpl engine.test_nfl_wpl_capture
+        run: python -m unittest -v engine.test_run_nfl engine.test_run_nfl_stars engine.test_run_nfl_artifacts engine.test_run_nfl_isolation engine.test_nfl_wpl engine.test_nfl_wpl_capture engine.test_run_nfl_wpl_cli

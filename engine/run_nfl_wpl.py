@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NFL RUN IT with explicit simulator win/push/loss columns. Wraps run_nfl.main; frozen v5 untouched.
+"""NFL RUN IT with simulator win/push/loss pricing. Run as its own process; frozen v5 untouched.
 
 Usage:  python engine/run_nfl_wpl.py board.csv
 """
@@ -12,8 +12,8 @@ import run_nfl  # noqa: E402
 
 
 def main(path):
-    nfl_wpl_capture.install()
-    return run_nfl.main(path)
+    with nfl_wpl_capture.installed():
+        return run_nfl.main(path)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """Explicit win / push / loss mass for priced NFL sides (research only, PAPER/0u).
 
-direct_wpl(S, ...)   PRIMARY. Counts win / push / loss over the simulator's own per-simulation
-                     outcomes (v5.diff: >0 win, ==0 push, <0 loss). Nothing is back-solved.
+direct_wpl(S, ...)   PRIMARY for game lines. Integer win / push / loss counts over the simulator's own
+                     per-simulation outcomes (v5.diff: >0 win, ==0 push, <0 loss). Nothing is back-solved.
 wpl(...) / annotate  DIAGNOSTIC ONLY. Derives the no-push share from v5's reported pre-blend EV.
 All functions validate strictly and return an UNAVAILABLE status instead of raising or emitting NaN.
 There is no fallback to blended EV: annotate() requires the pre-blend `model_ev`.
@@ -139,7 +139,8 @@ def direct_wpl(S, sport, market, line, side):
     if int(side) == 1:
         d = -d
     n = int(d.size)
-    w, p, l = float((d > 0).sum()) / n, float((d == 0).sum()) / n, float((d < 0).sum()) / n
-    if abs(w + p + l - 1.0) > 1e-12:
-        return _unavailable("probabilities do not normalise")
-    return dict(p_win=w, p_push=p, p_loss=l, wpl_status="SIMULATED", wpl_source="simulator_counts", n_sims=n)
+    wins, push, loss = int((d > 0).sum()), int((d == 0).sum()), int((d < 0).sum())
+    if wins + push + loss != n:
+        return _unavailable("outcome counts do not sum to n")
+    return dict(p_win=wins / n, p_push=push / n, p_loss=loss / n, wpl_status="SIMULATED",
+                wpl_source="simulator_counts", n_sims=n, counts=(wins, push, loss))
