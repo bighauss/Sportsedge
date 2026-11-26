@@ -377,6 +377,8 @@ class PlayerResearchContext:
             raise ValueError("PLAYER_BINDING_SCHEMA")
         self.bindings = json.loads(json.dumps(bindings))
         self.binding_sha256 = digest(self.bindings)
+        # Content identity is not an authenticated crosswalk or roster receipt.
+        self.binding_evidence = "CALLER_SUPPLIED_UNAUTHENTICATED"
         self.games = games
         self.freeze = parse_z(freeze_utc)
         teams = defaultdict(set)
@@ -410,7 +412,8 @@ class PlayerResearchContext:
         if any(b.get(k) != v for k, v in expected.items()):
             raise ValueError("PLAYER_BINDING_QUOTE_MISMATCH")
         if (g.id_source != "ESPN_PUBLIC_REPLAY" or b.get("namespace") != "ESPN" or
-                (g.dk_event_id is not None and g.dk_event_id != q.dk_event_id)):
+                (g.dk_event_id is not None and g.dk_event_id != q.dk_event_id) or
+                any(other.game_id != gid and other.dk_event_id == q.dk_event_id for other in self.games.values())):
             raise ValueError("PLAYER_BINDING_EVENT_MISMATCH")
         if (not isinstance(b.get("player_id"), str) or not b["player_id"].strip() or
                 not isinstance(b.get("team_id"), str) or not b["team_id"].strip() or
@@ -447,6 +450,9 @@ class PlayerResearchContext:
                                  "fair_american_given_participation": fair_american(win, pp),
                                  "samples": self.bundle.cache[(gid, b["team_id"], b["player_id"])]["samples"],
                                  "provenance": q.provenance, "evidence_status": "UNVERIFIED_RESEARCH_INPUTS",
+                                 "binding_evidence": self.binding_evidence,
+                                 "selected_for_card": False, "wager_eligible": False,
+                                 "sample_threshold_status": "UNVALIDATED_RESEARCH_FLOOR",
                                  "settlement_status": "UNVALIDATED_PARTICIPATION_CONDITIONAL",
                                  "label": C.PAPER_0U, "counted": C.NON_COUNTED, "approved_stake_u": 0,
                                  "stars": C.STARS_UNCALIBRATED})
@@ -458,6 +464,8 @@ class PlayerResearchContext:
                 "counted": C.NON_COUNTED, "approved_stake_u": 0,
                 "bundle_sha256": self.bundle.sha256, "binding_sha256": self.binding_sha256,
                 "evidence_status": "UNVERIFIED_RESEARCH_INPUTS",
+                "binding_evidence": self.binding_evidence,
+                "sample_threshold_status": "UNVALIDATED_RESEARCH_FLOOR",
                 "rows": rows}, rejects
 
 
@@ -1014,6 +1022,10 @@ def price(accepted, projections, sims, w, cfg, halves=None, challenger=None, cha
 
 
 def rank(priced):
+    priced = list(priced)
+    if any(not isinstance(r, C.PricedMarket) or r.market.startswith("PLAYER_") or q.market.startswith("PLAYER_")
+           for r, q in priced):
+        raise ValueError("PLAYER_RESEARCH_RANK_ISOLATION")
     return sorted(priced, key=lambda x: (-x[0].ev_model, x[0].game_id, x[0].market, x[0].side))
 
 
@@ -1050,6 +1062,8 @@ def grade(frozen, finals, close_quotes=None):
     Every side also feeds calibration (push outcomes excluded)."""
     groups = defaultdict(list)
     for r in frozen["priced"]:
+        if r["market"].startswith("PLAYER_"):
+            raise ValueError("PLAYER_RESEARCH_GRADE_ISOLATION")
         groups[(r["game_id"], r["period"], r["market"], _home_line(r))].append(r)
     grades, cal = [], []
     for key, sides in sorted(groups.items(), key=lambda kv: str(kv[0])):
@@ -1499,13 +1513,21 @@ def run_public_replay(*, date_ct, board, board_captured_utc, freeze_utc, season,
                     match_census["DK_TEAM_CROSSWALK_ESPN_ID"] += 1
                     return next(r for r in s1 if r["game_id"] == gid), None
         return None, why
-    accepted, val_rejects = validate(quotes, s1, freeze_utc, totals_order_verified=totals_order_verified,
-                                     match=match, adapters=active, as_of_utc=utcz(freeze), player_context=player_context)
-    player_accepted = [(q, gid) for q, gid in accepted if q.market.startswith("PLAYER_")]
-    accepted = [(q, gid) for q, gid in accepted if not q.market.startswith("PLAYER_")]
+    # Validate the standard card independently: a malformed research quote cannot
+    # suppress valid game markets via a conflicting DK event or duplicate key.
+    game_quotes = [(q, m) for q, m in quotes if not q.market.startswith("PLAYER_")]
+    player_quotes = [(q, m) for q, m in quotes if q.market.startswith("PLAYER_")]
+    accepted, val_rejects = validate(game_quotes, s1, freeze_utc, totals_order_verified=totals_order_verified,
+                                     match=match, adapters=active, as_of_utc=utcz(freeze))
+    game_realignments = list(validate.last_neutral_total_realignments)
     for q, gid in accepted:
         if q.dk_event_id and gm[gid].dk_event_id is None:
             gm[gid] = replace(gm[gid], dk_event_id=q.dk_event_id)
+    player_accepted, player_validation_rejects = validate(
+        player_quotes, s1, freeze_utc, totals_order_verified=totals_order_verified,
+        match=match, adapters=active, as_of_utc=utcz(freeze), player_context=player_context)
+    val_rejects.extend(player_validation_rejects)
+    validate.last_neutral_total_realignments = game_realignments
     # ---- project: independent first (reads no quotes), then market and hybrid views
     projections, leakage, ratings_body = public_replay_project(games, slate_ids, season, freeze_utc, cfg)
     # Ensure every slate game has a Projection so later stages do not KeyError.
