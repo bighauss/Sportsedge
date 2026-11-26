@@ -13,8 +13,11 @@ share a printed label. Frozen v5 is untouched.
 """
 import contextlib
 import csv
+import hashlib
+import json
 import math
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,7 +28,8 @@ import nfl_wpl  # noqa: E402
 TOL = 1e-9
 ID_KEYS = {"market", "price_a", "price_b", "home"}
 CALLSITE_MODULES = {v5.__name__}
-UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_binding=None)
+UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_binding=None,
+               raw_quote_id=None, selection_id=None, quote_identity_status="UNBOUND")
 
 
 def prop_push(spec, mean, line, seed):
@@ -50,9 +54,16 @@ def prop_push(spec, mean, line, seed):
 
 
 def _is_game_line(market):
-    head, _, rest = str(market).upper().partition("_")
-    base = rest if rest and head in nfl_wpl.PERIODS else str(market).upper()
-    return base in nfl_wpl.BASES
+    """Exactly the frozen NFL game-line catalog, including full-game binary outcomes."""
+    pre, base = v5.split_market("NFL", str(market).upper())
+    if base in nfl_wpl.BASES:
+        return True
+    if pre:
+        return False
+    if base in {"OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW"}:
+        return True
+    match = re.fullmatch(r"(?:HOME|AWAY)_BY_([1-9][0-9]{0,2})_([1-9][0-9]{0,2})", base)
+    return bool(match and int(match[1]) <= int(match[2]))
 
 
 def _exact_g(line):
@@ -184,6 +195,113 @@ def _selection_index(calls):
     return index
 
 
+def _digest(fields):
+    return hashlib.sha256(json.dumps(fields, ensure_ascii=True, separators=(",", ":"),
+                                    allow_nan=False).encode("utf-8")).hexdigest()
+
+
+def raw_identity(i, side):
+    """Content-addressed identity from the exact captured simulator board row, not emission order.
+    Missing source identifiers stay diagnostic: a digest is not an authentication receipt.
+    """
+    def val(k):
+        return str(i.get(k) or "").strip()
+
+    def numeric(k):
+        x = i.get(k)
+        return float(x) if x is not None else None
+
+    event = val("event_id")
+    book = val("book")
+    capture = val("captured_utc") or val("capture_ts")
+    player_id = val("player_id")
+    selection = ["NFL_SELECTION_V1", val("sport"), event, val("kickoff_utc"),
+                 val("home"), val("away"), val("market"), val("player"), player_id,
+                 val("team"), numeric("line"), val("sgp"), val("side"), side]
+    selection_id = _digest(selection)
+    quote_id = _digest(["NFL_QUOTE_V1", selection_id, book, capture, val("source"),
+                        val("market_id"), val("selection_id_a"), val("selection_id_b"),
+                        numeric("price_a"), numeric("price_b")])
+    complete = bool(event and val("kickoff_utc") and book and capture
+                    and (not val("player") or (player_id and val("team"))))
+    return selection_id, quote_id, "SOURCE_FIELDS_PRESENT" if complete else "SOURCE_FIELDS_INCOMPLETE"
+
+
+def coverage_report(path, outputs):
+    """Reconcile all offered sides in a validated NFL board against bound output IDs.
+    An unbound output is never assigned by guesswork. Absence is not a specific
+    simulator rejection reason: the unbound output list and runner notes are separate.
+    """
+    from collections import Counter, defaultdict
+    from pathlib import Path
+    import io
+
+    raw = Path(path).read_bytes()
+    offered = []
+    for index, raw_row in enumerate(csv.DictReader(io.StringIO(raw.decode("utf-8-sig"))), start=2):
+        r = {k.strip().lower(): (v or "").strip() for k, v in raw_row.items() if k}
+        if r.get("sport", "").upper() != "NFL":
+            continue
+        r["sport"], r["market"] = "NFL", r["market"].upper()
+        r["line"] = v5.num(r.get("line")) or 0.0
+        r["price_a"], r["price_b"] = v5.num(r.get("price_a")), v5.num(r.get("price_b"))
+        for side, col in enumerate(("price_a", "price_b")):
+            if r[col] is None:
+                continue
+            sid, qid, identity = raw_identity(r, side)
+            offered.append(dict(board_row=index, market=r["market"], game=r["away"] + " @ " + r["home"],
+                                player=r.get("player", ""), line=r["line"], side=side, price=r[col],
+                                selection_id=sid, quote_id=qid, source_identity_status=identity))
+    by_id = defaultdict(list)
+    expected = Counter(o["quote_id"] for o in offered)
+    unbound = []
+    for o in outputs:
+        qid = o.get("raw_quote_id")
+        if qid not in expected:
+            unbound.append({k: o.get(k) for k in ("row_id", "game", "bet_type", "pick", "price",
+                                                   "raw_quote_id", "quote_identity_status", "wpl_status", "held")})
+        else:
+            by_id[qid].append(o)
+    def family(m):
+        return "WINNING_MARGIN" if m.startswith(("HOME_BY_", "AWAY_BY_")) else m
+
+    catalog = set(nfl_wpl.BASES) | set(v5.PROPS["drive"]) | set(v5.TD_NAMES)
+    catalog |= {p + "_" + m for p in v5.PERIODS["NFL"] for m in nfl_wpl.BASES}
+    catalog |= {"OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW", "WINNING_MARGIN", "SGP"}
+    families = {m: Counter() for m in sorted(catalog)}
+    for entry in offered:
+        qid = entry["quote_id"]
+        matches = by_id[qid]
+        if expected[qid] != 1 or len(matches) > 1:
+            state, reason = "DUPLICATE_OR_AMBIGUOUS", "nonunique input or output quote identity"
+        elif not matches:
+            state, reason = "NO_BOUND_OUTPUT", "no uniquely bound priced output; inspect runner notes"
+        else:
+            o = matches[0]
+            if o.get("wpl_status") != "CAPTURED":
+                state, reason = "WPL_UNAVAILABLE", o.get("wpl_status") or "missing W/P/L status"
+            elif o.get("held"):
+                state, reason = "PRICED_HELD", o["held"]
+            else:
+                state, reason = "PRICED_RESEARCH", ""
+        entry.update(status=state, reason=reason, matched_output_count=len(matches),
+                     approved_stake_u=0)
+        counts = families.setdefault(family(entry["market"]), Counter())
+        counts["offered"] += 1
+        counts[state] += 1
+    statuses = ("DUPLICATE_OR_AMBIGUOUS", "NO_BOUND_OUTPUT", "WPL_UNAVAILABLE",
+                "PRICED_HELD", "PRICED_RESEARCH")
+    summary = Counter(e["status"] for e in offered)
+    return dict(schema="NFL_BOARD_COVERAGE_V1", board_sha256=hashlib.sha256(raw).hexdigest(),
+                label="PAPER_0U", counted="NON_COUNTED", approved_stake_u=0,
+                offered_side_count=len(offered), emitted_row_count=len(outputs),
+                unbound_output_count=len(unbound),
+                status_counts={s: summary[s] for s in statuses},
+                families={m: dict(offered=n["offered"], **{s: n[s] for s in statuses})
+                          for m, n in sorted(families.items())},
+                offered=offered, unbound_outputs=unbound)
+
+
 def attach(rows, calls):
     """Bind each priced row to captured outcome mass through selection identity, then verify numerically."""
     index = _selection_index(calls)
@@ -197,6 +315,12 @@ def attach(rows, calls):
         cands = [c for s, c in index.get(key, []) if s == side]
         if not cands:
             continue
+        identities = {raw_identity(c["ident"], side) for c in cands}
+        if len(identities) != 1:
+            o["quote_identity_status"] = "AMBIGUOUS"
+            o["wpl_status"] = "UNAVAILABLE: distinct source quotes share one v5 output label"
+            continue
+        o["selection_id"], o["raw_quote_id"], o["quote_identity_status"] = next(iter(identities))
         masses = {(c["w"], c["l"], c["push"]) for c in cands}
         if len(masses) != 1:
             o["wpl_status"] = "UNAVAILABLE: %d different outcome masses for one selection identity" % len(masses)

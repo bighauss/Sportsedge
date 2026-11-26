@@ -1,5 +1,6 @@
 """Provenance classification regression (pure python; no v5 / numpy needed)."""
 import os
+from datetime import datetime
 import sys
 import tempfile
 import unittest
@@ -8,7 +9,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import nfl_provenance as P  # noqa: E402
 
-H = "sport,home,away,home_proj,away_proj,proj_provenance,player,team,proj,market,line,price_a,price_b,sgp,side\n"
+H = "sport,home,away,home_proj,away_proj,proj_provenance,player,team,proj,market,line,price_a,price_b,sgp,side,event_id,kickoff_utc,captured_utc,player_id\n"
+NOW = datetime.fromisoformat("2026-11-26T16:00:00+00:00")
+KICK = "2026-11-26T18:00:00+00:00"
+CAPTURE = "2026-11-26T15:00:00+00:00"
 V = "PIT_VERIFIED"
 KEY = "test-key"
 
@@ -29,8 +33,11 @@ SGP = "NFL,A,B,,,,,,,SGP,,600,,S1,"
 
 
 def entry(subject, values, key=KEY, **kw):
-    e = dict(subject=subject, values=values, model_version="m1", input_hash="h" * 8,
-             forecast_ts="2026-11-26T14:00:00+00:00", kickoff_ts="2026-11-26T18:00:00+00:00")
+    e = dict(subject=subject, values=values, model_version="m1", input_hash="a" * 64,
+             forecast_ts="2026-11-26T14:00:00+00:00", available_ts="2026-11-26T14:30:00+00:00",
+             kickoff_ts=KICK, event_id="event-ab")
+    if subject.startswith("prop|"):
+        e.update(player_id=subject.split("|")[3], team="A")
     e.update(kw)
     e["sig"] = P.sign(e, key)
     return e
@@ -44,11 +51,17 @@ FULL = manifest(entry("game|A|B", ["27.0", "20.0"]), entry("prop|A|B|P1|REC_YDS"
                 entry("prop|A|B|P1|ATD", ["0.3"]), entry("prop|A|B|P2|REC_YDS", ["70.0"]))
 
 
-def run(*rows, ev=FULL, key=KEY):
+def run(*rows, ev=FULL, key=KEY, event_id="event-ab", kick=KICK, capture=CAPTURE, now=NOW, athlete=None):
     p = os.path.join(tempfile.mkdtemp(), "b.csv")
+    extended = []
+    for r in rows:
+        fields = r.split(",")
+        pid = fields[6]
+        eid = event_id if fields[1:3] == ["A", "B"] else "event-cd"
+        extended.append(r + "," + ",".join((eid, kick, capture, athlete if athlete is not None and pid else pid)))
     with open(p, "w", newline="") as f:
-        f.write(H + "\n".join(rows) + "\n")
-    return P.classify(p, ev, key)
+        f.write(H + "\n".join(extended) + "\n")
+    return P.classify(p, ev, key, now=now)
 
 
 def cls(res, market, player="", sgp=""):
@@ -193,6 +206,32 @@ class Adversarial(unittest.TestCase):
 
     def test_negative_control_verified_tag_but_no_game_projection_is_anchor(self):
         self.assertEqual(cls(run(*game("", "", V)), "TOTAL"), P.ANCHOR)
+
+    def test_event_bound_receipt_rejects_rematch_and_changed_kickoff(self):
+        self.assertEqual(cls(run(*game()), "TOTAL"), P.VERIFIED)
+        for kw in ({"event_id": "rematch"}, {"kick": "2026-11-26T19:00:00+00:00"},
+                   {"event_id": ""}, {"capture": ""}):
+            with self.subTest(kw=kw):
+                self.assertEqual(cls(run(*game(), **kw), "TOTAL"), P.UNVERIFIED)
+
+    def test_pregame_clock_rejects_future_capture_and_late_run(self):
+        for kw in ({"capture": "2026-11-26T17:00:00+00:00"},
+                   {"now": datetime.fromisoformat(KICK)},
+                   {"capture": "2026-11-26T14:15:00+00:00"}):
+            with self.subTest(kw=kw):
+                self.assertEqual(cls(run(*game(), **kw), "TOTAL"), P.UNVERIFIED)
+
+    def test_player_id_must_match_signed_receipt_for_props_and_sgp(self):
+        self.assertEqual(cls(run(*game(), prop(), athlete="different"), "REC_YDS", "P1"), P.UNVERIFIED)
+        legs = (prop(sgp="S1", side="A"), prop("P2", sgp="S1", side="B"), SGP)
+        self.assertEqual(cls(run(*game(), *legs, athlete="same-id"), "SGP", "", "S1"), P.UNVERIFIED)
+
+    def test_legacy_signed_receipt_and_unavailable_forecast_held(self):
+        old = entry("game|A|B", ["27.0", "20.0"])
+        del old["event_id"]
+        old["sig"] = P.sign(old, KEY)
+        for e in (old, entry("game|A|B", ["27.0", "20.0"], available_ts="2026-11-26T15:30:00+00:00")):
+            self.assertEqual(cls(run(*game(), ev=manifest(e)), "TOTAL"), P.UNVERIFIED)
 
 
 if __name__ == "__main__":

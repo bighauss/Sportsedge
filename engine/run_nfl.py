@@ -40,6 +40,7 @@ import shutil
 import sys
 import tempfile
 import threading
+from collections import Counter
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -185,6 +186,28 @@ def best_per_group(rows):
     return sorted(picks, key=lambda x: -x["ev"])
 
 
+def assign_quote_ids(rows):
+    """Canonical W/P/L outputs use raw quote identity; legacy outputs are explicitly ordinal-only.
+    Identical raw offers are not distinct observations. Keep all copies for audit, hold all copies.
+    """
+    counts = Counter(o.get("raw_quote_id") for o in rows if o.get("raw_quote_id"))
+    for i, o in enumerate(rows):
+        o["row_id"] = i
+        if "quote_identity_status" in o:
+            o["quote_id"] = o.get("raw_quote_id")
+            if o["quote_id"] and counts[o["quote_id"]] > 1:
+                o["quote_identity_status"] = "DUPLICATE"
+                o["held"] = "; ".join(filter(None, (o.get("held"), "duplicate raw quote identity (all copies held)")))
+            elif not o["quote_id"]:
+                o["held"] = "; ".join(filter(None, (o.get("held"), "raw quote identity unavailable")))
+            elif o["quote_identity_status"] == "SOURCE_FIELDS_INCOMPLETE":
+                o["held"] = "; ".join(filter(None, (o.get("held"), "raw quote source identity incomplete")))
+        else:
+            o["quote_id"] = hashlib.sha256("|".join(str(o.get(k, "")) for k in (
+                "sport", "game", "bet_type", "player", "pick", "price")).encode() + f"|{i}".encode()).hexdigest()[:16]
+            o["quote_identity_status"] = "LEGACY_ORDINAL_ONLY"
+        o["selected_for_card"] = False
+
 def build(path):
     with _V5_LOCK:                                   # cwd and v5.N_FIT are process-wide state
         path = os.path.abspath(path)                 # resolved against the caller's cwd, under the lock
@@ -208,11 +231,7 @@ def build(path):
                     shutil.rmtree(scratch, ignore_errors=True)
     notes = buf.getvalue().split("CARD (")[0].rstrip()
     out = [guard(o, gaps) for o in out]
-    for i, o in enumerate(out):                      # stable identity: v5 emission order + quote content
-        o["row_id"] = i
-        o["quote_id"] = hashlib.sha256("|".join(str(o.get(k, "")) for k in (
-            "sport", "game", "bet_type", "player", "pick", "price")).encode() + f"|{i}".encode()).hexdigest()[:16]
-        o["selected_for_card"] = False
+    assign_quote_ids(out)
     held = sorted([o for o in out if o["held"]], key=lambda x: (x["game"], x["pick"]))
     ok = [o for o in out if not o["held"] and o["ev"] >= v5.EV_FLOOR]
     blended = best_per_group([o for o in ok if o["status"] != "MODEL_ONLY"])
@@ -246,8 +265,12 @@ def table(rows, held=False):
               f"{STARS_LABEL} |{stake}")
 
 
-def _main_locked(path):
+def _main_locked(path, *, coverage=False):
     r = build(path)
+    audit = None
+    if coverage:
+        import nfl_wpl_capture
+        audit = nfl_wpl_capture.coverage_report(path, r['out'])
     print(r["notes"], "\n")
     seen = set()
     for (g, mk, ln, _side, _price), gap in sorted(r["gaps"].items(), key=lambda kv: kv[0][:4]):
@@ -275,11 +298,18 @@ def _main_locked(path):
         w.writeheader()
         w.writerows(r["out"])
     print(f"\nAll priced sides saved to {name} (research only; approved_stake_u = 0 on every row)")
+    if audit is not None:
+        import json
+        audit_name = name.replace("picks_nfl_", "coverage_nfl_").replace(".csv", ".json")
+        with open(audit_name, "x", encoding="utf-8") as f:
+            json.dump(audit, f, sort_keys=True, indent=2, allow_nan=False)
+            f.write("\n")
+        print(f"Coverage: {audit['offered_side_count']} offered sides, {audit['emitted_row_count']} emitted rows; {audit_name}")
 
 
-def main(path):
+def main(path, *, coverage=False):
     with _V5_LOCK:                                   # the relative output name needs a stable cwd
-        return _main_locked(path)
+        return _main_locked(path, coverage=coverage)
 
 
 if __name__ == "__main__":

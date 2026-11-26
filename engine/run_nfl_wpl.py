@@ -36,7 +36,7 @@ NUMERIC_COLS = ("home_proj", "away_proj", "proj", "home_score", "away_score", "r
 NEEDS_LINE = {"SPREAD", "TOTAL", "HOME_TT", "AWAY_TT"}
 PERIOD_OK = NEEDS_LINE | {"ML"}                                   # allowed with a period prefix
 FULL_GAME_ONLY = {"OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW"}  # v5 prices these only without a prefix
-REQUIRED_COLUMNS = ("sport", "home", "market")
+REQUIRED_COLUMNS = ("sport", "home", "away", "market")
 ENV_MANIFEST, ENV_KEY = "SPORTSEDGE_EVIDENCE_MANIFEST", "SPORTSEDGE_EVIDENCE_KEY"
 
 
@@ -46,12 +46,7 @@ def player_markets():
 
 
 def game_market_ok(market):
-    pre, base = v5.split_market("NFL", market)
-    if base in PERIOD_OK:
-        return True
-    if pre:
-        return False
-    return base in FULL_GAME_ONLY or base == "SGP" or base.startswith(("HOME_BY_", "AWAY_BY_"))
+    return market == "SGP" or nfl_wpl_capture._is_game_line(market)
 
 
 def validate_input(path):
@@ -70,16 +65,27 @@ def validate_input(path):
         raise ValueError("missing required column(s) in board header: " + ", ".join(absent))
     ix = {h: i for i, h in enumerate(header) if h}
     cell = lambda r, k: (r[ix[k]].strip() if k in ix and ix[k] < len(r) else "")  # noqa: E731
-    odds, lines, shape, nums = [], [], [], []
+    odds, lines, shape, nums, live = [], [], [], [], []
+    nfl_rows = 0
     for n, r in enumerate(rows[1:], start=2):
-        if not any(c.strip() for c in r) or cell(r, "sport").upper() != "NFL":
+        if not any(c.strip() for c in r):
             continue
-        if any(c.strip() for c in r[len(header):]):
+        if cell(r, "sport").upper() != "NFL":
+            shape.append("line %d is not an NFL row" % n)
+            continue
+        nfl_rows += 1
+        if len(r) != len(header):
             shape.append("line %d has %d cells for %d columns" % (n, len(r), len(header)))
             continue
         market, player = cell(r, "market").upper(), cell(r, "player")
         if not cell(r, "home"):
             shape.append("line %d has no home team" % n)
+        if not cell(r, "away"):
+            shape.append("line %d has no away team" % n)
+        if cell(r, "home").casefold() == cell(r, "away").casefold():
+            shape.append("line %d must have distinct teams" % n)
+        if any(cell(r, col) for col in ("remaining", "home_score", "away_score")):
+            live.append("line %d has live score/remaining data" % n)
         if not market:
             shape.append("line %d has no market" % n)
             continue
@@ -109,6 +115,8 @@ def validate_input(path):
                 shape.append("line %d unknown game-level market %r" % (n, market))
             elif base in NEEDS_LINE and not v:
                 lines.append("line %d market=%s has no line" % (n, market))
+    if not nfl_rows:
+        shape.append("board has no NFL rows")
     if shape:
         raise ValueError("malformed NFL board structure: " + "; ".join(shape[:20]))
     if odds:
@@ -117,6 +125,8 @@ def validate_input(path):
         raise ValueError("non-canonical projection/score on NFL rows: " + "; ".join(nums[:20]))
     if lines:
         raise ValueError("non-canonical line on NFL rows: " + "; ".join(lines[:20]))
+    if live:
+        raise ValueError("pregame-only NFL board: " + "; ".join(live[:20]))
 
 
 def apply_provenance(o, prov):
@@ -141,6 +151,19 @@ def apply_provenance(o, prov):
 
 
 def main(path, manifest=None, key=None):
+    # All validation, simulation and coverage use one private immutable-by-convention
+    # snapshot, not multiple reads of a mutable source path.
+    import tempfile
+    from pathlib import Path
+    with run_nfl._V5_LOCK:
+        raw = Path(path).read_bytes()
+        with tempfile.TemporaryDirectory(prefix="nfl_board_snapshot_") as tmp:
+            snapshot = Path(tmp) / "board.csv"
+            snapshot.write_bytes(raw)
+            return _run_snapshot(str(snapshot), manifest, key)
+
+
+def _run_snapshot(path, manifest, key):
     validate_input(path)
     if manifest is None and os.environ.get(ENV_MANIFEST):
         manifest = nfl_provenance.load_manifest(os.environ[ENV_MANIFEST])
@@ -157,7 +180,7 @@ def main(path, manifest=None, key=None):
 
         run_nfl.guard = guard
         try:
-            return run_nfl.main(path)
+            return run_nfl.main(path, coverage=True)
         finally:
             run_nfl.guard = inner
 

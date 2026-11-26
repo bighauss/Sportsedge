@@ -157,10 +157,46 @@ class Cli(unittest.TestCase):
         sys.path.insert(0, HERE)
         spec.loader.exec_module(mod)
         mod.validate_input(write_raw(HEADER_P + "NFL,A,B,ML,,,-150,130\nNFL,A,B,ATD,WR1,,150,-190\n"
-                                     "NFL,A,B,PASS_YDS,QB1,249.5,-110,-110\nNFL,A,B,1H_SPREAD,,-3.5,-110,-110\n"
-                                     "CBB,A,B,TOTAL,,,50,x\n"))
+                                     "NFL,A,B,PASS_YDS,QB1,249.5,-110,-110\nNFL,A,B,1H_SPREAD,,-3.5,-110,-110\n"))
+        with self.assertRaisesRegex(ValueError, "not an NFL row"):
+            mod.validate_input(write_raw(HEADER_P + "CBB,A,B,TOTAL,,,50,x\n"))
         with self.assertRaises(ValueError):
             mod.validate_input(write_raw(HEADER_P + "NFL,A,B,ATD,,,150,-190\n"))
+
+
+    def test_real_v5_special_game_markets_bind_simulator_mass(self):
+        markets = ("OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW",
+                   "HOME_BY_1_6", "AWAY_BY_7_13")
+        extra = [dict(market=m, price_a=150, price_b=-190) for m in markets]
+        wd, r = run_cli(os.path.abspath(base.board(base.game(24, 20, extra=extra))))
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        rows = [x for x in read_rows(wd) if x["bet_type"].split("|")[0] in markets]
+        self.assertEqual(collections.Counter(x["bet_type"].split("|")[0] for x in rows),
+                         collections.Counter({m: 2 for m in markets}))
+        for x in rows:
+            self.assertEqual(x["wpl_status"], "CAPTURED", (x["pick"], x["wpl_status"]))
+            self.assertAlmostEqual(sum(float(x[c]) for c in ("p_win", "p_push", "p_loss")), 1.0, places=9)
+            self.assertEqual(float(x["p_push"]), 0.0)
+
+
+    def test_canonical_cli_exports_audit_for_unpriced_offers(self):
+        import hashlib
+        import json
+        text = HEADER_P + "NFL,A,B,TOTAL,,44.5,-110,-110\nNFL,A,B,REC_YDS,WR1,59.5,150,\n"
+        p = write_raw(text)
+        wd, r = run_cli(p)
+        self.assertEqual(r.returncode, 0, r.stderr[-3000:])
+        files = glob.glob(os.path.join(wd, "coverage_nfl_*.json"))
+        self.assertEqual(len(files), 1)
+        with open(files[0], encoding="utf-8") as f:
+            report = json.load(f)
+        with open(p, "rb") as f:
+            self.assertEqual(report["board_sha256"], hashlib.sha256(f.read()).hexdigest())
+        self.assertEqual(report["offered_side_count"], 3)
+        self.assertEqual(sum(report["status_counts"].values()), 3)
+        self.assertEqual(report["families"]["REC_YDS"]["offered"], 1)
+        self.assertEqual(report["families"]["REC_YDS"]["NO_BOUND_OUTPUT"], 1)
+        self.assertEqual(report["approved_stake_u"], 0)
 
 
 if __name__ == "__main__":

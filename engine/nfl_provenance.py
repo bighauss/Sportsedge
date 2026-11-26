@@ -14,7 +14,9 @@ A component is VERIFIED only when BOTH hold: the board row claims proj_provenanc
 evidence entry for that exact subject exists whose HMAC-SHA256 verifies under the caller's key, whose recorded values
 equal the board's exactly, which names a model_version and an input_hash, and whose forecast_ts is strictly
 before its kickoff_ts (both timezone-aware). A claim without evidence is UNVERIFIED. The CSV tag alone is never proof.
-Trust rests on custody of the key; this module does not recompute input hashes or re-run the model.
+The signed receipt must also bind event_id, kickoff, player_id/team for props, and forecast/availability
+clocks to the board capture and actual pregame run clock. Legacy receipts are withheld. Trust rests on
+custody of the key; this module checks input hash syntax but does not recompute hashes or re-run the model.
 
 Projection cells are parsed STRICTLY (plain ASCII decimals, bounded length). Frozen v5's num() deletes every '+', so
 '2+7' would become 27; here it is INVALID_INPUT.
@@ -30,7 +32,7 @@ import hmac
 import json
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 VERIFIED, UNVERIFIED, ANCHOR, MIXED, AMBIGUOUS, INVALID = (
     "VERIFIED_PIT", "UNVERIFIED_PROJECTION", "ANCHOR", "MIXED", "AMBIGUOUS", "INVALID_INPUT")
@@ -80,7 +82,25 @@ def _ts(x):
     return t
 
 
-def _evidence(subject, values, manifest, key):
+def _event_context(rows, now):
+    """One event per team-pair group; all rows must carry an explicit pregame clock."""
+    ids = {r.get("event_id", "") for r in rows}
+    if len(ids) != 1 or not next(iter(ids)):
+        return "missing or conflicting board event_id"
+    try:
+        kicks = {_ts(r.get("kickoff_utc")) for r in rows}
+        captures = [_ts(r.get("captured_utc")) for r in rows]
+    except (TypeError, ValueError):
+        return "missing or invalid board kickoff/capture clock"
+    if len(kicks) != 1:
+        return "conflicting board kickoff clocks"
+    kickoff = next(iter(kicks))
+    if not max(captures) <= now < kickoff:
+        return "board capture/run is not strictly pregame or capture is in the future"
+    return next(iter(ids)), kickoff, min(captures)
+
+
+def _evidence(subject, values, manifest, key, context, athlete=None):
     if not manifest or not key:
         return "no signed evidence supplied"
     e = manifest.get(subject)
@@ -90,11 +110,21 @@ def _evidence(subject, values, manifest, key):
         return "evidence signature invalid for %s" % subject
     if e.get("values") != values:
         return "evidence values differ from the board for %s" % subject
-    if not e.get("model_version") or not e.get("input_hash"):
-        return "evidence lacks model_version or input_hash for %s" % subject
+    if not e.get("model_version") or not re.fullmatch(r"[0-9a-f]{64}", str(e.get("input_hash", ""))):
+        return "evidence lacks model_version or canonical input_hash for %s" % subject
+    if isinstance(context, str):
+        return context
+    event_id, kickoff, first_capture = context
+    if e.get("event_id") != event_id:
+        return "signed event_id does not match board for %s" % subject
+    if athlete is not None:
+        if not athlete[0] or not athlete[1] or (e.get("player_id"), e.get("team")) != athlete:
+            return "signed athlete identity/team does not match board for %s" % subject
     try:
-        if not _ts(e.get("forecast_ts")) < _ts(e.get("kickoff_ts")):
-            return "forecast_ts is not before kickoff_ts for %s" % subject
+        if _ts(e.get("kickoff_ts")) != kickoff:
+            return "signed kickoff does not match board for %s" % subject
+        if not _ts(e.get("forecast_ts")) <= _ts(e.get("available_ts")) <= first_capture < kickoff:
+            return "forecast/availability/capture chronology invalid for %s" % subject
     except (ValueError, TypeError):
         return "evidence timestamps missing, malformed or timezone-naive for %s" % subject
     return ""
@@ -151,7 +181,7 @@ def _read(path):
     return games
 
 
-def _game_component(home, away, rows, manifest, key):
+def _game_component(home, away, rows, manifest, key, context):
     if not home or not away or home == away:
         return INVALID, "game needs two distinct, non-empty teams"
     ordered = [r for r in rows if not r.get("player")] + [r for r in rows if r.get("player")]
@@ -171,10 +201,10 @@ def _game_component(home, away, rows, manifest, key):
         if r["tag"] != first["tag"]:
             return AMBIGUOUS, "conflicting proj_provenance on one game's team projections"
     values = [repr(fp[0]), repr(fp[1])]
-    return _component(True, first["tag"], _evidence("game|%s|%s" % (home, away), values, manifest, key))
+    return _component(True, first["tag"], _evidence("game|%s|%s" % (home, away), values, manifest, key, context))
 
 
-def _prop_component(home, away, rows, player, market, manifest, key):
+def _prop_component(home, away, rows, player, market, manifest, key, context):
     grp = [r for r in rows if r.get("player") == player and r["market"] == market]
     vals = {_num(r.get("proj")) for r in grp}
     tags = {r["tag"] for r in grp}
@@ -188,8 +218,13 @@ def _prop_component(home, away, rows, player, market, manifest, key):
         return INVALID, "%s %s projection %g outside %g-%g" % ((player, market, v) + rng)
     if market in TD_MARKETS and v is None:
         return AMBIGUOUS, "%s %s needs a player touchdown share; none supplied" % (player, market)
+    identity_rows = [r for r in rows if r.get("player") == player]
+    identities = {(r.get("player_id", ""), r.get("team", "")) for r in identity_rows}
+    athlete = next(iter(identities)) if len(identities) == 1 else ("", "")
+    if athlete[0] and any(r.get("player_id") == athlete[0] and r.get("player") != player for r in rows):
+        athlete = ("", "")
     subject = "prop|%s|%s|%s|%s" % (home, away, player, market)
-    return _component(v is not None, next(iter(tags)), "" if v is None else _evidence(subject, [repr(v)], manifest, key))
+    return _component(v is not None, next(iter(tags)), "" if v is None else _evidence(subject, [repr(v)], manifest, key, context, athlete))
 
 
 def _player_problem(home, away, rows, player):
@@ -199,17 +234,28 @@ def _player_problem(home, away, rows, player):
     return ""
 
 
-def classify(path, manifest=None, key=None):
+def classify(path, manifest=None, key=None, *, now=None):
     """{(game, market, player, sgp): (classification, reason)} for every NFL board row."""
     out, sgp_games = {}, {}
     boards = _read(path)
+    now = datetime.now(timezone.utc) if now is None else now
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("classification clock must be timezone-aware")
+    event_games = {}
+    for teams, rows in boards.items():
+        for r in rows:
+            if r.get("event_id"):
+                event_games.setdefault(r["event_id"], set()).add(teams)
     for (home, away), rows in boards.items():
         for r in rows:
             if r.get("sgp"):
                 sgp_games.setdefault(r["sgp"], set()).add((home, away))
     for (home, away), rows in boards.items():
         game = "%s @ %s" % (away, home)
-        gcomp, greason = _game_component(home, away, rows, manifest, key)
+        context = _event_context(rows, now)
+        if not isinstance(context, str) and len(event_games[context[0]]) != 1:
+            context = "board event_id maps to several team pairs"
+        gcomp, greason = _game_component(home, away, rows, manifest, key, context)
         legs = {}
         for r in rows:
             if r["market"] != "SGP" and r.get("sgp"):
@@ -225,7 +271,7 @@ def classify(path, manifest=None, key=None):
                 if bad:
                     why.append(bad)
                     return [INVALID]
-                c, why_ = _prop_component(home, away, rows, row["player"], row["market"], manifest, key)
+                c, why_ = _prop_component(home, away, rows, row["player"], row["market"], manifest, key, context)
                 if why_:
                     why.append(why_)
                 return ([gcomp] if row["market"] in TD_MARKETS else []) + [c]

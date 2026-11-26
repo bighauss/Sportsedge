@@ -1,5 +1,6 @@
 """Provenance wiring: non-VERIFIED_PIT NFL rows are held at 0u and can never reach the card."""
 import csv
+from datetime import datetime, timedelta, timezone
 import glob
 import json
 import os
@@ -15,7 +16,10 @@ import run_nfl_wpl as W  # noqa: E402
 
 KEY = "wiring-test-key"
 KEY_ENV, MAN_ENV = W.ENV_KEY, W.ENV_MANIFEST
-H = "sport,home,away,home_proj,away_proj,proj_provenance,market,line,price_a,price_b\n"
+H = "sport,home,away,home_proj,away_proj,proj_provenance,market,line,price_a,price_b,event_id,kickoff_utc,captured_utc\n"
+NOW = datetime.now(timezone.utc).replace(microsecond=0)
+KICK = (NOW + timedelta(hours=2)).isoformat()
+CAPTURE = (NOW - timedelta(minutes=10)).isoformat()
 
 
 def row(**kw):
@@ -58,10 +62,10 @@ class Apply(unittest.TestCase):
         self.assertEqual(W.apply_provenance(dict(o), None), o)
 
 
-def board(tag, hp="24", ap="20"):
+def board(tag, hp="24", ap="20", event_id="event-test"):
     p = os.path.join(tempfile.mkdtemp(), "b.csv")
     with open(p, "w", newline="") as f:
-        f.write(H + "".join(r + "\n" for r in (
+        f.write(H + "".join(r + "," + ",".join((event_id, KICK, CAPTURE)) + "\n" for r in (
             "NFL,HOM,AWY,%s,%s,%s,SPREAD,-3.5,-110,-110" % (hp, ap, tag),
             "NFL,HOM,AWY,,,,TOTAL,44.5,-110,-110",
             "NFL,HOM,AWY,,,,ML,,-180,150")))
@@ -94,8 +98,10 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(float(x["approved_stake_u"]), 0.0)
 
     def test_signed_evidence_clears_provenance_but_only_for_the_proven_game(self):
-        e = dict(subject="game|HOM|AWY", values=["24.0", "20.0"], model_version="m1", input_hash="h" * 8,
-                 forecast_ts="2026-11-26T14:00:00+00:00", kickoff_ts="2026-11-26T18:00:00+00:00")
+        e = dict(subject="game|HOM|AWY", values=["24.0", "20.0"], model_version="m1", input_hash="a" * 64,
+                 event_id="event-test", kickoff_ts=KICK,
+                 forecast_ts=(NOW - timedelta(minutes=30)).isoformat(),
+                 available_ts=(NOW - timedelta(minutes=20)).isoformat())
         e["sig"] = P.sign(e, KEY)
         mp = os.path.join(tempfile.mkdtemp(), "m.json")
         with open(mp, "w") as f:
@@ -110,6 +116,10 @@ class EndToEnd(unittest.TestCase):
         self.assertTrue(all(x["provenance"] == P.UNVERIFIED and "provenance" in x["held"] for x in rows2))
         r3, rows3 = run_cli(board("PIT_VERIFIED"), {KEY_ENV: "wrong-key", MAN_ENV: mp})
         self.assertTrue(all(x["provenance"] == P.UNVERIFIED for x in rows3))
+        r4, rows4 = run_cli(board("PIT_VERIFIED", event_id="rematch"), {KEY_ENV: KEY, MAN_ENV: mp})
+        self.assertEqual(r4.returncode, 0, r4.stderr[-2000:])
+        self.assertTrue(rows4)
+        self.assertTrue(all(x["provenance"] == P.UNVERIFIED and x["selected_for_card"] == "False" for x in rows4))
 
 
 if __name__ == "__main__":
