@@ -18,6 +18,9 @@ Wraps engine v5 without changing it. NFL rows only:
   7. Artifacts - frozen v5 is executed inside a throwaway scratch directory, so any legacy
      file it writes (for example picks.csv with EV-derived stars) can neither leak nor overwrite
      a file in the caller's directory. The only artifact written is the create-only picks_nfl_*.csv.
+  8. Exception safety - the working directory and v5.N_FIT are process-wide, so v5 execution is
+     serialized under a lock; N_FIT, the working directory and the scratch directory are restored
+     on every exit path, including failures while creating the scratch directory.
 Every held row is listed with its reason at 0u. Every exported row carries row_id, quote_id and
 selected_for_card (true only for rows on the final research card; approved_stake_u stays 0 regardless). Non-NFL rows pass through with v5 numbers.
 
@@ -31,6 +34,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -42,6 +46,7 @@ P_RATIO_HI, P_RATIO_LO, P_ABS = 1.5, 0.67, 0.12
 N_FIT = 100000
 N_GAP = 40000
 STARS_LABEL = "N/A \u2014 uncalibrated"
+_V5_LOCK = threading.RLock()
 
 
 def load_nfl_lines(path):
@@ -177,20 +182,25 @@ def best_per_group(rows):
 
 def build(path):
     path = os.path.abspath(path)
-    old = v5.N_FIT
-    v5.N_FIT = N_FIT
-    cwd = os.getcwd()
-    scratch = tempfile.mkdtemp(prefix="run_nfl_v5_scratch_")
-    os.chdir(scratch)                                # frozen v5 may write legacy files relative to cwd
-    try:
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            out = v5.run(path)
-        gaps = projection_gaps(load_nfl_lines(path))
-    finally:
-        os.chdir(cwd)
-        shutil.rmtree(scratch, ignore_errors=True)
-        v5.N_FIT = old
+    with _V5_LOCK:                                   # cwd and v5.N_FIT are process-wide state
+        old = v5.N_FIT
+        cwd = os.getcwd()
+        scratch = None
+        try:
+            scratch = tempfile.mkdtemp(prefix="run_nfl_v5_scratch_")
+            os.chdir(scratch)                        # frozen v5 may write legacy files relative to cwd
+            v5.N_FIT = N_FIT
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                out = v5.run(path)
+            gaps = projection_gaps(load_nfl_lines(path))
+        finally:
+            v5.N_FIT = old
+            try:
+                os.chdir(cwd)
+            finally:
+                if scratch is not None:
+                    shutil.rmtree(scratch, ignore_errors=True)
     notes = buf.getvalue().split("CARD (")[0].rstrip()
     out = [guard(o, gaps) for o in out]
     for i, o in enumerate(out):                      # stable identity: v5 emission order + quote content
