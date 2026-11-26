@@ -259,6 +259,78 @@ class Binding(unittest.TestCase):
         cm.attach([r], calls)
         self.assertEqual((r["wpl_source"], r["p_push"]), ("td_closed_form", 0.0))
 
+class QuoteIdentity(unittest.TestCase):
+    def raw(self, **kw):
+        r = board_row()
+        r.update(event_id="event1", kickoff_utc="2026-11-26T20:00:00Z",
+                 captured_utc="2026-11-26T19:00:00Z", book="DK", source="DK")
+        r.update(kw)
+        return r
+
+    def test_selection_stable_quote_changes_on_either_price_or_capture(self):
+        a = self.raw()
+        sid, qid, status = cm.raw_identity(a, 0)
+        self.assertEqual(status, "SOURCE_FIELDS_PRESENT")
+        for change in (dict(price_a=-115.0), dict(price_b=100.0),
+                       dict(captured_utc="2026-11-26T19:01:00Z"), dict(book="OTHER")):
+            with self.subTest(change=change):
+                s, q, _ = cm.raw_identity(dict(a, **change), 0)
+                self.assertEqual(s, sid)
+                self.assertNotEqual(q, qid)
+        for change in (dict(event_id="rematch"), dict(line=45.0)):
+            self.assertNotEqual(cm.raw_identity(dict(a, **change), 0)[0], sid)
+        self.assertNotEqual(cm.raw_identity(a, 1)[0], sid)
+
+    def test_source_bound_ids_independent_of_output_order(self):
+        a, b = self.raw(line=44.0), self.raw(line=45.0)
+        with cm.capturing() as calls:
+            w1, l1 = priced(a, v5.wl, D)
+            w2, l2 = priced(b, v5.wl, E)
+        rows = [out_row(a, 0, w1, l1), out_row(b, 0, w2, l2)]
+        got = []
+        for seq in (rows, list(reversed(rows))):
+            rr = cm.attach([dict(x) for x in seq], calls)
+            for x in rr:
+                x["held"] = ""
+            run_nfl.assign_quote_ids(rr)
+            got.append({x["pick"]: (x["quote_id"], x["selection_id"]) for x in rr})
+        self.assertEqual(got[0], got[1])
+        self.assertEqual(len({q for q, _ in got[0].values()}), 2)
+
+    def test_distinct_reciprocal_quotes_same_output_label_held(self):
+        a = self.raw()
+        b = self.raw(price_b=125.0)
+        with cm.capturing() as calls:
+            w, l = priced(a, v5.wl, D)
+            priced(b, v5.wl, D)
+        o = out_row(a, 0, w, l)
+        cm.attach([o], calls)
+        self.assertEqual(o["quote_identity_status"], "AMBIGUOUS")
+        self.assertIsNone(o["raw_quote_id"])
+        self.assertIn("distinct source quotes", o["wpl_status"])
+
+    def test_identical_quote_copies_all_held_and_retained(self):
+        a = self.raw()
+        with cm.capturing() as calls:
+            w, l = priced(a, v5.wl, D)
+            priced(a, v5.wl, D)
+        rows = cm.attach([out_row(a, 0, w, l), out_row(a, 0, w, l)], calls)
+        for o in rows:
+            o["held"] = ""
+        run_nfl.assign_quote_ids(rows)
+        self.assertEqual(rows[0]["quote_id"], rows[1]["quote_id"])
+        self.assertNotEqual(rows[0]["row_id"], rows[1]["row_id"])
+        self.assertTrue(all(o["quote_identity_status"] == "DUPLICATE" for o in rows))
+        self.assertTrue(all("all copies held" in o["held"] for o in rows))
+        self.assertTrue(all(not o["selected_for_card"] for o in rows))
+
+    def test_missing_source_fields_and_player_id_are_not_authentication(self):
+        self.assertEqual(cm.raw_identity(board_row(), 0)[2], "SOURCE_FIELDS_INCOMPLETE")
+        a = self.raw(player="P", team="DET")
+        self.assertEqual(cm.raw_identity(a, 0)[2], "SOURCE_FIELDS_INCOMPLETE")
+        self.assertEqual(cm.raw_identity(dict(a, player_id="p1"), 0)[2], "SOURCE_FIELDS_PRESENT")
+
+
 
 class Guard(unittest.TestCase):
     def base(self, **kw):
