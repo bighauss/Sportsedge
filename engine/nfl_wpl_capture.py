@@ -6,8 +6,9 @@ is real v5 pricing code (module in CALLSITE_MODULES, not a lambda/genexpr such a
 v5.anchor() are excluded. An output row binds to a call only through (sport, game, bet_type, player, price) AND the
 pick label v5 prints: v5.game_labels for game lines, "{player} {TD_NAMES[stat]}" / "{player} No {TD_NAMES[stat]}" for
 touchdown markets, "{player} Over|Under {line:g} {Stat Name}" for other props. The mass must also reproduce the row's
-model_p and ev exactly. Missing identity, no match, several different masses, a line that %g cannot represent exactly,
-or a numeric mismatch give UNAVAILABLE and the guard HOLDS the row. Frozen v5 is untouched.
+model_p and ev exactly. Missing identity, no match, several different masses, a line that %g cannot represent exactly
+(game lines and props alike), or a numeric mismatch give UNAVAILABLE and the guard HOLDS the row. Frozen v5 is
+untouched.
 """
 import contextlib
 import csv
@@ -53,11 +54,18 @@ def _is_game_line(market):
     return base in nfl_wpl.BASES
 
 
+def _exact_g(line):
+    """True when %g formatting round-trips the line, so a printed label identifies it exactly."""
+    return nfl_wpl._is_real(line) and float("%g" % line) == float(line)
+
+
 def _labels(i):
     """Pick labels (side 0, side 1) exactly as v5 prints them; None when they cannot be derived exactly."""
     try:
         market, player = i.get("market", ""), i.get("player")
         if _is_game_line(market):
+            if not _exact_g(i.get("line", 0.0)):
+                return None
             return tuple(v5.game_labels(i["sport"], i))
         if not player:
             return None
@@ -66,7 +74,7 @@ def _labels(i):
         if isinstance(td, dict) and stat in td:
             return ("%s %s" % (player, td[stat]), "%s No %s" % (player, td[stat]))
         line = i.get("line")
-        if not nfl_wpl._is_real(line) or float("%g" % line) != float(line):
+        if not _exact_g(line):
             return None
         name = stat.replace("_", " ").title()
         return ("%s Over %g %s" % (player, line, name), "%s Under %g %s" % (player, line, name))
