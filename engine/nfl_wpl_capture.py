@@ -1,12 +1,14 @@
 """Priced W/P/L integration for NFL RUN IT without modifying frozen v5 (research, PAPER/0u).
 
 While one v5.run executes, v5.wl / stat_probs / td_probs are wrapped (and restored on every exit path) to record
-the exact outcome mass each priced call used. Calls made inside v5.anchor() (fitting) are excluded. Each call is
-recorded in ORDER with integer counts (wl) or an exactly reproduced push mass (props). Priced rows are bound to
-calls sequentially: a row matches the earliest unused call for its side whose win/loss reproduce the row's own
-model_p and ev bit-for-bit; one call serves at most one row per side, so identical results keep distinct identity.
-Unmatched rows are UNAVAILABLE and the guard HOLDS them. Frozen v5 is untouched. Intended for a dedicated process
-(CLI); installed() restores every patched name and runs under run_nfl's v5 lock.
+the exact outcome mass each priced call used (integer counts for wl; an exactly reproduced push mass for props).
+Calls made inside v5.anchor() (fitting) are excluded.
+
+Binding is ORDER-INDEPENDENT (v5 sorts its rows by EV): a priced row binds to the captured outcome set whose
+(win, loss) reproduce the row's own model_p and ev bit-for-bit for its side. Calls with identical (win, loss) carry
+identical push mass, so identical results cannot mis-assign mass; if matching calls disagree on push, or zero / several
+distinct outcome sets match, the row is UNAVAILABLE and the guard HOLDS it. Frozen v5 is untouched. Intended for a
+dedicated process (CLI); installed() restores every patched name and runs under run_nfl's v5 lock.
 """
 import contextlib
 import csv
@@ -20,7 +22,7 @@ import sportsedge_v5 as v5  # noqa: E402
 import nfl_wpl  # noqa: E402
 
 TOL = 1e-9
-UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_call_index=None)
+UNAVAIL = dict(p_win=None, p_push=None, p_loss=None, wpl_source=None, wpl_n_calls=None)
 
 
 def prop_push(spec, mean, line, seed):
@@ -64,7 +66,7 @@ def capturing():
             wins, push, loss = int((arr > 0).sum()), int((arr == 0).sum()), int((arr < 0).sum())
             ok = n > 0 and wins + push + loss == n and w == wins / n and l == loss / n
             calls.append(dict(kind="wl", src="simulator_counts", w=w, l=l, push=(push / n if ok else None),
-                              counts=(wins, push, loss, n) if ok else None, used=set()))
+                              counts=(wins, push, loss, n) if ok else None))
         return w, l
 
     def stat_probs(spec, mean, line, seed):
@@ -76,14 +78,14 @@ def capturing():
                 resid = 1.0 - w - l - r[0]
                 if r[0] >= 0.0 and -TOL <= resid <= 1e-6:
                     push = r[0]
-            calls.append(dict(kind="stat", src="prop_exact_distribution", w=w, l=l, push=push, counts=None, used=set()))
+            calls.append(dict(kind="stat", src="prop_exact_distribution", w=w, l=l, push=push, counts=None))
         return w, l
 
     def td_probs(S, market, share, is_home):
         w, l = orig[2](S, market, share, is_home)
         if state["depth"] == 0:
             ok = abs(w + l - 1.0) <= 1e-12 and w >= 0.0 and l >= 0.0
-            calls.append(dict(kind="td", src="td_closed_form", w=w, l=l, push=0.0 if ok else None, counts=None, used=set()))
+            calls.append(dict(kind="td", src="td_closed_form", w=w, l=l, push=0.0 if ok else None, counts=None))
         return w, l
 
     v5.wl, v5.stat_probs, v5.td_probs, v5.anchor = wl, stat_probs, td_probs, anchor
@@ -102,8 +104,10 @@ def _side(o):
 
 
 def attach(rows, calls):
-    """Bind rows to captured calls in order; set p_win/p_push/p_loss/wpl_status/wpl_source/wpl_call_index."""
-    ptr = 0
+    """Bind each row to captured outcome mass by exact numeric reproduction, independent of row/call order."""
+    index = {}
+    for c in calls:
+        index.setdefault((c["w"], c["l"]), []).append(c)
     for o in rows:
         o.update(UNAVAIL, wpl_status="UNAVAILABLE: no matching simulator call")
         side, price = _side(o), o.get("price")
@@ -111,28 +115,25 @@ def attach(rows, calls):
             o["wpl_status"] = "UNAVAILABLE: row side/price invalid"
             continue
         pay = v5.payout(int(price))
-        for k in range(ptr, len(calls)):
-            c = calls[k]
-            if side in c["used"]:
-                continue
-            a, b = (c["w"], c["l"]) if side == 0 else (c["l"], c["w"])
+        hits = []
+        for (w, l), cs in index.items():
+            a, b = (w, l) if side == 0 else (l, w)
             if v5.cond(a, b) == o.get("model_p") and a * pay - b == o.get("ev"):
-                c["used"].add(side)
-                ptr = k
-                if c["push"] is None:
-                    o["wpl_status"] = "UNAVAILABLE: push mass not provable (%s)" % c["kind"]
-                    break
-                if c["counts"] is not None:
-                    wins, push, loss, n = c["counts"]
-                    pw, pp, pl = (wins, push, loss) if side == 0 else (loss, push, wins)
-                    pw, pp, pl = pw / n, pp / n, pl / n
-                else:
-                    pw, pp, pl = a, c["push"], b
-                if min(pw, pp, pl) < 0.0 or not all(math.isfinite(x) for x in (pw, pp, pl)) or abs(pw + pp + pl - 1.0) > 1e-9:
-                    o["wpl_status"] = "UNAVAILABLE: mass invalid or not normalised"
-                    break
-                o.update(p_win=pw, p_push=pp, p_loss=pl, wpl_status="CAPTURED", wpl_source=c["src"], wpl_call_index=k)
-                break
+                hits.append((a, b, cs))
+        if len(hits) != 1:
+            o["wpl_status"] = "UNAVAILABLE: %d distinct outcome sets match" % len(hits)
+            continue
+        a, b, cs = hits[0]
+        pushes = {c["push"] for c in cs}
+        if None in pushes or len(pushes) != 1:
+            o["wpl_status"] = "UNAVAILABLE: push mass unprovable or inconsistent across matching calls"
+            continue
+        pp = pushes.pop()
+        if min(a, pp, b) < 0.0 or not all(math.isfinite(x) for x in (a, pp, b)) or abs(a + pp + b - 1.0) > 1e-9:
+            o["wpl_status"] = "UNAVAILABLE: mass invalid or not normalised"
+            continue
+        o.update(p_win=a, p_push=pp, p_loss=b, wpl_status="CAPTURED",
+                 wpl_source=",".join(sorted({c["src"] for c in cs})), wpl_n_calls=len(cs))
     return rows
 
 

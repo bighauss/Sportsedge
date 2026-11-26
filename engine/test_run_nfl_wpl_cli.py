@@ -11,9 +11,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import test_run_nfl as base  # noqa: E402
 
+GAME_BASES = {"ML", "SPREAD", "TOTAL", "HOME_TT", "AWAY_TT"}
+PERIOD_PREFIXES = {"1Q", "2Q", "3Q", "4Q", "1H", "2H"}
+
+
+def is_game_line(x):
+    market = x["bet_type"].split("|")[0]
+    head, _, rest = market.partition("_")
+    base_market = rest if rest and head in PERIOD_PREFIXES else market
+    return base_market in GAME_BASES and not x["player"]
+
 
 class Cli(unittest.TestCase):
-    def test_real_v5_cli_exports_validated_wpl_and_holds_unavailable(self):
+    def test_real_v5_cli_binds_every_game_line_row_and_holds_the_rest(self):
         board = os.path.abspath(base.board(base.game(24, 20)))
         wd = tempfile.mkdtemp()
         r = subprocess.run([sys.executable, os.path.join(HERE, "run_nfl_wpl.py"), board], cwd=wd,
@@ -24,10 +34,12 @@ class Cli(unittest.TestCase):
         with open(files[0], newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
         self.assertTrue(rows)
-        for col in ("p_win", "p_push", "p_loss", "wpl_status", "wpl_source", "wpl_call_index", "held"):
+        for col in ("p_win", "p_push", "p_loss", "wpl_status", "wpl_source", "wpl_n_calls", "held", "bet_type", "player"):
             self.assertIn(col, rows[0])
-        captured = [x for x in rows if x["wpl_status"] == "CAPTURED"]
-        self.assertGreater(len(captured), 0, "no priced row bound to simulator mass; adaptor did not integrate")
+        lines = [x for x in rows if is_game_line(x)]
+        self.assertGreater(len(lines), 0)
+        unbound = [(x["pick"], x["wpl_status"]) for x in lines if x["wpl_status"] != "CAPTURED"]
+        self.assertEqual(unbound, [], "game-line rows not bound to simulator mass: %r" % unbound[:10])
         for x in rows:
             if x["wpl_status"] == "CAPTURED":
                 p = [float(x[c]) for c in ("p_win", "p_push", "p_loss")]

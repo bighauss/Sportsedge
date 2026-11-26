@@ -1,4 +1,4 @@
-"""Regression: ordered, verified binding of v5 outcome mass to priced rows; hold when unavailable."""
+"""Regression: order-independent, verified binding of v5 outcome mass to priced rows; hold when unavailable."""
 import csv
 import os
 import sys
@@ -27,24 +27,33 @@ def tiny_board():
 
 
 D = np.array([1, 0, -1, 0, 2, -3, 0, 5])
+E = np.array([1, 1, 0, -1, -1, -1, 0, 2])
 
 
 class Capture(unittest.TestCase):
-    def test_counts_and_identical_calls_keep_distinct_identity(self):
+    def test_binding_is_independent_of_row_order(self):
+        with cm.capturing() as calls:
+            wd, ld = v5.wl(D)
+            we, le = v5.wl(E)
+        self.assertEqual(calls[0]["counts"], (3, 3, 2, 8))
+        rows = [row(wd, ld, -110, 0), row(wd, ld, 105, 1), row(we, le, -110, 0), row(we, le, 105, 1)]
+        expect = [(3 / 8, 3 / 8, 2 / 8), (2 / 8, 3 / 8, 3 / 8), (3 / 8, 2 / 8, 3 / 8), (3 / 8, 2 / 8, 3 / 8)]
+        for order in (list(range(4)), [3, 2, 1, 0], [2, 0, 3, 1]):
+            rs = [dict(rows[i]) for i in order]
+            cm.attach(rs, calls)
+            for i, r in zip(order, rs):
+                self.assertEqual(r["wpl_status"], "CAPTURED", (order, i))
+                self.assertEqual((r["p_win"], r["p_push"], r["p_loss"]), expect[i])
+                self.assertAlmostEqual(r["p_win"] + r["p_push"] + r["p_loss"], 1.0, places=12)
+                self.assertGreaterEqual(min(r["p_win"], r["p_push"], r["p_loss"]), 0.0)
+
+    def test_identical_calls_share_identical_mass(self):
         with cm.capturing() as calls:
             w1, l1 = v5.wl(D)
             w2, l2 = v5.wl(D)
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(calls[0]["counts"], (3, 3, 2, 8))
-        rows = [row(w1, l1, -110, 0), row(w1, l1, 105, 1), row(w2, l2, -110, 0), row(w2, l2, 105, 1)]
-        cm.attach(rows, calls)
-        self.assertEqual([r["wpl_call_index"] for r in rows], [0, 0, 1, 1])
-        for r in rows:
-            self.assertEqual(r["wpl_status"], "CAPTURED")
-            self.assertGreaterEqual(min(r["p_win"], r["p_push"], r["p_loss"]), 0.0)
-            self.assertAlmostEqual(r["p_win"] + r["p_push"] + r["p_loss"], 1.0, places=12)
-        self.assertEqual((rows[0]["p_win"], rows[0]["p_push"], rows[0]["p_loss"]), (3 / 8, 3 / 8, 2 / 8))
-        self.assertEqual((rows[1]["p_win"], rows[1]["p_loss"]), (2 / 8, 3 / 8))
+        r = row(w1, l1, -110, 0)
+        cm.attach([r], calls)
+        self.assertEqual((r["wpl_status"], r["wpl_n_calls"], r["p_push"]), ("CAPTURED", 2, 3 / 8))
 
     def test_fitting_calls_inside_anchor_are_excluded(self):
         saved = v5.anchor
@@ -72,6 +81,14 @@ class Capture(unittest.TestCase):
         r = row(0.123, 0.456, -110, 0)
         cm.attach([r], calls)
         self.assertIsNone(r["p_win"])
+
+    def test_conflicting_push_for_same_win_loss_is_unavailable(self):
+        with cm.capturing() as calls:
+            w, l = v5.wl(np.array([1, -1, 0, 0]))
+        calls.append(dict(kind="wl", src="x", w=w, l=l, push=0.4, counts=None))
+        r = row(w, l, -110, 0)
+        cm.attach([r], calls)
+        self.assertIsNone(r["p_push"])
 
     def test_invalid_row_fields_fail_closed(self):
         with cm.capturing() as calls:
