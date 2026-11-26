@@ -265,8 +265,12 @@ def table(rows, held=False):
               f"{STARS_LABEL} |{stake}")
 
 
-def _main_locked(path):
+def _main_locked(path, *, coverage=False):
     r = build(path)
+    audit = None
+    if coverage:
+        import nfl_wpl_capture
+        audit = nfl_wpl_capture.coverage_report(path, r['out'])
     print(r["notes"], "\n")
     seen = set()
     for (g, mk, ln, _side, _price), gap in sorted(r["gaps"].items(), key=lambda kv: kv[0][:4]):
@@ -294,11 +298,18 @@ def _main_locked(path):
         w.writeheader()
         w.writerows(r["out"])
     print(f"\nAll priced sides saved to {name} (research only; approved_stake_u = 0 on every row)")
+    if audit is not None:
+        import json
+        audit_name = name.replace("picks_nfl_", "coverage_nfl_").replace(".csv", ".json")
+        with open(audit_name, "x", encoding="utf-8") as f:
+            json.dump(audit, f, sort_keys=True, indent=2, allow_nan=False)
+            f.write("\n")
+        print(f"Coverage: {audit['offered_side_count']} offered sides, {audit['emitted_row_count']} emitted rows; {audit_name}")
 
 
-def main(path):
+def main(path, *, coverage=False):
     with _V5_LOCK:                                   # the relative output name needs a stable cwd
-        return _main_locked(path)
+        return _main_locked(path, coverage=coverage)
 
 
 if __name__ == "__main__":
