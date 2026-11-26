@@ -141,7 +141,7 @@ AUTH_CAPTURE_REQUIREMENTS = {
 
 
 class AuthenticatedDkCapture:
-    """Manifest-backed authenticated capture. Verifies hashes; refuses credential material."""
+    """Reserved capture path; fail closed until independently trusted source verification is wired."""
     adapter = "dk_authenticated"
 
     def __init__(self, manifest_path):
@@ -156,21 +156,10 @@ class AuthenticatedDkCapture:
         man = json.loads(raw)
         if man.get("format") != AUTH_CAPTURE_REQUIREMENTS["format"]:
             raise ValueError("DK_AUTH_MANIFEST_FORMAT")
-        base = self.manifest_path.parent
-        for f in man.get("raw_files", []):
-            b = (base / f["path"]).read_bytes()
-            if sha_bytes(b) != f.get("sha256") or len(b) != f.get("bytes"):
-                raise ValueError("DK_AUTH_RAW_HASH_MISMATCH")
-        rows_raw = (base / man["rows_path"]).read_bytes()
-        if sha_bytes(rows_raw) != man.get("rows_sha256"):
-            raise ValueError("DK_AUTH_ROWS_HASH_MISMATCH")
-        rows = list(csv.DictReader(io.StringIO(rows_raw.decode("utf-8-sig"))))
-        for r in rows:
-            if not (r.get("dk_event_id") and r.get("dk_market_id") and r.get("price_a") and r.get("price_b")):
-                raise ValueError("DK_AUTH_ROW_MISSING_IDS_OR_SIDE")
-        return {"rows": rows, "provenance": C.AUTHENTICATED, "source_sha256": sha_bytes(rows_raw),
-                "bytes": len(rows_raw), "path": str(base / man["rows_path"]),
-                "board_captured_utc": man["captured_utc"], "adapter": self.adapter}
+        # Self-declared hashes prove integrity, not provider authenticity. Until an
+        # independently trusted receipt verifier and raw-to-selection crosswalk are
+        # wired, no manifest can elevate a CSV to AUTHENTICATED_DK_CAPTURE.
+        raise ValueError("DK_AUTH_INDEPENDENT_RECEIPT_VERIFIER_NOT_IMPLEMENTED")
 
 
 def _int_price(v):
@@ -265,6 +254,7 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
     accepted, rejects, realigned = [], [], []
     freeze = parse_z(freeze_utc)
     pre = []
+    player_keys = {}
     for q, meta in quotes:
         def rej(code, detail=""):
             rejects.append(C.Rejection("validate", q.period, q.market, code, detail, q.board_index,
@@ -312,6 +302,14 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
             rej("STARTED_BEFORE_AS_OF", f"tip {g['tipoff_utc']} <= as-of {as_of_utc}"); continue
         if q.market in LADDERS and not q.dk_event_id:
             rej("MISSING_DK_EVENT_ID", "ladder/team-total rows require a DK event id"); continue
+        if q.market.startswith("PLAYER_"):
+            raw = meta["raw"]
+            player_id = str(raw.get("player_id") or "").strip()
+            team_id = str(raw.get("player_team_id") or raw.get("team_id") or "").strip()
+            game_team_ids = {str(g.get(k) or "").strip() for k in ("home_team_id", "away_team_id", "home_id", "away_id")} - {""}
+            if not q.player or not player_id or not team_id or team_id not in game_team_ids:
+                rej("PLAYER_TEAM_UNKNOWN", "canonical player_id and matched slate team_id required"); continue
+            player_keys[q.board_index] = (player_id, team_id)
         pre.append((q, g["game_id"]))
     ev_games, game_evs = defaultdict(set), defaultdict(set)
     for q, gid in pre:
@@ -322,7 +320,8 @@ def validate(quotes, slate_rows, freeze_utc, *, totals_order_verified, match, ad
         if q.dk_event_id and (len(ev_games[q.dk_event_id]) > 1 or len(game_evs[gid]) > 1):
             rejects.append(C.Rejection("validate", q.period, q.market, "DK_EVENT_ID_CONFLICT", "",
                                        q.board_index, f"{q.away} @ {q.home}", q.provenance)); continue
-        keyed[(gid, q.period, q.market, q.line)].append(q)
+        # A player threshold is not a market identity without its athlete/team.
+        keyed[(gid, q.period, q.market, q.line, player_keys.get(q.board_index))].append(q)
     for key, qs in keyed.items():
         if len({(q.price_a, q.price_b) for q in qs}) > 1:
             for q in qs:
