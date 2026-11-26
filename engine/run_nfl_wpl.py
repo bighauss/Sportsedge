@@ -6,10 +6,10 @@ Usage:  python engine/run_nfl_wpl.py board.csv
 The board is validated STRICTLY before frozen v5 reads it, against the market catalog of frozen v5 itself
 (sportsedge_v5.PROPS["drive"], TD_NAMES, PERIODS, split_market) rather than a separate hand-kept list.
 Rejected, with a named error: duplicate or missing required header columns; rows with extra cells, no home team,
-no market, or neither price; odds that are not exact signed integers (v5 would turn "1+10" into +110); lines that
-are not plain decimals ("4+4" would become 44); spread/total/team-total rows without a line (v5 would default it to
-0); game-line rows carrying a player; player rows whose market v5 does not price, or stat props without a line; and
-unknown game-level markets.
+no market, or neither price; odds that are not exact signed integers (v5 would turn "1+10" into +110); lines,
+projections, scores and 'remaining' that are not plain decimals ("4+4" or "2+7" would become 44 / 27 because v5
+deletes every '+'); spread/total/team-total rows without a line (v5 would default it to 0); game-line rows carrying a
+player; player rows whose market v5 does not price, or stat props without a line; and unknown game-level markets.
 """
 import csv
 import os
@@ -23,6 +23,8 @@ import sportsedge_v5 as v5  # noqa: E402
 
 PRICE = re.compile(r"^[+-]?[1-9][0-9]*$")
 LINE = re.compile(r"^[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)$")
+DECIMAL = re.compile(r"^[+-]?(?:[0-9]{1,6}(?:\.[0-9]{1,6})?|\.[0-9]{1,6})$")
+NUMERIC_COLS = ("home_proj", "away_proj", "proj", "home_score", "away_score", "remaining")
 NEEDS_LINE = {"SPREAD", "TOTAL", "HOME_TT", "AWAY_TT"}
 PERIOD_OK = NEEDS_LINE | {"ML"}                                   # allowed with a period prefix
 FULL_GAME_ONLY = {"OT", "BTTS", "REG_HOME", "REG_AWAY", "REG_DRAW"}  # v5 prices these only without a prefix
@@ -59,7 +61,7 @@ def validate_input(path):
         raise ValueError("missing required column(s) in board header: " + ", ".join(absent))
     ix = {h: i for i, h in enumerate(header) if h}
     cell = lambda r, k: (r[ix[k]].strip() if k in ix and ix[k] < len(r) else "")  # noqa: E731
-    odds, lines, shape = [], [], []
+    odds, lines, shape, nums = [], [], [], []
     for n, r in enumerate(rows[1:], start=2):
         if not any(c.strip() for c in r) or cell(r, "sport").upper() != "NFL":
             continue
@@ -73,6 +75,10 @@ def validate_input(path):
             shape.append("line %d has no market" % n)
             continue
         pre, base = v5.split_market("NFL", market)
+        for col in NUMERIC_COLS:
+            v = cell(r, col)
+            if v and (len(v) > 16 or not DECIMAL.fullmatch(v)):
+                nums.append("line %d %s=%r" % (n, col, v))
         for col in ("price_a", "price_b"):
             v = cell(r, col)
             if v and (not PRICE.fullmatch(v) or abs(int(v)) < 100):
@@ -98,6 +104,8 @@ def validate_input(path):
         raise ValueError("malformed NFL board structure: " + "; ".join(shape[:20]))
     if odds:
         raise ValueError("invalid American odds on NFL rows: " + "; ".join(odds[:20]))
+    if nums:
+        raise ValueError("non-canonical projection/score on NFL rows: " + "; ".join(nums[:20]))
     if lines:
         raise ValueError("non-canonical line on NFL rows: " + "; ".join(lines[:20]))
 

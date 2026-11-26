@@ -12,20 +12,24 @@ the player legs. So provenance is rebuilt here from the board, from each row's r
 
 A component is VERIFIED only when BOTH hold: the board row claims proj_provenance = PIT_VERIFIED, AND a signed
 evidence entry for that exact subject exists whose HMAC-SHA256 verifies under the caller's key, whose recorded values
-equal the board's values exactly, which names a model_version and an input_hash, and whose forecast_ts is strictly
+equal the board's exactly, which names a model_version and an input_hash, and whose forecast_ts is strictly
 before its kickoff_ts (both timezone-aware). A claim without evidence is UNVERIFIED. The CSV tag alone is never proof.
 Trust rests on custody of the key; this module does not recompute input hashes or re-run the model.
 
-No projection -> ANCHOR (v5 fits it to the book). Partial team projection -> ANCHOR. Non-finite or out-of-range
-numbers, unknown players/teams, a player on two teams, malformed or one-leg SGPs -> INVALID. Conflicting or unknown
-tags -> AMBIGUOUS. Only a row whose every component is VERIFIED has provenance VERIFIED_PIT; card eligibility is a
-separate decision (eligible() is necessary, not sufficient).
+Projection cells are parsed STRICTLY (plain ASCII decimals, bounded length). Frozen v5's num() deletes every '+', so
+'2+7' would become 27; here it is INVALID_INPUT.
+
+No projection -> ANCHOR (v5 fits it to the book). Partial team projection -> ANCHOR. Non-finite, malformed or
+out-of-range numbers, unknown players/teams, a player on two teams, malformed or one-leg SGPs -> INVALID. Conflicting or
+unknown tags -> AMBIGUOUS. Only a row whose every component is VERIFIED has provenance VERIFIED_PIT; card eligibility
+is a separate decision (eligible() is necessary, not sufficient).
 """
 import csv
 import hashlib
 import hmac
 import json
 import math
+import re
 from datetime import datetime
 
 VERIFIED, UNVERIFIED, ANCHOR, MIXED, AMBIGUOUS, INVALID = (
@@ -36,6 +40,8 @@ UNVERIFIED_TAGS = {"", "UNVERIFIED"}
 TEAM_PTS = (0.0, 100.0)
 STAT_MEAN = (0.0, 2000.0)
 TD_SHARE = (0.0, 1.0)
+DECIMAL = re.compile(r"[+-]?(?:[0-9]{1,6}(?:\.[0-9]{1,6})?|\.[0-9]{1,6})")
+MAX_CELL = 16
 
 
 def eligible(classification):
@@ -96,13 +102,13 @@ def _evidence(subject, values, manifest, key):
 
 # ---------- parsing ----------
 def _num(x):
-    x = (x or "").strip().replace("+", "")
-    if not x:
+    """None for blank; 'bad' for anything but a plain ASCII decimal (no inner '+', no exponent, no NaN/inf)."""
+    s = (x or "").strip().replace("\u2212", "-")
+    if not s:
         return None
-    try:
-        v = float(x)
-    except ValueError:
+    if len(s) > MAX_CELL or not DECIMAL.fullmatch(s):
         return "bad"
+    v = float(s)
     return v if math.isfinite(v) else "bad"
 
 
@@ -151,7 +157,7 @@ def _game_component(home, away, rows, manifest, key):
     ordered = [r for r in rows if not r.get("player")] + [r for r in rows if r.get("player")]
     pairs = [(_num(r.get("home_proj")), _num(r.get("away_proj"))) for r in ordered]
     if any("bad" in p for p in pairs):
-        return INVALID, "non-finite or unparseable team projection"
+        return INVALID, "non-finite, malformed or unparseable team projection"
     full = [(r, p) for r, p in zip(ordered, pairs) if p[0] is not None and p[1] is not None]
     if any(not (_in(p[0], TEAM_PTS) and _in(p[1], TEAM_PTS)) for _, p in full):
         return INVALID, "team projection outside %g-%g points" % TEAM_PTS
@@ -173,7 +179,7 @@ def _prop_component(home, away, rows, player, market, manifest, key):
     vals = {_num(r.get("proj")) for r in grp}
     tags = {r["tag"] for r in grp}
     if "bad" in vals:
-        return INVALID, "non-finite or unparseable proj for %s %s" % (player, market)
+        return INVALID, "non-finite, malformed or unparseable proj for %s %s" % (player, market)
     if len(vals - {None}) > 1 or (None in vals and len(vals) > 1) or len(tags) > 1:
         return AMBIGUOUS, "conflicting proj / proj_provenance for %s %s" % (player, market)
     v = next(iter(vals))
