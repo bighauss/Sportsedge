@@ -42,6 +42,34 @@ class Contracts(unittest.TestCase):
             self.assertEqual((r.label, r.counted, r.approved_stake_u), (C.PAPER_0U, C.NON_COUNTED, 0))
 
 
+class StrictNumericAdmission(unittest.TestCase):
+    def test_normalize_and_validate_reject_malformed_quote_numbers(self):
+        base = dict(period="FG", market="TOTAL", home="Home U", away="Away U",
+                    line="145.5", price_a="-110", price_b="+105",
+                    totals_order="over_under", tip_utc="2026-11-25T20:00:00Z")
+        for col, values, code in (("price_a", ("1+10", "1e2", "inf", "-inf", "110.5"), "PRICE_INVALID"),
+                                  ("line", ("nan", "inf", "-inf", "14+5", "1e2"), "LINE_INVALID")):
+            for value in values:
+                with self.subTest(col=col, value=value):
+                    cap = dict(rows=[dict(base, **{col: value})], provenance="UNAUTHENTICATED_CSV",
+                               board_captured_utc="2026-11-25T12:00:00Z", source_sha256="test")
+                    qs, rejected = P.normalize_quotes(cap, totals_order_verified=True)
+                    self.assertEqual(rejected, [])
+                    self.assertEqual(len(qs), 1)
+                    accepted, reasons = P.validate(qs, [], "2026-11-25T12:01:00Z",
+                                                   totals_order_verified=True, match=None, adapters=set())
+                    self.assertEqual(accepted, [])
+                    self.assertEqual([r.reason_code for r in reasons], [code])
+                    self.assertEqual(reasons[0].board_index, 0)
+
+    def test_valid_numbers_and_missing_price_remain_distinct(self):
+        self.assertEqual(P._int_price("+105"), 105)
+        self.assertEqual(P._int_price("-110"), -110)
+        self.assertIsNone(P._int_price(None))
+        self.assertEqual(P._num("145.5"), 145.5)
+        self.assertIsNone(P._num(None))
+
+
 class SimPricing(unittest.TestCase):
     def setUp(self):
         self.pj = proj()
