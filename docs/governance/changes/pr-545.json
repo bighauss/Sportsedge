@@ -6,10 +6,11 @@
     ".github/workflows/nfl-run-it-guards.yml"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Stacked on PR 544. Add strict win/push/loss validation (engine/nfl_wpl.py), a temporary capture wrapper around frozen v5 outcome functions with order-independent numeric matching and hold-when-unavailable pricing (engine/nfl_wpl_capture.py), a research CLI (engine/run_nfl_wpl.py), regression and real-v5 CLI tests, and workflow wiring. Numeric matching is not selection-level provenance; rows without a unique, validated match are held. Frozen v5 and run_nfl.py are unchanged.",
+  "change_summary": "Stacked on PR 544. Add strict win/push/loss validation (engine/nfl_wpl.py), a capture wrapper around frozen v5 outcome functions that records the board-row identity the simulator is pricing and binds outcome mass to output rows by (sport, game, bet_type, player, price) plus the game-line pick label, with exact numeric reproduction as verification only, hold-when-unavailable pricing (engine/nfl_wpl_capture.py), a research CLI (engine/run_nfl_wpl.py), regression and real-v5 CLI tests, and workflow wiring. Player-prop rows with several thresholds of identical price and mass are not yet separable by identity and are held. Frozen v5 and run_nfl.py are unchanged.",
   "assumptions": [
     "Passing CI shows the regression suite executes; it does not validate predictive accuracy, calibration, odds, or profitability.",
-    "Binding of outcome mass to rows is by exact numeric reproduction, not by event/market/player/threshold identity; this PR is on HOLD for selection-level provenance.",
+    "Identity is read from the calling frame of the wrapped v5 functions; if it is absent or ambiguous the row is UNAVAILABLE and held.",
+    "Prop pick labels are not reproduced, so prop rows rely on identity plus exact numerics and may be held when thresholds are indistinguishable.",
     "The capture wrapper is intended for a dedicated process and restores every patched name on exit; it is not thread-safe outside run_nfl's lock.",
     "engine/sportsedge_v5.py is frozen and unchanged; every row is PAPER/0u and NON_COUNTED."
   ],
@@ -29,8 +30,8 @@
     "source_state": "UNKNOWN"
   },
   "golden": {
-    "sha256": null,
-    "cases": null,
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
     "suite": "SYNTHETIC_AGENT_SAFETY"
   },
   "evaluation": {
