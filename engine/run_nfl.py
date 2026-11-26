@@ -15,6 +15,9 @@ Wraps engine v5 without changing it. NFL rows only:
   5. Monte Carlo noise - N_FIT 20,000 -> 100,000 for this run only (restored afterwards).
   6. Stars - no EV-derived star ratings. Every row carries stars = 0 and the label
      'N/A — uncalibrated' until a validated calibration exists.
+  7. Artifacts - frozen v5 is executed inside a throwaway scratch directory, so any legacy
+     file it writes (for example picks.csv with EV-derived stars) can neither leak nor overwrite
+     a file in the caller's directory. The only artifact written is the create-only picks_nfl_*.csv.
 Every held row is listed with its reason at 0u. Every exported row carries row_id, quote_id and
 selected_for_card (true only for rows on the final research card; approved_stake_u stays 0 regardless). Non-NFL rows pass through with v5 numbers.
 
@@ -25,7 +28,9 @@ import csv
 import hashlib
 import io
 import os
+import shutil
 import sys
+import tempfile
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -174,12 +179,17 @@ def build(path):
     path = os.path.abspath(path)
     old = v5.N_FIT
     v5.N_FIT = N_FIT
+    cwd = os.getcwd()
+    scratch = tempfile.mkdtemp(prefix="run_nfl_v5_scratch_")
+    os.chdir(scratch)                                # frozen v5 may write legacy files relative to cwd
     try:
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             out = v5.run(path)
         gaps = projection_gaps(load_nfl_lines(path))
     finally:
+        os.chdir(cwd)
+        shutil.rmtree(scratch, ignore_errors=True)
         v5.N_FIT = old
     notes = buf.getvalue().split("CARD (")[0].rstrip()
     out = [guard(o, gaps) for o in out]
@@ -244,7 +254,7 @@ def main(path):
         table(r["held"], held=True)
     import datetime
     name = "picks_nfl_" + datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + ".csv"
-    with open(name, "x", newline="") as f:                     # create-only, never overwrite
+    with open(name, "x", newline="", encoding="utf-8") as f:  # create-only, never overwrite
         keys = list(r["out"][0].keys()) if r["out"] else ["pick"]
         w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
         w.writeheader()
