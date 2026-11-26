@@ -21,7 +21,9 @@ every row is held: an empty independent card is the intended default.
 import csv
 import os
 import re
+import shutil
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nfl_provenance  # noqa: E402
@@ -133,6 +135,8 @@ def apply_provenance(o, prov):
         cls, why = prov.get((game, market, o.get("player", "") or "", sgp),
                             (nfl_provenance.AMBIGUOUS, "no provenance entry for this row"))
     o["provenance"], o["provenance_reason"] = cls, why
+    if str(o.get("game", "")).endswith(" (LIVE)"):
+        o["held"] = "; ".join(filter(None, (o.get("held", ""), "LIVE_GAME: pregame research only")))
     if not nfl_provenance.eligible(cls):
         reasons = [x for x in str(o.get("held", "")).split("; ") if x]
         reasons.append("provenance %s: not an independent verified forecast%s" % (cls, " (%s)" % why if why else ""))
@@ -141,25 +145,31 @@ def apply_provenance(o, prov):
 
 
 def main(path, manifest=None, key=None):
-    validate_input(path)
-    if manifest is None and os.environ.get(ENV_MANIFEST):
-        manifest = nfl_provenance.load_manifest(os.environ[ENV_MANIFEST])
-    key = key or os.environ.get(ENV_KEY)
-    try:
-        prov = nfl_provenance.classify(path, manifest, key)
-    except Exception:                                   # fail closed: every row held
-        prov = None
-    with nfl_wpl_capture.installed():
-        inner = run_nfl.guard
-
-        def guard(o, gaps):
-            return apply_provenance(inner(o, gaps), prov)
-
-        run_nfl.guard = guard
+    # One private byte snapshot for validation, provenance and simulation.
+    # Hold the shared cwd lock before resolving paths; v5 temporarily changes cwd.
+    with run_nfl._V5_LOCK, tempfile.TemporaryDirectory(prefix="nfl_board_") as tmp:
+        snapshot = os.path.join(tmp, "board.csv")
+        with open(path, "rb") as src, open(snapshot, "xb") as dst:
+            shutil.copyfileobj(src, dst)
+        validate_input(snapshot)
+        key = key or os.environ.get(ENV_KEY)
         try:
-            return run_nfl.main(path)
-        finally:
-            run_nfl.guard = inner
+            if manifest is None and os.environ.get(ENV_MANIFEST):
+                manifest = nfl_provenance.load_manifest(os.environ[ENV_MANIFEST])
+            prov = nfl_provenance.classify(snapshot, manifest, key)
+        except Exception:
+            prov = None                         # unreadable/invalid evidence: every NFL row held
+        with nfl_wpl_capture.installed():
+            inner = run_nfl.guard
+
+            def guard(o, gaps):
+                return apply_provenance(inner(o, gaps), prov)
+
+            run_nfl.guard = guard
+            try:
+                return run_nfl.main(snapshot)
+            finally:
+                run_nfl.guard = inner
 
 
 if __name__ == "__main__":
