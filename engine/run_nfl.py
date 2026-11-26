@@ -14,7 +14,7 @@ Wraps engine v5 without changing it. NFL rows only:
      blended card; they are listed separately as MODEL-ONLY.
   5. Monte Carlo noise - N_FIT 20,000 -> 100,000 for this run only (restored afterwards).
   6. Stars - no EV-derived star ratings. Every row carries stars = 0 and the label
-     'N/A — uncalibrated' until a validated calibration exists.
+     'N/A \u2014 uncalibrated' until a validated calibration exists.
   7. Artifacts - frozen v5 is executed inside a throwaway scratch directory, so any legacy
      file it writes (for example picks.csv with EV-derived stars) can neither leak nor overwrite
      a file in the caller's directory. The only artifact written is the create-only picks_nfl_*.csv.
@@ -27,6 +27,9 @@ Every held row is listed with its reason at 0u. Every exported row carries row_i
 selected_for_card (true only for rows on the final research card; approved_stake_u stays 0 regardless). Non-NFL rows pass through with v5 numbers.
 
 Usage:  python engine/run_nfl.py board.csv
+        The command-line entry prices every NFL row from the simulator's captured win/push/loss mass
+        (engine/run_nfl_wpl.py); rows without a selection-bound, validated mass are HELD at 0u.
+        python engine/run_nfl.py --legacy-unpriced board.csv   runs the earlier EV-inversion path.
 """
 import contextlib
 import csv
@@ -280,4 +283,10 @@ def main(path):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "board.csv")
+    _args = [a for a in sys.argv[1:] if a != "--legacy-unpriced"]
+    _path = _args[0] if _args else "board.csv"
+    if "--legacy-unpriced" in sys.argv[1:]:
+        main(_path)
+    else:
+        import run_nfl_wpl                           # imports the real run_nfl module, so patches apply to it
+        run_nfl_wpl.main(_path)
