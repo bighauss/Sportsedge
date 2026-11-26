@@ -20,7 +20,9 @@ Wraps engine v5 without changing it. NFL rows only:
      a file in the caller's directory. The only artifact written is the create-only picks_nfl_*.csv.
   8. Exception safety - the working directory and v5.N_FIT are process-wide, so v5 execution is
      serialized under a lock; N_FIT, the working directory and the scratch directory are restored
-     on every exit path, including failures while creating the scratch directory.
+     on every exit path, including failures while creating the scratch directory. A relative
+     board path is resolved, and the final CSV is written, while holding the same lock, so a
+     concurrent run can neither misresolve a path nor write into another run's scratch directory.
 Every held row is listed with its reason at 0u. Every exported row carries row_id, quote_id and
 selected_for_card (true only for rows on the final research card; approved_stake_u stays 0 regardless). Non-NFL rows pass through with v5 numbers.
 
@@ -181,8 +183,8 @@ def best_per_group(rows):
 
 
 def build(path):
-    path = os.path.abspath(path)
     with _V5_LOCK:                                   # cwd and v5.N_FIT are process-wide state
+        path = os.path.abspath(path)                 # resolved against the caller's cwd, under the lock
         old = v5.N_FIT
         cwd = os.getcwd()
         scratch = None
@@ -241,7 +243,7 @@ def table(rows, held=False):
               f"{STARS_LABEL} |{stake}")
 
 
-def main(path):
+def _main_locked(path):
     r = build(path)
     print(r["notes"], "\n")
     seen = set()
@@ -270,6 +272,11 @@ def main(path):
         w.writeheader()
         w.writerows(r["out"])
     print(f"\nAll priced sides saved to {name} (research only; approved_stake_u = 0 on every row)")
+
+
+def main(path):
+    with _V5_LOCK:                                   # the relative output name needs a stable cwd
+        return _main_locked(path)
 
 
 if __name__ == "__main__":

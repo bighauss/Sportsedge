@@ -1,5 +1,7 @@
 """Regression: exception safety and serialization of the frozen-v5 execution wrapper."""
+import glob
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -102,6 +104,58 @@ class Isolation(unittest.TestCase):
                 t.join()
         self.assertEqual(errors, [])
         self.assertEqual(state["max"], 1)
+
+    def _slow_first_run(self):
+        calls = {"n": 0}
+        started = threading.Event()
+
+        def fake_run(path):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                started.set()
+                time.sleep(0.3)
+            return []
+        return fake_run, started
+
+    def test_relative_board_path_resolves_against_callers_cwd_while_another_build_runs(self):
+        shutil.copy(self.board, os.path.join(self.work, "board.csv"))
+        fake_run, started = self._slow_first_run()
+        errors = []
+
+        def first():
+            try:
+                run_nfl.build(self.board)
+            except Exception as exc:  # pragma: no cover - reported below
+                errors.append(exc)
+        with mock.patch.object(run_nfl.v5, "run", side_effect=fake_run):
+            a = threading.Thread(target=first)
+            a.start()
+            self.assertTrue(started.wait(5))
+            result = run_nfl.build("board.csv")
+            a.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(result["out"], [])
+        self.assertTrue(self.same_dir(os.getcwd(), self.work))
+
+    def test_main_writes_final_csv_to_callers_directory_not_a_foreign_scratch_dir(self):
+        shutil.copy(self.board, os.path.join(self.work, "board.csv"))
+        fake_run, started = self._slow_first_run()
+        errors = []
+
+        def first():
+            try:
+                run_nfl.build(self.board)
+            except Exception as exc:  # pragma: no cover - reported below
+                errors.append(exc)
+        with mock.patch.object(run_nfl.v5, "run", side_effect=fake_run):
+            a = threading.Thread(target=first)
+            a.start()
+            self.assertTrue(started.wait(5))
+            run_nfl.main("board.csv")
+            a.join()
+        self.assertEqual(errors, [])
+        written = glob.glob(os.path.join(self.work, "picks_nfl_*.csv"))
+        self.assertEqual(len(written), 1)
 
 
 if __name__ == "__main__":
