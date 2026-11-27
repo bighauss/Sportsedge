@@ -98,6 +98,13 @@ class T(unittest.TestCase):
             self.assertGreater(audit["priced_rows"], 0)
             self.assertEqual(audit["priced_rows"], audit["arithmetic_checked"])
             self.assertFalse(audit["release_ready"])
+            with open(os.path.join(d, "cfb_run_it.json")) as handle:
+                shadow = json.load(handle)["original_run_shadow_prop_means"]
+            self.assertEqual(shadow["attempts"], shadow["mean_only"] + shadow["blocked"])
+            self.assertEqual(shadow["mean_only"], 1)
+            self.assertEqual(shadow["blocked"], 1)
+            self.assertFalse(shadow["release_ready"])
+            self.assertEqual(len(shadow["rows"]), shadow["attempts"])
 
 class QuantRunnerAudit(unittest.TestCase):
     def test_real_runner_fixture_audits_before_selection(self):
@@ -169,6 +176,19 @@ class ShadowPropMeans(unittest.TestCase):
         self.assertFalse(mean["pit_verified"])
         self.assertIsNone(mean["distribution"])
         self.assertFalse(mean["release_ready"])
+
+    def test_feature_change_changes_hash_and_mean(self):
+        import copy
+        old = self.run_shadow(copy.deepcopy(INTAKE), fixture())
+        cap = fixture()
+        for r in cap["player_rushing"]:
+            if r["statType"] == "YDS":
+                r["stat"] = 900
+        new = self.run_shadow(copy.deepcopy(INTAKE), cap)
+        before = next(r for r in old["rows"] if r["status"] == "MEAN_ONLY")
+        after = next(r for r in new["rows"] if r["status"] == "MEAN_ONLY")
+        self.assertNotEqual(before["feature_values_sha256"], after["feature_values_sha256"])
+        self.assertGreater(after["mean"], before["mean"])
 
     def test_missing_or_duplicate_yardage_blocks_shadow(self):
         import copy
