@@ -1,0 +1,38 @@
+name: SportsLeader historical census
+on:
+  pull_request:
+    paths:
+      - 'research/sportsleader/**'
+      - '.github/workflows/sportsleader-history-audit.yml'
+permissions:
+  contents: read
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        league: [cbb, cfb, nfl]
+        season: [2022, 2023, 2024, 2025]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pyarrow==19.0.1
+      - run: |
+          mkdir -p evidence
+          curl --fail --location --max-time 60 --max-filesize 10000000 https://github.com/WalrusQuant/sportsleader-data/releases/download/manifest/manifest.json -o evidence/manifest.json
+          python -m research.sportsleader.run_intake evidence/manifest.json ${{ matrix.league }} games ${{ matrix.season }} evidence/assets > evidence/receipt.json
+          asset=$(python -c 'import json; print(json.load(open("evidence/receipt.json"))["asset"])')
+          python -m research.sportsleader.audit_games "$asset" > evidence/audit.json
+          cat evidence/audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: census-${{ matrix.league }}-${{ matrix.season }}
+          path: |
+            evidence/receipt.json
+            evidence/audit.json
+          retention-days: 7
