@@ -1,0 +1,8 @@
+item,value
+cfb_rows,8570
+cfb_dataset_sha256_canonical_parsed_rows,e789971ffe6cdd17a5ab7e3cb89acf93090f1b65012bada051e8f818e4b67b4e
+nfl_rows,3028
+nfl_dataset_sha256_canonical_parsed_rows,8ffcef28cb72e7d954d4b3b16fbd063c7052074ce28d2bd2a8009f9e2191c33b
+nfl_hfa_margin_non_neutral_all_seasons,1.9171
+nfl_hfa_CI95_season_block_bootstrap,1.342..2.416
+seed,20261127

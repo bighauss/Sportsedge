@@ -1,0 +1,7 @@
+baseline,n,MAE,RMSE,signed_resid_actual_minus_pred,signed_CI95_lo_season_block_bootstrap,signed_CI95_hi_season_block_bootstrap
+prior_season_mean,7700,14.1399,17.8902,-0.456,-1.3355,0.3812
+expanding_mean,7700,14.1755,17.9041,-1.1311,-1.8125,-0.385
+rolling_1000_games,7700,14.1056,17.8616,-0.2496,-0.7115,0.2163
+rolling_365_days,7700,14.1067,17.8649,-0.2431,-0.6549,0.1478
+frozen_LG_PPG_28_total_56,7700,14.1143,17.8956,-0.2426,-1.1574,0.7757
+season_to_date_shrunk_to_prior_k300,7700,14.1029,17.8617,-0.2588,-0.631,0.1737

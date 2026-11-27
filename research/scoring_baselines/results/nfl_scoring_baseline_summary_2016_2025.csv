@@ -1,0 +1,6 @@
+baseline,n,MAE,RMSE,signed_resid_actual_minus_pred,signed_CI95_lo_season_block_bootstrap,signed_CI95_hi_season_block_bootstrap
+prior_season_mean,2761,11.0718,14.0001,0.0282,-1.297,1.4334
+expanding_mean,2761,11.0121,13.923,0.0576,-0.8597,1.093
+rolling_1000_games,2761,11.0395,13.9503,0.0416,-1.016,1.1373
+rolling_365_days,2761,10.9908,13.9115,0.0237,-0.6141,0.6966
+constant_45,2761,10.9812,13.9344,0.6849,-0.2494,1.7742
