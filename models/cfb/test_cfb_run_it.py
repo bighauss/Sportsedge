@@ -98,6 +98,13 @@ class T(unittest.TestCase):
             self.assertGreater(audit["priced_rows"], 0)
             self.assertEqual(audit["priced_rows"], audit["arithmetic_checked"])
             self.assertFalse(audit["release_ready"])
+            with open(os.path.join(d, "cfb_run_it.json")) as handle:
+                shadow = json.load(handle)["original_run_shadow_prop_means"]
+            self.assertEqual(shadow["attempts"], shadow["mean_only"] + shadow["blocked"])
+            self.assertEqual(shadow["mean_only"], 1)
+            self.assertEqual(shadow["blocked"], 1)
+            self.assertFalse(shadow["release_ready"])
+            self.assertEqual(len(shadow["rows"]), shadow["attempts"])
 
 class QuantRunnerAudit(unittest.TestCase):
     def test_real_runner_fixture_audits_before_selection(self):
@@ -143,6 +150,103 @@ class QuantRunnerAudit(unittest.TestCase):
                 row[key] = value
                 with self.assertRaisesRegex(R.Fail, "QUANT_ARITHMETIC_MISMATCH"):
                     R.quant_arithmetic_audit([row])
+
+
+class ShadowPropMeans(unittest.TestCase):
+    def run_shadow(self, intake, cap):
+        import datetime as dt
+        _, _, _, ctx = R.run(intake, cap,
+                              dt.datetime.fromisoformat("2026-11-21T17:00:00+00:00"),
+                              lambda *_: cap["_weather"])
+        return ctx["shadow_prop_means"]
+
+    def test_odds_and_line_perturbation_do_not_change_shadow(self):
+        import copy
+        original = self.run_shadow(copy.deepcopy(INTAKE), fixture())
+        changed = copy.deepcopy(INTAKE)
+        changed["props"][0]["overOdds"] = -150
+        changed["props"][0]["line"] = 80.5
+        result = self.run_shadow(changed, fixture())
+        self.assertEqual(original, result)
+        self.assertEqual(original["attempts"], 2)
+        self.assertEqual(original["mean_only"], 1)
+        self.assertEqual(original["blocked"], 1)
+        mean = next(r for r in original["rows"] if r["status"] == "MEAN_ONLY")
+        self.assertEqual(len(mean["feature_values_sha256"]), 64)
+        self.assertFalse(mean["pit_verified"])
+        self.assertIsNone(mean["distribution"])
+        self.assertFalse(mean["release_ready"])
+
+    def test_all_game_quote_perturbations_preserve_forecasts(self):
+        import copy
+        import datetime as dt
+        original = copy.deepcopy(INTAKE)
+        original["lines"][0].update({
+            "homeTT": 20.5, "homeTTOver": -110, "homeTTUnder": -110,
+            "awayTT": 17.5, "awayTTOver": -105, "awayTTUnder": -115,
+            "h1Spread": 1.5, "h1HomeOdds": -110, "h1AwayOdds": -110,
+            "h1Total": 18.5, "h1Over": -110, "h1Under": -110,
+        })
+        changed = copy.deepcopy(original)
+        thresholds = {"spread", "overUnder", "homeTT", "awayTT",
+                      "h1Spread", "h1Total"}
+        prices = {"spreadHomeOdds", "spreadAwayOdds", "overOdds",
+                  "underOdds", "homeMoneyline", "awayMoneyline",
+                  "homeTTOver", "homeTTUnder", "awayTTOver", "awayTTUnder",
+                  "h1HomeOdds", "h1AwayOdds", "h1Over", "h1Under"}
+        for line in changed["lines"]:
+            for key in thresholds & line.keys():
+                line[key] += 7
+            for key in prices & line.keys():
+                line[key] = 145 if line[key] < 0 else -160
+        for prop in changed["props"]:
+            prop["line"] += 10
+            prop["overOdds"] = -150
+        self.assertNotEqual(original["lines"], changed["lines"])
+        self.assertNotEqual(original["props"], changed["props"])
+
+        def run(intake):
+            cap = fixture()
+            return R.run(intake, cap,
+                         dt.datetime.fromisoformat("2026-11-21T17:00:00+00:00"),
+                         lambda *_: cap["_weather"])
+
+        _, forecasts_a, _, ctx_a = run(original)
+        _, forecasts_b, _, ctx_b = run(changed)
+        self.assertEqual(len(forecasts_a), 1)
+        self.assertEqual(forecasts_a, forecasts_b)
+        self.assertEqual(ctx_a["shadow_prop_means"], ctx_b["shadow_prop_means"])
+        self.assertEqual(ctx_a["shadow_prop_means"]["mean_only"], 1)
+        self.assertEqual(ctx_a["shadow_prop_means"]["blocked"], 1)
+
+    def test_feature_change_changes_hash_and_mean(self):
+        import copy
+        old = self.run_shadow(copy.deepcopy(INTAKE), fixture())
+        cap = fixture()
+        for r in cap["player_rushing"]:
+            if r["statType"] == "YDS":
+                r["stat"] = 900
+        new = self.run_shadow(copy.deepcopy(INTAKE), cap)
+        before = next(r for r in old["rows"] if r["status"] == "MEAN_ONLY")
+        after = next(r for r in new["rows"] if r["status"] == "MEAN_ONLY")
+        self.assertNotEqual(before["feature_values_sha256"], after["feature_values_sha256"])
+        self.assertGreater(after["mean"], before["mean"])
+
+    def test_missing_or_duplicate_yardage_blocks_shadow(self):
+        import copy
+        for duplicate in (False, True):
+            cap = fixture()
+            source = cap["player_rushing"]
+            yard = next(r for r in source if r["statType"] == "YDS")
+            if duplicate:
+                source.append(copy.deepcopy(yard))
+            else:
+                source.remove(yard)
+            result = self.run_shadow(copy.deepcopy(INTAKE), cap)
+            self.assertEqual(result["mean_only"], 0)
+            self.assertEqual(result["blocked"], 2)
+            self.assertTrue(any("SOURCE_INPUT_INVALID" in r["reason"]
+                                for r in result["rows"]))
 
 
 if __name__ == "__main__":
