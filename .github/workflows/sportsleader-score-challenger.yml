@@ -27,7 +27,7 @@ jobs:
           for season in 2022 2023 2024 2025; do
             python -m research.sportsleader.run_intake evidence/manifest.json ${{ matrix.league }} games "$season" evidence/assets > "evidence/receipt-$season.json"
           done
-          OPENBLAS_NUM_THREADS=1 python -m research.sportsleader.score_challenger evidence/assets/*.parquet | tee evidence/score.json
+          OPENBLAS_NUM_THREADS=1 python -m research.sportsleader.score_challenger evidence/assets/*.parquet --residual-output evidence/residuals.json | tee evidence/score.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
