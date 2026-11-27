@@ -616,5 +616,18 @@ class BonaventureDatedAlias(unittest.TestCase):
                              (b["price_a"], b["price_b"], b["captured_utc"]))
 
 
+
+
+class ReplayExitStatus(unittest.TestCase):
+    def test_cli_fails_on_mismatch(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as td:
+            args = ['--replay-evidence', td, '--season', '2027', '--out', td]
+            with patch.object(R, 'replay', return_value=False):
+                self.assertEqual(R.main(args), 2)
+            with patch.object(R, 'replay', return_value=True):
+                self.assertEqual(R.main(args), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
