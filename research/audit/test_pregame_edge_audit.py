@@ -56,7 +56,7 @@ class Validation(unittest.TestCase):
         self.assertEqual(z['diagnostic_eligible'],0)
         self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in r['flags'] for r in z['flagged']))
     def test_invalid_numeric_lines(self):
-        for line in ('nan','Infinity','abc','1e100'):
+        for line in ('nan','Infinity','abc','1e100','1e-999999999','0'*65,'1_000'):
             with self.subTest(line=line):
                 z=run(row(market='TOTAL',line=line))
                 self.assertIn('INVALID_LINE',z['flagged'][0]['flags'])
