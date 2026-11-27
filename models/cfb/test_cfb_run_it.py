@@ -115,6 +115,15 @@ class QuantRunnerAudit(unittest.TestCase):
         self.assertEqual(a["approved_stake_u"], 0)
         self.assertFalse(a["release_ready"])
         self.assertEqual(len(a["master_odds_sha256"]), 64)
+        self.assertTrue(card)
+        for row in card:
+            self.assertEqual(row["stars"], 0)
+            self.assertEqual(row["flames"], "")
+            self.assertEqual(row["stars_label"], "N/A — uncalibrated")
+            self.assertEqual(row["settlement_model"], "LEGACY_ZERO_PUSH_ASSUMPTION")
+            self.assertEqual(row["projection_mode"],
+                             "MARKET_ANCHORED_RESEARCH" if row["market"].startswith("Prop")
+                             else "LEGACY_GAME_RESEARCH")
 
     def row(self):
         rows = []
