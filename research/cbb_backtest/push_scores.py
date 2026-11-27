@@ -62,3 +62,36 @@ def matched_scores(rows, names, family):
             "status": "RESEARCH_PAPER_0U_NON_COUNTED",
         })
     return result
+
+
+def report(all_rows, ident, names):
+    """Report identical forecast cohort and disjoint chronological subdivisions.
+
+    Previously inspected years are retrospective, not fresh untouched evidence.
+    The market supplies settlement thresholds only; no market-only W/P/L
+    distribution is inferred. No selection or model tuning occurs here.
+    """
+    groups = {"ALL": ident}
+    for split, seasons in H.SPLITS.items():
+        groups[split.upper()] = [r for r in ident if r["season"] in seasons]
+    for season in sorted({r["season"] for r in all_rows}):
+        groups[str(season)] = [r for r in ident if r["season"] == season]
+    output = []
+    for group, cohort in groups.items():
+        eligible = [r for r in all_rows
+                    if group == "ALL"
+                    or (group in ("TRAIN", "VALIDATION", "TEST")
+                        and H.split_of(r["season"]).upper() == group)
+                    or str(r["season"]) == group]
+        for family in H.FAMILIES:
+            for row in matched_scores(cohort, names, family):
+                output.append({
+                    "group": group,
+                    "all_forecast_rows": len(eligible),
+                    "identical_forecast_rows": len(cohort),
+                    "outside_identical_cohort": len(eligible) - len(cohort),
+                    **row,
+                    "evaluation_state": "RETROSPECTIVE_NOT_UNTOUCHED",
+                    "market_benchmark": "NOT_IDENTIFIED_FROM_TWO_SIDED_PRICES",
+                })
+    return output
