@@ -4,6 +4,10 @@ on:
     paths:
       - 'models/cfb/cfb_run_it.py'
       - 'models/cfb/test_cfb_neutral_site_guard.py'
+      - 'models/cfb/cfb_neutral_strict.py'
+      - 'models/cfb/test_cfb_neutral_strict.py'
+      - 'models/cfb/test_cfb_venue_hfa.py'
+      - 'models/cfb/sportsedge_cfb_model.py'
       - '.github/workflows/cfb-neutral-site-guard.yml'
       - 'docs/governance/changes/pr-*.json'
   workflow_dispatch:
@@ -24,3 +28,7 @@ jobs:
         run: python -m unittest models.cfb.test_cfb_neutral_site_guard -v
       - name: Existing CFB RUN IT adapter fixtures
         run: python -m unittest models.cfb.test_cfb_run_it -v
+      - name: Strict neutral-site entry point and pinned-model SHA (explicit)
+        run: python -m unittest models.cfb.test_cfb_neutral_strict -v
+      - name: Venue HFA safeguard (explicit)
+        run: python -m unittest models.cfb.test_cfb_venue_hfa -v
