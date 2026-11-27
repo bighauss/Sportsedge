@@ -214,6 +214,41 @@ class EndToEnd(unittest.TestCase):
         self.assertGreaterEqual(res["max_drawdown_u"], 0)
 
 
+
+class ThreeOutcomeScores(unittest.TestCase):
+    def test_push_is_scored_not_dropped(self):
+        from research.cbb_backtest import push_scores as P
+        row = {"season": 2024, "event_id": "1", "total": 140,
+               "mkt": {"close_total": 140},
+               "p": {"a": {"total": (.45, .10)}, "b": {"total": (.49, .02)}}}
+        got = P.matched_scores([row], ["a", "b"], "total")
+        self.assertEqual([r["n"] for r in got], [1, 1])
+        self.assertEqual([r["observed_pushes"] for r in got], [1, 1])
+        self.assertLess(got[0]["log_loss_3class_eps_clipped"],
+                        got[1]["log_loss_3class_eps_clipped"])
+        self.assertLess(got[0]["brier_3class_sum"], got[1]["brier_3class_sum"])
+        self.assertAlmostEqual(got[0]["push_brier"], .81)
+
+    def test_paired_hold_and_duplicate(self):
+        from research.cbb_backtest import push_scores as P
+        row = {"season": 2024, "event_id": "1", "margin": 5,
+               "mkt": {"close_spread_home": -4.5},
+               "p": {"a": {"spread": (.6, 0)}, "b": {"spread": (.7, 0)}}}
+        missing = dict(row, event_id="2", p={"a": row["p"]["a"]})
+        got = P.matched_scores([row, missing], ["a", "b"], "spread")
+        self.assertEqual([(x["n"], x["held_events"]) for x in got], [(1, 1), (1, 1)])
+        self.assertAlmostEqual(got[0]["brier_3class_sum"], .32)
+        with self.assertRaisesRegex(ValueError, "DUPLICATE_EVENT"):
+            P.matched_scores([row, row], ["a", "b"], "spread")
+
+    def test_reject_invalid_probabilities_and_score_exact(self):
+        from research.cbb_backtest import push_scores as P
+        self.assertEqual(P.score((0, 1, 0), 1), (0, 0))
+        for prob in ((.5, .4, .4), (.5, float("nan"), .5), (-.1, .2, .9)):
+            with self.assertRaises(ValueError):
+                P.score(prob, 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
