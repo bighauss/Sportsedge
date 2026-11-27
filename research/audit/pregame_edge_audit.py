@@ -14,6 +14,7 @@ import json
 import math
 import re
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 REQUIRED = ('sport','event_id','period','market','side','line','price_american',
@@ -37,12 +38,24 @@ def price(s):
     dec = 1 + (v / 100 if v > 0 else 100 / -v)
     return v, dec
 
+def canonical_line(value):
+    try:
+        number = Decimal(value)
+        if not number.is_finite() or abs(number) > 1000000:
+            raise ValueError('invalid line')
+        return '0' if number == 0 else format(number, 'f').rstrip('0').rstrip('.') if '.' in format(number, 'f') else format(number, 'f')
+    except (InvalidOperation, ValueError):
+        raise ValueError('invalid line')
+
 def identity(row):
     val = lambda k:(row.get(k) or '').strip().casefold()
     market = val('market').replace('moneyline','ml').replace('money_line','ml')
     period = {'full_game':'fg','fullgame':'fg','h1':'1h','first_half':'1h'}.get(val('period'),val('period'))
     line = val('line')
-    if market == 'ml' and line in ('', '0', '0.0', '+0', '-0'): line='0'
+    try:
+        line = canonical_line(line or '0') if market == 'ml' else canonical_line(line)
+    except ValueError:
+        pass
     return '|'.join((val('sport'),val('event_id'),period,market,val('side'),line,val('player_id')))
 
 def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
@@ -58,6 +71,11 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
         missing=[name for name in REQUIRED if not str(row.get(name) or '').strip()
                  and not (name=='line' and is_ml)]
         if missing: flags.append('MISSING_FIELDS:' + ','.join(missing))
+        try:
+            line = canonical_line((row.get('line') or '').strip() or ('0' if is_ml else ''))
+            if is_ml and line != '0': flags.append('INVALID_MONEYLINE_LINE')
+        except ValueError:
+            flags.append('INVALID_LINE')
         key=identity(row)
         if identity_counts[key] > 1: flags.append('DUPLICATE_CANONICAL_SELECTION')
         if (row.get('sport') or '').strip().upper() not in ALLOWED: flags.append('UNKNOWN_SPORT')
