@@ -31,6 +31,7 @@ jobs:
           set -e
           mkdir -p evidence
           curl --fail --location --max-time 60 --max-filesize 10000000 https://github.com/WalrusQuant/sportsleader-data/releases/download/manifest/manifest.json -o evidence/manifest.json
+          python -m research.sportsleader.period_census evidence/manifest.json > evidence/period-census.json
           for season in 2022 2023 2024 2025; do
             python -m research.sportsleader.run_intake evidence/manifest.json ${{ matrix.league }} ${{ matrix.dataset }} "$season" evidence/assets > "evidence/receipt-$season.json"
           done
