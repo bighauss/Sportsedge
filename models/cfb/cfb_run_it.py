@@ -344,10 +344,62 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                   po, p_imp, "over", f"{g['id']}|PTS|UP|{player}", mean)
             rows[-1]["player_id"] = pid
             rows[-1]["why"] = f"{team}: {why}; model {mm:.1f} / mkt {mkt_mean:.1f} (one-sided, vig in mkt p)"
+    ctx["quant_arithmetic_audit"] = quant_arithmetic_audit(rows)
     card = M.finalize(rows)
     return card, projs, withheld, ctx
 
 INJURY_MAX_AGE_H = 6
+
+def quant_arithmetic_audit(rows):
+    """Read-only master-quant cross-check of ALL legacy priced rows, before filtering.
+
+    This verifies the legacy no-push arithmetic only, not settlement or calibration.
+    Market-anchored player probabilities are never independent forecasts.
+    """
+    import math
+    _repo_on_path()
+    from research.audit.master import odds
+
+    counts = {"priced_rows": len(rows), "arithmetic_checked": 0,
+              "market_anchored_prop_rows": 0, "integer_line_push_unmodelled": 0,
+              "nonpositive_blended_ev_rows": 0}
+    for i, row in enumerate(rows):
+        try:
+            values = [row[k] for k in ("p_model", "p_market", "p_blend",
+                                       "ev_raw", "ev_blend", "odds")]
+            if any(isinstance(v, bool) or not isinstance(v, (int, float))
+                   or not math.isfinite(v) for v in values):
+                raise ValueError("nonfinite or nonnumeric")
+            p, market, blend, raw_ev, blend_ev, price = values
+            if not all(0 <= v <= 1 for v in (p, market, blend)):
+                raise ValueError("probability outside [0,1]")
+            if abs(price) < 100:
+                raise ValueError("invalid American price")
+            if not math.isclose(blend, M.P_BLEND_MODEL * p + (1 - M.P_BLEND_MODEL) * market,
+                                rel_tol=0, abs_tol=1e-12):
+                raise ValueError("blend mismatch")
+            for prob, actual in ((p, raw_ev), (blend, blend_ev)):
+                if not math.isclose(odds.ev_per_unit(prob, price, p_push=0.0), actual,
+                                    rel_tol=0, abs_tol=1e-12):
+                    raise ValueError("EV mismatch")
+            line = row.get("line")
+            if line is not None and (isinstance(line, bool) or
+                                     not isinstance(line, (int, float)) or not math.isfinite(line)):
+                raise ValueError("invalid line")
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise Fail(f"QUANT_ARITHMETIC_MISMATCH row={i + 1}: {exc}") from exc
+        counts["arithmetic_checked"] += 1
+        counts["market_anchored_prop_rows"] += int(row["market"].startswith("Prop"))
+        counts["integer_line_push_unmodelled"] += int(line is not None and float(line).is_integer())
+        counts["nonpositive_blended_ev_rows"] += int(blend_ev <= 0)
+    return {"schema": "sportsedge-cfb-legacy-quant-audit-v1",
+            "scope": "ALL_LEGACY_PRICED_ROWS_BEFORE_SELECTION_FILTER",
+            "master_odds_sha256": sha256(open(odds.__file__, "rb").read()),
+            "arithmetic_convention": "LEGACY_ZERO_PUSH_ASSUMPTION",
+            "calibration": "UNVERIFIED", "source_authentication": "UNVERIFIED",
+            "release_ready": False, "official_counted": 0, "approved_stake_u": 0,
+            **counts}
+
 
 def eligibility(intake, now_utc, teams=()):
     """Card-level eligibility. This runner never emits official wagers: the model is unvalidated.
@@ -558,6 +610,7 @@ def main(argv=None):
         print(f"BLOCKED {e}", file=sys.stderr); return 2
     os.makedirs(x.out, exist_ok=True)
     doc = to_doc(card, projs, withheld, intake, now, receipts)
+    doc["original_run_quant_arithmetic_audit"] = ctx["quant_arithmetic_audit"]
     json.dump(doc, open(os.path.join(x.out, "cfb_run_it.json"), "w"), indent=1, default=str)
     json.dump(receipts, open(os.path.join(x.out, "receipts.json"), "w"), indent=1)
     open(os.path.join(x.out, "cfb_card.md"), "w").write(render(doc))
