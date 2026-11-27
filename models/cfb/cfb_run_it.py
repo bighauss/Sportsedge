@@ -399,9 +399,11 @@ def quant_arithmetic_audit(rows):
         counts["market_anchored_prop_rows"] += int(row["market"].startswith("Prop"))
         counts["integer_line_push_unmodelled"] += int(line is not None and float(line).is_integer())
         counts["nonpositive_blended_ev_rows"] += int(blend_ev <= 0)
+    with open(odds.__file__, "rb") as module_file:
+        master_odds_sha = sha256(module_file.read())
     return {"schema": "sportsedge-cfb-legacy-quant-audit-v1",
             "scope": "ALL_LEGACY_PRICED_ROWS_BEFORE_SELECTION_FILTER",
-            "master_odds_sha256": sha256(open(odds.__file__, "rb").read()),
+            "master_odds_sha256": master_odds_sha,
             "arithmetic_convention": "LEGACY_ZERO_PUSH_ASSUMPTION",
             "calibration": "UNVERIFIED", "source_authentication": "UNVERIFIED",
             "release_ready": False, "official_counted": 0, "approved_stake_u": 0,
