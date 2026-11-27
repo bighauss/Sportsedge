@@ -5,7 +5,10 @@ from collections import defaultdict
 import numpy as np
 import pyarrow.parquet as pq
 
-def evaluate(paths, ridge=20.):
+def evaluate(paths, ridge=20., residual_sink=None):
+    if not np.isfinite(ridge) or ridge <= 0:
+        raise ValueError('invalid ridge')
+    ids=defaultdict(list)
     seasons=defaultdict(list)
     seen=set()
     for path in paths:
@@ -19,6 +22,7 @@ def evaluate(paths, ridge=20.):
             if h is None or a is None or h==a or r["game_id"] is None or r["game_id"] in seen:
                 raise ValueError("invalid game identity")
             seen.add(r["game_id"])
+            ids[r["season"]].append(str(r["game_id"]))
             seasons[r["season"]].append((h,a,not r["neutral_site"],y,z))
     results=[]
     for season in sorted(seasons):
@@ -42,8 +46,10 @@ def evaluate(paths, ridge=20.):
                 (beta[teams[t]] if t in teams else 0)+
                 (beta[n+teams[o]] if o in teams else 0)))
         errors=[]
-        for h,a,v,y,z in seasons[season]:
+        for game_id,(h,a,v,y,z) in zip(ids[season],seasons[season]):
             p,q=pred(h,a,v),pred(a,h,False)
+            if residual_sink is not None:
+                residual_sink.append(dict(game_id=game_id,season=season,train_end_season=max(s for s in seasons if s<season),home_residual=y-p,away_residual=z-q))
             errors.append([y-p,z-q,(y-z)-(p-q),(y+z)-(p+q)])
         e=np.asarray(errors)
         results.append(dict(season=season,n=len(e),train_n=len(train),
@@ -54,4 +60,11 @@ def evaluate(paths, ridge=20.):
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("assets",nargs="+")
-    print(json.dumps(evaluate(p.parse_args().assets),sort_keys=True))
+    p.add_argument("--residual-output")
+    args=p.parse_args()
+    rows=[]
+    print(json.dumps(evaluate(args.assets,residual_sink=rows),sort_keys=True))
+    if args.residual_output:
+        with open(args.residual_output,"w") as f:
+            json.dump(rows,f,sort_keys=True,allow_nan=False)
+
