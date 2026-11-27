@@ -2,6 +2,7 @@ import argparse,glob,json,math
 import pyarrow.parquet as pq
 from research.sportsleader.player_baseline import evaluate
 from research.sportsleader.player_metrics import metrics
+from research.sportsleader.player_probability import evaluate as probabilities
 
 def run(paths,dataset):
     stats={"passing_game_logs":["completions","attempts","yards","touchdowns","interceptions"],"player_game_logs":["points","rebounds","assists","fg3_made","steals","blocks","turnovers"],"rushing_game_logs":["carries","yards","touchdowns"],"receiving_game_logs":["receptions","yards","touchdowns"]}[dataset]
@@ -22,7 +23,7 @@ def run(paths,dataset):
                     continue
                 rows.append(dict(date=str(r["game_date"])[:10],game_id=str(r["game_id"]),player_id=str(r["player_id"]),stat=stat,value=v))
     result=evaluate(rows)
-    return dict(metrics=metrics(result["predictions"]),input_rows=len(rows),skipped=skipped,limitations=result["limitations"],release_state=result["release_state"])
+    return dict(probabilities=probabilities(result["predictions"]),metrics=metrics(result["predictions"]),input_rows=len(rows),skipped=skipped,limitations=result["limitations"],release_state=result["release_state"])
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("dataset")
