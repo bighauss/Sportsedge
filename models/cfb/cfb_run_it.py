@@ -346,6 +346,13 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             rows[-1]["why"] = f"{team}: {why}; model {mm:.1f} / mkt {mkt_mean:.1f} (one-sided, vig in mkt p)"
     ctx["quant_arithmetic_audit"] = quant_arithmetic_audit(rows)
     card = M.finalize(rows)
+    for row in card:
+        row["stars"] = 0
+        row["flames"] = ""
+        row["stars_label"] = "N/A — uncalibrated"
+        row["projection_mode"] = ("MARKET_ANCHORED_RESEARCH" if row["market"].startswith("Prop")
+                                  else "LEGACY_GAME_RESEARCH")
+        row["settlement_model"] = "LEGACY_ZERO_PUSH_ASSUMPTION"
     return card, projs, withheld, ctx
 
 INJURY_MAX_AGE_H = 6
@@ -469,7 +476,7 @@ def render(doc):
          f"**{c['eligibility']['state']}** — 0u · reasons: {', '.join(c['eligibility']['reasons'])}", "",
          f"Run {run:%Y-%m-%d %-I:%M %p} CT" + (f" · rechecked {dt.datetime.fromisoformat(c['rechecked_utc']).astimezone(CT):%-I:%M %p} CT" if c.get("rechecked_utc") else "")
          + f" · lines: {c.get('lines_captured')} · model sha256 {raw['model_file_sha256'][:12]}", "",
-         "_All weights untested starting values. p model = raw model; p blend = 30% model / 70% market._", "",
+         "_Uncalibrated research. Game probabilities use the legacy model; prop probabilities are market-anchored. p blend = 30% legacy probability / 70% market. Pushes are not modelled. No calibrated stars._", "",
          "## Raw model projections", "", "| Game | Kickoff | Home | Away | Margin (H) | Total | Plays/team | Weather | Inputs |",
          "|---|---|---|---|---|---|---|---|---|"]
     for g in raw["games"]:
@@ -481,7 +488,7 @@ def render(doc):
     for r in c["rows"]:
         mk = r["market"].startswith("Prop")
         proj = "-" if r["proj"] is None else f"{r['proj']:.1f}"
-        o.append(f"| {r['rank']} | {'*' * r['stars']}{' FIRE' if r['flames'] else ''} | {r['game']} | {r['market']} | {r['pick']} | "
+        o.append(f"| {r['rank']} | N/A | {r['game']} | {r['market']} | {r['pick']} | "
                  f"{r['odds']:+d} | {proj} | {r['p_model']:.3f} | "
                  f"{r['p_market']:.3f}{'*' if mk else ''} | {r['p_blend']:.3f} | {r['ev_raw']*100:+.1f}% | {r['ev_blend']*100:+.1f}% |")
     o += ["", "\\* one-sided milestone price: market probability includes vig.", "", "## Withheld", ""]
