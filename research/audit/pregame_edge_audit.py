@@ -3,7 +3,8 @@
 
 Input CSV fields: sport,event_id,period,market,side,line,price_american,p_model,
 model_asof_utc,captured_utc,game_start_utc,quote_sha256,model_sha256
-Optional: book,player_id,player,result,settled_utc,source.
+Optional: book,player_id,player,result,settled_utc,source,p_push.
+p_model is unconditional win probability; p_push is unconditional refund probability.
 All timestamps must be timezone-aware; receipt hashes must be 64 hex chars.
 """
 import argparse
@@ -91,6 +92,21 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
             p=float(row.get('p_model') or '')
             if not math.isfinite(p) or not (0 < p < 1): raise ValueError('probability out of range')
             odds, decimal=price(row.get('price_american') or '')
+            push_text = (row.get('p_push') or '').strip()
+            push = None
+            if push_text:
+                push = float(push_text)
+                if not math.isfinite(push) or push < 0 or p + push > 1:
+                    raise ValueError('invalid push probability')
+            elif not is_ml:
+                try:
+                    numeric_line = Decimal(canonical_line((row.get('line') or '').strip()))
+                    if numeric_line % 1 == Decimal('0.5') or numeric_line % 1 == Decimal('-0.5'):
+                        push = 0.0
+                except ValueError:
+                    pass
+            if push is None:
+                flags.append('MISSING_PUSH_PROBABILITY')
             model_t=timestamp(row.get('model_asof_utc') or '')
             quote_t=timestamp(row.get('captured_utc') or '')
             start_t=timestamp(row.get('game_start_utc') or '')
@@ -101,7 +117,7 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
             if odds > 400: flags.append('LONGSHOT_METHOD_SENSITIVITY_REQUIRED')
             value={'line':(row.get('line') or '').strip(), 'p_model':p,
                    'american':odds, 'implied_probability':round(1/decimal,8),
-                   'raw_ev_per_dollar':round(p*decimal-1,8)}
+                   'p_push':push, 'raw_ev_per_dollar':round(p*decimal+push-1,8) if push is not None else None}
         except (ValueError,TypeError,OverflowError) as e:
             flags.append('INVALID_NUMERIC_OR_TIMESTAMP:' + type(e).__name__)
         rec={'row':number,'identity':key,'flags':sorted(set(flags)),
