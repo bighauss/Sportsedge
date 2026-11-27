@@ -13,7 +13,7 @@ def row(**override):
        'model_asof_utc':'2026-11-15T16:00:00Z',
        'captured_utc':'2026-11-15T16:10:00Z',
        'game_start_utc':'2026-11-15T17:00:00Z',
-       'quote_sha256':H,'model_sha256':B,'player_id':''}
+       'quote_sha256':H,'model_sha256':B,'player_id':'','book':'DK'}
     d.update(override)
     return d
 
@@ -51,6 +51,10 @@ class Validation(unittest.TestCase):
         z=run(row(market='SPREAD',side='home',line='-5.5'),
               row(market='SPREAD',side='home',line='-6.5'))
         self.assertEqual(z['diagnostic_eligible'],2)
+    def test_book_label_required(self):
+        for book in ('','OTHER'):
+            z=run(row(book=book))
+            self.assertIn('BOOK_NOT_VERIFIED_DK_LABEL',z['flagged'][0]['flags'])
     def test_push_aware_ev(self):
         z=run(row(market='TOTAL',line='150',p_model='0.50',p_push='0.10',price_american='-110'))
         self.assertAlmostEqual(z['top_edges'][0]['raw_ev_per_dollar'],0.05454545)
