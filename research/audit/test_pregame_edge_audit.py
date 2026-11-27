@@ -51,6 +51,18 @@ class Validation(unittest.TestCase):
         z=run(row(market='SPREAD',side='home',line='-5.5'),
               row(market='SPREAD',side='home',line='-6.5'))
         self.assertEqual(z['diagnostic_eligible'],2)
+    def test_numeric_line_aliases(self):
+        z=run(row(market='SPREAD',line='2.50'),row(market='SPREAD',line='+2.5'))
+        self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in r['flags'] for r in z['flagged']))
+    def test_invalid_numeric_lines(self):
+        for line in ('nan','Infinity','abc','1e100'):
+            with self.subTest(line=line):
+                z=run(row(market='TOTAL',line=line))
+                self.assertIn('INVALID_LINE',z['flagged'][0]['flags'])
+    def test_nonzero_moneyline(self):
+        z=run(row(line='2.5'))
+        self.assertIn('INVALID_MONEYLINE_LINE',z['flagged'][0]['flags'])
     def test_quote_not_pregame(self):
         z=run(row(captured_utc='2026-11-15T17:00:00Z'))
         self.assertIn('QUOTE_NOT_PREGAME',z['flagged'][0]['flags'])
