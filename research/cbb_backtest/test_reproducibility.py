@@ -166,5 +166,39 @@ class FullRederivation(unittest.TestCase):
         self.assertEqual(I.rederive(DATA, raw, raw / "espn_odds_all.jsonl.gz", work), [])
 
 
+
+class HistoricalThreeOutcomeReport(unittest.TestCase):
+    """Execute the real driver on committed historical inputs; no provider or mocks."""
+    def test_full_historical_companion_report(self):
+        from . import harness as H
+        self.assertEqual(I.verify_derivatives(DATA), [])
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            meta, _ = H.run(None, None, out, list(range(2019, 2027)),
+                            reps=100, data_dir=DATA, push_score_report=True)
+            self.assertEqual(meta["leakage"]["violation_count"], 0)
+            with (out / "probability_metrics_3class.csv").open() as f:
+                rows = list(csv.DictReader(f))
+            self.assertTrue((out / "probability_metrics.csv").is_file())
+            all_groups = [r for r in rows if r["group"] == "ALL"]
+            self.assertEqual(len(all_groups), len(meta["models"]) * len(H.FAMILIES))
+            for family in H.FAMILIES:
+                subset = [r for r in all_groups if r["family"] == family]
+                self.assertEqual(len({r["n"] for r in subset}), 1)
+                self.assertGreater(int(subset[0]["n"]), 0)
+                self.assertEqual(len({r["observed_pushes"] for r in subset}), 1)
+                if family != "ml":
+                    self.assertGreater(int(subset[0]["observed_pushes"]), 0)
+                for r in subset:
+                    self.assertEqual(int(r["n"]) + int(r["held_events"]), meta["identical_rows"])
+                    self.assertEqual(int(r["all_forecast_rows"]), meta["total_rows"])
+                    self.assertEqual(r["evaluation_state"], "RETROSPECTIVE_NOT_UNTOUCHED")
+                    self.assertGreaterEqual(float(r["brier_3class_sum"]), 0)
+                    self.assertLessEqual(float(r["brier_3class_sum"]), 2)
+                    print("CBB_HISTORICAL_WPL " + json.dumps(r, sort_keys=True), flush=True)
+            self.assertEqual(meta["approved_stake_u"], 0)
+            self.assertEqual(meta["official_counted"], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
