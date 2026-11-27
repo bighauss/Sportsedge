@@ -16,7 +16,7 @@ def evaluate(rows, min_games=5, window=20):
             raise ValueError("invalid or duplicate identity")
         seen.add(key)
         value=r["value"]
-        if not math.isfinite(value) or value<0:
+        if not math.isfinite(value) or (value<0 and stat not in ('yards','passing_yards','rushing_yards','receiving_yards')):
             raise ValueError("invalid stat")
         days[day].append((player,stat,value,game))
     history=defaultdict(list)
