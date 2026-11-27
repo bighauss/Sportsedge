@@ -842,7 +842,11 @@ def main(argv=None):
             same = replay(x.replay_evidence, x.season, x.out)
         except (Hold, PC.Pass, ValueError, OSError, KeyError) as e:
             print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr); return 2
-        print(f"SHADOW REPLAY done; matches frozen card: {same}"); return 0
+        print(f"SHADOW REPLAY done; matches frozen card: {same}")
+        if same is not True:
+            print("BLOCKED REPLAY_CARD_MISMATCH", file=sys.stderr)
+            return 2
+        return 0
     def blocked(code):
         print(f"BLOCKED Hold: {code}", file=sys.stderr)
         _write_receipt(x.out, x.run_id, datetime.now(timezone.utc), None, None, [f"Hold: {code}"], x.ledger)
