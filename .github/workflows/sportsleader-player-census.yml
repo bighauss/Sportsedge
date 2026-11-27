@@ -1,0 +1,48 @@
+name: SportsLeader player census
+on:
+  pull_request:
+    paths:
+      - 'research/sportsleader/**'
+      - '.github/workflows/sportsleader-player-census.yml'
+permissions:
+  contents: read
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {league: cbb, dataset: player_game_logs}
+          - {league: cfb, dataset: passing_game_logs}
+          - {league: cfb, dataset: rushing_game_logs}
+          - {league: cfb, dataset: receiving_game_logs}
+          - {league: nfl, dataset: passing_game_logs}
+          - {league: nfl, dataset: rushing_game_logs}
+          - {league: nfl, dataset: receiving_game_logs}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pyarrow==19.0.1
+      - run: |
+          set -eo pipefail
+          mkdir -p evidence
+          curl --fail --location --max-time 60 --max-filesize 10000000 https://github.com/WalrusQuant/sportsleader-data/releases/download/manifest/manifest.json -o evidence/manifest.json
+          python -m research.sportsleader.period_census evidence/manifest.json | tee evidence/period-census.json
+          for season in 2022 2023 2024 2025; do
+            python -m research.sportsleader.run_intake evidence/manifest.json ${{ matrix.league }} ${{ matrix.dataset }} "$season" evidence/assets > "evidence/receipt-$season.json"
+          done
+          python -c 'import glob,json,pyarrow.parquet as p; print(json.dumps([dict(path=x,rows=p.ParquetFile(x).metadata.num_rows,columns=p.ParquetFile(x).schema_arrow.names) for x in glob.glob("evidence/assets/*.parquet")]))' | tee evidence/census.json
+      - name: Chronological player replay
+        run: |
+          set -o pipefail
+          python -m research.sportsleader.football_player_replay ${{ matrix.dataset }} evidence/assets | tee evidence/player-metrics.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: player-${{ matrix.league }}-${{ matrix.dataset }}
+          path: evidence/*.json
+          retention-days: 7

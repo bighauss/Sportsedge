@@ -1,0 +1,39 @@
+name: SportsLeader score challenger
+on:
+  pull_request:
+    paths:
+      - 'research/sportsleader/**'
+      - '.github/workflows/sportsleader-score-challenger.yml'
+permissions:
+  contents: read
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        league: [cbb, cfb, nfl]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pyarrow==19.0.1 numpy==2.2.6
+      - run: |
+          set -o pipefail
+          mkdir -p evidence
+          curl --fail --location --max-time 60 --max-filesize 10000000 https://github.com/WalrusQuant/sportsleader-data/releases/download/manifest/manifest.json -o evidence/manifest.json
+          for season in 2022 2023 2024 2025; do
+            python -m research.sportsleader.run_intake evidence/manifest.json ${{ matrix.league }} games "$season" evidence/assets > "evidence/receipt-$season.json"
+          done
+          OPENBLAS_NUM_THREADS=1 python -m research.sportsleader.score_challenger evidence/assets/*.parquet --residual-output evidence/residuals.json | tee evidence/score.json
+          python -m research.sportsleader.audit_residuals evidence/residuals.json | tee evidence/residual-audit.json
+          python -m research.sportsleader.evaluate_probabilities evidence/residuals.json | tee evidence/probabilities.json
+          python -m research.sportsleader.evaluate_thresholds evidence/residuals.json | tee evidence/thresholds.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: score-${{ matrix.league }}
+          path: evidence/*.json
+          retention-days: 7

@@ -1,0 +1,31 @@
+name: SportsLeader upstream probe
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/sportsleader-manifest-probe.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install pyarrow==19.0.1
+      - run: |
+          mkdir -p evidence
+          curl --fail --location --max-time 60 --max-filesize 10000000 https://github.com/WalrusQuant/sportsleader-data/releases/download/manifest/manifest.json -o evidence/manifest.json
+          python -c 'import json; x=json.load(open("evidence/manifest.json")); print(type(x).__name__, list(x)[:20] if isinstance(x,dict) else len(x))'
+          python -m research.sportsleader.run_intake evidence/manifest.json cbb games 2025 evidence/assets > evidence/receipt.json
+          cat evidence/receipt.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sportsleader-probe-metadata
+          path: |
+            evidence/manifest.json
+            evidence/receipt.json
+          retention-days: 7
