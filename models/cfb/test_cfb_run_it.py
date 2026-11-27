@@ -177,6 +177,48 @@ class ShadowPropMeans(unittest.TestCase):
         self.assertIsNone(mean["distribution"])
         self.assertFalse(mean["release_ready"])
 
+    def test_all_game_quote_perturbations_preserve_forecasts(self):
+        import copy
+        import datetime as dt
+        original = copy.deepcopy(INTAKE)
+        original["lines"][0].update({
+            "homeTT": 20.5, "homeTTOver": -110, "homeTTUnder": -110,
+            "awayTT": 17.5, "awayTTOver": -105, "awayTTUnder": -115,
+            "h1Spread": 1.5, "h1HomeOdds": -110, "h1AwayOdds": -110,
+            "h1Total": 18.5, "h1Over": -110, "h1Under": -110,
+        })
+        changed = copy.deepcopy(original)
+        thresholds = {"spread", "overUnder", "homeTT", "awayTT",
+                      "h1Spread", "h1Total"}
+        prices = {"spreadHomeOdds", "spreadAwayOdds", "overOdds",
+                  "underOdds", "homeMoneyline", "awayMoneyline",
+                  "homeTTOver", "homeTTUnder", "awayTTOver", "awayTTUnder",
+                  "h1HomeOdds", "h1AwayOdds", "h1Over", "h1Under"}
+        for line in changed["lines"]:
+            for key in thresholds & line.keys():
+                line[key] += 7
+            for key in prices & line.keys():
+                line[key] = 145 if line[key] < 0 else -160
+        for prop in changed["props"]:
+            prop["line"] += 10
+            prop["overOdds"] = -150
+        self.assertNotEqual(original["lines"], changed["lines"])
+        self.assertNotEqual(original["props"], changed["props"])
+
+        def run(intake):
+            cap = fixture()
+            return R.run(intake, cap,
+                         dt.datetime.fromisoformat("2026-11-21T17:00:00+00:00"),
+                         lambda *_: cap["_weather"])
+
+        _, forecasts_a, _, ctx_a = run(original)
+        _, forecasts_b, _, ctx_b = run(changed)
+        self.assertEqual(len(forecasts_a), 1)
+        self.assertEqual(forecasts_a, forecasts_b)
+        self.assertEqual(ctx_a["shadow_prop_means"], ctx_b["shadow_prop_means"])
+        self.assertEqual(ctx_a["shadow_prop_means"]["mean_only"], 1)
+        self.assertEqual(ctx_a["shadow_prop_means"]["blocked"], 1)
+
     def test_feature_change_changes_hash_and_mean(self):
         import copy
         old = self.run_shadow(copy.deepcopy(INTAKE), fixture())
