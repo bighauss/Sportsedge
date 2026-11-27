@@ -66,7 +66,7 @@ def independent_distribution(u, proj, ctx):
 
 
 def freeze_distributions(proj, ctx):
-    """All distributions for one game, computed with no quote in scope."""
+    """All distributions for one game, built before any sportsbook input is read."""
     teams = {proj["home"], proj["away"]}
     rows = [u for u in ctx["usage"] if isinstance(u, dict) and u.get("team") in teams]
     seen = {}
