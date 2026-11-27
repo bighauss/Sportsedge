@@ -145,5 +145,47 @@ class QuantRunnerAudit(unittest.TestCase):
                     R.quant_arithmetic_audit([row])
 
 
+class ShadowPropMeans(unittest.TestCase):
+    def run_shadow(self, intake, cap):
+        import datetime as dt
+        _, _, _, ctx = R.run(intake, cap,
+                              dt.datetime.fromisoformat("2026-11-21T17:00:00+00:00"),
+                              lambda *_: cap["_weather"])
+        return ctx["shadow_prop_means"]
+
+    def test_odds_and_line_perturbation_do_not_change_shadow(self):
+        import copy
+        original = self.run_shadow(copy.deepcopy(INTAKE), fixture())
+        changed = copy.deepcopy(INTAKE)
+        changed["props"][0]["overOdds"] = -150
+        changed["props"][0]["line"] = 80.5
+        result = self.run_shadow(changed, fixture())
+        self.assertEqual(original, result)
+        self.assertEqual(original["attempts"], 2)
+        self.assertEqual(original["mean_only"], 1)
+        self.assertEqual(original["blocked"], 1)
+        mean = next(r for r in original["rows"] if r["status"] == "MEAN_ONLY")
+        self.assertEqual(len(mean["feature_values_sha256"]), 64)
+        self.assertFalse(mean["pit_verified"])
+        self.assertIsNone(mean["distribution"])
+        self.assertFalse(mean["release_ready"])
+
+    def test_missing_or_duplicate_yardage_blocks_shadow(self):
+        import copy
+        for duplicate in (False, True):
+            cap = fixture()
+            source = cap["player_rushing"]
+            yard = next(r for r in source if r["statType"] == "YDS")
+            if duplicate:
+                source.append(copy.deepcopy(yard))
+            else:
+                source.remove(yard)
+            result = self.run_shadow(copy.deepcopy(INTAKE), cap)
+            self.assertEqual(result["mean_only"], 0)
+            self.assertEqual(result["blocked"], 2)
+            self.assertTrue(any("SOURCE_INPUT_INVALID" in r["reason"]
+                                for r in result["rows"]))
+
+
 if __name__ == "__main__":
     unittest.main()
