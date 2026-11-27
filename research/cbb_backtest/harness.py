@@ -408,7 +408,7 @@ def build_rows(seasons, names, games_loader, odds, leak, cutoff_day=None):
     return all_rows, ident, coverage
 
 
-def run(root, odds_path, out_dir, seasons, extra_models=(), reps=1000, data_dir=None):
+def run(root, odds_path, out_dir, seasons, extra_models=(), reps=1000, data_dir=None, *, push_score_report=False):
     """root/odds_path: raw SDV parquet dir + raw ESPN odds jsonl.gz (original path).
     data_dir: committed normalized inputs (research/cbb_backtest/data) instead; see inputs.py."""
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
@@ -424,6 +424,9 @@ def run(root, odds_path, out_dir, seasons, extra_models=(), reps=1000, data_dir=
         loader = lambda s: D.load_games(root, s)
     leak = {"origins": 0, "violations": []}
     all_rows, ident, coverage = build_rows(seasons, names, loader, odds, leak)
+    if push_score_report:
+        from .push_scores import report as outcome_report
+        _write(out_dir / "probability_metrics_3class.csv", outcome_report(all_rows, ident, names))
     return _report(all_rows, ident, names, coverage, odds_census, leak, out_dir, seasons, reps)
 
 
@@ -710,7 +713,8 @@ if __name__ == "__main__":
     p.add_argument("--seasons", nargs="+", type=int, default=list(range(2019, 2027)))
     p.add_argument("--model", action="append", default=[], help="name=module:callable challenger")
     p.add_argument("--reps", type=int, default=1000)
+    p.add_argument("--push-score-report", action="store_true", help="write companion unconditional W/P/L scores (retrospective research only)")
     a = p.parse_args()
     if not (a.data_dir or a.root):
         p.error('give --data-dir (committed inputs) or --root/--odds (raw inputs)')
-    run(a.root, a.odds, a.out, a.seasons, a.model, a.reps, a.data_dir)
+    run(a.root, a.odds, a.out, a.seasons, a.model, a.reps, a.data_dir, push_score_report=a.push_score_report)
