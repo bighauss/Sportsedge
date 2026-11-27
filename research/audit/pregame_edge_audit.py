@@ -40,6 +40,8 @@ def price(s):
 
 def canonical_line(value):
     try:
+        if len(value) > 64 or not re.fullmatch(r'[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)', value):
+            raise ValueError('invalid line')
         number = Decimal(value)
         if not number.is_finite() or abs(number) > 1000000:
             raise ValueError('invalid line')
