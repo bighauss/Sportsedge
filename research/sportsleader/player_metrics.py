@@ -5,7 +5,7 @@ def metrics(predictions):
     groups=defaultdict(list)
     for r in predictions:
         p,a=r["prediction"],r["actual"]
-        if not all(math.isfinite(x) and x>=0 for x in (p,a)):
+        if not all(math.isfinite(x) for x in (p,a)):
             raise ValueError("invalid prediction or actual")
         groups[r["stat"]].append(a-p)
     return {s:dict(n=len(e),mae=sum(map(abs,e))/len(e),bias=sum(e)/len(e),
