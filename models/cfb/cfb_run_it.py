@@ -262,6 +262,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
     games_by_pair = {k: v for k, v in games_by_pair.items() if v is not None}
     ptable, vol = player_table(cap), team_volume(cap["team_stats"])
     rows, projs, withheld, meta = [], [], [], {}
+    shadow_means = []
     for L in intake["lines"]:
         label = f"{L['awayTeam']} @ {L['homeTeam']}"
         A, H = resolve(L["awayTeam"]), resolve(L["homeTeam"])
@@ -328,8 +329,12 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
             if resolve(p["away"]) != A or resolve(p["home"]) != H: continue
             hit = match_player(p["player"], (A, H), ptable, p.get("truncated", False))
             if not hit:
+                shadow_means.append({"game_id": str(g["id"]), "stat": p["market"],
+                                     "status": "BLOCKED", "reason": "PLAYER_IDENTITY_UNMATCHED"})
                 withheld.append((label, f"prop {p['player']} {p['market']}: player identity not unique in CFBD")); continue
             team, pid = hit; player = ptable[hit]["name"]
+            shadow_means.append(shadow_prop_mean(cap, pj, ctx, team, pid, p["market"],
+                                                 player, p.get("truncated", False)))
             u = usage_row(player, team, p["market"], ptable[hit], vol)
             if not u:
                 withheld.append((label, f"prop {player} {p['market']}: no season usage")); continue
@@ -344,6 +349,12 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                   po, p_imp, "over", f"{g['id']}|PTS|UP|{player}", mean)
             rows[-1]["player_id"] = pid
             rows[-1]["why"] = f"{team}: {why}; model {mm:.1f} / mkt {mkt_mean:.1f} (one-sided, vig in mkt p)"
+    ctx["shadow_prop_means"] = {"schema": "sportsedge-cfb-shadow-prop-means-v1",
+                                 "scope": "OFFER_ATTEMPTS_IN_PROJECTED_GAMES_ONLY",
+                                 "attempts": len(shadow_means),
+                                 "mean_only": sum(r["status"] == "MEAN_ONLY" for r in shadow_means),
+                                 "blocked": sum(r["status"] == "BLOCKED" for r in shadow_means),
+                                 "release_ready": False, "rows": shadow_means}
     ctx["quant_arithmetic_audit"] = quant_arithmetic_audit(rows)
     card = M.finalize(rows)
     for row in card:
@@ -356,6 +367,89 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
     return card, projs, withheld, ctx
 
 INJURY_MAX_AGE_H = 6
+
+def shadow_prop_mean(cap, pj, ctx, team, pid, market, player, truncated):
+    """Market-blind legacy mean, NOT a calibrated or PIT-certified forecast.
+
+    Scope: matched offered player/stat attempts only; no quote or line argument.
+    Reject ambiguous source rows and unknown yardage rather than assume zero.
+    """
+    import math
+
+    identity = {"game_id": str(pj["game"]["id"]), "team": team,
+                "player_id": str(pid), "stat": market, "period": "FG"}
+    base = {**identity, "model_sha256": MODEL_SHA256_PIN,
+            "mode": "MARKET_BLIND_LEGACY_MEAN_RESEARCH",
+            "pit_verified": False, "participation_verified": False,
+            "distribution": None, "release_ready": False,
+            "approved_stake_u": 0, "official_counted": 0}
+
+    def blocked(reason):
+        return {**base, "status": "BLOCKED", "reason": reason}
+
+    if truncated:
+        return blocked("TRUNCATED_NAME_NOT_EXACT_IDENTITY")
+    spec = {"rush_yds": ("rushing", "CAR", "YDS", "rushingAttempts"),
+            "pass_yds": ("passing", "ATT", "YDS", "passAttempts"),
+            "rec_yds": ("receiving", "REC", "YDS", "passAttempts"),
+            "receptions": ("receiving", "REC", None, "passAttempts")}.get(market)
+    if spec is None:
+        return blocked("UNSUPPORTED_STAT")
+    cat, count_key, yards_key, denominator_key = spec
+    try:
+        def number(v):
+            if isinstance(v, bool) or v is None or v == "":
+                raise ValueError("missing or invalid numeric input")
+            x = float(v)
+            if not math.isfinite(x):
+                raise ValueError("nonfinite numeric input")
+            return x
+
+        def player_stat(stat):
+            found = [r for r in cap["player_" + cat]
+                     if r["team"] == team and str(r.get("playerId")) == str(pid)
+                     and r["statType"] == stat]
+            if len(found) != 1 or norm(found[0]["player"]) != norm(player):
+                raise ValueError("missing, duplicate or mismatched player stat")
+            return number(found[0]["stat"])
+
+        count = player_stat(count_key)
+        den_rows = [r for r in cap["team_stats"]
+                    if r["team"] == team and r["statName"] == denominator_key]
+        if len(den_rows) != 1:
+            raise ValueError("missing or duplicate team denominator")
+        den = number(den_rows[0]["statValue"])
+        if not (0 < count <= den) or not count.is_integer() or not den.is_integer():
+            raise ValueError("invalid usage counts")
+        yards = player_stat(yards_key) if yards_key is not None else None
+        if yards is not None and not yards.is_integer():
+            raise ValueError("nonintegral season yardage")
+        u = {"team": team, "market": market, "share": count / den,
+             "eff": yards / count if yards is not None else 1.0}
+        opp = pj["away"] if team == pj["home"] else pj["home"]
+        ppa_key = ("defense.rushingPlays.ppa" if market == "rush_yds"
+                   else "defense.passingPlays.ppa")
+        info = pj["info"][0 if team == pj["home"] else 1]
+        plays = number(pj["plays"])
+        pass_rate = number(info["pass_rate"])
+        points = number(pj["pts_home"] if team == pj["home"] else pj["pts_away"])
+        opp_ppa = number(M.g(ctx["adv"][opp], ppa_key))
+        league_ppa = number(ctx["lm"][ppa_key])
+        if plays <= 0 or not 0 <= pass_rate <= 1 or points < 0:
+            raise ValueError("invalid game features")
+        features = {**identity, "opponent": opp, "count": count, "denominator": den,
+                    "yards": yards, "plays": plays, "pass_rate": pass_rate,
+                    "team_points": points, "opponent_ppa": opp_ppa, "league_ppa": league_ppa}
+        mean, _ = M.project_prop(u, pj, ctx)
+        if not math.isfinite(mean):
+            raise ValueError("nonfinite mean")
+        digest = sha256(json.dumps(features, sort_keys=True, separators=(",", ":"),
+                                  allow_nan=False).encode("utf-8"))
+        return {**base, "status": "MEAN_ONLY", "mean": mean,
+                "feature_values_sha256": digest}
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        return blocked("SOURCE_INPUT_INVALID: " + str(exc))
+
 
 def quant_arithmetic_audit(rows):
     """Read-only master-quant cross-check of ALL legacy priced rows, before filtering.
@@ -620,6 +714,7 @@ def main(argv=None):
     os.makedirs(x.out, exist_ok=True)
     doc = to_doc(card, projs, withheld, intake, now, receipts)
     doc["original_run_quant_arithmetic_audit"] = ctx["quant_arithmetic_audit"]
+    doc["original_run_shadow_prop_means"] = ctx["shadow_prop_means"]
     json.dump(doc, open(os.path.join(x.out, "cfb_run_it.json"), "w"), indent=1, default=str)
     json.dump(receipts, open(os.path.join(x.out, "receipts.json"), "w"), indent=1)
     open(os.path.join(x.out, "cfb_card.md"), "w").write(render(doc))
