@@ -98,13 +98,6 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
                 push = float(push_text)
                 if not math.isfinite(push) or push < 0 or p + push > 1:
                     raise ValueError('invalid push probability')
-            elif not is_ml:
-                try:
-                    numeric_line = Decimal(canonical_line((row.get('line') or '').strip()))
-                    if numeric_line % 1 == Decimal('0.5') or numeric_line % 1 == Decimal('-0.5'):
-                        push = 0.0
-                except ValueError:
-                    pass
             if push is None:
                 flags.append('MISSING_PUSH_PROBABILITY')
             model_t=timestamp(row.get('model_asof_utc') or '')
