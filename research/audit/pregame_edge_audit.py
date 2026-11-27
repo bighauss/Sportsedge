@@ -82,6 +82,8 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
         key=identity(row)
         if identity_counts[key] > 1: flags.append('DUPLICATE_CANONICAL_SELECTION')
         if (row.get('sport') or '').strip().upper() not in ALLOWED: flags.append('UNKNOWN_SPORT')
+        if (row.get('book') or '').strip().casefold() not in ('dk','draftkings'):
+            flags.append('BOOK_NOT_VERIFIED_DK_LABEL')
         if 'PROP' in (row.get('market') or '').upper() and not (row.get('player_id') or '').strip():
             flags.append('MISSING_PLAYER_ID')
         for field in ('quote_sha256','model_sha256'):
