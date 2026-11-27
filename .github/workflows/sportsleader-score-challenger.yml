@@ -9,7 +9,7 @@ permissions:
 jobs:
   score:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +30,7 @@ jobs:
           OPENBLAS_NUM_THREADS=1 python -m research.sportsleader.score_challenger evidence/assets/*.parquet --residual-output evidence/residuals.json | tee evidence/score.json
           python -m research.sportsleader.audit_residuals evidence/residuals.json | tee evidence/residual-audit.json
           python -m research.sportsleader.evaluate_probabilities evidence/residuals.json | tee evidence/probabilities.json
+          python -m research.sportsleader.evaluate_thresholds evidence/residuals.json | tee evidence/thresholds.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
