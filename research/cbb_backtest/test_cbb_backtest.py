@@ -249,6 +249,40 @@ class ThreeOutcomeScores(unittest.TestCase):
                 P.score(prob, 0)
 
 
+
+    def test_report_in_actual_driver_opt_in(self):
+        import csv
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from research.cbb_backtest import inputs as I
+        games = synth(days=35)
+        def load_games(data_dir, season):
+            return (games if season == 2024 else [], {})
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            with patch.object(I, "load_games_normalized", side_effect=load_games), \
+                 patch.object(I, "load_odds_normalized", return_value=({}, {})), \
+                 patch.object(H, "_report", return_value=("legacy", {})) as legacy:
+                H.run(None, None, out, [2024], data_dir=out)
+                self.assertFalse((out / "probability_metrics_3class.csv").exists())
+                H.run(None, None, out, [2024], data_dir=out, push_score_report=True)
+                self.assertEqual(legacy.call_count, 2)
+            with (out / "probability_metrics_3class.csv").open() as f:
+                rows = list(csv.DictReader(f))
+            ml = [r for r in rows if r["group"] == "ALL" and r["family"] == "ml"]
+            self.assertTrue(ml)
+            self.assertTrue(all(int(r["n"]) > 0 for r in ml))
+            self.assertEqual(len({r["n"] for r in ml}), 1)
+            self.assertTrue(all(r["evaluation_state"] == "RETROSPECTIVE_NOT_UNTOUCHED" for r in ml))
+            self.assertTrue(all(int(r["all_forecast_rows"]) ==
+                                int(r["identical_forecast_rows"]) +
+                                int(r["outside_identical_cohort"]) for r in rows))
+            totals = [r for r in rows if r["group"] == "ALL" and r["family"] == "total"]
+            self.assertTrue(all(int(r["n"]) == 0 and int(r["held_events"]) ==
+                                int(r["identical_forecast_rows"]) for r in totals))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
