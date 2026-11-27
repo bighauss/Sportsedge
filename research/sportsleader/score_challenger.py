@@ -49,7 +49,7 @@ def evaluate(paths, ridge=20., residual_sink=None):
         for game_id,(h,a,v,y,z) in zip(ids[season],seasons[season]):
             p,q=pred(h,a,v),pred(a,h,False)
             if residual_sink is not None:
-                residual_sink.append(dict(game_id=game_id,season=season,train_end_season=max(s for s in seasons if s<season),home_residual=y-p,away_residual=z-q))
+                residual_sink.append(dict(game_id=game_id,season=season,train_end_season=max(s for s in seasons if s<season),home_residual=y-p,away_residual=z-q,home_prediction=p,away_prediction=q,home_actual=y,away_actual=z))
             errors.append([y-p,z-q,(y-z)-(p-q),(y+z)-(p+q)])
         e=np.asarray(errors)
         results.append(dict(season=season,n=len(e),train_n=len(train),
