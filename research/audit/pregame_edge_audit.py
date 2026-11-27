@@ -3,7 +3,8 @@
 
 Input CSV fields: sport,event_id,period,market,side,line,price_american,p_model,
 model_asof_utc,captured_utc,game_start_utc,quote_sha256,model_sha256
-Optional: book,player_id,player,result,settled_utc,source.
+Optional: book,player_id,player,result,settled_utc,source,p_push.
+p_model is unconditional win probability; p_push is unconditional refund probability.
 All timestamps must be timezone-aware; receipt hashes must be 64 hex chars.
 """
 import argparse
@@ -14,6 +15,7 @@ import json
 import math
 import re
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 REQUIRED = ('sport','event_id','period','market','side','line','price_american',
@@ -37,12 +39,26 @@ def price(s):
     dec = 1 + (v / 100 if v > 0 else 100 / -v)
     return v, dec
 
+def canonical_line(value):
+    try:
+        if len(value) > 64 or not re.fullmatch(r'[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)', value):
+            raise ValueError('invalid line')
+        number = Decimal(value)
+        if not number.is_finite() or abs(number) > 1000000:
+            raise ValueError('invalid line')
+        return '0' if number == 0 else format(number, 'f').rstrip('0').rstrip('.') if '.' in format(number, 'f') else format(number, 'f')
+    except (InvalidOperation, ValueError):
+        raise ValueError('invalid line')
+
 def identity(row):
     val = lambda k:(row.get(k) or '').strip().casefold()
     market = val('market').replace('moneyline','ml').replace('money_line','ml')
     period = {'full_game':'fg','fullgame':'fg','h1':'1h','first_half':'1h'}.get(val('period'),val('period'))
     line = val('line')
-    if market == 'ml' and line in ('', '0', '0.0', '+0', '-0'): line='0'
+    try:
+        line = canonical_line(line or '0') if market == 'ml' else canonical_line(line)
+    except ValueError:
+        pass
     return '|'.join((val('sport'),val('event_id'),period,market,val('side'),line,val('player_id')))
 
 def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
@@ -58,9 +74,16 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
         missing=[name for name in REQUIRED if not str(row.get(name) or '').strip()
                  and not (name=='line' and is_ml)]
         if missing: flags.append('MISSING_FIELDS:' + ','.join(missing))
+        try:
+            line = canonical_line((row.get('line') or '').strip() or ('0' if is_ml else ''))
+            if is_ml and line != '0': flags.append('INVALID_MONEYLINE_LINE')
+        except ValueError:
+            flags.append('INVALID_LINE')
         key=identity(row)
         if identity_counts[key] > 1: flags.append('DUPLICATE_CANONICAL_SELECTION')
         if (row.get('sport') or '').strip().upper() not in ALLOWED: flags.append('UNKNOWN_SPORT')
+        if (row.get('book') or '').strip().casefold() not in ('dk','draftkings'):
+            flags.append('BOOK_NOT_VERIFIED_DK_LABEL')
         if 'PROP' in (row.get('market') or '').upper() and not (row.get('player_id') or '').strip():
             flags.append('MISSING_PLAYER_ID')
         for field in ('quote_sha256','model_sha256'):
@@ -71,6 +94,14 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
             p=float(row.get('p_model') or '')
             if not math.isfinite(p) or not (0 < p < 1): raise ValueError('probability out of range')
             odds, decimal=price(row.get('price_american') or '')
+            push_text = (row.get('p_push') or '').strip()
+            push = None
+            if push_text:
+                push = float(push_text)
+                if not math.isfinite(push) or push < 0 or p + push > 1:
+                    raise ValueError('invalid push probability')
+            if push is None:
+                flags.append('MISSING_PUSH_PROBABILITY')
             model_t=timestamp(row.get('model_asof_utc') or '')
             quote_t=timestamp(row.get('captured_utc') or '')
             start_t=timestamp(row.get('game_start_utc') or '')
@@ -81,7 +112,7 @@ def audit_rows(rows, snapshot_sha256, *, max_age_minutes=120, top_n=20):
             if odds > 400: flags.append('LONGSHOT_METHOD_SENSITIVITY_REQUIRED')
             value={'line':(row.get('line') or '').strip(), 'p_model':p,
                    'american':odds, 'implied_probability':round(1/decimal,8),
-                   'raw_ev_per_dollar':round(p*decimal-1,8)}
+                   'p_push':push, 'raw_ev_per_dollar':round(p*decimal+push-1,8) if push is not None else None}
         except (ValueError,TypeError,OverflowError) as e:
             flags.append('INVALID_NUMERIC_OR_TIMESTAMP:' + type(e).__name__)
         rec={'row':number,'identity':key,'flags':sorted(set(flags)),

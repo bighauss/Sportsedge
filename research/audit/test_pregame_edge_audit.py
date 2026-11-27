@@ -9,11 +9,11 @@ B='b'*64
 
 def row(**override):
     d={'sport':'NFL','event_id':'2026-11-15-MATCH1','period':'FG','market':'ML',
-       'side':'home','line':'0','price_american':'+120','p_model':'0.52',
+       'side':'home','line':'0','price_american':'+120','p_model':'0.52','p_push':'0',
        'model_asof_utc':'2026-11-15T16:00:00Z',
        'captured_utc':'2026-11-15T16:10:00Z',
        'game_start_utc':'2026-11-15T17:00:00Z',
-       'quote_sha256':H,'model_sha256':B,'player_id':''}
+       'quote_sha256':H,'model_sha256':B,'player_id':'','book':'DK'}
     d.update(override)
     return d
 
@@ -51,6 +51,32 @@ class Validation(unittest.TestCase):
         z=run(row(market='SPREAD',side='home',line='-5.5'),
               row(market='SPREAD',side='home',line='-6.5'))
         self.assertEqual(z['diagnostic_eligible'],2)
+    def test_book_label_required(self):
+        for book in ('','OTHER'):
+            z=run(row(book=book))
+            self.assertIn('BOOK_NOT_VERIFIED_DK_LABEL',z['flagged'][0]['flags'])
+    def test_push_aware_ev(self):
+        z=run(row(market='TOTAL',line='150',p_model='0.50',p_push='0.10',price_american='-110'))
+        self.assertAlmostEqual(z['top_edges'][0]['raw_ev_per_dollar'],0.05454545)
+    def test_missing_push_mass(self):
+        z=run(row(p_push=''))
+        self.assertIn('MISSING_PUSH_PROBABILITY',z['flagged'][0]['flags'])
+    def test_invalid_push_mass(self):
+        for push in ('nan','-0.1','0.6','inf'):
+            z=run(row(p_push=push))
+            self.assertEqual(z['diagnostic_eligible'],0)
+    def test_numeric_line_aliases(self):
+        z=run(row(market='SPREAD',line='2.50'),row(market='SPREAD',line='+2.5'))
+        self.assertEqual(z['diagnostic_eligible'],0)
+        self.assertTrue(all('DUPLICATE_CANONICAL_SELECTION' in r['flags'] for r in z['flagged']))
+    def test_invalid_numeric_lines(self):
+        for line in ('nan','Infinity','abc','1e100','1e-999999999','0'*65,'1_000'):
+            with self.subTest(line=line):
+                z=run(row(market='TOTAL',line=line))
+                self.assertIn('INVALID_LINE',z['flagged'][0]['flags'])
+    def test_nonzero_moneyline(self):
+        z=run(row(line='2.5'))
+        self.assertIn('INVALID_MONEYLINE_LINE',z['flagged'][0]['flags'])
     def test_quote_not_pregame(self):
         z=run(row(captured_utc='2026-11-15T17:00:00Z'))
         self.assertIn('QUOTE_NOT_PREGAME',z['flagged'][0]['flags'])
