@@ -36,6 +36,11 @@ jobs:
             python -m research.sportsleader.run_intake evidence/manifest.json ${{ matrix.league }} ${{ matrix.dataset }} "$season" evidence/assets > "evidence/receipt-$season.json"
           done
           python -c 'import glob,json,pyarrow.parquet as p; print(json.dumps([dict(path=x,rows=p.ParquetFile(x).metadata.num_rows,columns=p.ParquetFile(x).schema_arrow.names) for x in glob.glob("evidence/assets/*.parquet")]))' | tee evidence/census.json
+      - name: Chronological football replay
+        if: matrix.dataset == 'rushing_game_logs' || matrix.dataset == 'receiving_game_logs'
+        run: |
+          set -o pipefail
+          python -m research.sportsleader.football_player_replay ${{ matrix.dataset }} evidence/assets | tee evidence/player-metrics.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
