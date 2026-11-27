@@ -28,14 +28,14 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install pyarrow==19.0.1
       - run: |
-          set -e
+          set -eo pipefail
           mkdir -p evidence
           curl --fail --location --max-time 60 --max-filesize 10000000 https://github.com/WalrusQuant/sportsleader-data/releases/download/manifest/manifest.json -o evidence/manifest.json
-          python -m research.sportsleader.period_census evidence/manifest.json > evidence/period-census.json
+          python -m research.sportsleader.period_census evidence/manifest.json | tee evidence/period-census.json
           for season in 2022 2023 2024 2025; do
             python -m research.sportsleader.run_intake evidence/manifest.json ${{ matrix.league }} ${{ matrix.dataset }} "$season" evidence/assets > "evidence/receipt-$season.json"
           done
-          python -c 'import glob,json,pyarrow.parquet as p; print(json.dumps([dict(path=x,rows=p.ParquetFile(x).metadata.num_rows,columns=p.ParquetFile(x).schema_arrow.names) for x in glob.glob("evidence/assets/*.parquet")]))' > evidence/census.json
+          python -c 'import glob,json,pyarrow.parquet as p; print(json.dumps([dict(path=x,rows=p.ParquetFile(x).metadata.num_rows,columns=p.ParquetFile(x).schema_arrow.names) for x in glob.glob("evidence/assets/*.parquet")]))' | tee evidence/census.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
