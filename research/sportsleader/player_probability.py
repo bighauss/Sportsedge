@@ -2,6 +2,7 @@
 from collections import defaultdict
 from datetime import date
 import math
+from bisect import bisect_right, insort
 def evaluate(predictions,min_history=100):
     days=defaultdict(list)
     for r in predictions:
@@ -17,7 +18,7 @@ def evaluate(predictions,min_history=100):
             h=history[s]
             if len(h)>=min_history:
                 line=math.floor(p)+0.5
-                wins=sum(p+e>line for e in h)
+                wins=len(h)-bisect_right(h,line-p)
                 prob=(wins+1)/(len(h)+2)
                 y=int(a>line)
                 z=scores[s]
@@ -25,5 +26,5 @@ def evaluate(predictions,min_history=100):
                 z[1]+=(prob-y)**2
                 z[2]-=math.log(prob if y else 1-prob)
         for r in days[day]:
-            history[r["stat"]].append(r["actual"]-r["prediction"])
+            insort(history[r["stat"]],r["actual"]-r["prediction"])
     return {s:dict(n=n,brier=b/n,logloss=l/n) for s,(n,b,l) in scores.items() if n}
