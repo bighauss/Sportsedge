@@ -588,5 +588,52 @@ class MainQuoteSanity(unittest.TestCase):
                 self.assertEqual(proj(board), base)
 
 
+class MainQuoteSanityAllMarkets(unittest.TestCase):
+    """#568 review: TOTAL (verified order incl. swap) and ML coverage; pick'em zero line."""
+    BAD = (("+150", "+150"), ("-110", "+900"), ("+20000", "-110"))
+    GOOD = (("-110", "-110"), ("-150", "+130"))
+
+    def quotes(self, rows, verified=False):
+        return R.board_quotes(rows, R.slate(T.provider()[0], T.NOW.date(), T.NOW, S.SEASON),
+                              "2026-11-21T14:30:00Z", totals_order_verified=verified)
+
+    def test_total_impossible_pairs_rejected_both_orders(self):
+        for order in ("over_under", "under_over"):
+            for pa, pb in self.BAD:
+                with self.subTest(order=order, pa=pa, pb=pb):
+                    q, un = self.quotes([row("TOTAL", "140.5", pa, pb, totals_order=order)])
+                    self.assertEqual(q, [])
+                    self.assertTrue(un[0][2].startswith(("NOVIG_SUM_OUT_OF_RANGE", "IMPLAUSIBLE_PRICE_MAGNITUDE")))
+
+    def test_total_normal_pairs_admitted_and_swap_applied(self):
+        q, _ = self.quotes([row("TOTAL", "140.5", "-120", "100", totals_order="under_over")])
+        self.assertEqual((q[0]["price_a"], q[0]["price_b"]), ("100", "-120"))
+        for pa, pb in self.GOOD:
+            q, _ = self.quotes([row("TOTAL", "140.5", pa, pb)], verified=True)
+            self.assertEqual(len(q), 1)
+
+    def test_moneyline_impossible_rejected_normal_admitted(self):
+        for pa, pb in self.BAD:
+            with self.subTest(pa=pa, pb=pb):
+                q, un = self.quotes([row("ML", "", pa, pb)])
+                self.assertEqual(q, [])
+        for pa, pb in self.GOOD:
+            q, _ = self.quotes([row("ML", "", pa, pb)])
+            self.assertEqual(len(q), 1)
+            self.assertIsNone(q[0]["line"])
+
+    def test_pickem_zero_line_preserved(self):
+        for line in (0, "0", 0.0, "0.0"):
+            with self.subTest(line=line):
+                q, _ = self.quotes([row("SPREAD", line)])
+                self.assertEqual(len(q), 1)
+                self.assertIsNotNone(q[0]["line"])
+                self.assertEqual(float(q[0]["line"]), 0.0)
+
+    def test_missing_line_stays_none(self):
+        for line in (None, "", "  "):
+            self.assertIsNone(R._quote_line(line))
+
+
 if __name__ == "__main__":
     unittest.main()

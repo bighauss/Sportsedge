@@ -343,6 +343,12 @@ def main_quote_sanity(pa, pb):
     return None
 
 
+def _quote_line(v):
+    """Keep a numeric zero (pick'em) line; only a missing/blank line becomes None."""
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    return v
+
 def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
                  totals_order_verified=TOTALS_ORDER_VERIFIED):
     matched, unmatched = [], []
@@ -385,7 +391,7 @@ def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
         if bad:
             unmatched.append((f"{b['away']} @ {b['home']}", b["market"], bad)); continue
         out.append({"game_id": g["game_id"], "market": MK[b["market"]], "book": book,
-                    "line": b["line"] or None, "price_a": pa, "price_b": pb,
+                    "line": _quote_line(b.get("line")), "price_a": pa, "price_b": pb,
                     "captured_utc": str(b.get("captured_utc") or captured_utc)})
     return out, unmatched
 
