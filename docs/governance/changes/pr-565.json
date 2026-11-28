@@ -8,7 +8,7 @@
     "models/cfb/test_cfb_prop_independence.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Land the #558 market-blind CFB prop challenger (Perplexity) plus Claude repairs: team-scoped player identity, duplicate/conflicting quote handling, push-aware EV for whole-number thresholds; explicit CI wiring. Pinned model unchanged.",
+  "change_summary": "Land the #558 market-blind CFB prop challenger (Perplexity) plus Claude repairs: team-scoped player identity, duplicate/conflicting quote handling, push-aware EV for whole-number thresholds, and CBB-parity quote validation (integer American odds, |odds|<=5000, overround in [-0.5%,25%], half-point grid); explicit CI wiring. Pinned model unchanged.",
   "assumptions": [
     "Base is main after #556 (9c0aaf41); includes #558 commits; pinned sportsedge_cfb_model.py (blob a07f4cd4) is not modified.",
     "Push band uses a +/-0.5 continuity correction on the normal forecast; unvalidated.",

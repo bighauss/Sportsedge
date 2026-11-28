@@ -127,6 +127,30 @@ def push_aware_ev(p_win, p_loss, american):
     return p_win * (M.dec(american) - 1.0) - p_loss
 
 
+# Same pair-admission rules as the CBB ladder/main quotes (models/cbb/cbb_pricing._rung).
+MAX_ABS_PRICE = 5000
+OVERROUND_RANGE = (-0.005, 0.25)
+
+
+def _implied(american):
+    return 100.0 / (american + 100.0) if american > 0 else -american / (-american + 100.0)
+
+
+def quote_reason(threshold, over_odds, under_odds):
+    """Reason code if a two-sided prop quote is malformed, else None. Never reads the model."""
+    if threshold is None or threshold <= 0 or (threshold * 2) % 1:
+        return "LINE_OFF_HALF_POINT_GRID"
+    for v in (over_odds, under_odds):
+        if v is None or not float(v).is_integer() or abs(v) < 100:
+            return "INVALID_AMERICAN_ODDS"
+        if abs(v) > MAX_ABS_PRICE:
+            return "IMPLAUSIBLE_PRICE_MAGNITUDE"
+    over = _implied(over_odds) + _implied(under_odds) - 1.0
+    if not OVERROUND_RANGE[0] <= over <= OVERROUND_RANGE[1]:
+        return "NOVIG_SUM_OUT_OF_RANGE"
+    return None
+
+
 def price_props_independent(proj, ctx, prop_rows):
     frozen = freeze_distributions(proj, ctx)
     set_sha = _set_digest(frozen)
@@ -144,9 +168,10 @@ def price_props_independent(proj, ctx, prop_rows):
             withheld.append({"team": key[0], "player": player, "market": market, "reason": d["reason"]})
             continue
         threshold, oo, uo = _num(p.get("line")), _num(p.get("overOdds")), _num(p.get("underOdds"))
-        if (threshold is None or threshold <= 0 or oo is None or uo is None
-                or abs(oo) < 100 or abs(uo) < 100):
-            withheld.append({"team": key[0], "player": player, "market": market, "reason": "INVALID_QUOTE"})
+        bad = quote_reason(threshold, oo, uo)
+        if bad:
+            withheld.append({"team": key[0], "player": player, "market": market,
+                             "reason": "INVALID_QUOTE", "detail": bad})
             continue
         valid.append((key, threshold, oo, uo))
 

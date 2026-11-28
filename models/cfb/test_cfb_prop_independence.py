@@ -88,7 +88,7 @@ class IndependentChallenger(unittest.TestCase):
         self.assertGreater(len({r["p_over"] for r in out}), 1)
         self.assertGreater(len({r["ev_over"] for r in out}), 1)
         lo = P.price_props_independent(proj, ctx, [_prop(245.5, -110, -110)])["rows"][0]
-        hi = P.price_props_independent(proj, ctx, [_prop(245.5, 120, -110)])["rows"][0]
+        hi = P.price_props_independent(proj, ctx, [_prop(245.5, 120, -140)])["rows"][0]  # +120/-110 is a negative-overround pair, now withheld
         self.assertEqual(lo["p_over"], hi["p_over"])
         self.assertGreater(hi["ev_over"], lo["ev_over"])
 
@@ -216,6 +216,45 @@ class IdentityDuplicatesPush(unittest.TestCase):
         r = P.price_props_independent(proj, ctx, [_prop(line=float(round(mean)))])["rows"][0]
         self.assertAlmostEqual(r["ev_over"], r["p_over"] * (M.dec(-110) - 1) - r["p_under"], places=12)
         self.assertAlmostEqual(r["ev_under"], r["p_under"] * (M.dec(-110) - 1) - r["p_over"], places=12)
+
+
+class QuoteValidation(unittest.TestCase):
+    """#565 review: malformed quotes must be withheld before pricing (CBB rule parity)."""
+
+    def withheld(self, **kw):
+        ctx, proj = _ctx(), _proj()
+        res = P.price_props_independent(proj, ctx, [_prop(**kw)])
+        return res["rows"], [w.get("detail") for w in res["withheld"]], res["distribution_set_sha256"]
+
+    def test_malformed_quotes_withheld(self):
+        cases = [(dict(over=20000, under=-110), "IMPLAUSIBLE_PRICE_MAGNITUDE"),
+                 (dict(over=150, under=150), "NOVIG_SUM_OUT_OF_RANGE"),
+                 (dict(over=-110, under=900), "NOVIG_SUM_OUT_OF_RANGE"),
+                 (dict(line=245.25), "LINE_OFF_HALF_POINT_GRID"),
+                 (dict(line=245.75), "LINE_OFF_HALF_POINT_GRID"),
+                 (dict(over=-110.5), "INVALID_AMERICAN_ODDS"),
+                 (dict(under=99), "INVALID_AMERICAN_ODDS"),
+                 (dict(line=0), "LINE_OFF_HALF_POINT_GRID")]
+        for kw, reason in cases:
+            with self.subTest(**kw):
+                rows, details, _ = self.withheld(**kw)
+                self.assertEqual(rows, [])
+                self.assertEqual(details, [reason])
+
+    def test_normal_quotes_still_priced(self):
+        for kw in (dict(), dict(over=-150, under=125), dict(over=250, under=-320), dict(line=245.0)):
+            with self.subTest(**kw):
+                rows, _, _ = self.withheld(**kw)
+                self.assertEqual(len(rows), 1)
+
+    def test_rejection_does_not_change_distributions(self):
+        _, _, good = self.withheld()
+        _, _, bad = self.withheld(over=20000, under=-110)
+        self.assertEqual(good, bad)
+
+    def test_rule_matches_cbb_pricing_bounds(self):
+        self.assertEqual(P.MAX_ABS_PRICE, 5000)
+        self.assertEqual(P.OVERROUND_RANGE, (-0.005, 0.25))
 
 
 if __name__ == "__main__":
