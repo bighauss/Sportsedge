@@ -322,6 +322,33 @@ def align_neutral_totals(board_rows, slate_rows, registry_rows, freeze_utc):
     return out, audit
 
 
+def main_quote_sanity(pa, pb):
+    """Same price-pair admission rules ladder rungs already get (PR._rung).
+
+    Main spread/total/moneyline quotes previously skipped these checks, so an
+    impossible pair (negative overround, +20000 typo) was priced and could top
+    the card with an inflated paper EV. Returns a reason code or None.
+    Never looks at the model.
+    """
+    try:
+        a, b = int(str(pa).strip()), int(str(pb).strip())
+        PR.NM.decimal_odds(a); PR.NM.decimal_odds(b)
+    except (TypeError, ValueError, PR.NM.Pass):
+        return "INVALID_PRICE: main quote price not valid American odds"
+    if abs(a) > PR.MAX_ABS_PRICE or abs(b) > PR.MAX_ABS_PRICE:
+        return "IMPLAUSIBLE_PRICE_MAGNITUDE: implausible main quote price magnitude"
+    _, _, over = PR.NM.no_vig(a, b)
+    if not PR.OVERROUND_RANGE[0] <= over <= PR.OVERROUND_RANGE[1]:
+        return f"NOVIG_SUM_OUT_OF_RANGE: main quote overround {over:.3f}"
+    return None
+
+
+def _quote_line(v):
+    """Keep a numeric zero (pick'em) line; only a missing/blank line becomes None."""
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    return v
+
 def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
                  totals_order_verified=TOTALS_ORDER_VERIFIED):
     matched, unmatched = [], []
@@ -360,8 +387,11 @@ def board_quotes(board_rows, slate_rows, captured_utc, book="DraftKings",
                 not e and game_evs.get(g["game_id"])):
             unmatched.append((f"{b['away']} @ {b['home']}", b["market"], "DK event id conflict")); continue
         pa, pb = (b["price_b"], b["price_a"]) if order == "swap" else (b["price_a"], b["price_b"])
+        bad = main_quote_sanity(pa, pb)
+        if bad:
+            unmatched.append((f"{b['away']} @ {b['home']}", b["market"], bad)); continue
         out.append({"game_id": g["game_id"], "market": MK[b["market"]], "book": book,
-                    "line": b["line"] or None, "price_a": pa, "price_b": pb,
+                    "line": _quote_line(b.get("line")), "price_a": pa, "price_b": pb,
                     "captured_utc": str(b.get("captured_utc") or captured_utc)})
     return out, unmatched
 
