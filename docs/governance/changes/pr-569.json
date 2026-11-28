@@ -25,9 +25,9 @@
     "merge_rights": "REPO_RULES_ONLY"
   },
   "baseline": {
-    "metric": "cfb-prop-independence-tests",
+    "metric": "seven-sport-code-pin-verification",
     "before": null,
-    "unit": "tests",
+    "unit": "pinned files",
     "source_state": "UNKNOWN"
   },
   "golden": {
