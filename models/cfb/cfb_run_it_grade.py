@@ -75,7 +75,10 @@ def result(row, g, pstats):
         cat, typ = STAT.get(mk, (None, None))
         v = st.get(f"{cat}.{typ}")
         if v is None: return None, "PROP_STAT_MISSING"
-        return _ou("Over", v, float(row["line"])), None
+        pick = f" {row.get('pick', '')} "
+        if (" Over " in pick) == (" Under " in pick):
+            return None, "PROP_SIDE_UNKNOWN"
+        return _ou("Over" if " Over " in pick else "Under", v, float(row["line"])), None
     return None, "MARKET_UNSUPPORTED"
 
 def grade(ledger_path, finals, players_payload, receipts, now=None):
