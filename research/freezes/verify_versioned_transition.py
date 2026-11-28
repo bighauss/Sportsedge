@@ -26,6 +26,19 @@ TRANSITIONS = (
 )
 LEGACY = Path(__file__).with_name('frozen_baselines_20261115.json')
 TRANSITION = Path(__file__).with_name('code_identity_transitions_20261118.json')
+# Round 2 (owner decision 2026-11-28): chained on the round-1 candidates, never on the
+# original freeze. Each entry's "original" is the round-1 approved candidate blob.
+TRANSITIONS_2 = (
+    ('MLB', 'models/mlb/sportsedge_mlb_model.py',
+     '3f630532e9ff499912bc06041906d3b7c11d9887',
+     '30c6cb3355ac5f6b6cbb018729c4fdc41255e057',
+     'b73874a2ecf8d558780bacf6b636b70e409f2cb4', 446),
+    ('NBA', 'models/nba/sportsedge_nba_model.py',
+     'da0c1503af5ed9ad548d1458588505f695b749e5',
+     'b353de86445188288cab4050f6cae13eee76bff6',
+     '8537ae481a34fa6972a67389a6ac75172ee1f59c', 460),
+)
+TRANSITION_2 = Path(__file__).with_name('code_identity_transitions_20261128.json')
 
 def checked_manifest(legacy: dict, transition: dict, raw_legacy: bytes) -> dict:
     """Authorize exactly three reviewed research-code identities, in memory only."""
@@ -59,6 +72,48 @@ def checked_manifest(legacy: dict, transition: dict, raw_legacy: bytes) -> dict:
         candidate['sports'][sport]['sources'][path] = new
     return candidate
 
+def checked_round2(candidate: dict, transition2: dict) -> dict:
+    """Apply exactly the round-2 owner-approved identities on top of round 1."""
+    expected = {
+        'schema': 'sportsedge-code-identity-transitions-v1',
+        'original_baseline_commit': BASELINE_COMMIT,
+        'original_manifest_git_blob_sha1': LEGACY_MANIFEST_BLOB,
+        'prior_transition': TRANSITION.name,
+        'owner_decision': 'VERSIONED_RESEARCH_CANDIDATES_ONLY',
+        'owner_decision_record': transition2.get('owner_decision_record'),
+        'frozen_engine_v5_unchanged': True,
+        'official_counted': 0,
+        'approved_stake_u': 0,
+        'candidates': [
+            {'sport': sport, 'path': path, 'original_git_blob_sha1': old,
+             'approved_candidate_git_blob_sha1': new,
+             'first_introducing_commit': commit, 'change_pr': pr}
+            for sport, path, old, new, commit, pr in TRANSITIONS_2
+        ],
+    }
+    rec = transition2.get('owner_decision_record')
+    if not isinstance(rec, str) or not rec.strip() or transition2 != expected:
+        raise FreezeViolation('UNAUTHORIZED_OR_UNVERSIONED_CODE_TRANSITION_2')
+    out = copy.deepcopy(candidate)
+    for sport, path, old, new, commit, pr in TRANSITIONS_2:
+        if out.get('sports', {}).get(sport, {}).get('sources', {}).get(path) != old:
+            raise FreezeViolation('ROUND1_CANDIDATE_PIN_INVALID:' + sport)
+        out['sports'][sport]['sources'][path] = new
+    return out
+
+
+def apply_approved_transitions(manifest: dict) -> dict:
+    """In-memory, report-only view: replace a pin only where it equals the exact approved
+    predecessor blob. Used by the whole-repo report; CI provenance stays in run()."""
+    out = copy.deepcopy(manifest)
+    for rows in (TRANSITIONS, TRANSITIONS_2):
+        for sport, path, old, new, commit, pr in rows:
+            src = out.get('sports', {}).get(sport, {}).get('sources', {})
+            if src.get(path) == old:
+                src[path] = new
+    return out
+
+
 def _git(repo: Path, *args: str) -> bytes:
     try:
         return subprocess.check_output(['git', '-C', str(repo), *args], stderr=subprocess.PIPE)
@@ -67,8 +122,26 @@ def _git(repo: Path, *args: str) -> bytes:
 
 def check_provenance(repo: Path) -> None:
     """Validate both frozen and introduced Git objects for each changed sport."""
-    for sport, path, old, new, commit, pr in TRANSITIONS:
-        original = _git(repo, 'show', BASELINE_COMMIT + ':' + path)
+    _check_round(repo, TRANSITIONS, BASELINE_COMMIT)
+
+
+def _check_round2(repo: Path) -> None:
+    for sport, path, old, new, commit, pr in TRANSITIONS_2:
+        introduced = _git(repo, 'show', commit + ':' + path)
+        if git_blob_digest(introduced) != new:
+            raise FreezeViolation('INTRODUCING_COMMIT_BYTES_MISMATCH_2:' + sport)
+        _git(repo, 'merge-base', '--is-ancestor', commit, 'HEAD')
+        parents = _git(repo, 'rev-list', '--parents', '-n', '1', commit).decode('ascii').split()
+        if len(parents) < 2 or parents[0] != commit or new == old:
+            raise FreezeViolation('INTRODUCING_COMMIT_PARENTS_UNVERIFIABLE_2:' + sport)
+        for parent in parents[1:]:
+            if git_blob_digest(_git(repo, 'show', parent + ':' + path)) != old:
+                raise FreezeViolation('NOT_FIRST_INTRODUCING_COMMIT_2:' + sport)
+
+
+def _check_round(repo: Path, rows, baseline: str) -> None:
+    for sport, path, old, new, commit, pr in rows:
+        original = _git(repo, 'show', baseline + ':' + path)
         introduced = _git(repo, 'show', commit + ':' + path)
         if git_blob_digest(original) != old:
             raise FreezeViolation('HISTORICAL_BASELINE_BYTES_MISMATCH:' + sport)
@@ -95,15 +168,17 @@ def run(repo: Path = ROOT, legacy_path: Path = LEGACY, transition_path: Path = T
     raw = legacy_path.read_bytes()
     legacy = json.loads(raw, object_pairs_hook=unique_pairs, parse_constant=reject_constant)
     transition = json.loads(transition_path.read_bytes(), object_pairs_hook=unique_pairs, parse_constant=reject_constant)
-    candidate = checked_manifest(legacy, transition, raw)
+    transition2 = json.loads(TRANSITION_2.read_bytes(), object_pairs_hook=unique_pairs, parse_constant=reject_constant)
+    candidate = checked_round2(checked_manifest(legacy, transition, raw), transition2)
     check_provenance(repo)
+    _check_round2(repo)
     report = verify(candidate, repo)
     return {**report, 'status': 'VERSIONED_CODE_IDENTITY_ONLY_PAPER_0U',
             'legacy_manifest_unchanged': True,
             'candidate_changes': [
                 {'sport': sport, 'original_git_blob_sha1': old,
                  'candidate_git_blob_sha1': new, 'introducing_commit': commit}
-                for sport, path, old, new, commit, pr in TRANSITIONS
+                for sport, path, old, new, commit, pr in (*TRANSITIONS, *TRANSITIONS_2)
             ],
             'source_authenticated': False, 'model_release_certified': False}
 

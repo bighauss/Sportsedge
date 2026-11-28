@@ -1,0 +1,29 @@
+{
+  "schema": "sportsedge-code-identity-transitions-v1",
+  "original_baseline_commit": "29c85365e27665f16ba378cf2c7fc9c81f5754c1",
+  "original_manifest_git_blob_sha1": "fd90e7d493739584bf59bd9d81a69f4174f119e8",
+  "prior_transition": "code_identity_transitions_20261118.json",
+  "owner_decision": "VERSIONED_RESEARCH_CANDIDATES_ONLY",
+  "owner_decision_record": "Isaac approved both Nov 22 changes as new versioned research candidates on 2026-11-28 (Claude session, issue #57).",
+  "frozen_engine_v5_unchanged": true,
+  "official_counted": 0,
+  "approved_stake_u": 0,
+  "candidates": [
+    {
+      "sport": "MLB",
+      "path": "models/mlb/sportsedge_mlb_model.py",
+      "original_git_blob_sha1": "3f630532e9ff499912bc06041906d3b7c11d9887",
+      "approved_candidate_git_blob_sha1": "30c6cb3355ac5f6b6cbb018729c4fdc41255e057",
+      "first_introducing_commit": "b73874a2ecf8d558780bacf6b636b70e409f2cb4",
+      "change_pr": 446
+    },
+    {
+      "sport": "NBA",
+      "path": "models/nba/sportsedge_nba_model.py",
+      "original_git_blob_sha1": "da0c1503af5ed9ad548d1458588505f695b749e5",
+      "approved_candidate_git_blob_sha1": "b353de86445188288cab4050f6cae13eee76bff6",
+      "first_introducing_commit": "8537ae481a34fa6972a67389a6ac75172ee1f59c",
+      "change_pr": 460
+    }
+  ]
+}
