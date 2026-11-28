@@ -320,6 +320,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                                        f"{'applied ' + r['role'] if r['applied'] else 'listed only'} [{r['source']}]")
         pj["kickoff_ct"] = f"{ko.astimezone(CT):%-I:%M %p} CT"; pj["kickoff_utc"] = ko.isoformat()
         projs.append(pj)
+        ctx.setdefault("label_to_gid", {})[label] = str(g["id"])
         rows += M.price_game(pj, line)
         for mk, need in (("homeTT", f"{H} team total"), ("awayTT", f"{A} team total")):
             if line.get(mk) is None: withheld.append((label, f"{need}: no line in intake"))
@@ -344,6 +345,7 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                   po, p_imp, "over", f"{g['id']}|PTS|UP|{player}", mean)
             rows[-1]["player_id"] = pid
             rows[-1]["why"] = f"{team}: {why}; model {mm:.1f} / mkt {mkt_mean:.1f} (one-sided, vig in mkt p)"
+    ctx["priced_rows_all"] = list(rows)   # full denominator for the pregame log (read-only)
     card = M.finalize(rows)
     return card, projs, withheld, ctx
 
@@ -485,6 +487,8 @@ def main(argv=None):
     a.add_argument("--ledger", metavar="PATH", help="alias of --freeze-ledger (run after --recheck)")
     a.add_argument("--fixture", help="offline CFBD capture JSON (tests only)")
     a.add_argument("--now", help="ISO UTC override (tests only)")
+    a.add_argument("--prediction-log", help="append every evaluated selection (priced, rejected, withheld) to the "
+                                             "shared hash-chained pregame log ledger/pregame_log.py; never changes the card")
     x = a.parse_args(argv)
     now = dt.datetime.fromisoformat(x.now) if x.now else dt.datetime.now(dt.timezone.utc)
     lp = x.freeze_ledger or x.ledger
@@ -562,6 +566,17 @@ def main(argv=None):
     json.dump(receipts, open(os.path.join(x.out, "receipts.json"), "w"), indent=1)
     open(os.path.join(x.out, "cfb_card.md"), "w").write(render(doc))
     print(f"{len(projs)} games projected, {len(card)} +EV rows, {len(withheld)} withheld")
+    if x.prediction_log:
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")))
+        from ledger import pregame_log as PLOG
+        try:
+            rows_, unl = PLOG.rows_from_cfb_run(card, projs, withheld, ctx, intake, now,
+                                                 sha256(open(M.__file__, "rb").read()))
+            res = PLOG.append(x.prediction_log, rows_)
+            print(f"PREDICTION_LOG appended {res['appended']} rows (total {res['total']}); "
+                  f"{len(unl)} game-level withholds without a kickoff time not loggable")
+        except (PLOG.LogError, OSError, KeyError, TypeError, ValueError) as exc:
+            print(f"PREDICTION_LOG_ERROR {exc}", file=sys.stderr)
     return 0
 
 if __name__ == "__main__":

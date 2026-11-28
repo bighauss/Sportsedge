@@ -1,0 +1,33 @@
+name: Pregame prediction log (offline)
+on:
+  pull_request:
+    paths:
+      - 'ledger/pregame_log.py'
+      - 'ledger/test_pregame_log*.py'
+      - 'models/cfb/cfb_run_it.py'
+      - 'models/nfl/runit_ledger.py'
+      - 'models/cbb/cbb_run_it.py'
+      - 'sportsedge/grading/**'
+      - '.github/workflows/pregame-log.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pregame-log:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Shared log schema, CBB wiring, results and harness export
+        run: python -m unittest ledger.test_pregame_log -v
+      - name: CFB and NFL adapters (full denominator, honest labels, card unchanged, grade + export)
+        run: python -m unittest ledger.test_pregame_log_cfb_nfl -v
+      - name: Existing CFB runner and NFL ledger suites
+        run: |
+          (cd models/cfb && python -m unittest test_cfb_run_it -v)
+          (cd models/nfl && python -m unittest test_runit_ledger -v)
