@@ -13,18 +13,28 @@ Three separate things, never mixed:
   * quote-anchored mean   -> market_implied_mean / hybrid_mean (label MARKET_ANCHORED_RESEARCH,
                              diagnostic only; not used by the pricing path, never bet-eligible)
 
-Limits: normal distribution, no push probability for whole-number thresholds, weights are the
-pinned model's untested starting values. Nothing here is validated. PAPER / 0u / NON_COUNTED.
+Identity: distributions are keyed by (team, player, market). A quote that omits the team and
+matches more than one player is withheld as AMBIGUOUS_PLAYER_IDENTITY.
+
+Duplicates: identical duplicate quotes collapse to one row; conflicting duplicates (same
+selection and threshold, different prices) are all withheld.
+
+Push: whole-number thresholds use a continuity-corrected push probability and push-aware EV
+(win * (decimal - 1) - loss). Half-point thresholds have push probability 0.
+
+Limits: normal distribution, weights are the pinned model's untested starting values.
+Nothing here is validated. PAPER / 0u / NON_COUNTED.
 """
 from __future__ import annotations
 import hashlib, json, math, sys
 from pathlib import Path
+from statistics import NormalDist
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import sportsedge_cfb_model as M  # noqa: E402
 
-VERSION = "cfb-prop-independent-v1"
+VERSION = "cfb-prop-independent-v2"
 LABEL = "INDEPENDENT_MARKET_BLIND_UNVALIDATED"
 ANCHORED_LABEL = "MARKET_ANCHORED_RESEARCH"
 SUPPORTED = tuple(sorted(M.PROP_SD_FRAC))
@@ -71,52 +81,98 @@ def freeze_distributions(proj, ctx):
     rows = [u for u in ctx["usage"] if isinstance(u, dict) and u.get("team") in teams]
     seen = {}
     for u in rows:
-        k = (u.get("player"), u.get("market"))
+        k = (u.get("team"), u.get("player"), u.get("market"))
         seen[k] = seen.get(k, 0) + 1
     out = {}
     for u in rows:
-        k = (u.get("player"), u.get("market"))
+        k = (u.get("team"), u.get("player"), u.get("market"))
         out[k] = ({"state": "WITHHELD", "reason": "DUPLICATE_USAGE_ROW"} if seen[k] > 1
                   else independent_distribution(u, proj, ctx))
     return out
 
 
+def _skey(k):
+    return tuple(str(x) for x in k)
+
+
 def _set_digest(frozen):
-    items = sorted(([str(k[0]), str(k[1]), d.get("sha256") or d.get("reason")] for k, d in frozen.items()))
+    items = sorted([*_skey(k), d.get("sha256") or d.get("reason")] for k, d in frozen.items())
     return _digest(items)
+
+
+def _resolve(frozen, team, player, market):
+    """Return (key, reason). Team-scoped when the quote names a team."""
+    if team is not None:
+        k = (team, player, market)
+        return (k, None) if k in frozen else (None, "NO_USAGE_ROW")
+    hits = [k for k in frozen if k[1] == player and k[2] == market]
+    if not hits:
+        return None, "NO_USAGE_ROW"
+    if len(hits) > 1:
+        return None, "AMBIGUOUS_PLAYER_IDENTITY"
+    return hits[0], None
+
+
+def threshold_probs(mean, sd, threshold):
+    """(p_over, p_push, p_under). Whole numbers get a continuity-corrected push band."""
+    if float(threshold).is_integer():
+        nd = NormalDist(mean, sd)
+        lo, hi = nd.cdf(threshold - 0.5), nd.cdf(threshold + 0.5)
+        return 1.0 - hi, hi - lo, lo
+    p_over = M.pgt(mean, threshold, sd)
+    return p_over, 0.0, 1.0 - p_over
+
+
+def push_aware_ev(p_win, p_loss, american):
+    return p_win * (M.dec(american) - 1.0) - p_loss
 
 
 def price_props_independent(proj, ctx, prop_rows):
     frozen = freeze_distributions(proj, ctx)
     set_sha = _set_digest(frozen)
-    rows, withheld = [], []
+    rows, withheld, valid = [], [], []
     for p in prop_rows:
         if p.get("gameId") != proj["game"]["id"]:
             continue
-        key = (p.get("player"), p.get("market"))
-        d = frozen.get(key)
-        if d is None:
-            withheld.append({"player": key[0], "market": key[1], "reason": "NO_USAGE_ROW"})
+        team, player, market = p.get("team"), p.get("player"), p.get("market")
+        key, why = _resolve(frozen, team, player, market)
+        if key is None:
+            withheld.append({"team": team, "player": player, "market": market, "reason": why})
             continue
+        d = frozen[key]
         if d["state"] != "PROJECTED":
-            withheld.append({"player": key[0], "market": key[1], "reason": d["reason"]})
+            withheld.append({"team": key[0], "player": player, "market": market, "reason": d["reason"]})
             continue
         threshold, oo, uo = _num(p.get("line")), _num(p.get("overOdds")), _num(p.get("underOdds"))
         if (threshold is None or threshold <= 0 or oo is None or uo is None
                 or abs(oo) < 100 or abs(uo) < 100):
-            withheld.append({"player": key[0], "market": key[1], "reason": "INVALID_QUOTE"})
+            withheld.append({"team": key[0], "player": player, "market": market, "reason": "INVALID_QUOTE"})
             continue
-        p_over = M.pgt(d["mean"], threshold, d["sd"])
-        rows.append({"gameId": proj["game"]["id"], "player": key[0], "market": key[1],
+        valid.append((key, threshold, oo, uo))
+
+    groups = {}
+    for key, threshold, oo, uo in valid:
+        groups.setdefault((key, threshold), []).append((oo, uo))
+    for (key, threshold), quotes in groups.items():
+        if len(set(quotes)) > 1:
+            withheld.append({"team": key[0], "player": key[1], "market": key[2],
+                             "line": threshold, "reason": "DUPLICATE_CONFLICTING_QUOTE"})
+            continue
+        oo, uo = quotes[0]
+        d = frozen[key]
+        p_over, p_push, p_under = threshold_probs(d["mean"], d["sd"], threshold)
+        rows.append({"gameId": proj["game"]["id"], "team": key[0], "player": key[1], "market": key[2],
                      "line": threshold, "over_odds": oo, "under_odds": uo,
                      "dist_sha256": d["sha256"], "mean": d["mean"], "sd": d["sd"],
-                     "p_over": p_over, "p_under": 1 - p_over,
-                     "ev_over": p_over * M.dec(oo) - 1, "ev_under": (1 - p_over) * M.dec(uo) - 1,
+                     "p_over": p_over, "p_push": p_push, "p_under": p_under,
+                     "ev_over": push_aware_ev(p_over, p_under, oo),
+                     "ev_under": push_aware_ev(p_under, p_over, uo),
+                     "duplicates_collapsed": len(quotes) - 1,
                      "market_novig_over": M.novig(oo, uo)[0],
                      "label": LABEL, "state": "PAPER_0U_NON_COUNTED",
                      "approved_stake_u": 0, "official_counted": 0})
     return {"version": VERSION, "label": LABEL, "distribution_set_sha256": set_sha,
-            "distributions": [frozen[k] for k in sorted(frozen, key=lambda k: (str(k[0]), str(k[1])))],
+            "distributions": [frozen[k] for k in sorted(frozen, key=_skey)],
             "rows": rows, "withheld": withheld}
 
 
