@@ -24,13 +24,13 @@
   },
   "baseline": {
     "metric": "cfb-prop-independence-tests",
-    "before": 14,
+    "before": null,
     "unit": "tests",
-    "source_state": "PR_558_HOSTED_CI_TYPED_NEUTRAL_ADMISSION_SUCCESS"
+    "source_state": "UNKNOWN"
   },
   "golden": {
-    "sha256": null,
-    "cases": 24,
+    "sha256": "sha256:c09d93c207f122be752f0860cc844af99568eeed73766681f3ce6ba82652b6e0",
+    "cases": 9,
     "suite": "SYNTHETIC_AGENT_SAFETY"
   },
   "evaluation": {
