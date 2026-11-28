@@ -15,7 +15,7 @@ research/backtest_harness/harness.py.
 """
 from __future__ import annotations
 import csv, hashlib, json, math, os
-from datetime import datetime
+from datetime import datetime, timezone
 
 SCHEMA = "sportsedge-pregame-prediction-log-v2"
 RESULTS_SCHEMA = "sportsedge-pregame-results-v1"
@@ -333,3 +333,219 @@ def rows_from_cbb_card(card, names, extra=None, commit_sha=None):
                         "win_p": win, "push_p": push, "loss_p": max(0.0, 1 - win - push),
                         "raw_ev": m["paper_ev"][i], "selection_state": st, "rejection_reason": why})
     return out
+
+
+# ---------------------------------------------------------------- CFB / NFL adapters
+def _z(ts):
+    """ISO UTC (offset or Z) -> canonical Z string, or None."""
+    if not isinstance(ts, str) or not ts:
+        return None
+    try:
+        d = datetime.fromisoformat(ts[:-1] + "+00:00" if ts.endswith("Z") else ts)
+    except ValueError:
+        return None
+    if d.tzinfo is None:
+        return None
+    return d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _pairs(rows, key):
+    """Map id(row) -> opposite row for two-way markets (exactly two priced sides per key)."""
+    groups = {}
+    for r in rows:
+        groups.setdefault(key(r), []).append(r)
+    opp = {}
+    for g in groups.values():
+        if len(g) == 2 and all(isinstance(x.get("odds"), int) for x in g):
+            opp[id(g[0])], opp[id(g[1])] = g[1], g[0]
+    return opp
+
+
+def _priced_or_withheld(base, state, reason, opp, capture):
+    """Schema requires both DK prices + capture time for a priced row; otherwise keep the
+    model values but log WITHHELD with the original card state in the reason."""
+    if opp is None:
+        return "WITHHELD", f"ONE_SIDED_QUOTE_NO_OPPOSITE_PRICE (card_state={state}{':' + reason if reason else ''})"
+    if capture is None:
+        return "WITHHELD", f"QUOTE_CAPTURE_TIME_MISSING (card_state={state}{':' + reason if reason else ''})"
+    return state, reason
+
+
+def _cfb_canon(r, home_away):
+    """CFB card row -> (market, period, selection, team, player) in settle() vocabulary."""
+    home, away = home_away
+    m, pick = r["market"], r["pick"]
+    period = "H1" if m.startswith("1H") else "FG"
+    base = m[3:] if m.startswith("1H ") else m
+    if m.startswith("Prop "):
+        stat = m[5:]
+        for word, side in ((" Over ", "over"), (" Under ", "under")):
+            if word in pick:
+                return stat, "FG", side, None, pick.split(word, 1)[0]
+        return None, None, None, None, None
+    if base == "ML":
+        if pick == home: return "moneyline", period, "home", None, None
+        if pick == away: return "moneyline", period, "away", None, None
+    if base == "Spread":
+        if home and pick.startswith(home + " "): return "spread", period, "home", None, None
+        if away and pick.startswith(away + " "): return "spread", period, "away", None, None
+    if base == "Total":
+        return "total", period, "over" if pick.startswith("Over") else "under", None, None
+    if base.endswith(" TT"):
+        t = base[:-3]
+        team = "home" if t == home else "away" if t == away else None
+        if team:
+            return "team_total", period, "over" if pick.startswith("Over") else "under", team, None
+    return None, None, None, None, None
+
+
+def rows_from_cfb_run(card, projs, withheld, ctx, intake, now_utc, model_code_sha256, commit_sha=None):
+    """Every evaluated CFB selection. Returns (rows, unloggable). Reads frozen run values only.
+
+    Game markets use the legacy normal with a ZERO-push assumption (recorded in distribution_id).
+    CFB legacy props are MARKET-ANCHORED (mean = 0.7 model + 0.3 market-implied) and are labelled so.
+    """
+    import sportsedge_cfb_model as M
+    kick = {str(p["game"]["id"]): _z(p.get("kickoff_utc")) for p in projs}
+    sides = {str(p["game"]["id"]): (p["home"], p["away"]) for p in projs}
+    cap = _z(intake.get("captured_utc"))
+    pred = _z(now_utc.isoformat())
+    selected = {id(r) for r in card}
+    allrows = ctx.get("priced_rows_all", [])
+    opp = _pairs([r for r in allrows if not r["market"].startswith("Prop")],
+                 lambda r: (r["gameId"], r["market"], None if r["line"] is None else abs(float(r["line"]))))
+    cfg = {"P_BLEND_MODEL": M.P_BLEND_MODEL, "PROP_MODEL_W": M.PROP_MODEL_W,
+           "SD_MARGIN": M.SD_MARGIN, "SD_TOTAL": M.SD_TOTAL, "SD_TT": M.SD_TT,
+           "PROP_SD_FRAC": M.PROP_SD_FRAC}
+    base = {"sport": "CFB", "team": None, "player_id": None, "player_name": None, "period": "FG",
+            "prediction_utc": pred, "book": "DraftKings", "model_version": "cfb-run-it-legacy",
+            "model_commit_sha": commit_sha or _commit_sha(), "model_code_sha256": model_code_sha256,
+            "config_sha256": sha256_of(cfg),
+            "source_provenance": {"lines_captured": str(intake.get("captured")), "captured_utc": cap},
+            "adj_ev": None, "adj_ev_method": "NOT_COMPUTED"}
+    out, unl = [], []
+    for r in allrows:
+        gid = str(r["gameId"])
+        start = kick.get(gid)
+        if start is None:
+            unl.append((gid, r["market"], r["pick"], "NO_KICKOFF_TIME")); continue
+        prop = r["market"].startswith("Prop")
+        if id(r) in selected:
+            st, why = "SELECTED", None
+        else:
+            st, why = "REJECTED", ("CONTRADICTS_PROJECTION" if M.contradicts(r) else "NONPOSITIVE_BLENDED_EV")
+        o = None if prop else opp.get(id(r))
+        st, why = _priced_or_withheld(base, st, why, o, cap)
+        dist = ("MARKET_ANCHORED_PROP_NORMAL(mean=0.7model+0.3market;sd_frac=PROP_SD_FRAC)" if prop
+                else f"LEGACY_GAME_NORMAL_ZERO_PUSH(sd_margin={M.SD_MARGIN},sd_total={M.SD_TOTAL},sd_tt={M.SD_TT})")
+        mkt, period, sel, team, player = _cfb_canon(r, sides.get(gid, (None, None)))
+        if mkt is None:
+            unl.append((gid, r["market"], r["pick"], "UNMAPPED_MARKET")); continue
+        out.append({**base, "event_id": gid, "player_name": player, "market": mkt, "period": period,
+                    "team": team, "player_id": str(r["player_id"]) if prop and r.get("player_id") is not None else None,
+                    "selection": sel, "quote_captured_utc": cap, "game_start_utc": start,
+                    "line": r["line"], "price": r["odds"] if st != "WITHHELD" else None,
+                    "opp_price": o["odds"] if (o and st != "WITHHELD") else None,
+                    "novig_p": r["p_market"] if st != "WITHHELD" else None, "projection": r.get("proj"),
+                    "distribution_id": dist, "win_p": r["p_model"], "push_p": 0.0,
+                    "loss_p": max(0.0, 1.0 - r["p_model"]), "raw_ev": r["ev_raw"] if st != "WITHHELD" else None,
+                    "selection_state": st, "rejection_reason": why,
+                    "source_provenance": {**base["source_provenance"],
+                                          "projection_mode": "MARKET_ANCHORED_RESEARCH" if prop else "LEGACY_GAME_RESEARCH",
+                                          "price_as_quoted": r["odds"], "pick_text": r["pick"],
+                                          "market_text": r["market"]}})
+    lab = ctx.get("label_to_gid", {})
+    for k, (label, reason) in enumerate(withheld):
+        gid = lab.get(label)
+        if gid is None or kick.get(gid) is None:
+            unl.append((label, None, None, reason)); continue
+        out.append({**base, "event_id": gid, "market": "UNPRICED", "selection": f"withheld#{k}",
+                    "quote_captured_utc": cap, "game_start_utc": kick[gid], "line": None, "price": None,
+                    "opp_price": None, "novig_p": None, "projection": None, "distribution_id": "NONE",
+                    "win_p": None, "push_p": None, "loss_p": None, "raw_ev": None,
+                    "selection_state": "WITHHELD", "rejection_reason": str(reason)[:400]})
+    return out, unl
+
+
+def _nfl_canon(r):
+    """NFL v3 ledger row -> (market, period, side) in settle() vocabulary, or Nones."""
+    m, sel, game = str(r.get("market") or ""), str(r.get("selection") or ""), str(r.get("game") or "")
+    if r.get("kind") == "prop":
+        return None, "FG", None
+    period = "H1" if m.startswith("1H") else "FG"
+    base = m[3:] if m.startswith("1H ") else m
+    away, _, home = game.partition("@")
+    if base in ("Spread", "ML", "Moneyline"):
+        mk = "spread" if base == "Spread" else "moneyline"
+        if home and sel.startswith(home + " "): return mk, period, "home"
+        if away and sel.startswith(away + " "): return mk, period, "away"
+        return None, period, None
+    if base == "Total":
+        return "total", period, "over" if "Over" in sel else "under" if "Under" in sel else None
+    return None, period, None
+
+
+def rows_from_nfl_ledger(ledger_rows, meta, commit_sha=None):
+    """Every NFL v3 ledger row (complete denominator) -> pregame-log rows. Returns (rows, unloggable).
+
+    meta: {"kickoff_utc": {game: iso}, "quote_captured_utc": iso, "prediction_utc": iso,
+           "model_version": str, "model_code_sha256": str, "config": dict, "provenance": dict}.
+    NFL props are priced from a one-sided quote against the market line scaled by the model
+    total, so they are logged MARKET_ANCHORED and WITHHELD (no opposite price)."""
+    import re
+    kick = {g: _z(t) for g, t in (meta.get("kickoff_utc") or {}).items()}
+    cap = _z(meta.get("quote_captured_utc"))
+    pred = _z(meta.get("prediction_utc"))
+    games = [r for r in ledger_rows if r.get("kind") == "game"]
+    opp = _pairs(games, lambda r: (r["game"], r["market"]))
+    base = {"sport": "NFL", "team": None, "player_id": None, "player_name": None,
+            "prediction_utc": pred, "book": "DraftKings", "model_version": meta.get("model_version") or "nfl-run-it-v3",
+            "model_commit_sha": commit_sha or _commit_sha(),
+            "model_code_sha256": meta.get("model_code_sha256") or "UNAVAILABLE",
+            "config_sha256": sha256_of(meta.get("config") or {}),
+            "source_provenance": dict(meta.get("provenance") or {"source": "UNSPECIFIED"}),
+            "adj_ev": None, "adj_ev_method": "NOT_COMPUTED"}
+    out, unl = [], []
+    for i, r in enumerate(ledger_rows):
+        start = kick.get(r.get("game"))
+        if start is None or pred is None:
+            unl.append((r.get("game"), r.get("market"), r.get("selection"), "NO_KICKOFF_OR_PREDICTION_TIME")); continue
+        status, reason = r.get("status"), r.get("reject_reason") or None
+        if status == "rejected_input":
+            st, why = "WITHHELD", str(reason or "rejected_input")
+        elif status == "on_card":
+            st, why = "SELECTED", None
+        else:
+            st, why = "REJECTED", str(status or "NOT_QUALIFIED")
+        prop = r.get("kind") == "prop"
+        o = opp.get(id(r)) if not prop else None
+        if st != "WITHHELD":
+            st, why = _priced_or_withheld(base, st, why, o, cap)
+        mkt_text = str(r.get("market") or "UNKNOWN")
+        mkt, period, sel_side = _nfl_canon(r)
+        line = r.get("line")
+        if line is None and r.get("selection"):
+            m = re.search(r"([+-]\d+(?:\.\d+)?)$", str(r["selection"]).replace(" ML", ""))
+            line = float(m.group(1)) if m and "Spread" in mkt_text else None
+        priced = st != "WITHHELD"
+        pw, pp = r.get("model_p"), r.get("p_push") or 0.0
+        if mkt is None and st != "WITHHELD":
+            st, why = "WITHHELD", f"UNMAPPED_MARKET (card_state={st})"
+        priced = st != "WITHHELD"
+        out.append({**base, "event_id": str(r.get("game")), "period": period,
+                    "player_name": r.get("player") if prop else None, "market": mkt or mkt_text,
+                    "selection": sel_side or str(r.get("selection") or f"row#{i}"), "quote_captured_utc": cap,
+                    "game_start_utc": start, "line": line,
+                    "price": r["odds"] if priced else None, "opp_price": o["odds"] if (o and priced) else None,
+                    "novig_p": r.get("market_p") if priced else None, "projection": r.get("proj_value"),
+                    "distribution_id": ("MARKET_ANCHORED_PROP(one_sided_vig=1.045)" if prop
+                                        else "V3_NORMAL(sd_margin=13.5,sd_total=13.0,sd_1h=9.5;integer_push)"),
+                    "win_p": pw, "push_p": pp if pw is not None else None,
+                    "loss_p": max(0.0, 1 - pw - pp) if pw is not None else None,
+                    "raw_ev": r.get("raw_ev") if priced else None,
+                    "selection_state": st, "rejection_reason": why,
+                    "source_provenance": {**base["source_provenance"],
+                                          "projection_mode": "MARKET_ANCHORED_RESEARCH" if prop else "V3_GAME_RESEARCH",
+                                          "price_as_quoted": r.get("odds"), "selection_text": r.get("selection"),
+                                          "market_text": mkt_text}})
+    return out, unl
