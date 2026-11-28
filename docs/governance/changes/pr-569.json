@@ -3,6 +3,7 @@
   "pr_number": 569,
   "base_commit": "770f862dcbf36b7ce16f6ba302054cab37e1d3c2",
   "protected_paths": [
+    ".github/workflows/whole-repo-release-audit.yml",
     "research/freezes/code_identity_transitions_20261128.json",
     "research/freezes/test_versioned_transition_round2.py",
     "research/freezes/verify_versioned_transition.py"
