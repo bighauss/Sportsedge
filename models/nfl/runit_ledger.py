@@ -16,7 +16,10 @@ No quotes or private data live in this file.
 from __future__ import annotations
 
 import math
+import os as _os
+import sys as _sys
 from statistics import NormalDist
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
 N = NormalDist()
 
@@ -41,6 +44,12 @@ GAME_FIELDS = ("away", "home", "spread", "sp_a", "sp_h", "total", "o", "u",
                "ml_a", "ml_h", "h1_spread", "h1_a", "h1_h", "h1_total",
                "h1_o", "h1_u", "h1_ml_a", "h1_ml_h")
 PROP_FIELDS = ("file", "game", "player", "line", "odds")
+# Versioned prop outcome distributions. "v3_normal" is the frozen default (reproduces the
+# v3 card). "skew_v1" uses models/nfl/prop_skew_v1 (fitted 2018-2022 nflverse only) for the
+# stats it covers; others fall back to v3 and say so in the row.
+PROP_DISTS = ("v3_normal", "skew_v1")
+SKEW_STAT = {"Pass Yds": "pass_yds", "Rec Yds": "rec_yds", "Rush Yds": "rush_yds",
+             "Receptions": "receptions"}
 
 
 def dec(o): return 1 + (o / 100 if o > 0 else 100 / -o)
@@ -211,23 +220,34 @@ def game_offers(g):
             ("1H ML", f"{h} 1H ML", g["h1_ml_h"]), ("1H ML", f"{a} 1H ML", g["h1_ml_a"])]
 
 
-def prop_row(x, gm, proj, market_total):
+def prop_row(x, gm, proj, market_total, prop_dist="v3_normal"):
+    if prop_dist not in PROP_DISTS:
+        raise ValueError("UNKNOWN_PROP_DIST:" + str(prop_dist))
     name, cv, el, kind = PROP_MARKETS[x["file"]]
     ap, hp = proj
     pm = min(.97, imp(x["odds"]) / ONE_SIDED_VIG)
     k = x["line"]
+    used = "v3_normal"
+    if kind == "p":
+        ge = lambda mu: pois_ge(mu, k)
+    elif prop_dist == "skew_v1" and name in SKEW_STAT:
+        import prop_skew_v1 as SK
+        ge = lambda mu: SK.p_ge(SKEW_STAT[name], mu, k)
+        used = SK.VERSION
+    else:
+        ge = lambda mu: 1 - N.cdf((k - 0.5 - mu) / (cv * mu))
     lo, hi = 0.01, 600
     for _ in range(80):
         m = (lo + hi) / 2
-        q = pois_ge(m, k) if kind == "p" else 1 - N.cdf((k - 0.5 - m) / (cv * m))
-        lo, hi = (m, hi) if q < pm else (lo, m)
+        lo, hi = (m, hi) if ge(m) < pm else (lo, m)
     r_ = (ap + hp) / market_total          # whole-game ratio (known v3 limitation)
     mm = m * (1 + el * (r_ - 1))
-    pmod = pois_ge(mm, k) if kind == "p" else 1 - N.cdf((k - 0.5 - mm) / (cv * mm))
+    pmod = ge(mm)
     d = dec(x["odds"])
     row = _row(gm, name, f"{x['player']} {k}+ {name}", x["odds"], pmod, 0, pm,
                f"proj {mm:.1f}", kind="prop", model_mean=mm, market_mean=m, line=k,
-               scaling="whole_game_total_ratio", vig_basis="assumed_one_sided_1.045")
+               scaling="whole_game_total_ratio", vig_basis="assumed_one_sided_1.045",
+               prop_dist=used)
     row["raw_ev"] = pmod * d - 1                           # v3 prop formulas
     row["blended_ev"] = (BLEND_MODEL * pmod + (1 - BLEND_MODEL) * pm) * d - 1
     if mm < k - 0.5:
@@ -253,12 +273,14 @@ def team_abbr(name, abbr):
     return None
 
 
-def build_ledger(games, props, projections, abbr, legacy_note_rounding=True):
+def build_ledger(games, props, projections, abbr, legacy_note_rounding=True, prop_dist="v3_normal"):
     """games: list of dicts with GAME_FIELDS; props: list of dicts with PROP_FIELDS;
     projections: {'AWAY@HOME': (away_pts, home_pts)}; abbr: nickname->abbr map.
     Returns (rows, summary). len(rows) == 12*well_formed_games + malformed_games + len(props):
     a well-formed game that is rejected (duplicate, no projection, pricing error) keeps
     one rejected row per known original offer; only a malformed input collapses to one row."""
+    if prop_dist not in PROP_DISTS:
+        raise ValueError("UNKNOWN_PROP_DIST:" + str(prop_dist))
     rows, proj, mtot = [], {}, {}
     seen_games, rejected_offer_rows, malformed_games = set(), 0, 0
     for i, g in enumerate(games):
@@ -318,7 +340,7 @@ def build_ledger(games, props, projections, abbr, legacy_note_rounding=True):
         if gm not in proj:
             rows.append(dict(base, reject_reason="game_not_on_slate")); continue
         try:
-            rows.append(prop_row(x, gm, proj[gm], mtot[gm]))
+            rows.append(prop_row(x, gm, proj[gm], mtot[gm], prop_dist))
         except (ArithmeticError, ValueError, TypeError) as exc:
             rows.append(dict(base, reject_reason=f"pricing_error:{type(exc).__name__}"))
 

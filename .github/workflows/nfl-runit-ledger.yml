@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - 'models/nfl/runit_ledger.py'
+      - 'models/nfl/prop_skew_v1.py'
+      - 'models/nfl/prop_skew_v1_table.json'
+      - 'models/nfl/test_prop_skew_v1.py'
+      - 'research/prop_variance/**'
       - 'models/nfl/test_runit_ledger.py'
       - 'models/nfl/RUNIT_LEDGER_README.md'
       - '.github/workflows/nfl-runit-ledger.yml'
@@ -22,5 +26,7 @@ jobs:
           python-version: '3.12'
       - name: Complete-denominator ledger fixture checks
         run: python -m unittest discover -s models/nfl -p 'test_runit_ledger.py' -v
+      - name: prop-skew-v1 table, shape and opt-in ledger integration
+        run: python -m unittest discover -s models/nfl -p 'test_prop_skew_v1.py' -v
       - name: Compile ledger
         run: python -m py_compile models/nfl/runit_ledger.py
