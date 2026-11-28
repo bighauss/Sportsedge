@@ -45,7 +45,7 @@ def _num(x):
         return None
     try:
         v = float(x)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return v if math.isfinite(v) else None
 
@@ -130,16 +130,22 @@ def push_aware_ev(p_win, p_loss, american):
 # Same pair-admission rules as the CBB ladder/main quotes (models/cbb/cbb_pricing._rung).
 MAX_ABS_PRICE = 5000
 OVERROUND_RANGE = (-0.005, 0.25)
+# Plausible single-game CFB thresholds; anything outside is a feed/typing error, not a market.
+LINE_BOUNDS = {"pass_yds": (0.5, 650.0), "rush_yds": (0.5, 400.0),
+               "rec_yds": (0.5, 400.0), "receptions": (0.5, 25.0)}
 
 
 def _implied(american):
     return 100.0 / (american + 100.0) if american > 0 else -american / (-american + 100.0)
 
 
-def quote_reason(threshold, over_odds, under_odds):
+def quote_reason(threshold, over_odds, under_odds, market=None):
     """Reason code if a two-sided prop quote is malformed, else None. Never reads the model."""
     if threshold is None or threshold <= 0 or (threshold * 2) % 1:
         return "LINE_OFF_HALF_POINT_GRID"
+    lo, hi = LINE_BOUNDS.get(market, (0.5, 650.0))
+    if not lo <= threshold <= hi:
+        return "LINE_OUT_OF_MARKET_RANGE"
     for v in (over_odds, under_odds):
         if v is None or not float(v).is_integer() or abs(v) < 100:
             return "INVALID_AMERICAN_ODDS"
@@ -155,10 +161,20 @@ def price_props_independent(proj, ctx, prop_rows):
     frozen = freeze_distributions(proj, ctx)
     set_sha = _set_digest(frozen)
     rows, withheld, valid = [], [], []
+    if not isinstance(prop_rows, (list, tuple)):
+        prop_rows = []
+        withheld.append({"team": None, "player": None, "market": None, "reason": "PROP_ROWS_NOT_A_LIST"})
     for p in prop_rows:
+        if not isinstance(p, dict):
+            withheld.append({"team": None, "player": None, "market": None, "reason": "MALFORMED_PROP_ROW"})
+            continue
         if p.get("gameId") != proj["game"]["id"]:
             continue
         team, player, market = p.get("team"), p.get("player"), p.get("market")
+        if (not isinstance(player, str) or not player.strip() or not isinstance(market, str)
+                or not (team is None or isinstance(team, str))):
+            withheld.append({"team": None, "player": None, "market": None, "reason": "MALFORMED_IDENTITY"})
+            continue
         key, why = _resolve(frozen, team, player, market)
         if key is None:
             withheld.append({"team": team, "player": player, "market": market, "reason": why})
@@ -168,7 +184,7 @@ def price_props_independent(proj, ctx, prop_rows):
             withheld.append({"team": key[0], "player": player, "market": market, "reason": d["reason"]})
             continue
         threshold, oo, uo = _num(p.get("line")), _num(p.get("overOdds")), _num(p.get("underOdds"))
-        bad = quote_reason(threshold, oo, uo)
+        bad = quote_reason(threshold, oo, uo, market)
         if bad:
             withheld.append({"team": key[0], "player": player, "market": market,
                              "reason": "INVALID_QUOTE", "detail": bad})

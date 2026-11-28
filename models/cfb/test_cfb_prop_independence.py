@@ -257,5 +257,55 @@ class QuoteValidation(unittest.TestCase):
         self.assertEqual(P.OVERROUND_RANGE, (-0.005, 0.25))
 
 
+class InputContract(unittest.TestCase):
+    """#565 re-review: malformed rows/identities, overflow and absurd thresholds fail closed."""
+
+    def price(self, rows):
+        ctx, proj = _ctx(), _proj()
+        return P.price_props_independent(proj, ctx, rows)
+
+    def test_non_dict_rows_withheld_not_crash(self):
+        res = self.price([None, [], "x", 5, _prop()])
+        self.assertEqual(len(res["rows"]), 1)
+        self.assertEqual([w["reason"] for w in res["withheld"]], ["MALFORMED_PROP_ROW"] * 4)
+
+    def test_non_list_input_withheld(self):
+        for rows in (None, {"a": 1}, "abc"):
+            with self.subTest(rows=rows):
+                res = self.price(rows)
+                self.assertEqual(res["rows"], [])
+                self.assertEqual(res["withheld"][0]["reason"], "PROP_ROWS_NOT_A_LIST")
+
+    def test_unhashable_or_wrong_type_identity_withheld(self):
+        for kw in (dict(team=[]), dict(team={}), dict(player=["QB One"]), dict(player=None),
+                   dict(player=" "), dict(market=["pass_yds"]), dict(market=None), dict(team=7)):
+            with self.subTest(**{k: repr(v) for k, v in kw.items()}):
+                res = self.price([_prop(**kw)])
+                self.assertEqual(res["rows"], [])
+                self.assertEqual(res["withheld"][0]["reason"], "MALFORMED_IDENTITY")
+
+    def test_huge_integer_does_not_overflow(self):
+        for kw in (dict(over=10 ** 400), dict(line=10 ** 400), dict(under=-(10 ** 400))):
+            with self.subTest(key=list(kw)[0]):
+                res = self.price([_prop(**kw)])
+                self.assertEqual(res["rows"], [])
+                self.assertEqual(res["withheld"][0]["reason"], "INVALID_QUOTE")
+
+    def test_absurd_thresholds_withheld(self):
+        for line in (1e12, 650.5, 999.5):
+            with self.subTest(line=line):
+                res = self.price([_prop(line=line)])
+                self.assertEqual(res["rows"], [])
+                self.assertEqual(res["withheld"][0]["detail"], "LINE_OUT_OF_MARKET_RANGE")
+
+    def test_market_bounds_cover_every_supported_market(self):
+        self.assertEqual(set(P.LINE_BOUNDS), set(P.SUPPORTED))
+
+    def test_rejections_never_change_frozen_digest(self):
+        good = self.price([_prop()])["distribution_set_sha256"]
+        bad = self.price([None, _prop(team=[]), _prop(line=1e12), _prop(over=10 ** 400)])
+        self.assertEqual(bad["distribution_set_sha256"], good)
+
+
 if __name__ == "__main__":
     unittest.main()
