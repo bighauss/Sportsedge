@@ -24,6 +24,7 @@ market probability, is flagged and capped at 3 stars; an entry that cannot be
 priced goes to "unpriced" with a reason, never guessed. Constants are
 placeholders, not calibrated on out-of-sample results.
 """
+import json
 import math
 
 BLEND_MODEL = 0.4
@@ -129,6 +130,41 @@ def _ou(vals, line):
     return (over, push, under), (under, push, over)
 
 
+def _selection_key(e):
+    """Identity of a board selection without its prices (None if unkeyable)."""
+    if not isinstance(e, dict):
+        return None
+    m = e.get("market")
+    line = e.get("home_line", e.get("line"))
+    who = e.get("team") or e.get("player") or "game"
+    try:
+        return (str(m), str(who), None if line is None else float(line))
+    except (TypeError, ValueError):
+        return None
+
+
+def _duplicate_census(markets, unpriced):
+    """Indexes to skip. Identical repeats collapse to the first entry; entries for the
+    same selection with different prices are ALL withheld (never pick one silently)."""
+    groups = {}
+    for i, e in enumerate(markets):
+        k = _selection_key(e)
+        if k is not None:
+            groups.setdefault(k, []).append(i)
+    skip = set()
+    for idx in groups.values():
+        if len(idx) < 2:
+            continue
+        first = json.dumps(markets[idx[0]], sort_keys=True, default=str)
+        same = all(json.dumps(markets[j], sort_keys=True, default=str) == first for j in idx)
+        drop = idx[1:] if same else idx
+        reason = "DUPLICATE_QUOTE_COLLAPSED" if same else "DUPLICATE_CONFLICTING_QUOTE"
+        for j in drop:
+            skip.add(j)
+            unpriced.append({"index": j, "entry": markets[j], "reason": reason})
+    return skip
+
+
 def price_lines(cfg, raw, away, home, lines, props):
     """Return the "book" block. raw: per-sim {team: (player_stats, score)}."""
     if not isinstance(lines, dict):
@@ -165,7 +201,10 @@ def price_lines(cfg, raw, away, home, lines, props):
         return [f(r[tm][0][player]) if player in r[tm][0] else 0 for r in raw]
 
     rows, unpriced = [], []
+    skip = _duplicate_census(lines["markets"], unpriced)
     for i, e in enumerate(lines["markets"]):
+        if i in skip:
+            continue
         try:
             m = e["market"]
             if m == "moneyline":

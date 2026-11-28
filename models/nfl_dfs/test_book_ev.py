@@ -141,5 +141,42 @@ class T(unittest.TestCase):
         self.assertEqual(out["status"], "RESEARCH_PAPER_UNVALIDATED")
 
 
+class DuplicateQuotes(unittest.TestCase):
+    """Duplicate board entries must not double-count or price conflicting quotes."""
+    TOT = {"market": "total", "line": 45.5, "over": -110, "under": -110}
+
+    def test_identical_duplicates_collapse_to_one_selection(self):
+        out = run([dict(self.TOT), dict(self.TOT), dict(self.TOT)])
+        self.assertEqual(len(out["rows"]), 2)
+        self.assertEqual([u["reason"] for u in out["unpriced"]], ["DUPLICATE_QUOTE_COLLAPSED"] * 2)
+
+    def test_conflicting_duplicates_are_all_withheld(self):
+        out = run([dict(self.TOT), dict(self.TOT, over=-125, under=105)])
+        self.assertEqual(out["rows"], [])
+        self.assertEqual([u["reason"] for u in out["unpriced"]], ["DUPLICATE_CONFLICTING_QUOTE"] * 2)
+
+    def test_conflicting_player_prop_duplicates_withheld(self):
+        a = {"market": "pass_yds", "player": "QB1", "line": 255.5, "over": -110, "under": -110}
+        out = run([a, dict(a, over=120, under=-150)])
+        self.assertEqual(out["rows"], [])
+
+    def test_distinct_lines_are_not_duplicates(self):
+        out = run([dict(self.TOT), dict(self.TOT, line=48.5)])
+        self.assertEqual(len(out["rows"]), 4)
+        self.assertEqual(out["unpriced"], [])
+
+    def test_duplicate_spread_and_moneyline(self):
+        sp = {"market": "spread", "home_line": -3.5, "home": -110, "away": -110}
+        ml = {"market": "moneyline", "prices": {"HOM": -150, "AWY": 130}}
+        out = run([sp, dict(sp), ml, {"market": "moneyline", "prices": {"HOM": -160, "AWY": 140}}])
+        self.assertEqual(sorted({r["market"] for r in out["rows"]}), ["spread"])
+        self.assertEqual(len(out["rows"]), 2)
+
+    def test_board_order_does_not_change_rows(self):
+        ms = [dict(self.TOT), {"market": "spread", "home_line": -3.5, "home": -110, "away": -110},
+              dict(self.TOT)]
+        self.assertEqual(run(ms)["rows"], run(list(reversed(ms)))["rows"])
+
+
 if __name__ == "__main__":
     unittest.main()
