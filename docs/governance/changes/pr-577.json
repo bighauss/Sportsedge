@@ -1,14 +1,14 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 577,
-  "base_commit": "770f862dcbf36b7ce16f6ba302054cab37e1d3c2",
+  "base_commit": "308940bc70805e0cbf986582e2a2cee8b8db314f",
   "protected_paths": [
     "models/cbb/cbb_run_it.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Add a shared hash-chained pregame prediction log (full denominator, pregame-only, duplicate and tamper rejection), an exporter to the backtest-harness format, and an opt-in --prediction-log flag on the CBB runner that does not change pricing.",
+  "change_summary": "Schema-v2 shared pregame prediction log (every evaluated selection with state and reason; identity, timing, DK, model, versioning fields), separate append-only results via settlement.settle(), harness exporter, and an opt-in CBB --prediction-log flag that does not change pricing. Stacked on #574.",
   "assumptions": [
-    "CBB card output is byte-identical with and without --prediction-log.",
+    "Stacked on PR #574 (settlement core); CBB card output is byte-identical with and without --prediction-log.",
     "Frozen v5 and pinned models untouched.",
     "Tests are deterministic synthetic regressions; not model validation."
   ],
@@ -39,7 +39,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "770f862dcbf36b7ce16f6ba302054cab37e1d3c2",
+    "target_base_sha": "308940bc70805e0cbf986582e2a2cee8b8db314f",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest ledger.test_pregame_log -v"
   },
