@@ -548,5 +548,45 @@ class BoardAndSeasonStart(unittest.TestCase):
             self.assertEqual(json.loads((Path(d) / "o" / "run_receipt.json").read_text())["errors"],
                              ["Hold: CBBD_API_KEY_ABSENT"])
 
+
+class MainQuoteSanity(unittest.TestCase):
+    """Main quotes get the same pair-admission rules as ladder rungs (Claude, CBB lane)."""
+
+    def spread(self, board):
+        card, _, _ = go(board)
+        return [m for r in card["rows"] if r["game_id"] == "9001"
+                for m in r["markets"] if m["market"] == "spread"][0]
+
+    def test_impossible_pairs_are_not_priced(self):
+        for pa, pb in (("+150", "+150"), ("-110", "+900"), ("+20000", "-110"), ("-110", "-9000")):
+            with self.subTest(pa=pa, pb=pb):
+                q, un = R.board_quotes([row("SPREAD", "-3.5", pa, pb)],
+                                       R.slate(T.provider()[0], T.NOW.date(), T.NOW, S.SEASON),
+                                       "2026-11-21T14:30:00Z")
+                self.assertEqual(q, [])
+                self.assertTrue(un[0][2].startswith(("NOVIG_SUM_OUT_OF_RANGE", "IMPLAUSIBLE_PRICE_MAGNITUDE")))
+                self.assertNotEqual(self.spread([row("SPREAD", "-3.5", pa, pb)])["status"], "PRICED_PAPER")
+
+    def test_normal_pairs_still_priced(self):
+        for pa, pb in (("-110", "-110"), ("-150", "+130"), ("+250", "-320")):
+            with self.subTest(pa=pa, pb=pb):
+                self.assertEqual(self.spread([row("SPREAD", "-3.5", pa, pb)])["status"], "PRICED_PAPER")
+
+    def test_main_and_ladder_rules_agree(self):
+        for pa, pb in (("-110", "-110"), ("+150", "+150"), ("+20000", "-110"), ("-110", "+900")):
+            ladder_ok = R.PR._rung({"line": "-3.5", "price_a": pa, "price_b": pb}, "alt_spread")[0] is not None
+            self.assertEqual(R.main_quote_sanity(pa, pb) is None, ladder_ok, (pa, pb))
+
+    def test_forecast_invariant_to_quotes_and_rejections(self):
+        def proj(board):
+            card, _, _ = go(board)
+            return next(r for r in card["rows"] if r["game_id"] == "9001")["projection"]
+        base = proj([row("SPREAD", "-3.5")])
+        for board in ([row("SPREAD", "-9.5", "+20000", "-110")], [], [row("TOTAL", "150.5"), row("SPREAD", "+2.5")],
+                      list(reversed([row("TOTAL", "150.5"), row("SPREAD", "+2.5")]))):
+            with self.subTest(board=board):
+                self.assertEqual(proj(board), base)
+
+
 if __name__ == "__main__":
     unittest.main()
