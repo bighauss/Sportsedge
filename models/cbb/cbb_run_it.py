@@ -844,6 +844,12 @@ def _write_receipt(out_dir, run_id, now, card, extra, errors, ledger_path):
     except OSError:
         pass
 
+def _repo_on_sys_path():
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.insert(0, root)
+
+
 def main(argv=None):
     a = argparse.ArgumentParser()
     a.add_argument("--replay-evidence", help="decrypted evidence dir: SHADOW REPLAY, read-only, no ledger")
@@ -851,6 +857,8 @@ def main(argv=None):
     a.add_argument("--season", type=int, required=True)
     a.add_argument("--private-dir"); a.add_argument("--out", required=True)
     a.add_argument("--ledger")
+    a.add_argument("--prediction-log", help="append every evaluated selection (priced and withheld) to the shared "
+                                             "hash-chained pregame log ledger/pregame_log.py; never changes pricing")
     a.add_argument("--factorial-sidecar", action="store_true", help="opt-in prospective research; no parent or ledger mutation")
     a.add_argument("--diagnostic-repeat", action="store_true",
                    help="retain previous game freezes; append unseen games only; report full current diagnostic")
@@ -976,6 +984,14 @@ def main(argv=None):
         print(f"BLOCKED {type(e).__name__}: {e}", file=sys.stderr)
         _write_receipt(x.out, x.run_id, clock(), None, None, [_err_code(e)], x.ledger)
         return 2
+    if x.prediction_log:
+        _repo_on_sys_path()
+        from ledger import pregame_log as PLOG
+        try:
+            res = PLOG.append(x.prediction_log, PLOG.rows_from_cbb_card(card, names, extra))
+            print(f"PREDICTION_LOG appended {res['appended']} rows (total {res['total']})")
+        except (PLOG.LogError, OSError, KeyError, TypeError) as exc:
+            print(f"PREDICTION_LOG_ERROR {exc}", file=sys.stderr)
     receipts = [{"source": "cbbd_ratings_adjusted", **{k: rec[0].get(k) for k in ("bytes", "sha256", "observed_utc")}},
                 {"source": "cbbd_games", "sha256": gcap["sha256"], "observed_utc": gcap["observed_utc"]},
                 brec, erec, *([srec] if not x.fixture_dir else []), {"source": "dk_board", "bytes": len(board_raw), "sha256": sha(board_raw),
