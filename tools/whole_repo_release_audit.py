@@ -19,7 +19,15 @@ import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from research.freezes.verify_code_freezes import FreezeViolation, verify as verify_freezes
+from research.freezes.verify_code_freezes import FreezeViolation, verify as _verify_freezes
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "research" / "freezes"))
+from verify_versioned_transition import apply_approved_transitions  # noqa: E402
+
+
+def verify_freezes(freeze, root):
+    """Verify pins after owner-approved versioned transitions (report-only view)."""
+    return _verify_freezes(apply_approved_transitions(freeze), root)
 from research.risk.strict_v21_v22 import POLICY_VERSION
 from sportsedge.validation.daily_safety_sweep import inspect_matrix
 

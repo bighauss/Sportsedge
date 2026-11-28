@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # versioned transition provenance needs the baseline and introducing commits
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -31,9 +33,9 @@ jobs:
         run: |
           python -m tools.whole_repo_release_audit --asof-date-ct 2026-11-16 > /tmp/sportsedge_certification_status.json
           python -c 'import json; d=json.load(open("/tmp/sportsedge_certification_status.json")); assert d["release_verdict"]=="NOT_CERTIFIED"; assert d["production_certified"] is False; assert d["approved_stake_u"]==0; assert len(d["gates"])==5; print("Certification correctly WITHHELD; all five external A-E gates OPEN")'
-      - name: Verify original pinned seven-sport baseline and zero release
+      - name: Verify original pinned seven-sport baseline (via owner-approved versioned transitions) and zero release
         run: |
-          python research/freezes/verify_code_freezes.py
+          python research/freezes/verify_versioned_transition.py
           python -m sportsedge.validation.daily_safety_sweep
       - name: Do not persist private provider data
         run: echo 'No provider requests, raw receipts, odds tokens, official cards, or external attestation were used.'
