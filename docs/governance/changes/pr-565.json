@@ -1,0 +1,63 @@
+{
+  "schema": "sportsedge-high-risk-agent-change-v1",
+  "pr_number": 565,
+  "base_commit": "d91fe61e27b9032f900588ddf576c0f8890c04b0",
+  "protected_paths": [
+    "models/cfb/cfb_prop_independent.py",
+    "models/cfb/test_cfb_prop_independence.py"
+  ],
+  "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
+  "change_summary": "Repair three defects in the #558 market-blind CFB prop challenger: team-scoped player identity (same-name collision and ambiguous quotes), duplicate/conflicting quote handling, and continuity-corrected push probability with push-aware EV for whole-number thresholds. Pinned model unchanged.",
+  "assumptions": [
+    "Stacked on PR #558 head d91fe61e; pinned sportsedge_cfb_model.py (blob a07f4cd4) is not modified.",
+    "Push band uses a +/-0.5 continuity correction on the normal forecast; unvalidated.",
+    "Tests are deterministic synthetic regressions; they are not model validation or a backtest."
+  ],
+  "agent_identity": "Claude",
+  "permissions": {
+    "role": "CODING_AGENT",
+    "repo_write": "BRANCH_ONLY",
+    "secrets_read": false,
+    "production_deploy": false,
+    "market_release": false,
+    "merge_rights": "REPO_RULES_ONLY"
+  },
+  "baseline": {
+    "metric": "cfb-prop-independence-tests",
+    "before": 14,
+    "unit": "tests",
+    "source_state": "PR_558_HOSTED_CI_TYPED_NEUTRAL_ADMISSION_SUCCESS"
+  },
+  "golden": {
+    "sha256": null,
+    "cases": 24,
+    "suite": "SYNTHETIC_AGENT_SAFETY"
+  },
+  "evaluation": {
+    "method": "DETERMINISTIC_REGRESSION",
+    "test_command": "python -m unittest models.cfb.test_cfb_prop_independence -v",
+    "external_review_state": "NOT_VERIFIED",
+    "unseen_data_verified": false
+  },
+  "rollback": {
+    "target_base_sha": "d91fe61e27b9032f900588ddf576c0f8890c04b0",
+    "strategy": "REVIEWED_REVERT_PR",
+    "verification_command": "python -m unittest models.cfb.test_cfb_prop_independence -v"
+  },
+  "cost": {
+    "currency": "USD",
+    "measurement": "UNKNOWN",
+    "usd": null,
+    "receipt_sha256": null,
+    "outcome_per_dollar": null
+  },
+  "release_claims": {
+    "policy_id": "SPORTSEDGE_STRICT_V21_V22_20261115_R1",
+    "production_ready": false,
+    "external_owner_approval_verified": false,
+    "source_authenticated": false,
+    "model_release_certified": false,
+    "official_counted": 0,
+    "approved_stake_u": 0
+  }
+}
