@@ -140,5 +140,83 @@ class IndependentChallenger(unittest.TestCase):
         self.assertEqual(blob, PINNED_BLOB)
 
 
+AWAY_SAME_NAME = dict(USAGE, team="Away U", eff=5.1, share=0.9)
+
+
+class IdentityDuplicatesPush(unittest.TestCase):
+    """Adversarial regressions added by Claude on top of #558."""
+
+    def test_same_name_players_on_both_teams_do_not_collide(self):
+        ctx = _ctx((USAGE, AWAY_SAME_NAME))
+        proj = _proj(ctx)
+        res = P.price_props_independent(proj, ctx, [_prop()])
+        self.assertNotIn("DUPLICATE_USAGE_ROW", [d.get("reason") for d in res["distributions"]])
+        self.assertEqual(res["rows"], [])
+        self.assertEqual(res["withheld"][0]["reason"], "AMBIGUOUS_PLAYER_IDENTITY")
+
+    def test_team_scoped_quote_prices_the_correct_player(self):
+        ctx = _ctx((USAGE, AWAY_SAME_NAME))
+        proj = _proj(ctx)
+        home = P.price_props_independent(proj, ctx, [_prop(team="Home U")])["rows"][0]
+        away = P.price_props_independent(proj, ctx, [_prop(team="Away U")])["rows"][0]
+        self.assertEqual((home["team"], away["team"]), ("Home U", "Away U"))
+        self.assertNotEqual(home["dist_sha256"], away["dist_sha256"])
+        self.assertNotAlmostEqual(home["mean"], away["mean"], places=3)
+
+    def test_unknown_team_on_quote_is_withheld(self):
+        ctx, proj = _ctx(), _proj()
+        res = P.price_props_independent(proj, ctx, [_prop(team="Other U")])
+        self.assertEqual(res["rows"], [])
+        self.assertEqual(res["withheld"][0]["reason"], "NO_USAGE_ROW")
+
+    def test_identical_duplicate_quotes_collapse_to_one_row(self):
+        ctx, proj = _ctx(), _proj()
+        res = P.price_props_independent(proj, ctx, [_prop(), _prop(), _prop()])
+        self.assertEqual(len(res["rows"]), 1)
+        self.assertEqual(res["rows"][0]["duplicates_collapsed"], 2)
+
+    def test_conflicting_duplicate_quotes_are_withheld(self):
+        ctx, proj = _ctx(), _proj()
+        res = P.price_props_independent(proj, ctx, [_prop(over=-110), _prop(over=-125, under=105)])
+        self.assertEqual(res["rows"], [])
+        self.assertEqual([w["reason"] for w in res["withheld"]], ["DUPLICATE_CONFLICTING_QUOTE"])
+
+    def test_quote_order_does_not_change_output(self):
+        ctx, proj = _ctx(), _proj()
+        qs = [_prop(245.5), _prop(285.5, -120, 100), _prop(205.5, -200, 170)]
+        a = P.price_props_independent(proj, ctx, qs)
+        b = P.price_props_independent(proj, ctx, list(reversed(qs)))
+        key = lambda r: r["line"]
+        self.assertEqual(sorted(a["rows"], key=key), sorted(b["rows"], key=key))
+        self.assertEqual(a["distribution_set_sha256"], b["distribution_set_sha256"])
+
+    def test_whole_number_threshold_has_push_and_probabilities_sum_to_one(self):
+        ctx, proj = _ctx(), _proj()
+        mean = P.price_props_independent(proj, ctx, [_prop()])["rows"][0]["mean"]
+        whole = float(round(mean))
+        r = P.price_props_independent(proj, ctx, [_prop(line=whole)])["rows"][0]
+        self.assertGreater(r["p_push"], 0.0)
+        self.assertAlmostEqual(r["p_over"] + r["p_push"] + r["p_under"], 1.0, places=12)
+
+    def test_half_point_threshold_has_zero_push(self):
+        ctx, proj = _ctx(), _proj()
+        r = P.price_props_independent(proj, ctx, [_prop(245.5)])["rows"][0]
+        self.assertEqual(r["p_push"], 0.0)
+        self.assertAlmostEqual(r["p_over"] + r["p_under"], 1.0, places=12)
+
+    def test_push_aware_ev_returns_stake_on_push(self):
+        # Even money, 40% win / 20% push / 40% loss -> EV exactly 0 (push returns stake).
+        self.assertAlmostEqual(P.push_aware_ev(0.4, 0.4, 100), 0.0, places=12)
+        # Naive formula p_win*dec - 1 would wrongly give -0.2.
+        self.assertAlmostEqual(0.4 * M.dec(100) - 1, -0.2, places=12)
+
+    def test_whole_number_ev_matches_push_aware_formula(self):
+        ctx, proj = _ctx(), _proj()
+        mean = P.price_props_independent(proj, ctx, [_prop()])["rows"][0]["mean"]
+        r = P.price_props_independent(proj, ctx, [_prop(line=float(round(mean)))])["rows"][0]
+        self.assertAlmostEqual(r["ev_over"], r["p_over"] * (M.dec(-110) - 1) - r["p_under"], places=12)
+        self.assertAlmostEqual(r["ev_under"], r["p_under"] * (M.dec(-110) - 1) - r["p_over"], places=12)
+
+
 if __name__ == "__main__":
     unittest.main()
