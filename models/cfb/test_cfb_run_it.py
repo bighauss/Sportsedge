@@ -249,5 +249,65 @@ class ShadowPropMeans(unittest.TestCase):
                                 for r in result["rows"]))
 
 
+class ShadowAdmissionGate(unittest.TestCase):
+    """#562 shadow-block bypass: blocked market-blind inputs must also block the card row."""
+    NOW = "2026-11-21T17:00:00+00:00"
+
+    def run_card(self, cap):
+        import copy, datetime as dt
+        return R.run(copy.deepcopy(INTAKE), cap, dt.datetime.fromisoformat(self.NOW),
+                     lambda *_: cap["_weather"])
+
+    def corrupt(self, mode):
+        import copy
+        cap = fixture()
+        src = cap["player_rushing"]
+        yard = next(r for r in src if r["statType"] == "YDS")
+        if mode == "duplicate":
+            src.append(copy.deepcopy(yard))
+        elif mode == "missing":
+            src.remove(yard)
+        elif mode == "nonfinite":
+            yard["stat"] = float("nan")
+        elif mode == "fractional":
+            yard["stat"] = 812.5
+        return cap
+
+    def test_clean_fixture_still_prices_matched_prop(self):
+        card, _, _, ctx = self.run_card(fixture())
+        self.assertEqual(ctx["shadow_prop_means"]["mean_only"], 1)
+        self.assertEqual(ctx["quant_arithmetic_audit"]["market_anchored_prop_rows"], 1)
+
+    def test_blocked_shadow_removes_legacy_prop_row(self):
+        for mode in ("duplicate", "missing", "nonfinite", "fractional"):
+            with self.subTest(mode=mode):
+                card, _, withheld, ctx = self.run_card(self.corrupt(mode))
+                self.assertEqual(ctx["shadow_prop_means"]["mean_only"], 0)
+                self.assertEqual(ctx["quant_arithmetic_audit"]["market_anchored_prop_rows"], 0)
+                self.assertFalse([r for r in card if r["market"].startswith("Prop")])
+                self.assertTrue(any("shadow admission blocked" in why for _, why in withheld))
+
+    def test_blocked_shadow_does_not_change_game_forecasts(self):
+        _, clean, _, _ = self.run_card(fixture())
+        _, dirty, _, _ = self.run_card(self.corrupt("duplicate"))
+        self.assertEqual(clean, dirty)
+
+    def test_persisted_card_has_no_blocked_prop(self):
+        cap = self.corrupt("duplicate")
+        with tempfile.TemporaryDirectory() as d:
+            f = os.path.join(d, "i.json"); json.dump(INTAKE, open(f, "w"))
+            fx = os.path.join(d, "fx.json"); json.dump(cap, open(fx, "w"))
+            r = subprocess.run([sys.executable, os.path.join(HERE, "cfb_run_it.py"), f, "--season", "2026",
+                                "--out", d, "--fixture", fx, "--now", "2026-11-21T15:00:00+00:00"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            doc = json.load(open(os.path.join(d, "cfb_run_it.json")))
+            rows = doc["card"]["rows"]
+            self.assertTrue(rows)
+            self.assertFalse([x for x in rows if x["market"].startswith("Prop")])
+            self.assertEqual(doc["original_run_shadow_prop_means"]["mean_only"], 0)
+            self.assertEqual(doc["original_run_quant_arithmetic_audit"]["market_anchored_prop_rows"], 0)
+            self.assertIn("shadow admission blocked", open(os.path.join(d, "cfb_card.md")).read())
+
 if __name__ == "__main__":
     unittest.main()

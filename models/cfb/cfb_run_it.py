@@ -333,8 +333,14 @@ def run(intake, cap, now_utc, weather_fetch=fetch_weather, allow_no_injury_feed=
                                      "status": "BLOCKED", "reason": "PLAYER_IDENTITY_UNMATCHED"})
                 withheld.append((label, f"prop {p['player']} {p['market']}: player identity not unique in CFBD")); continue
             team, pid = hit; player = ptable[hit]["name"]
-            shadow_means.append(shadow_prop_mean(cap, pj, ctx, team, pid, p["market"],
-                                                 player, p.get("truncated", False)))
+            shadow = shadow_prop_mean(cap, pj, ctx, team, pid, p["market"],
+                                      player, p.get("truncated", False))
+            shadow_means.append(shadow)
+            if shadow["status"] != "MEAN_ONLY":
+                # Admission gate: a prop whose market-blind inputs fail validation must not
+                # reach the card through the legacy usage path (shadow-block bypass, #562).
+                withheld.append((label, f"prop {player} {p['market']}: shadow admission blocked "
+                                        f"({shadow.get('reason', 'UNKNOWN')})")); continue
             u = usage_row(player, team, p["market"], ptable[hit], vol)
             if not u:
                 withheld.append((label, f"prop {player} {p['market']}: no season usage")); continue
