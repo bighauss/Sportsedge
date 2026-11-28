@@ -1,0 +1,34 @@
+name: Sport-specific prop skew distributions (offline)
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/markets/prop_skew.py'
+      - 'sportsedge/markets/test_prop_skew.py'
+      - 'models/cbb/cbb_prop_skew.py'
+      - 'models/cbb/test_cbb_prop_skew.py'
+      - 'models/cbb/prop_skew_cbb_v1_table.json'
+      - 'models/cfb/prop_skew_cfb_v1_table.json'
+      - 'models/cfb/cfb_prop_independent.py'
+      - 'research/prop_variance/*_prop_skew_v1_validation.json'
+      - '.github/workflows/prop-skew.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prop-skew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Shared skew evaluator (sum-to-one, push, monotonic, low-volume, sport-specific tables)
+        run: python -m unittest sportsedge.markets.test_prop_skew -v
+      - name: CBB skew prop challenger (market-blind mean, versioned rows, push-aware EV)
+        working-directory: models/cbb
+        run: python -m unittest test_cbb_prop_skew -v
+      - name: CFB challenger incl. opt-in skew distribution
+        run: python -m unittest models.cfb.test_cfb_prop_independence -v

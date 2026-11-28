@@ -307,5 +307,51 @@ class InputContract(unittest.TestCase):
         self.assertEqual(bad["distribution_set_sha256"], good)
 
 
+class SkewDistributionOptIn(unittest.TestCase):
+    """Opt-in CFB-only skew table (cfb-prop-skew-v1); default stays the normal."""
+
+    def run_(self, dist=None, **kw):
+        ctx, proj = _ctx(), _proj()
+        args = {} if dist is None else {"distribution": dist}
+        return P.price_props_independent(proj, ctx, [_prop(**kw)], **args)
+
+    def test_default_unchanged(self):
+        r = self.run_()
+        self.assertEqual(r["distribution"], P.NORMAL_DIST)
+        self.assertEqual(r["rows"][0]["distribution"], P.NORMAL_DIST)
+
+    def test_skew_rows_versioned_and_sum_to_one(self):
+        for line in (245.5, 245.0, 180.5, 320.5):
+            with self.subTest(line=line):
+                row = self.run_(P.SKEW_DIST, line=line)["rows"][0]
+                self.assertEqual(row["distribution"], "cfb-prop-skew-v1")
+                self.assertAlmostEqual(row["p_over"] + row["p_push"] + row["p_under"], 1.0, places=12)
+                self.assertEqual(row["p_push"] > 0, float(line).is_integer())
+
+    def test_skew_does_not_change_frozen_forecast(self):
+        a, b = self.run_(), self.run_(P.SKEW_DIST)
+        self.assertEqual(a["distribution_set_sha256"], b["distribution_set_sha256"])
+        self.assertEqual(a["rows"][0]["mean"], b["rows"][0]["mean"])
+
+    def test_alternate_lines_monotonic(self):
+        ps = [self.run_(P.SKEW_DIST, line=L)["rows"][0]["p_over"] for L in (150.5, 200.5, 245.5, 290.5, 340.5)]
+        self.assertEqual(ps, sorted(ps, reverse=True))
+
+    def test_low_volume_withheld(self):
+        ctx = _ctx((dict(USAGE, share=0.05),))
+        res = P.price_props_independent(_proj(ctx), ctx, [_prop(line=20.5)], distribution=P.SKEW_DIST)
+        self.assertEqual(res["rows"], [])
+        self.assertEqual((res["withheld"][0]["reason"], res["withheld"][0]["detail"]),
+                         ("DISTRIBUTION_REFUSED", "LOW_VOLUME_FORECAST"))
+
+    def test_unknown_distribution_rejected(self):
+        with self.assertRaisesRegex(ValueError, "UNKNOWN_DISTRIBUTION"):
+            self.run_("nfl-prop-skew-v1")
+
+    def test_uses_cfb_table_not_another_sport(self):
+        import json
+        self.assertEqual(json.loads(P.SKEW_TABLE.read_text())["sport"], "CFB")
+
+
 if __name__ == "__main__":
     unittest.main()
