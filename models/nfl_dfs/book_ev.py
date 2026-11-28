@@ -129,6 +129,61 @@ def _ou(vals, line):
     return (over, push, under), (under, push, over)
 
 
+def _num_key(v):
+    if isinstance(v, bool) or v is None:
+        raise ValueError
+    return float(v)
+
+
+def _selection_key(e):
+    """(identity, consumed prices) using exactly the fields price_lines reads for each
+    market; extra fields are ignored consistently. None if unkeyable (priced/rejected
+    by the normal path)."""
+    if not isinstance(e, dict):
+        return None
+    m = e.get("market")
+    try:
+        if m == "moneyline":
+            pr = e.get("prices")
+            if not isinstance(pr, dict):
+                return None
+            return (m, "game", None), tuple(sorted((str(k), repr(v)) for k, v in pr.items()))
+        if m == "spread":
+            return (m, "game", _num_key(e["home_line"])), (repr(e.get("home")), repr(e.get("away")))
+        if m == "total":
+            return (m, "game", _num_key(e["line"])), (repr(e.get("over")), repr(e.get("under")))
+        if m == "team_total":
+            return (m, str(e["team"]), _num_key(e["line"])), (repr(e.get("over")), repr(e.get("under")))
+        if m in PLAYER_OU:
+            return (m, str(e["player"]), _num_key(e["line"])), (repr(e.get("over")), repr(e.get("under")))
+        if m in PLAYER_TD:
+            return (m, str(e["player"]), None), (repr(e.get("yes")), repr(e.get("no")))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return None
+
+
+def _duplicate_census(markets, unpriced):
+    """Indexes to skip. Repeats with identical consumed prices collapse to the first entry;
+    repeats of the same selection with different prices are ALL withheld."""
+    groups = {}
+    for i, e in enumerate(markets):
+        k = _selection_key(e)
+        if k is not None:
+            groups.setdefault(k[0], []).append((i, k[1]))
+    skip = set()
+    for idx in groups.values():
+        if len(idx) < 2:
+            continue
+        same = len({price for _, price in idx}) == 1
+        drop = [i for i, _ in idx][1:] if same else [i for i, _ in idx]
+        reason = "DUPLICATE_QUOTE_COLLAPSED" if same else "DUPLICATE_CONFLICTING_QUOTE"
+        for j in drop:
+            skip.add(j)
+            unpriced.append({"index": j, "entry": markets[j], "reason": reason})
+    return skip
+
+
 def price_lines(cfg, raw, away, home, lines, props):
     """Return the "book" block. raw: per-sim {team: (player_stats, score)}."""
     if not isinstance(lines, dict):
@@ -165,7 +220,10 @@ def price_lines(cfg, raw, away, home, lines, props):
         return [f(r[tm][0][player]) if player in r[tm][0] else 0 for r in raw]
 
     rows, unpriced = [], []
+    skip = _duplicate_census(lines["markets"], unpriced)
     for i, e in enumerate(lines["markets"]):
+        if i in skip:
+            continue
         try:
             m = e["market"]
             if m == "moneyline":
