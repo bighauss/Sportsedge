@@ -1,15 +1,16 @@
 {
   "schema": "sportsedge-high-risk-agent-change-v1",
   "pr_number": 565,
-  "base_commit": "d91fe61e27b9032f900588ddf576c0f8890c04b0",
+  "base_commit": "9c0aaf417ce762544646651d3f0d2a7b04712d21",
   "protected_paths": [
+    ".github/workflows/cfb-neutral-site-guard.yml",
     "models/cfb/cfb_prop_independent.py",
     "models/cfb/test_cfb_prop_independence.py"
   ],
   "ticket_url": "https://github.com/bighauss/Sportsedge/issues/57",
-  "change_summary": "Repair three defects in the #558 market-blind CFB prop challenger: team-scoped player identity (same-name collision and ambiguous quotes), duplicate/conflicting quote handling, and continuity-corrected push probability with push-aware EV for whole-number thresholds. Pinned model unchanged.",
+  "change_summary": "Land the #558 market-blind CFB prop challenger (Perplexity) plus Claude repairs: team-scoped player identity, duplicate/conflicting quote handling, push-aware EV for whole-number thresholds; explicit CI wiring. Pinned model unchanged.",
   "assumptions": [
-    "Stacked on PR #558 head d91fe61e; pinned sportsedge_cfb_model.py (blob a07f4cd4) is not modified.",
+    "Base is main after #556 (9c0aaf41); includes #558 commits; pinned sportsedge_cfb_model.py (blob a07f4cd4) is not modified.",
     "Push band uses a +/-0.5 continuity correction on the normal forecast; unvalidated.",
     "Tests are deterministic synthetic regressions; they are not model validation or a backtest."
   ],
@@ -40,7 +41,7 @@
     "unseen_data_verified": false
   },
   "rollback": {
-    "target_base_sha": "d91fe61e27b9032f900588ddf576c0f8890c04b0",
+    "target_base_sha": "9c0aaf417ce762544646651d3f0d2a7b04712d21",
     "strategy": "REVIEWED_REVERT_PR",
     "verification_command": "python -m unittest models.cfb.test_cfb_prop_independence -v"
   },
