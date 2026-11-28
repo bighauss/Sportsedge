@@ -93,6 +93,57 @@ class T(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             md = open(os.path.join(d, "cfb_card.md")).read()
             self.assertIn("UCLA @ Michigan", md); self.assertIn("## Withheld", md); self.assertIn("CT", md)
+            with open(os.path.join(d, "cfb_run_it.json")) as handle:
+                audit = json.load(handle)["original_run_quant_arithmetic_audit"]
+            self.assertGreater(audit["priced_rows"], 0)
+            self.assertEqual(audit["priced_rows"], audit["arithmetic_checked"])
+            self.assertFalse(audit["release_ready"])
+
+class QuantRunnerAudit(unittest.TestCase):
+    def test_real_runner_fixture_audits_before_selection(self):
+        import copy
+        import datetime as dt
+        cap = fixture()
+        card, _, _, ctx = R.run(copy.deepcopy(INTAKE), cap,
+                                dt.datetime.fromisoformat("2026-11-21T17:00:00+00:00"),
+                                lambda *_: cap["_weather"])
+        a = ctx["quant_arithmetic_audit"]
+        self.assertEqual(a["priced_rows"], a["arithmetic_checked"])
+        self.assertGreater(a["priced_rows"], len(card))
+        self.assertGreater(a["nonpositive_blended_ev_rows"], 0)
+        self.assertEqual(a["market_anchored_prop_rows"], 1)
+        self.assertEqual(a["approved_stake_u"], 0)
+        self.assertFalse(a["release_ready"])
+        self.assertEqual(len(a["master_odds_sha256"]), 64)
+        self.assertTrue(card)
+        for row in card:
+            self.assertEqual(row["stars"], 0)
+            self.assertEqual(row["flames"], "")
+            self.assertEqual(row["stars_label"], "N/A — uncalibrated")
+            self.assertEqual(row["settlement_model"], "LEGACY_ZERO_PUSH_ASSUMPTION")
+            self.assertEqual(row["projection_mode"],
+                             "MARKET_ANCHORED_RESEARCH" if row["market"].startswith("Prop")
+                             else "LEGACY_GAME_RESEARCH")
+
+    def row(self):
+        rows = []
+        M.bet(rows, None, "Total", "Over 50", 50, -110, .6, .5)
+        return rows[0]
+
+    def test_integer_line_reports_unmodelled_push(self):
+        a = R.quant_arithmetic_audit([self.row()])
+        self.assertEqual(a["integer_line_push_unmodelled"], 1)
+        self.assertEqual(a["arithmetic_convention"], "LEGACY_ZERO_PUSH_ASSUMPTION")
+
+    def test_bad_ev_and_probability_fail_closed(self):
+        for key, value in (("ev_blend", 42), ("p_model", float("nan")),
+                           ("odds", 0), ("p_blend", .99)):
+            with self.subTest(key=key):
+                row = self.row()
+                row[key] = value
+                with self.assertRaisesRegex(R.Fail, "QUANT_ARITHMETIC_MISMATCH"):
+                    R.quant_arithmetic_audit([row])
+
 
 if __name__ == "__main__":
     unittest.main()
