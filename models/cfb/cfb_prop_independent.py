@@ -157,7 +157,25 @@ def quote_reason(threshold, over_odds, under_odds, market=None):
     return None
 
 
-def price_props_independent(proj, ctx, prop_rows):
+# Opt-in skewed outcome distribution (CFB-only table, fitted on CFB 2014-2021 train seasons).
+NORMAL_DIST = "normal-continuity-v2"
+SKEW_DIST = "cfb-prop-skew-v1"
+SKEW_TABLE = HERE / "prop_skew_cfb_v1_table.json"
+
+
+def _shape_probs(distribution, mean, sd, market, threshold):
+    if distribution == NORMAL_DIST:
+        return threshold_probs(mean, sd, threshold)
+    if distribution == SKEW_DIST:
+        sys.path.insert(0, str(HERE.parents[1]))
+        from sportsedge.markets import prop_skew as PS
+        return PS.three_way(PS.load(SKEW_TABLE), market, mean, threshold)
+    raise ValueError("UNKNOWN_DISTRIBUTION")
+
+
+def price_props_independent(proj, ctx, prop_rows, distribution=NORMAL_DIST):
+    if distribution not in (NORMAL_DIST, SKEW_DIST):
+        raise ValueError("UNKNOWN_DISTRIBUTION")
     frozen = freeze_distributions(proj, ctx)
     set_sha = _set_digest(frozen)
     rows, withheld, valid = [], [], []
@@ -201,8 +219,13 @@ def price_props_independent(proj, ctx, prop_rows):
             continue
         oo, uo = quotes[0]
         d = frozen[key]
-        p_over, p_push, p_under = threshold_probs(d["mean"], d["sd"], threshold)
-        rows.append({"gameId": proj["game"]["id"], "team": key[0], "player": key[1], "market": key[2],
+        try:
+            p_over, p_push, p_under = _shape_probs(distribution, d["mean"], d["sd"], key[2], threshold)
+        except ValueError as exc:  # SkewError subclasses ValueError (e.g. LOW_VOLUME_FORECAST)
+            withheld.append({"team": key[0], "player": key[1], "market": key[2], "line": threshold,
+                             "reason": "DISTRIBUTION_REFUSED", "detail": str(exc)})
+            continue
+        rows.append({"distribution": distribution,"gameId": proj["game"]["id"], "team": key[0], "player": key[1], "market": key[2],
                      "line": threshold, "over_odds": oo, "under_odds": uo,
                      "dist_sha256": d["sha256"], "mean": d["mean"], "sd": d["sd"],
                      "p_over": p_over, "p_push": p_push, "p_under": p_under,
@@ -212,7 +235,8 @@ def price_props_independent(proj, ctx, prop_rows):
                      "market_novig_over": M.novig(oo, uo)[0],
                      "label": LABEL, "state": "PAPER_0U_NON_COUNTED",
                      "approved_stake_u": 0, "official_counted": 0})
-    return {"version": VERSION, "label": LABEL, "distribution_set_sha256": set_sha,
+    return {"version": VERSION, "label": LABEL, "distribution": distribution,
+            "distribution_set_sha256": set_sha,
             "distributions": [frozen[k] for k in sorted(frozen, key=_skey)],
             "rows": rows, "withheld": withheld}
 
