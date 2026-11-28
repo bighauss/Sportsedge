@@ -5,7 +5,14 @@ GradeRecord. It never guesses:
   * results come only from final scores / period scores and player box scores;
   * props are NEVER graded from team totals;
   * integer lines push; two-way period moneylines push on a tied period;
-  * cancelled / postponed / abandoned events -> VOID; not-final -> UNGRADED;
+  * cancelled events -> VOID; postponed / suspended / abandoned / forfeit / no-contest
+    -> UNGRADED (re-gradable) until the applicable book rule is confirmed; not-final -> UNGRADED;
+  * moneyline is TWO-WAY only (ways=3 or a draw side is refused);
+  * event identity (sport + event_id) is required on BOTH selection and event and must match;
+  * both final scores must be present, non-negative integers before any grade; period scores
+    likewise, and must sum to the final;
+  * TD scorer markets require ALL TD categories (rushing, receiving, return) present --
+    a missing category is UNGRADED, never a silent zero;
   * player did not participate (DNP / inactive) -> VOID, never a loss;
   * a player missing from the box score -> UNGRADED (unknown is not zero).
 
@@ -34,7 +41,9 @@ PLAYER_OU = {"pass_yds": ("passing_yards",), "pass_tds": ("passing_tds",),
 TD_MARKETS = {"anytime_td": 1, "td_2plus": 2, "td_3plus": 3}
 # TDs that count for scorer markets: rushing, receiving and return TDs; never passing TDs.
 TD_FIELDS = ("rushing_tds", "receiving_tds", "special_teams_tds")
-VOID_STATUSES = {"cancelled", "canceled", "postponed", "abandoned", "forfeit", "no_contest"}
+VOID_STATUSES = {"cancelled", "canceled"}
+# Book rules for these differ by time-to-resume / decided markets; never settle irreversibly.
+REVIEW_STATUSES = {"postponed", "suspended", "abandoned", "forfeit", "no_contest", "delayed"}
 RESULTS = ("W", "L", "P", "VOID", "UNGRADED")
 
 
@@ -70,6 +79,18 @@ def _num(v):
     return x if math.isfinite(x) else None
 
 
+def _score(v, what):
+    """Non-negative integer score, None if absent; malformed values raise."""
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        raise SettlementInputError("BAD_SCORE:" + what)
+    x = _num(v)
+    if x is None or not x.is_integer() or x < 0:
+        raise SettlementInputError("BAD_SCORE:" + what)
+    return x
+
+
 def _american(v):
     x = _num(v)
     if x is None or not x.is_integer() or abs(x) < 100:
@@ -96,16 +117,18 @@ def period_points(event, team_key, period):
     sport = event["sport"]
     regs = SPORT_PERIODS[sport]
     scores = event.get(team_key + "_periods")
-    final = _num(event.get(team_key + "_score"))
+    final = _score(event.get(team_key + "_score"), team_key + "_score")
+    if final is None:
+        return None
     if period == "FG":
         return final
     if not isinstance(scores, (list, tuple)) or len(scores) < len(regs):
         return None
-    vals = [_num(x) for x in scores]
-    if any(v is None for v in vals):
+    if any(x is None for x in scores):
         return None
+    vals = [_score(x, team_key + "_periods") for x in scores]
     reg, ot = vals[:len(regs)], vals[len(regs):]
-    if final is not None and sum(vals) != final:
+    if sum(vals) != final:
         raise SettlementInputError("PERIOD_SCORES_DO_NOT_SUM_TO_FINAL")
     if period not in regs and period not in ("H1", "H2"):
         raise SettlementInputError("PERIOD_NOT_PLAYED_IN_SPORT")
@@ -124,6 +147,8 @@ def _game_result(sel, ev):
     if hp is None or ap is None:
         return None, "PERIOD_SCORES_UNAVAILABLE", None
     if m == "moneyline":
+        if sel.get("ways", 2) != 2:
+            raise SettlementInputError("ONLY_TWO_WAY_MONEYLINE_SUPPORTED")
         if side not in ("home", "away"):
             raise SettlementInputError("SIDE_MUST_BE_HOME_OR_AWAY")
         if hp == ap:
@@ -170,10 +195,9 @@ def _player_result(sel, ev, players):
     if team is not None and rec.get("team") is not None and team != rec.get("team"):
         raise SettlementInputError("PLAYER_TEAM_MISMATCH")
     if m in TD_MARKETS:
-        vals = [_num(rec.get(k)) for k in TD_FIELDS if k in rec]
-        if not vals or any(v is None for v in vals):
-            return None, "TD_FIELDS_MISSING", None
-        tds = sum(vals)
+        if any(rec.get(k) in (None, "") for k in TD_FIELDS):
+            return None, "TD_FIELDS_INCOMPLETE", None
+        tds = sum(_score(rec[k], k) for k in TD_FIELDS)
         hit = tds >= TD_MARKETS[m]
         if side not in ("yes", "no"):
             raise SettlementInputError("SIDE_MUST_BE_YES_OR_NO")
@@ -199,15 +223,25 @@ def settle(selection, event, players=None):
     sha = _digest(snap)
     if event.get("sport") not in SPORT_PERIODS:
         raise SettlementInputError("UNSUPPORTED_SPORT")
-    if selection.get("event_id") is not None and event.get("event_id") is not None \
-            and str(selection["event_id"]) != str(event["event_id"]):
+    if selection.get("sport") != event["sport"]:
+        raise SettlementInputError("SPORT_MISMATCH")
+    for obj, who in ((selection, "SELECTION"), (event, "EVENT")):
+        eid = obj.get("event_id")
+        if not isinstance(eid, str) or not eid.strip():
+            raise SettlementInputError(who + "_EVENT_ID_REQUIRED")
+    if selection["event_id"] != event["event_id"]:
         raise SettlementInputError("EVENT_ID_MISMATCH")
     price = _american(selection.get("price"))
     status = str(event.get("status") or "").lower()
     if status in VOID_STATUSES:
         res, why, val = "VOID", "EVENT_" + status.upper(), None
+    elif status in REVIEW_STATUSES:
+        res, why, val = "UNGRADED", "EVENT_" + status.upper() + "_BOOK_RULE_REVIEW_REQUIRED", None
     elif status != "final":
         res, why, val = "UNGRADED", "EVENT_NOT_FINAL", None
+    elif _score(event.get("home_score"), "home_score") is None or \
+            _score(event.get("away_score"), "away_score") is None:
+        res, why, val = "UNGRADED", "FINAL_SCORE_MISSING", None
     else:
         m = selection.get("market")
         if m in PLAYER_OU or m in TD_MARKETS:
@@ -239,7 +273,7 @@ def nflverse_players(rows, season, week, team=None):
         for k in ("passing_yards", "passing_tds", "attempts", "completions", "rushing_yards",
                   "carries", "receiving_yards", "receptions", "rushing_tds", "receiving_tds",
                   "special_teams_tds"):
-            if k in r:
+            if r.get(k) not in (None, ""):   # NA in the CSV stays absent (unknown, not zero)
                 rec[k] = r[k]
         out[pid] = rec
     return out

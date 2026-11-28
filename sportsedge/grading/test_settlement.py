@@ -8,12 +8,16 @@ from sportsedge.grading.settlement import (
 NFL = {"sport": "NFL", "status": "final", "event_id": "E1",
        "home_score": 27, "away_score": 24,
        "home_periods": [7, 10, 0, 7, 3], "away_periods": [3, 7, 14, 0, 0]}
-CBB = {"sport": "CBB", "status": "final", "home_score": 80, "away_score": 78,
+CBB = {"sport": "CBB", "status": "final", "event_id": "C1", "home_score": 80, "away_score": 78,
        "home_periods": [35, 39, 6], "away_periods": [40, 34, 4]}
 
 
 def s(**kw):
-    return dict({"price": -110, "period": "FG"}, **kw)
+    return dict({"sport": "NFL", "event_id": "E1", "price": -110, "period": "FG"}, **kw)
+
+
+def c(**kw):
+    return s(sport="CBB", event_id="C1", **kw)
 
 
 def R(sel, ev=NFL, players=None):
@@ -59,9 +63,9 @@ class GameMarkets(unittest.TestCase):
 
     def test_cbb_halves_and_no_quarters(self):
         self.assertEqual(period_points(CBB, "home", "H2"), 45)  # 39 + 6 OT
-        self.assertEqual(R(s(market="moneyline", side="away", period="H1"), CBB), "W")
+        self.assertEqual(R(c(market="moneyline", side="away", period="H1"), CBB), "W")
         with self.assertRaisesRegex(SettlementInputError, "PERIOD_NOT_PLAYED_IN_SPORT"):
-            settle(s(market="total", side="over", period="Q1", line=30), CBB)
+            settle(c(market="total", side="over", period="Q1", line=30), CBB)
 
     def test_period_scores_must_sum_to_final(self):
         bad = dict(NFL, home_periods=[7, 10, 0, 7, 0])
@@ -76,9 +80,13 @@ class GameMarkets(unittest.TestCase):
 
 class StatusAndMoney(unittest.TestCase):
     def test_void_and_not_final(self):
-        for st in ("cancelled", "postponed", "abandoned"):
+        for st in ("cancelled", "canceled"):
             r = settle(s(market="moneyline", side="home"), dict(NFL, status=st))
             self.assertEqual((r.result, r.profit_units), ("VOID", 0.0))
+        # Book rules for these depend on resumption / decided markets: never an irreversible VOID.
+        for st in ("postponed", "abandoned", "suspended"):
+            r = settle(s(market="moneyline", side="home"), dict(NFL, status=st))
+            self.assertEqual((r.result, r.profit_units), ("UNGRADED", 0.0))
         self.assertEqual(R(s(market="moneyline", side="home"), dict(NFL, status="in_progress")), "UNGRADED")
 
     def test_profit_units(self):
@@ -176,6 +184,20 @@ class RealNflverse(unittest.TestCase):
         self.assertEqual(R(s(market="rec_yds", player_id=pid, side="over", line=y - 0.5), ev, box), "W")
         self.assertEqual(R(s(market="rec_yds", player_id=pid, side="over", line=y), ev, box), "P")
         self.assertEqual(R(s(market="rec_yds", player_id="00-NOT-REAL", side="over", line=1.5), ev, box), "UNGRADED")
+
+    def test_real_td_scorer_uses_all_categories(self):
+        """2024 W1 Mike Evans (TB): 2 receiving TDs, all three TD categories present."""
+        f = sorted(glob.glob("/tmp/nflv/ps_2024.csv.gz"))
+        if not f:
+            self.skipTest("nflverse fixture not present")
+        rows = list(csv.DictReader(gzip.open(f[0], "rt")))
+        pid = next(r["player_id"] for r in rows if r["season"] == "2024" and r["week"] == "1"
+                   and r["player_display_name"] == "Mike Evans")
+        box = nflverse_players(rows, 2024, 1)
+        self.assertEqual(R(s(market="td_2plus", player_id=pid, side="yes"), NFL, box), "W")
+        self.assertEqual(R(s(market="td_3plus", player_id=pid, side="yes"), NFL, box), "L")
+        partial = {pid: {k: v for k, v in box[pid].items() if k != "receiving_tds"}}
+        self.assertEqual(R(s(market="anytime_td", player_id=pid, side="yes"), NFL, partial), "UNGRADED")
 
 
 if __name__ == "__main__":
