@@ -1,0 +1,234 @@
+{
+ "schema": "sportsedge-cfb-prop-variance-v1",
+ "alpha": 0.35,
+ "min_prior": 3,
+ "train": [
+  2014,
+  2021
+ ],
+ "holdout": [
+  2022,
+  2025
+ ],
+ "line_source": "PROXY_LINES_NOT_SPORTSBOOK",
+ "status": "PAPER_RESEARCH_ONLY",
+ "player_games": 252464,
+ "stats": {
+  "pass_yds": {
+   "train_n": 7792,
+   "holdout_n": 4547,
+   "holdout_mean_forecast": 204.93,
+   "holdout_mae": 66.65,
+   "holdout_rmse": 84.87,
+   "holdout_signed_bias_y_minus_f": 0.41,
+   "holdout_median_ratio": 0.989,
+   "pinned_frac": 0.28,
+   "implied_frac_at_mean": 0.414,
+   "power_fit_train": {
+    "a": 17.2472,
+    "b": 0.3072
+   },
+   "pinned_fixed_frac_normal": {
+    "n": 22735,
+    "brier": 0.22873,
+    "logloss": 0.65177,
+    "ece": 0.0532,
+    "p_over_bias_by_line": {
+     "0.75f": 0.081,
+     "0.90f": 0.0576,
+     "1.00f": 0.0089,
+     "1.10f": -0.0334,
+     "1.25f": -0.0852
+    }
+   },
+   "train_power_law_normal": {
+    "n": 22735,
+    "brier": 0.22474,
+    "logloss": 0.64079,
+    "ece": 0.0246,
+    "p_over_bias_by_line": {
+     "0.75f": -0.0166,
+     "0.90f": 0.009,
+     "1.00f": 0.0089,
+     "1.10f": 0.0152,
+     "1.25f": 0.0124
+    }
+   },
+   "train_empirical_ratio": {
+    "n": 22525,
+    "brier": 0.21794,
+    "logloss": 0.62579,
+    "ece": 0.0256,
+    "p_over_bias_by_line": {
+     "0.75f": 0.0172,
+     "0.90f": 0.0262,
+     "1.00f": 0.0286,
+     "1.10f": 0.0254,
+     "1.25f": 0.0308
+    }
+   }
+  },
+  "rush_yds": {
+   "train_n": 21733,
+   "holdout_n": 12551,
+   "holdout_mean_forecast": 56.42,
+   "holdout_mae": 29.64,
+   "holdout_rmse": 39.65,
+   "holdout_signed_bias_y_minus_f": 0.73,
+   "holdout_median_ratio": 0.914,
+   "pinned_frac": 0.45,
+   "implied_frac_at_mean": 0.703,
+   "power_fit_train": {
+    "a": 2.5455,
+    "b": 0.6747
+   },
+   "pinned_fixed_frac_normal": {
+    "n": 62755,
+    "brier": 0.24313,
+    "logloss": 0.67986,
+    "ece": 0.0614,
+    "p_over_bias_by_line": {
+     "0.75f": 0.1057,
+     "0.90f": 0.0786,
+     "1.00f": 0.0518,
+     "1.10f": 0.0165,
+     "1.25f": -0.0346
+    }
+   },
+   "train_power_law_normal": {
+    "n": 62755,
+    "brier": 0.24077,
+    "logloss": 0.67446,
+    "ece": 0.0436,
+    "p_over_bias_by_line": {
+     "0.75f": 0.0343,
+     "0.90f": 0.0475,
+     "1.00f": 0.0518,
+     "1.10f": 0.0477,
+     "1.25f": 0.0368
+    }
+   },
+   "train_empirical_ratio": {
+    "n": 62730,
+    "brier": 0.23113,
+    "logloss": 0.65417,
+    "ece": 0.0199,
+    "p_over_bias_by_line": {
+     "0.75f": 0.0177,
+     "0.90f": 0.0187,
+     "1.00f": 0.0214,
+     "1.10f": 0.02,
+     "1.25f": 0.0216
+    }
+   }
+  },
+  "rec_yds": {
+   "train_n": 29810,
+   "holdout_n": 15615,
+   "holdout_mean_forecast": 48.98,
+   "holdout_mae": 26.74,
+   "holdout_rmse": 35.53,
+   "holdout_signed_bias_y_minus_f": 0.1,
+   "holdout_median_ratio": 0.907,
+   "pinned_frac": 0.5,
+   "implied_frac_at_mean": 0.725,
+   "power_fit_train": {
+    "a": 3.4835,
+    "b": 0.5941
+   },
+   "pinned_fixed_frac_normal": {
+    "n": 78075,
+    "brier": 0.2431,
+    "logloss": 0.67953,
+    "ece": 0.0556,
+    "p_over_bias_by_line": {
+     "0.75f": 0.0969,
+     "0.90f": 0.0749,
+     "1.00f": 0.055,
+     "1.10f": 0.0265,
+     "1.25f": -0.0173
+    }
+   },
+   "train_power_law_normal": {
+    "n": 78075,
+    "brier": 0.24157,
+    "logloss": 0.67611,
+    "ece": 0.0472,
+    "p_over_bias_by_line": {
+     "0.75f": 0.0383,
+     "0.90f": 0.0497,
+     "1.00f": 0.055,
+     "1.10f": 0.0517,
+     "1.25f": 0.0412
+    }
+   },
+   "train_empirical_ratio": {
+    "n": 77830,
+    "brier": 0.23007,
+    "logloss": 0.65172,
+    "ece": 0.0155,
+    "p_over_bias_by_line": {
+     "0.75f": 0.0115,
+     "0.90f": 0.0121,
+     "1.00f": 0.0174,
+     "1.10f": 0.0177,
+     "1.25f": 0.0186
+    }
+   }
+  },
+  "receptions": {
+   "train_n": 29810,
+   "holdout_n": 15616,
+   "holdout_mean_forecast": 3.95,
+   "holdout_mae": 1.58,
+   "holdout_rmse": 2.09,
+   "holdout_signed_bias_y_minus_f": 0.05,
+   "holdout_median_ratio": 0.961,
+   "pinned_frac": 0.4,
+   "implied_frac_at_mean": 0.528,
+   "power_fit_train": {
+    "a": 0.8567,
+    "b": 0.6479
+   },
+   "pinned_fixed_frac_normal": {
+    "n": 78080,
+    "brier": 0.22819,
+    "logloss": 0.64826,
+    "ece": 0.0318,
+    "p_over_bias_by_line": {
+     "0.75f": 0.0377,
+     "0.90f": 0.0423,
+     "1.00f": 0.033,
+     "1.10f": 0.0133,
+     "1.25f": -0.0224
+    }
+   },
+   "train_power_law_normal": {
+    "n": 78080,
+    "brier": 0.22812,
+    "logloss": 0.64799,
+    "ece": 0.023,
+    "p_over_bias_by_line": {
+     "0.75f": -0.0114,
+     "0.90f": 0.0207,
+     "1.00f": 0.0335,
+     "1.10f": 0.0354,
+     "1.25f": 0.0266
+    }
+   },
+   "train_empirical_ratio": {
+    "n": 78000,
+    "brier": 0.22737,
+    "logloss": 0.64632,
+    "ece": 0.0182,
+    "p_over_bias_by_line": {
+     "0.75f": -0.01,
+     "0.90f": 0.0078,
+     "1.00f": 0.0172,
+     "1.10f": 0.0213,
+     "1.25f": 0.0239
+    }
+   }
+  }
+ }
+}
