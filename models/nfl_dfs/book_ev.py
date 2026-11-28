@@ -163,11 +163,32 @@ def _selection_key(e):
     return None
 
 
-def _duplicate_census(markets, unpriced):
+def _identity_mismatch(e, players, teams):
+    """Reason code if a player-prop quote's stated identity contradicts the model, else None.
+    Never reads prices."""
+    if not isinstance(e, dict) or (e.get("market") not in PLAYER_OU and e.get("market") not in PLAYER_TD):
+        return None
+    pl = e.get("player")
+    if not isinstance(pl, str) or not pl.strip():
+        return "MISSING_PLAYER_IDENTITY"
+    if e.get("team") is None:
+        return None
+    t = e["team"]
+    if not isinstance(t, str) or t not in teams:
+        return "PLAYER_TEAM_NOT_IN_GAME"
+    meta = players.get(pl)
+    if isinstance(meta, dict) and meta.get("team") != t:
+        return "PLAYER_TEAM_MISMATCH"
+    return None
+
+
+def _duplicate_census(markets, unpriced, exclude=()):
     """Indexes to skip. Repeats with identical consumed prices collapse to the first entry;
     repeats of the same selection with different prices are ALL withheld."""
     groups = {}
     for i, e in enumerate(markets):
+        if i in exclude:
+            continue
         k = _selection_key(e)
         if k is not None:
             groups.setdefault(k[0], []).append((i, k[1]))
@@ -220,7 +241,13 @@ def price_lines(cfg, raw, away, home, lines, props):
         return [f(r[tm][0][player]) if player in r[tm][0] else 0 for r in raw]
 
     rows, unpriced = [], []
-    skip = _duplicate_census(lines["markets"], unpriced)
+    mismatched = set()
+    for i, e in enumerate(lines["markets"]):
+        why = _identity_mismatch(e, players, teams)
+        if why:
+            mismatched.add(i)
+            unpriced.append({"index": i, "entry": e, "reason": why})
+    skip = mismatched | _duplicate_census(lines["markets"], unpriced, mismatched)
     for i, e in enumerate(lines["markets"]):
         if i in skip:
             continue
