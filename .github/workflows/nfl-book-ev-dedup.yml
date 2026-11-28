@@ -1,0 +1,24 @@
+name: NFL book-EV duplicate-quote gate (offline)
+on:
+  pull_request:
+    paths:
+      - 'models/nfl_dfs/book_ev.py'
+      - 'models/nfl_dfs/test_book_ev.py'
+      - '.github/workflows/nfl-book-ev-dedup.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  nfl-book-ev-dedup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Book-EV pricing and market-specific duplicate keys
+        working-directory: models/nfl_dfs
+        run: python -m unittest test_book_ev -v

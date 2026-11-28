@@ -178,5 +178,48 @@ class DuplicateQuotes(unittest.TestCase):
         self.assertEqual(run(ms)["rows"], run(list(reversed(ms)))["rows"])
 
 
+class DuplicateKeysMatchPricing(unittest.TestCase):
+    """#567 review: keys must use exactly the identity each market's pricing consumes."""
+    ML = {"market": "moneyline", "prices": {"HOM": -150, "AWY": 130}}
+
+    def test_conflicting_moneylines_with_ignored_extra_field_are_withheld(self):
+        out = run([self.ML, dict(self.ML, line=0, prices={"HOM": -170, "AWY": 150})])
+        self.assertEqual(out["rows"], [])
+        self.assertEqual([u["reason"] for u in out["unpriced"]], ["DUPLICATE_CONFLICTING_QUOTE"] * 2)
+
+    def test_identical_moneyline_prices_with_different_extras_collapse(self):
+        out = run([self.ML, dict(self.ML, line=0, book="DK")])
+        self.assertEqual(len(out["rows"]), 2)
+        self.assertEqual([u["reason"] for u in out["unpriced"]], ["DUPLICATE_QUOTE_COLLAPSED"])
+
+    def test_different_players_same_team_same_line_not_quarantined(self):
+        a = {"market": "rec_yds", "player": "WR1", "team": "HOM", "line": 55.5, "over": -110, "under": -110}
+        out = run([a, dict(a, player="QB1", over=-120, under=100)])
+        self.assertNotIn("DUPLICATE_CONFLICTING_QUOTE", [u["reason"] for u in out["unpriced"]])
+        self.assertEqual(len(out["rows"]), 2)  # WR1 over/under priced
+
+    def test_same_player_with_and_without_team_is_deduplicated(self):
+        a = {"market": "rec_yds", "player": "WR1", "line": 55.5, "over": -110, "under": -110}
+        out = run([a, dict(a, team="HOM", over=-130, under=110)])
+        self.assertEqual(out["rows"], [])
+        self.assertEqual([u["reason"] for u in out["unpriced"]], ["DUPLICATE_CONFLICTING_QUOTE"] * 2)
+
+    def test_total_key_ignores_unused_home_line(self):
+        t = {"market": "total", "line": 45.5, "over": -110, "under": -110}
+        out = run([t, dict(t, home_line=-3.5, over=-125, under=105)])
+        self.assertEqual(out["rows"], [])
+        self.assertEqual([u["reason"] for u in out["unpriced"]], ["DUPLICATE_CONFLICTING_QUOTE"] * 2)
+
+    def test_td_key_ignores_line(self):
+        td = {"market": "anytime_td", "player": "WR1", "yes": 150, "no": -190}
+        out = run([td, dict(td, line=0.5, yes=170, no=-210)])
+        self.assertEqual(out["rows"], [])
+
+    def test_spread_and_total_same_number_are_distinct(self):
+        out = run([{"market": "spread", "home_line": 3.0, "home": -110, "away": -110},
+                   {"market": "total", "line": 3.0, "over": -110, "under": -110}])
+        self.assertEqual(out["unpriced"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

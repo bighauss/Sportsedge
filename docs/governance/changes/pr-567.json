@@ -3,6 +3,7 @@
   "pr_number": 567,
   "base_commit": "9c0aaf417ce762544646651d3f0d2a7b04712d21",
   "protected_paths": [
+    ".github/workflows/nfl-book-ev-dedup.yml",
     "models/nfl_dfs/book_ev.py",
     "models/nfl_dfs/test_book_ev.py"
   ],
