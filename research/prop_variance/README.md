@@ -46,3 +46,25 @@ the SD alone (the power-law fit) barely helps. The shape has to change.
 3. Non-participation (DNP or in-game injury) is not in this data, so real downside is
    *larger* than shown.
 4. Correction to an earlier #57 estimate: pass_yds width was overstated (+18% measured, not +37%).
+
+## prop-skew-v1 (versioned, opt-in): `models/nfl/prop_skew_v1.py`
+- The table `models/nfl/prop_skew_v1_table.json` is fitted on **2018–2022 only**: outcome/forecast
+  ratio quantiles (201 points) in 5 forecast-size bins at train quintiles.
+  Built by `fit_nfl_skew_table.py`, which refuses any holdout row passed to the fit.
+- Ledger: `runit_ledger.build_ledger(..., prop_dist="skew_v1")`. The default `v3_normal` is
+  unchanged. Pass TDs and Rush+Rec are not fitted and stay v3; each row records `prop_dist`.
+- Holdout 2023–2025, milestone k+ proxies at k/f ∈ {0.6 … 1.5}
+  (`nfl_prop_skew_v1_validation.json`):
+
+| Stat | n | Brier v3 → skew | Log loss v3 → skew | ECE v3 → skew | Signed P(≥k) bias range, v3 | skew |
+|---|---|---|---|---|---|---|
+| pass_yds | 1,619 | 0.1778 → 0.1689 | 0.534 → 0.508 | 0.029 → 0.026 | −4.4 … +4.0 pts | +1.6 … +3.8 |
+| rush_yds | 3,054 | 0.2218 → 0.2132 | 0.635 → 0.615 | 0.053 → 0.013 | −3.7 … +7.2 | +0.3 … +2.1 |
+| rec_yds | 7,285 | 0.2286 → 0.2202 | 0.649 → 0.630 | 0.047 → 0.011 | −1.3 … +6.6 | +0.5 … +1.7 |
+| receptions | 7,285 | 0.2067 → 0.1980 | 0.602 → 0.580 | 0.035 → 0.014 | −3.2 … +4.2 | −0.3 … +1.8 |
+
+**Not bias-free.** skew_v1 still slightly overstates P(over), by about +1 to +2 pts (rush, rec,
+receptions) and +2 to +4 pts (pass). An expanding-window refit (fit on all seasons before each
+holdout year) leaves a similar +0.2 to +3.4 pts. Treat overs as carrying this residual until a
+better location model (opponent, game script, usage) or a DNP-aware fit removes it.
+Note: v3 is overconfident *both ways*. It inflates overs near projection and deflates long-tail overs.
