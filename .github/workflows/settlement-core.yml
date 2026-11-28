@@ -1,0 +1,28 @@
+name: Shared settlement core (offline)
+on:
+  pull_request:
+    paths:
+      - 'sportsedge/grading/**'
+      - 'models/cfb/cfb_run_it_grade.py'
+      - 'models/cfb/test_cfb_prop_side_grade.py'
+      - 'models/cfb/test_cfb_run_it_grade.py'
+      - '.github/workflows/settlement-core.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  settlement-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check cryptography==46.0.4
+      - name: Shared settlement (all markets, push/void/DNP, no team-total props)
+        run: python -m unittest -v sportsedge.grading.test_settlement
+      - name: CFB RUN IT grader prop side + existing grader fixtures
+        run: python -m unittest -v models.cfb.test_cfb_prop_side_grade models.cfb.test_cfb_run_it_grade
