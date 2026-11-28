@@ -1,0 +1,189 @@
+{
+ "schema": "sportsedge-cbb-pit-pinned-model-backtest-v1",
+ "status": "PAPER_RESEARCH_ONLY",
+ "model": "models/cbb/sportsedge_cbb_model.py project_game (unchanged)",
+ "inputs": "RECONSTRUCTED_FROM_PRIOR_BOX_SCORES (see module docstring for differences)",
+ "min_prior_games": 3,
+ "train": [
+  "2021-22",
+  "2022-23"
+ ],
+ "holdout": [
+  "2023-24",
+  "2024-25"
+ ],
+ "leakage_audit": {
+  "train_last_date": "2023-04-03",
+  "holdout_first_date": "2023-11-06",
+  "game_id_overlap": 0,
+  "train_before_holdout": true
+ },
+ "season_audit": {
+  "2021-22": {
+   "games_with_both_sides": 5180,
+   "rejected_implausible_box": 20,
+   "first_date": "2021-11-09",
+   "last_date": "2022-03-13"
+  },
+  "2022-23": {
+   "games_with_both_sides": 5690,
+   "rejected_implausible_box": 17,
+   "first_date": "2022-11-07",
+   "last_date": "2023-04-03"
+  },
+  "2023-24": {
+   "games_with_both_sides": 5588,
+   "rejected_implausible_box": 58,
+   "first_date": "2023-11-06",
+   "last_date": "2024-04-08"
+  },
+  "2024-25": {
+   "games_with_both_sides": 5756,
+   "rejected_implausible_box": 5,
+   "first_date": "2024-11-04",
+   "last_date": "2025-04-07"
+  }
+ },
+ "train_summary": {
+  "games": 9644,
+  "neutral_games": 1183,
+  "margin": {
+   "n": 9644,
+   "mean": 0.458,
+   "sd": 11.438,
+   "mae": 9.015,
+   "rmse": 11.447,
+   "skew": 0.088,
+   "excess_kurtosis": 0.219
+  },
+  "total": {
+   "n": 9644,
+   "mean": -4.958,
+   "sd": 17.011,
+   "mae": 14.07,
+   "rmse": 17.718,
+   "skew": 0.166,
+   "excess_kurtosis": 0.517
+  },
+  "team_total": {
+   "n": 19288,
+   "mean": -2.479,
+   "sd": 10.252,
+   "mae": 8.387,
+   "rmse": 10.547,
+   "skew": 0.08,
+   "excess_kurtosis": 0.185
+  },
+  "home_margin_bias_nonneutral": 0.548,
+  "favorite_margin_bias": 1.148,
+  "favorite_cover_rate_vs_model": 0.5455,
+  "pinned_sd": {
+   "margin": 11.0,
+   "total": 11.0,
+   "team_total": 8.0
+  },
+  "total_over_calibration_pinned_sd": {
+   "n": 48220,
+   "ece": 0.1213,
+   "brier": 0.24361,
+   "pred_minus_actual_by_offset": {
+    "-6": 0.1896,
+    "-3": 0.1602,
+    "0": 0.1246,
+    "3": 0.0855,
+    "6": 0.0466
+   }
+  }
+ },
+ "train_fitted_sd": {
+  "total": 17.011,
+  "team_total": 10.252
+ },
+ "holdout_summary": {
+  "games": 10125,
+  "neutral_games": 1343,
+  "margin": {
+   "n": 10125,
+   "mean": 0.654,
+   "sd": 11.774,
+   "mae": 9.294,
+   "rmse": 11.791,
+   "skew": 0.086,
+   "excess_kurtosis": 0.326
+  },
+  "total": {
+   "n": 10125,
+   "mean": -2.304,
+   "sd": 16.997,
+   "mae": 13.504,
+   "rmse": 17.152,
+   "skew": 0.274,
+   "excess_kurtosis": 0.609
+  },
+  "team_total": {
+   "n": 20250,
+   "mean": -1.152,
+   "sd": 10.343,
+   "mae": 8.246,
+   "rmse": 10.407,
+   "skew": 0.127,
+   "excess_kurtosis": 0.208
+  },
+  "home_margin_bias_nonneutral": 0.747,
+  "favorite_margin_bias": 1.596,
+  "favorite_cover_rate_vs_model": 0.5585,
+  "pinned_sd": {
+   "margin": 11.0,
+   "total": 11.0,
+   "team_total": 8.0
+  },
+  "total_over_calibration_pinned_sd": {
+   "n": 50625,
+   "ece": 0.0669,
+   "brier": 0.24212,
+   "pred_minus_actual_by_offset": {
+    "-6": 0.126,
+    "-3": 0.1016,
+    "0": 0.0683,
+    "3": 0.0298,
+    "6": -0.0003
+   }
+  },
+  "total_over_calibration_train_fitted_sd": {
+   "n": 50625,
+   "ece": 0.065,
+   "brier": 0.24003,
+   "pred_minus_actual_by_offset": {
+    "-6": 0.0596,
+    "-3": 0.0659,
+    "0": 0.0683,
+    "3": 0.0655,
+    "6": 0.066
+   }
+  },
+  "team_total_over_calibration_pinned_sd": {
+   "n": 101250,
+   "ece": 0.048,
+   "brier": 0.23868,
+   "pred_minus_actual_by_offset": {
+    "-4": 0.0843,
+    "-2": 0.0678,
+    "0": 0.0496,
+    "2": 0.0303,
+    "4": 0.0081
+   }
+  },
+  "team_total_over_calibration_train_fitted_sd": {
+   "n": 101250,
+   "ece": 0.048,
+   "brier": 0.23795,
+   "pred_minus_actual_by_offset": {
+    "-4": 0.0447,
+    "-2": 0.0464,
+    "0": 0.0495,
+    "2": 0.0516,
+    "4": 0.0477
+   }
+  }
+ }
+}
