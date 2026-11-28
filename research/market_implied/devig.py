@@ -162,7 +162,7 @@ def book_key(book):
     key = "".join(c for c in book.casefold() if c.isalnum())
     if not key:
         raise ValueError("invalid sportsbook identity")
-    if key in {"dk", "draftkings", "draftkingssportsbook", "draftkingssports", "draftkingsus"}:
+    if key == "dk" or key.startswith("draftkings"):
         return "draftkings"
     return key
 

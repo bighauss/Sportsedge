@@ -4,13 +4,18 @@ Uses existing two-sided consensus; does not identify a full PMF, a point mean,
 or authenticated source clocks. Half-integer lines only, nonnegative counts.
 """
 from collections import defaultdict
+from math import fsum
 from .devig import book_key, consensus, utc
+
+
+def _external_rows(quotes):
+    return [q for q in quotes if book_key(q.book)!="draftkings" and q.copies is None]
 
 def infer_count_ladder(quotes, *, as_of, max_age_seconds, max_snapshot_skew_seconds=60, method="power"):
     if type(max_snapshot_skew_seconds) is not int or max_snapshot_skew_seconds<0:
         raise ValueError("INVALID_SNAPSHOT_SKEW")
     # Never allow a DK alias or a declared copied book to enter the ladder.
-    rows=[q for q in quotes if book_key(q.book)!="draftkings" and q.copies is None]
+    rows=_external_rows(quotes)
     if not rows:raise ValueError("NO_EXTERNAL_BOOKS")
     groups=defaultdict(list)
     common=None
@@ -56,3 +61,58 @@ def infer_count_ladder(quotes, *, as_of, max_age_seconds, max_snapshot_skew_seco
         "mean_upper_bound":None,"full_pmf_identified":False,"source_authentication":"NOT_VERIFIED_HERE",
         "assumption":"De-vigged half-line odds approximate survival conditional on decisive settlement; player availability and void rules not inferred.",
         "approved_stake_u":0}
+
+
+# Narrow research contract: integer-valued is not enough (yards can be negative).
+# Providers must map their own identifiers and settlement terms upstream.
+_COUNT_MARKETS = {
+    "NBA": {"prop_points", "prop_rebounds", "prop_assists"},
+    "CBB": {"prop_points", "prop_rebounds", "prop_assists"},
+    "NFL": {"prop_receptions"}, "CFB": {"prop_receptions"},
+    "MLB": {"prop_hits", "prop_total_bases", "prop_pitcher_strikeouts"},
+    "NHL": {"prop_shots_on_goal", "prop_goals", "prop_assists"},
+    "PGA": {"prop_birdies"},
+}
+
+
+def integer_count_bounds(quotes, line, *, as_of, max_age_seconds,
+                         max_snapshot_skew_seconds=60, method="power"):
+    """Sharp marginal over/push/under bounds conditional on non-void settlement.
+
+    Each interval may put its mass at any integer in its support. An outcome
+    gets all the mass in its lower bound iff forced, and in its upper bound iff
+    possible. Endpoints of different marginals need not be jointly attainable.
+    This is identification uncertainty, not a sampling confidence interval.
+    """
+    if type(line) is not int or line < 0:
+        raise ValueError("NONNEGATIVE_INTEGER_TARGET_REQUIRED")
+    rows = _external_rows(quotes)
+    ladder = infer_count_ladder(rows, as_of=as_of, max_age_seconds=max_age_seconds,
+                                max_snapshot_skew_seconds=max_snapshot_skew_seconds, method=method)
+    first = rows[0]
+    if first.market not in _COUNT_MARKETS.get(first.sport, ()):
+        raise ValueError("UNSUPPORTED_NONNEGATIVE_COUNT_MARKET")
+    weights = {}
+    for q in rows:
+        book, weight = book_key(q.book), float(q.weight)
+        if weights.setdefault(book, weight) != weight:
+            raise ValueError("CHANGING_BOOK_WEIGHT")
+    masses = {"over": ([], []), "push": ([], []), "under": ([], [])}
+    for interval in ladder["interval_masses"]:
+        lo, hi, mass = interval["min_count"], interval["max_count"], interval["mass"]
+        possible = {"under": lo < line, "push": lo <= line and (hi is None or line <= hi),
+                    "over": hi is None or hi > line}
+        forced = sum(possible.values()) == 1
+        for outcome, allowed in possible.items():
+            if allowed:
+                masses[outcome][1].append(mass)
+                if forced:
+                    masses[outcome][0].append(mass)
+    return {"status": "PAPER_0U_INTEGER_BOUNDS", "line": line,
+            "contract": {k: getattr(first, k) for k in
+                         ("sport", "event_id", "player_id", "market", "period", "rules")},
+            "start_utc": utc(first.start_utc).isoformat(), "as_of": utc(as_of).isoformat(),
+            "books": ladder["books"], "method": method,
+            "bounds": {k: [fsum(lower), fsum(upper)] for k, (lower, upper) in masses.items()},
+            "semantics": "SHARP_MARGINAL_BOUNDS_CONDITIONAL_ON_NONVOID",
+            "source_authentication": ladder["source_authentication"], "approved_stake_u": 0}
